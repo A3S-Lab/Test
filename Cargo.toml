@@ -12,7 +12,7 @@ version = "0.1.0"
 edition = "2021"
 license = "MIT"
 repository = "https://github.com/A3S-Lab/Test"
-rust-version = "1.82"
+rust-version = "1.85"
 
 [workspace.dependencies]
 a3s-acl = "0.3.0"
