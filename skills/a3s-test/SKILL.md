@@ -64,6 +64,12 @@ to an ACL suite.
    a3s-test agent fill @e4 "tester@example.test" \
      --session checkout --observation 2 --json
 
+   a3s-test agent context-click @e6 \
+     --session checkout --observation 3 --json
+
+   a3s-test agent wheel -120 --target '.document-canvas' \
+     --modifier control --session checkout --json
+
    a3s-test agent press Enter --session checkout --json
 
    a3s-test agent screenshot screenshots/confirmation.png \
@@ -74,6 +80,11 @@ to an ACL suite.
    tabs, frames, dialogs, network controls, or advanced evidence. Read
    [references/agentic-cli.md](references/agentic-cli.md) before constructing
    those actions.
+
+   Focus, double-click, context-click, type, uncheck, select, drag, and
+   target-scoped wheel require a ref from the latest observation or explicit
+   CSS selector with the current browser protocol. Do not invent semantic
+   fallbacks for unsupported subactions.
 
 6. Observe again after every state-changing action. A ref such as `@e3` is
    accepted only with the latest observation identifier. Never reuse a ref

@@ -50,6 +50,57 @@ fill "email" {
     value = "user@example.test"
 }
 
+hover "help" {
+    target = role("button", "Help")
+}
+
+focus "title" {
+    target = css("#title")
+}
+
+type "append-title" {
+    target = css("#title")
+    value = " plan"
+}
+
+check "comments-on" {
+    target = label("Comments")
+}
+
+uncheck "comments-off" {
+    target = css("#comments")
+}
+
+select "status" {
+    target = css("#status")
+    values = ["draft", "review"]
+}
+
+double_click "open-row" {
+    target = ref("@e7")
+}
+
+context_click "row-menu" {
+    target = ref("@e7")
+}
+
+drag "move-comment" {
+    source = css("#comment-1")
+    target = css("#comment-gutter")
+}
+
+wheel "zoom" {
+    target = css(".document-canvas")
+    delta_y = -120
+    modifiers = ["control"]
+}
+
+viewport "desktop" {
+    width = 1440
+    height = 900
+    scale = 2
+}
+
 press "confirm" {
     key = "Enter"
 }
@@ -238,8 +289,17 @@ target = placeholder("Search")
 ```
 
 The optional second argument to `text` controls exact matching. Visibility
-assertions, non-main frame switching, uploads, and downloads require `ref()` or
-`css()` because those map directly to the browser protocol.
+assertions, non-main frame switching, uploads, downloads, focus, double-click,
+context-click, type, uncheck, select, drag, and target-scoped wheel require
+`ref()` or `css()` because those map directly to the browser protocol. Click,
+hover, fill, and check accept every target form.
+
+`select` requires at least one value. `wheel` requires `delta_y`; `delta_x`
+defaults to zero, at least one delta must be non-zero, and `modifiers` may
+contain unique `alt`, `control`, `meta`, or `shift` values. A wheel without a
+target is native. A target-scoped wheel is dispatched at the visible center of
+the resolved element. Viewport width, height, and optional integer scale must
+be greater than zero.
 
 ## Admission behavior
 
@@ -257,9 +317,9 @@ code and path to repair manifests.
 ## Browser admission and runner bounds
 
 `a3s-test capabilities --json` probes the configured executable before any
-browser session launches. Protocol revision 1 admits A3S Browser `>= 0.1.1,
-< 0.2.0` and standalone agent-browser `>= 0.26.0, < 0.27.0`. Unverified
-versions fail with `test.driver.web.version_unsupported`.
+browser session launches. Action protocol revision 2 admits A3S Browser
+`>= 0.1.1, < 0.2.0` and standalone agent-browser `>= 0.26.0, < 0.27.0`.
+Unverified versions fail with `test.driver.web.version_unsupported`.
 
 The runner defaults to one scenario at a time and accepts an explicit
 `--max-parallel-scenarios` limit from 1 through 64. Infrastructure retry count
@@ -269,9 +329,10 @@ browser action exits are never retried.
 
 ## Agentic boundary
 
-The ACL grammar currently describes deterministic scenarios only. It does not
-accept free-form `agent`, `prompt`, or natural-language action blocks.
-LLM-driven execution is available through the `a3s-test-agent` library, where a
-host supplies a typed goal, a real `LlmProvider`, explicit budgets, and an
-`ActionPolicy`. A future ACL version may project that same application contract;
-it must not introduce a keyword intent router.
+The ACL grammar describes deterministic scenarios only. It does not accept
+free-form `agent`, `prompt`, or natural-language action blocks. A coding agent
+drives exploratory execution through the persistent `a3s-test agent` CLI and
+the generated action schema. A host that intentionally embeds its own model
+can instead use `a3s-test-agent` with a typed goal, real `LlmProvider`, explicit
+budgets, and an `ActionPolicy`. A future ACL version may project that same
+application contract; it must not introduce a keyword intent router.

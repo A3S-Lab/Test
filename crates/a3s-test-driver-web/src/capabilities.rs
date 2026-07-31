@@ -1,13 +1,11 @@
 use std::collections::BTreeSet;
 use std::ffi::OsString;
 
-use a3s_test_core::DriverError;
+use a3s_test_core::{DriverError, ACTION_PROTOCOL_REVISION};
 use semver::Version;
 use serde::{Deserialize, Serialize};
 
 use crate::{AgentBrowserConfig, BrowserCommand, CommandExecutor, CommandInvocation};
-
-const PROTOCOL_REVISION: u32 = 1;
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -21,10 +19,15 @@ pub enum BrowserIntegration {
 pub enum WebCapability {
     Accessibility,
     Console,
+    ContextClicks,
     Dialogs,
     Downloads,
+    DragAndDrop,
+    ElementInteractions,
+    FormControls,
     Frames,
     Har,
+    MouseWheel,
     NetworkRoutes,
     PageErrors,
     Screenshots,
@@ -32,6 +35,7 @@ pub enum WebCapability {
     Trace,
     Uploads,
     Video,
+    Viewport,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -86,14 +90,19 @@ pub(crate) async fn discover(
     Ok(BrowserCapabilities {
         integration,
         version: version.to_string(),
-        protocol_revision: PROTOCOL_REVISION,
+        protocol_revision: ACTION_PROTOCOL_REVISION,
         features: [
             WebCapability::Accessibility,
             WebCapability::Console,
+            WebCapability::ContextClicks,
             WebCapability::Dialogs,
             WebCapability::Downloads,
+            WebCapability::DragAndDrop,
+            WebCapability::ElementInteractions,
+            WebCapability::FormControls,
             WebCapability::Frames,
             WebCapability::Har,
+            WebCapability::MouseWheel,
             WebCapability::NetworkRoutes,
             WebCapability::PageErrors,
             WebCapability::Screenshots,
@@ -101,6 +110,7 @@ pub(crate) async fn discover(
             WebCapability::Trace,
             WebCapability::Uploads,
             WebCapability::Video,
+            WebCapability::Viewport,
         ]
         .into_iter()
         .collect(),

@@ -2,6 +2,8 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
+pub const ACTION_PROTOCOL_REVISION: u32 = 2;
+
 #[derive(Clone, Copy, Debug, Deserialize, Eq, Hash, JsonSchema, PartialEq, Serialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Surface {
@@ -44,12 +46,53 @@ pub enum Action {
     Click {
         target: Target,
     },
+    Hover {
+        target: Target,
+    },
+    Focus {
+        target: Target,
+    },
+    DoubleClick {
+        target: Target,
+    },
+    ContextClick {
+        target: Target,
+    },
     Fill {
         target: Target,
         value: String,
     },
+    Type {
+        target: Target,
+        value: String,
+    },
+    Check {
+        target: Target,
+    },
+    Uncheck {
+        target: Target,
+    },
+    Select {
+        target: Target,
+        values: Vec<String>,
+    },
+    Drag {
+        source: Target,
+        target: Target,
+    },
     Press {
         key: String,
+    },
+    Wheel {
+        target: Option<Target>,
+        delta_x: i32,
+        delta_y: i32,
+        modifiers: Vec<ModifierKey>,
+    },
+    Viewport {
+        width: u32,
+        height: u32,
+        scale: Option<u32>,
     },
     Wait {
         condition: WaitCondition,
@@ -105,6 +148,17 @@ pub enum Action {
         path: String,
         clear: bool,
     },
+}
+
+#[derive(
+    Clone, Copy, Debug, Deserialize, Eq, Hash, JsonSchema, Ord, PartialEq, PartialOrd, Serialize,
+)]
+#[serde(rename_all = "lowercase")]
+pub enum ModifierKey {
+    Alt,
+    Control,
+    Meta,
+    Shift,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]

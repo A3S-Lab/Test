@@ -25,7 +25,9 @@ The Web surface is available today through
 ## Install
 
 The installers download the matching CLI, verify its SHA-256 checksum, and
-install the Skill for the selected coding agent.
+install the same portable Skill in the user-level directory for the selected
+coding agent. Re-running a command replaces the previous CLI and Skill, so the
+same entry point also upgrades an installation.
 
 macOS or Linux:
 
@@ -57,13 +59,19 @@ any other Agent Skills-compatible tool. `--skill-only`, `--cli-only`,
 installations. The scripts resolve the latest release through GitHub's release
 redirect rather than the rate-limited API.
 
+The checked-in [`install.sh`](scripts/install.sh) supports macOS and Linux
+x64/ARM64. [`install.ps1`](scripts/install.ps1) supports Windows x64. Both
+installers and every built-in Agent target are exercised by release fixtures;
+the release workflow publishes the scripts beside the CLI archives and
+`a3s-test.skill`.
+
 You can also download an archive from
 [Releases](https://github.com/A3S-Lab/Test/releases/latest), or install the
 tagged Rust package manually:
 
 ```bash
 cargo install --git https://github.com/A3S-Lab/Test \
-  --tag v0.3.1 --locked a3s-test-cli
+  --tag v0.4.0 --locked a3s-test-cli
 ```
 
 ## Let a coding agent test the product
@@ -106,10 +114,33 @@ a3s-test agent finish \
 ```
 
 `agent open` aliases `agent start`, and `agent snapshot` aliases
-`agent observe`. Compact `click`, `fill`, `press`, and `screenshot` commands
-cover common turns. `agent act --action-json` exposes the complete typed model
-for semantic targets, waits, assertions, tabs, frames, dialogs, network
-controls, and evidence.
+`agent observe`. Compact commands cover click, hover, focus, double-click,
+context-click, fill, type, check, uncheck, select, drag, key press, mouse
+wheel, viewport, and screenshot turns. `agent act --action-json` exposes the
+same complete typed model together with semantic targets, waits, assertions,
+tabs, frames, dialogs, network controls, and evidence.
+
+Office-grade gestures remain explicit:
+
+```bash
+a3s-test agent context-click @e8 \
+  --session editor --observation 5 --json
+
+a3s-test agent drag '#comment-1' '#comment-gutter' \
+  --session editor --json
+
+a3s-test agent wheel -120 --target '.document-canvas' \
+  --modifier control --session editor --json
+
+a3s-test agent viewport 1440 900 --scale 2 \
+  --session editor --json
+```
+
+The standalone browser semantic protocol does not expose every advanced
+subaction. Focus, double-click, context-click, type, uncheck, select, drag, and
+target-scoped wheel therefore require an observation ref or explicit CSS
+target. Basic click, hover, fill, and check continue to accept semantic
+role/text/test-ID/label/placeholder targets.
 
 Inspect the exact protocol installed on the machine:
 
@@ -200,7 +231,7 @@ actions.
 
 | Concern | Available capabilities |
 | --- | --- |
-| Interaction | Navigate, semantic snapshots, ref/CSS/role/text/test-ID/label/placeholder targets, click, fill, key press |
+| Interaction | Navigate, semantic snapshots, semantic and direct targets, click/hover/focus, fill/type, check/select, double/context click, drag, key press, modifier wheel, viewport |
 | Synchronization | Typed load, text, and URL waits; text, URL, and visibility assertions |
 | Browser state | Stable tab IDs and labels, frame context, browser dialogs |
 | Files | Upload fixtures and keep downloads inside the run artifact root |

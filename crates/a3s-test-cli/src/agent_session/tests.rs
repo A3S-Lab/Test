@@ -3,14 +3,40 @@ use super::*;
 #[test]
 fn ref_actions_require_the_latest_observation() {
     let state = test_state(Some(7));
-    let action = Action::Click {
-        target: Target::Ref {
-            value: "@e3".to_string(),
+    let actions = [
+        Action::Click {
+            target: Target::Ref {
+                value: "@e3".to_string(),
+            },
         },
-    };
-    assert!(validate_action(&state, &action, Some(7)).is_ok());
-    assert!(validate_action(&state, &action, Some(6)).is_err());
-    assert!(validate_action(&test_state(None), &action, Some(7)).is_err());
+        Action::ContextClick {
+            target: Target::Ref {
+                value: "@e4".to_string(),
+            },
+        },
+        Action::Drag {
+            source: Target::Css {
+                selector: "#source".to_string(),
+            },
+            target: Target::Ref {
+                value: "@e5".to_string(),
+            },
+        },
+        Action::Wheel {
+            target: Some(Target::Ref {
+                value: "@e6".to_string(),
+            }),
+            delta_x: 0,
+            delta_y: 120,
+            modifiers: Vec::new(),
+        },
+    ];
+
+    for action in actions {
+        assert!(validate_action(&state, &action, Some(7)).is_ok());
+        assert!(validate_action(&state, &action, Some(6)).is_err());
+        assert!(validate_action(&test_state(None), &action, Some(7)).is_err());
+    }
 }
 
 #[test]

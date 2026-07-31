@@ -164,12 +164,21 @@ verified protocol window. The discovered `BrowserCapabilities` records the
 typed integration, semantic version, protocol revision, and feature set.
 Concurrent scenarios share a single asynchronous capability result.
 
-The adapter maps typed `Action` values to tabs, frames, dialogs, uploads,
-artifact-scoped downloads, network routes, HAR, trace, video, screenshots,
-accessibility snapshots, console logs, and page errors. It exposes a full A3S
-Browser accessibility snapshot through `DriverSession::observe`. It does not
-parse natural-language intent. Refs, semantic locators, and CSS locators remain
-explicit target types in both deterministic and agentic execution.
+The adapter maps typed `Action` values to pointer, form, keyboard, wheel,
+viewport, tab, frame, dialog, upload, artifact-scoped download, network, HAR,
+trace, video, screenshot, accessibility, console, and page-error commands. It
+exposes a full A3S Browser accessibility snapshot through
+`DriverSession::observe`. It does not parse natural-language intent. Refs,
+semantic locators, and CSS locators remain explicit target types in both
+deterministic and agentic execution.
+
+The shared action protocol is revisioned independently of browser executable
+versions. Revision 2 adds Office-grade interactions. A basic interaction uses
+the browser's semantic `find` protocol when that subaction exists. Operations
+that the current standalone semantic protocol cannot express require a direct
+ref or CSS selector. Context-click is implemented as visible-center pointer
+movement plus a bounded right-button down/up pair; drag scrolls both endpoints
+into view; wheel owns modifier press/release cleanup.
 
 The adapter keeps configuration, command execution, protocol mapping, session
 behavior, and host-process supervision in separate modules. The public crate
@@ -227,7 +236,7 @@ agent observe -> observation_id + semantic snapshot
 coding agent decides one typed action
       |
       v
-agent click/fill/press/... or agent act
+agent click/hover/type/drag/wheel/... or agent act
       |
       +--> event log + scoped evidence
       |

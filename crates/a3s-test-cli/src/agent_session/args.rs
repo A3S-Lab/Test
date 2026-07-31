@@ -1,0 +1,329 @@
+use std::path::PathBuf;
+
+use a3s_test_core::ModifierKey;
+use clap::{Args, Subcommand, ValueEnum};
+
+use super::super::BrowserDriverKind;
+
+#[derive(Debug, Args)]
+pub(crate) struct AgentArgs {
+    #[command(subcommand)]
+    pub(super) command: AgentCommand,
+}
+
+#[derive(Debug, Subcommand)]
+pub(super) enum AgentCommand {
+    /// Start a persistent Web test session for an external coding agent.
+    #[command(alias = "open")]
+    Start(StartArgs),
+    /// Capture the next semantic observation from an active session.
+    #[command(alias = "snapshot")]
+    Observe(ObserveArgs),
+    /// Execute one schema-validated action in an active session.
+    Act(ActArgs),
+    /// Click a ref or CSS target in an active session.
+    Click(TargetArgs),
+    /// Hover a target in an active session.
+    Hover(TargetArgs),
+    /// Focus a ref or CSS target in an active session.
+    Focus(TargetArgs),
+    /// Double-click a ref or CSS target in an active session.
+    #[command(alias = "dblclick")]
+    DoubleClick(TargetArgs),
+    /// Open the context menu for a ref or CSS target.
+    #[command(alias = "right-click")]
+    ContextClick(TargetArgs),
+    /// Replace the value of a ref or CSS target in an active session.
+    Fill(TargetValueArgs),
+    /// Type without clearing a ref or CSS target.
+    Type(TargetValueArgs),
+    /// Check a target in an active session.
+    Check(TargetArgs),
+    /// Uncheck a ref or CSS target in an active session.
+    Uncheck(TargetArgs),
+    /// Select one or more values in a ref or CSS target.
+    Select(SelectArgs),
+    /// Drag one ref or CSS target to another.
+    Drag(DragArgs),
+    /// Send one key or key chord to the active session.
+    Press(PressArgs),
+    /// Dispatch a mouse wheel gesture with optional held modifiers.
+    Wheel(WheelArgs),
+    /// Set the browser viewport.
+    Viewport(ViewportArgs),
+    /// Capture a screenshot inside the session artifact directory.
+    Screenshot(ScreenshotArgs),
+    /// Finish the session, close its surface, and write a report.
+    Finish(FinishArgs),
+    /// Abort an active session and close only its owned surface.
+    Abort(SessionArgs),
+    /// Show the persisted state for one session.
+    Show(SessionArgs),
+    /// List sessions in the current workspace.
+    List(ListArgs),
+    /// Print the external-planner protocol and typed action schema.
+    Schema(SchemaArgs),
+}
+
+#[derive(Debug, Args)]
+pub(super) struct StartArgs {
+    /// Initial Web URL.
+    pub(super) url: String,
+    /// Stable workspace-local session identifier.
+    #[arg(long)]
+    pub(super) session: String,
+    /// Concrete test goal for the coding agent.
+    #[arg(long)]
+    pub(super) goal: String,
+    /// Observable success criterion. Repeat for multiple criteria.
+    #[arg(long = "success", required = true)]
+    pub(super) success_criteria: Vec<String>,
+    /// Additional navigation origin allowed during this session.
+    #[arg(long = "allow-origin")]
+    pub(super) allowed_origins: Vec<String>,
+    /// Browser driver integration.
+    #[arg(long, value_enum, default_value_t = BrowserDriverKind::A3s)]
+    pub(super) browser_driver: BrowserDriverKind,
+    /// Override the browser driver executable.
+    #[arg(long)]
+    pub(super) browser_executable: Option<PathBuf>,
+    /// Show the browser window.
+    #[arg(long)]
+    pub(super) headed: bool,
+    /// Per-command browser deadline.
+    #[arg(long, default_value_t = 30_000)]
+    pub(super) command_timeout_ms: u64,
+    /// Browser daemon inactivity deadline between agent turns.
+    #[arg(long, default_value_t = 300_000)]
+    pub(super) idle_timeout_ms: u64,
+    /// Emit machine-readable JSON.
+    #[arg(long)]
+    pub(super) json: bool,
+}
+
+#[derive(Debug, Args)]
+pub(super) struct ObserveArgs {
+    /// Active session identifier.
+    #[arg(long)]
+    pub(super) session: String,
+    /// Return only interactive elements when supported.
+    #[arg(long)]
+    pub(super) interactive: bool,
+    /// Emit machine-readable JSON.
+    #[arg(long)]
+    pub(super) json: bool,
+}
+
+#[derive(Debug, Args)]
+pub(super) struct ActArgs {
+    /// Active session identifier.
+    #[arg(long)]
+    pub(super) session: String,
+    /// One JSON object matching the Action schema.
+    #[arg(long = "action-json")]
+    pub(super) action_json: String,
+    /// Observation identifier that supplied any ref target used by the action.
+    #[arg(long)]
+    pub(super) observation: Option<u64>,
+    /// Emit machine-readable JSON.
+    #[arg(long)]
+    pub(super) json: bool,
+}
+
+#[derive(Debug, Args)]
+pub(super) struct TargetArgs {
+    /// Ref such as @e3, or an explicit CSS selector.
+    pub(super) target: String,
+    /// Active session identifier.
+    #[arg(long)]
+    pub(super) session: String,
+    /// Observation identifier that supplied a ref target.
+    #[arg(long)]
+    pub(super) observation: Option<u64>,
+    /// Emit machine-readable JSON.
+    #[arg(long)]
+    pub(super) json: bool,
+}
+
+#[derive(Debug, Args)]
+pub(super) struct TargetValueArgs {
+    /// Ref such as @e3, or an explicit CSS selector.
+    pub(super) target: String,
+    /// Text value.
+    pub(super) value: String,
+    /// Active session identifier.
+    #[arg(long)]
+    pub(super) session: String,
+    /// Observation identifier that supplied a ref target.
+    #[arg(long)]
+    pub(super) observation: Option<u64>,
+    /// Emit machine-readable JSON.
+    #[arg(long)]
+    pub(super) json: bool,
+}
+
+#[derive(Debug, Args)]
+pub(super) struct SelectArgs {
+    /// Ref such as @e3, or an explicit CSS selector.
+    pub(super) target: String,
+    /// One or more option values.
+    #[arg(required = true, num_args = 1..)]
+    pub(super) values: Vec<String>,
+    /// Active session identifier.
+    #[arg(long)]
+    pub(super) session: String,
+    /// Observation identifier that supplied a ref target.
+    #[arg(long)]
+    pub(super) observation: Option<u64>,
+    /// Emit machine-readable JSON.
+    #[arg(long)]
+    pub(super) json: bool,
+}
+
+#[derive(Debug, Args)]
+pub(super) struct DragArgs {
+    /// Source ref or CSS selector.
+    pub(super) source: String,
+    /// Destination ref or CSS selector.
+    pub(super) target: String,
+    /// Active session identifier.
+    #[arg(long)]
+    pub(super) session: String,
+    /// Observation identifier that supplied either ref target.
+    #[arg(long)]
+    pub(super) observation: Option<u64>,
+    /// Emit machine-readable JSON.
+    #[arg(long)]
+    pub(super) json: bool,
+}
+
+#[derive(Debug, Args)]
+pub(super) struct PressArgs {
+    /// Key or key chord, for example Enter or Meta+z.
+    pub(super) key: String,
+    /// Active session identifier.
+    #[arg(long)]
+    pub(super) session: String,
+    /// Emit machine-readable JSON.
+    #[arg(long)]
+    pub(super) json: bool,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq, ValueEnum)]
+pub(super) enum ModifierArg {
+    Alt,
+    Control,
+    Meta,
+    Shift,
+}
+
+impl From<ModifierArg> for ModifierKey {
+    fn from(value: ModifierArg) -> Self {
+        match value {
+            ModifierArg::Alt => Self::Alt,
+            ModifierArg::Control => Self::Control,
+            ModifierArg::Meta => Self::Meta,
+            ModifierArg::Shift => Self::Shift,
+        }
+    }
+}
+
+#[derive(Debug, Args)]
+pub(super) struct WheelArgs {
+    /// Vertical wheel delta. Negative values scroll or zoom in.
+    #[arg(allow_hyphen_values = true)]
+    pub(super) delta_y: i32,
+    /// Horizontal wheel delta.
+    #[arg(long, default_value_t = 0, allow_hyphen_values = true)]
+    pub(super) delta_x: i32,
+    /// Optional ref or CSS target for a synthetic target-scoped wheel event.
+    #[arg(long)]
+    pub(super) target: Option<String>,
+    /// Modifier to hold for the gesture. Repeat for multiple modifiers.
+    #[arg(long = "modifier", value_enum)]
+    pub(super) modifiers: Vec<ModifierArg>,
+    /// Active session identifier.
+    #[arg(long)]
+    pub(super) session: String,
+    /// Observation identifier that supplied a ref target.
+    #[arg(long)]
+    pub(super) observation: Option<u64>,
+    /// Emit machine-readable JSON.
+    #[arg(long)]
+    pub(super) json: bool,
+}
+
+#[derive(Debug, Args)]
+pub(super) struct ViewportArgs {
+    /// Viewport width in CSS pixels.
+    pub(super) width: u32,
+    /// Viewport height in CSS pixels.
+    pub(super) height: u32,
+    /// Optional integer device scale factor.
+    #[arg(long)]
+    pub(super) scale: Option<u32>,
+    /// Active session identifier.
+    #[arg(long)]
+    pub(super) session: String,
+    /// Emit machine-readable JSON.
+    #[arg(long)]
+    pub(super) json: bool,
+}
+
+#[derive(Debug, Args)]
+pub(super) struct ScreenshotArgs {
+    /// Relative path below the session artifact directory.
+    pub(super) path: String,
+    /// Active session identifier.
+    #[arg(long)]
+    pub(super) session: String,
+    /// Emit machine-readable JSON.
+    #[arg(long)]
+    pub(super) json: bool,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq, ValueEnum)]
+pub(super) enum FinishStatus {
+    Passed,
+    Failed,
+}
+
+#[derive(Debug, Args)]
+pub(super) struct FinishArgs {
+    /// Active session identifier.
+    #[arg(long)]
+    pub(super) session: String,
+    /// Final test status decided from explicit success criteria and evidence.
+    #[arg(long, value_enum)]
+    pub(super) status: FinishStatus,
+    /// Concise result summary.
+    #[arg(long)]
+    pub(super) summary: String,
+    /// Emit machine-readable JSON.
+    #[arg(long)]
+    pub(super) json: bool,
+}
+
+#[derive(Debug, Args)]
+pub(super) struct SessionArgs {
+    /// Session identifier.
+    #[arg(long)]
+    pub(super) session: String,
+    /// Emit machine-readable JSON.
+    #[arg(long)]
+    pub(super) json: bool,
+}
+
+#[derive(Debug, Args)]
+pub(super) struct ListArgs {
+    /// Emit machine-readable JSON.
+    #[arg(long)]
+    pub(super) json: bool,
+}
+
+#[derive(Debug, Args)]
+pub(super) struct SchemaArgs {
+    /// Emit compact JSON instead of pretty JSON.
+    #[arg(long)]
+    pub(super) compact: bool,
+}

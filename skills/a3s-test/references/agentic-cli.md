@@ -60,6 +60,23 @@ a3s-test agent click '[data-testid=save]' \
 a3s-test agent fill @e4 "new value" \
   --session <id> --observation <observation-id> --json
 
+a3s-test agent hover @e5 \
+  --session <id> --observation <observation-id> --json
+
+a3s-test agent focus '#title' --session <id> --json
+a3s-test agent double-click '#row-3' --session <id> --json
+a3s-test agent context-click '#row-3' --session <id> --json
+a3s-test agent type '#title' " plan" --session <id> --json
+a3s-test agent check '#comments' --session <id> --json
+a3s-test agent uncheck '#comments' --session <id> --json
+a3s-test agent select '#status' draft review --session <id> --json
+a3s-test agent drag '#comment-1' '#comment-gutter' --session <id> --json
+
+a3s-test agent wheel -120 --target '.document-canvas' \
+  --modifier control --session <id> --json
+
+a3s-test agent viewport 1440 900 --scale 2 --session <id> --json
+
 a3s-test agent press Meta+z --session <id> --json
 
 a3s-test agent screenshot screenshots/final.png \
@@ -68,7 +85,11 @@ a3s-test agent screenshot screenshots/final.png \
 
 A target matching `@e` followed by digits is a ref. Every other compact target
 is an explicit CSS selector. A ref requires the observation identifier that
-returned it.
+returned it. Basic click, hover, fill, and check actions accept semantic
+targets through `agent act`. Focus, double-click, context-click, type, uncheck,
+select, drag, and target-scoped wheel require ref or CSS targets because the
+current standalone browser semantic protocol has no corresponding `find`
+subaction.
 
 ## Typed action JSON
 
@@ -95,7 +116,14 @@ Common actions:
 
 ```json
 {"type":"navigate","url":"https://example.test/settings"}
+{"type":"hover","target":{"type":"role","role":"button","name":"Help"}}
+{"type":"focus","target":{"type":"css","selector":"#title"}}
 {"type":"fill","target":{"type":"label","value":"Email"},"value":"tester@example.test"}
+{"type":"type","target":{"type":"css","selector":"#title"},"value":" plan"}
+{"type":"select","target":{"type":"ref","value":"@e9"},"values":["draft","review"]}
+{"type":"drag","source":{"type":"css","selector":"#comment-1"},"target":{"type":"css","selector":"#comment-gutter"}}
+{"type":"wheel","target":{"type":"css","selector":".document-canvas"},"delta_x":0,"delta_y":-120,"modifiers":["control"]}
+{"type":"viewport","width":1440,"height":900,"scale":2}
 {"type":"press","key":"Enter"}
 {"type":"wait","condition":{"type":"text","value":"Saved"}}
 {"type":"assert","expectation":{"type":"text_visible","value":"Saved"}}

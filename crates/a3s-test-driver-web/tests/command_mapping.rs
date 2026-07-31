@@ -361,10 +361,15 @@ async fn discovers_and_admits_the_typed_browser_protocol() {
     let capabilities = driver.capabilities().await.expect("capabilities");
     assert_eq!(capabilities.integration, BrowserIntegration::Standalone);
     assert_eq!(capabilities.version, "0.26.0");
-    assert_eq!(capabilities.protocol_revision, 1);
+    assert_eq!(capabilities.protocol_revision, 2);
     assert!(capabilities.features.contains(&WebCapability::Tabs));
     assert!(capabilities.features.contains(&WebCapability::Har));
     assert!(capabilities.features.contains(&WebCapability::Video));
+    assert!(capabilities
+        .features
+        .contains(&WebCapability::ContextClicks));
+    assert!(capabilities.features.contains(&WebCapability::MouseWheel));
+    assert!(capabilities.features.contains(&WebCapability::Viewport));
 
     let invocations = executor.invocations.lock().unwrap();
     assert_eq!(invocations.len(), 1);

@@ -72,6 +72,57 @@ fill "email" {
     value = "tester@example.test"
 }
 
+hover "help" {
+    target = role("button", "Help")
+}
+
+focus "title" {
+    target = css("#title")
+}
+
+type "append-title" {
+    target = css("#title")
+    value = " plan"
+}
+
+check "comments-on" {
+    target = label("Comments")
+}
+
+uncheck "comments-off" {
+    target = css("#comments")
+}
+
+select "status" {
+    target = css("#status")
+    values = ["draft", "review"]
+}
+
+double_click "open-row" {
+    target = ref("@e7")
+}
+
+context_click "row-menu" {
+    target = ref("@e7")
+}
+
+drag "move-comment" {
+    source = css("#comment-1")
+    target = css("#comment-gutter")
+}
+
+wheel "zoom" {
+    target = css(".document-canvas")
+    delta_y = -120
+    modifiers = ["control"]
+}
+
+viewport "desktop" {
+    width = 1440
+    height = 900
+    scale = 2
+}
+
 press "submit" {
     key = "Enter"
 }
@@ -107,6 +158,13 @@ screenshot "final" {
 
 A wait accepts exactly one of `load`, `text`, or `url`. An expectation accepts
 exactly one of `text`, `url`, or `visible`.
+
+Focus, double-click, context-click, type, uncheck, select, drag, and
+target-scoped wheel require `ref()` or `css()` with the current browser
+protocol. Click, hover, fill, and check accept all semantic targets. Select
+requires one or more values. Wheel requires a non-zero delta, accepts unique
+`alt`, `control`, `meta`, and `shift` modifiers, and is native when no target
+is supplied. Viewport dimensions and optional scale must be positive.
 
 ## Tabs, frames, and dialogs
 

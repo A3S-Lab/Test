@@ -30,7 +30,8 @@
 - [x] Observation-bound refs and origin gates for explicit URL actions
 - [ ] Browser-level origin enforcement for link-, script-, and
       redirect-triggered navigation
-- [x] Compact click, fill, press, and screenshot turns plus full typed actions
+- [x] Compact pointer, form, keyboard, wheel, viewport, and evidence turns plus
+      full typed actions
 - [x] Typed LLM provider and planner interface
 - [x] Schema-constrained observe-decide-act loop
 - [x] Goal, success criteria, turn, token, cost, context, and time budgets

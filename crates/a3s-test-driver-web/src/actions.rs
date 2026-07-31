@@ -1,7 +1,7 @@
 use std::ffi::OsString;
 
 use a3s_test_core::{
-    DialogOperation, DriverError, FrameTarget, NetworkRoute, TabOperation, Target,
+    DialogOperation, DriverError, FrameTarget, ModifierKey, NetworkRoute, TabOperation, Target,
 };
 
 use crate::protocol::direct_selector;
@@ -61,6 +61,54 @@ pub(crate) fn upload_args(target: &Target, paths: &[String]) -> Result<Vec<OsStr
     ];
     args.extend(paths.iter().map(OsString::from));
     Ok(args)
+}
+
+pub(crate) fn select_args(
+    target: &Target,
+    values: &[String],
+) -> Result<Vec<OsString>, DriverError> {
+    if values.is_empty() {
+        return Err(DriverError::new(
+            "test.driver.web.select_values_required",
+            "select requires at least one value",
+        ));
+    }
+    let mut args = vec![
+        OsString::from("select"),
+        OsString::from(direct_selector(target)?),
+    ];
+    args.extend(values.iter().map(OsString::from));
+    Ok(args)
+}
+
+pub(crate) fn drag_args(source: &Target, target: &Target) -> Result<Vec<OsString>, DriverError> {
+    Ok(vec![
+        OsString::from("drag"),
+        OsString::from(direct_selector(source)?),
+        OsString::from(direct_selector(target)?),
+    ])
+}
+
+pub(crate) fn viewport_args(width: u32, height: u32, scale: Option<u32>) -> Vec<OsString> {
+    let mut args = vec![
+        OsString::from("set"),
+        OsString::from("viewport"),
+        OsString::from(width.to_string()),
+        OsString::from(height.to_string()),
+    ];
+    if let Some(scale) = scale {
+        args.push(OsString::from(scale.to_string()));
+    }
+    args
+}
+
+pub(crate) const fn modifier_name(modifier: ModifierKey) -> &'static str {
+    match modifier {
+        ModifierKey::Alt => "Alt",
+        ModifierKey::Control => "Control",
+        ModifierKey::Meta => "Meta",
+        ModifierKey::Shift => "Shift",
+    }
 }
 
 pub(crate) fn network_route_args(pattern: &str, route: &NetworkRoute) -> Vec<OsString> {

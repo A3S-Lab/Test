@@ -39,9 +39,22 @@ pub(super) fn validate_action(
 fn action_uses_ref(action: &Action) -> bool {
     match action {
         Action::Click { target }
+        | Action::Hover { target }
+        | Action::Focus { target }
+        | Action::DoubleClick { target }
+        | Action::ContextClick { target }
         | Action::Fill { target, .. }
+        | Action::Type { target, .. }
+        | Action::Check { target }
+        | Action::Uncheck { target }
+        | Action::Select { target, .. }
         | Action::Upload { target, .. }
         | Action::Download { target, .. } => target_uses_ref(target),
+        Action::Drag { source, target } => target_uses_ref(source) || target_uses_ref(target),
+        Action::Wheel {
+            target: Some(target),
+            ..
+        } => target_uses_ref(target),
         Action::Assert {
             expectation: Expectation::Visible(target),
         } => target_uses_ref(target),

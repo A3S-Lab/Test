@@ -11,7 +11,8 @@ use serde_json::Value;
 use tokio::sync::OnceCell;
 
 use crate::actions::{
-    dialog_args, frame_args, network_route_args, network_unroute_args, tab_args, upload_args,
+    dialog_args, frame_args, network_route_args, network_unroute_args, select_args, tab_args,
+    upload_args, viewport_args,
 };
 use crate::capabilities;
 use crate::process::{create_runtime_directory, terminate_owned_session, SessionRegistration};
@@ -20,6 +21,8 @@ use crate::protocol::{
     scalar_string, target_action, validate_component, wait_args,
 };
 use crate::{AgentBrowserConfig, BrowserCapabilities, CommandExecutor, TokioCommandExecutor};
+
+mod advanced;
 
 #[derive(Clone, Debug)]
 pub struct AgentBrowserConnectionConfig {
@@ -263,16 +266,82 @@ impl DriverSession for AgentBrowserSession {
                     .await
                     .map(|data| StepOutput::new("target clicked").with_data(data))
             }
+            Action::Hover { target } => {
+                let args = target_action(target, "hover", None)?;
+                self.execute_command(args)
+                    .await
+                    .map(|data| StepOutput::new("target hovered").with_data(data))
+            }
+            Action::Focus { target } => {
+                let selector = direct_selector(target)?;
+                self.execute_command(vec!["focus".into(), selector.into()])
+                    .await
+                    .map(|data| StepOutput::new("target focused").with_data(data))
+            }
+            Action::DoubleClick { target } => {
+                let selector = direct_selector(target)?;
+                self.execute_command(vec!["dblclick".into(), selector.into()])
+                    .await
+                    .map(|data| StepOutput::new("target double-clicked").with_data(data))
+            }
+            Action::ContextClick { target } => self.context_click(target).await,
             Action::Fill { target, value } => {
                 let args = target_action(target, "fill", Some(value))?;
                 self.execute_command(args)
                     .await
                     .map(|data| StepOutput::new("target filled").with_data(data))
             }
+            Action::Type { target, value } => {
+                let selector = direct_selector(target)?;
+                self.execute_command(vec!["type".into(), selector.into(), value.into()])
+                    .await
+                    .map(|data| StepOutput::new("text typed into target").with_data(data))
+            }
+            Action::Check { target } => {
+                let args = target_action(target, "check", None)?;
+                self.execute_command(args)
+                    .await
+                    .map(|data| StepOutput::new("target checked").with_data(data))
+            }
+            Action::Uncheck { target } => {
+                let selector = direct_selector(target)?;
+                self.execute_command(vec!["uncheck".into(), selector.into()])
+                    .await
+                    .map(|data| StepOutput::new("target unchecked").with_data(data))
+            }
+            Action::Select { target, values } => self
+                .execute_command(select_args(target, values)?)
+                .await
+                .map(|data| StepOutput::new("target options selected").with_data(data)),
+            Action::Drag { source, target } => self.drag(source, target).await,
             Action::Press { key } => self
                 .execute_command(vec!["press".into(), key.into()])
                 .await
                 .map(|data| StepOutput::new("key pressed").with_data(data)),
+            Action::Wheel {
+                target,
+                delta_x,
+                delta_y,
+                modifiers,
+            } => {
+                self.wheel(target.as_ref(), *delta_x, *delta_y, modifiers.as_slice())
+                    .await
+            }
+            Action::Viewport {
+                width,
+                height,
+                scale,
+            } => {
+                if *width == 0 || *height == 0 || scale == &Some(0) {
+                    return Err(DriverError::new(
+                        "test.driver.web.viewport_invalid",
+                        "viewport width, height, and optional scale must be greater than zero",
+                    ));
+                }
+                self.execute_command(viewport_args(*width, *height, *scale))
+                    .await
+                    .map(|data| StepOutput::new("viewport updated").with_data(data))
+            }
             Action::Wait { condition } => {
                 let args = wait_args(condition);
                 self.execute_command(args)

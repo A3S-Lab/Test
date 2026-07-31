@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>A3S Test advanced interaction fixture</title>
+    <style>
+      body {
+        font: 16px/1.5 system-ui, sans-serif;
+        margin: 24px;
+      }
+
+      main {
+        display: grid;
+        gap: 16px;
+        max-width: 640px;
+      }
+
+      #double-target,
+      #context-target,
+      #drag-source,
+      #drop-target,
+      #wheel-target {
+        align-items: center;
+        border: 1px solid #64748b;
+        display: flex;
+        min-height: 48px;
+        padding: 8px 12px;
+      }
+
+      #drag-source {
+        background: #dbeafe;
+        width: 120px;
+      }
+
+      #drop-target {
+        background: #f1f5f9;
+        min-height: 80px;
+      }
+
+      #wheel-target {
+        min-height: 120px;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>A3S Test advanced interactions</h1>
+
+      <label>
+        Title
+        <input id="title" value="Draft" />
+      </label>
+
+      <label>
+        <input id="comments" type="checkbox" />
+        Enable comments
+      </label>
+
+      <label>
+        Status
+        <select id="status" multiple>
+          <option value="draft">Draft</option>
+          <option value="review">Review</option>
+          <option value="published">Published</option>
+        </select>
+      </label>
+
+      <div id="double-target" tabindex="0">Double-click target</div>
+      <output id="double-result">double: pending</output>
+
+      <div id="context-target">Context-click target</div>
+      <output id="context-result">context: pending</output>
+
+      <div id="drag-source">Drag source</div>
+      <div id="drop-target">Drop target</div>
+      <output id="drag-result">drag: pending</output>
+
+      <div id="wheel-target">Wheel target</div>
+      <output id="wheel-result">wheel: pending</output>
+      <output id="viewport-result">viewport: pending</output>
+    </main>
+
+    <script>
+      const byId = (id) => document.getElementById(id);
+
+      byId("double-target").addEventListener("dblclick", () => {
+        byId("double-result").textContent = "double: passed";
+      });
+
+      byId("context-target").addEventListener("contextmenu", (event) => {
+        event.preventDefault();
+        byId("context-result").textContent = "context: passed";
+      });
+
+      let pointerDragging = false;
+      byId("drag-source").addEventListener("pointerdown", () => {
+        pointerDragging = true;
+      });
+      byId("drop-target").addEventListener("pointerup", () => {
+        if (pointerDragging) {
+          pointerDragging = false;
+          byId("drag-result").textContent = "drag: passed";
+        }
+      });
+
+      byId("wheel-target").addEventListener("wheel", (event) => {
+        event.preventDefault();
+        const modifier = event.ctrlKey || event.metaKey;
+        byId("wheel-result").textContent =
+          modifier && event.deltaY === -120 ? "wheel: passed" : "wheel: failed";
+      });
+
+      const reportViewport = () => {
+        byId("viewport-result").textContent =
+          `viewport: ${window.innerWidth}x${window.innerHeight}`;
+      };
+      window.addEventListener("resize", reportViewport);
+      reportViewport();
+    </script>
+  </body>
+</html>

@@ -8,7 +8,8 @@ use a3s_test_agent::{
     StructuredLlmResponse,
 };
 use a3s_test_core::{
-    Action, DriverError, DriverSession, StepOutput, Surface, SurfaceObservation, Target, TestStep,
+    Action, DriverError, DriverSession, ModifierKey, StepOutput, Surface, SurfaceObservation,
+    Target, TestStep,
 };
 use async_trait::async_trait;
 use tokio_util::sync::CancellationToken;
@@ -354,6 +355,93 @@ async fn bounds_serialized_context_before_calling_the_llm() {
         Some("test.agent.budget.context_exceeded")
     );
     assert!(provider.requests.lock().unwrap().is_empty());
+}
+
+#[test]
+fn advanced_actions_have_distinct_policy_capabilities() {
+    let target = Target::Css {
+        selector: "#target".to_string(),
+    };
+    let actions = [
+        (
+            Action::Hover {
+                target: target.clone(),
+            },
+            ActionKind::Hover,
+        ),
+        (
+            Action::Focus {
+                target: target.clone(),
+            },
+            ActionKind::Focus,
+        ),
+        (
+            Action::DoubleClick {
+                target: target.clone(),
+            },
+            ActionKind::DoubleClick,
+        ),
+        (
+            Action::ContextClick {
+                target: target.clone(),
+            },
+            ActionKind::ContextClick,
+        ),
+        (
+            Action::Type {
+                target: target.clone(),
+                value: "text".to_string(),
+            },
+            ActionKind::Type,
+        ),
+        (
+            Action::Check {
+                target: target.clone(),
+            },
+            ActionKind::Check,
+        ),
+        (
+            Action::Uncheck {
+                target: target.clone(),
+            },
+            ActionKind::Uncheck,
+        ),
+        (
+            Action::Select {
+                target: target.clone(),
+                values: vec!["value".to_string()],
+            },
+            ActionKind::Select,
+        ),
+        (
+            Action::Drag {
+                source: target.clone(),
+                target: target.clone(),
+            },
+            ActionKind::Drag,
+        ),
+        (
+            Action::Wheel {
+                target: Some(target),
+                delta_x: 0,
+                delta_y: 120,
+                modifiers: vec![ModifierKey::Control],
+            },
+            ActionKind::Wheel,
+        ),
+        (
+            Action::Viewport {
+                width: 1280,
+                height: 720,
+                scale: None,
+            },
+            ActionKind::Viewport,
+        ),
+    ];
+
+    for (action, expected) in actions {
+        assert_eq!(ActionKind::from(&action), expected);
+    }
 }
 
 fn goal() -> AgentGoal {

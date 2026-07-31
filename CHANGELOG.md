@@ -1,5 +1,39 @@
 # Changelog
 
+## 0.4.0 - 2026-07-31
+
+### Added
+
+- Action protocol revision 2 with typed hover, focus, double-click,
+  context-click, incremental type, check, uncheck, multi-value select, drag,
+  modifier-aware mouse wheel, and viewport actions.
+- Compact external-planner commands for every new interaction, with generated
+  JSON Schema, ACL parsing, policy capability kinds, and Web capability
+  reporting from the same shared action model.
+- A hermetic advanced-interaction fixture, ACL example, command-mapping tests,
+  failure-cleanup tests, and a real standalone agent-browser smoke workflow.
+
+### Changed
+
+- Context-click resolves a visible target center and performs a bounded right
+  mouse down/up sequence. Drag scrolls both endpoints into view before
+  dispatch.
+- Mouse wheel releases held modifiers in reverse order on both success and
+  failure. A target-scoped wheel emits a typed event at the resolved element;
+  an untargeted wheel remains a native browser gesture.
+- Advanced operations use observation refs or CSS selectors when the
+  standalone browser semantic protocol cannot express the corresponding
+  subaction.
+- Cross-platform one-click installers and all built-in Coding Agent targets
+  remain release assets and are validated against the `v0.4.0` package shape.
+
+### Safety
+
+- Ref provenance checks now cover every source, destination, and optional
+  target in the expanded action protocol.
+- Viewport dimensions, wheel deltas and modifiers, select values, and direct
+  selector requirements are rejected before unsafe or ambiguous dispatch.
+
 ## 0.3.1 - 2026-07-31
 
 ### Fixed

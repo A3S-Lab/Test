@@ -49,6 +49,30 @@ fn agent_schema_exposes_values_for_semantic_targets() {
     assert!(output.status.success(), "{output:?}");
     let value: serde_json::Value = serde_json::from_slice(&output.stdout).expect("JSON output");
     assert_eq!(value["planner"], "external_coding_agent");
+    assert_eq!(value["protocol_revision"], 2);
+    let action_types = value["action_schema"]["oneOf"]
+        .as_array()
+        .expect("action variants");
+    for kind in [
+        "hover",
+        "focus",
+        "double_click",
+        "context_click",
+        "type",
+        "check",
+        "uncheck",
+        "select",
+        "drag",
+        "wheel",
+        "viewport",
+    ] {
+        assert!(
+            action_types
+                .iter()
+                .any(|action| action["properties"]["type"]["const"] == kind),
+            "missing {kind} action"
+        );
+    }
     let targets = value["action_schema"]["$defs"]["Target"]["oneOf"]
         .as_array()
         .expect("target variants");
@@ -90,11 +114,16 @@ fn capabilities_returns_the_admitted_web_protocol() {
     let value: serde_json::Value = serde_json::from_slice(&output.stdout).expect("JSON output");
     assert_eq!(value["integration"], "standalone");
     assert_eq!(value["version"], "0.26.0");
-    assert_eq!(value["protocol_revision"], 1);
+    assert_eq!(value["protocol_revision"], 2);
     assert!(value["features"].as_array().is_some_and(|features| {
         features
             .iter()
             .any(|feature| feature.as_str() == Some("tabs"))
+    }));
+    assert!(value["features"].as_array().is_some_and(|features| {
+        features
+            .iter()
+            .any(|feature| feature.as_str() == Some("context_clicks"))
     }));
 }
 
@@ -276,6 +305,111 @@ esac
         })
         .collect::<HashSet<_>>();
     assert_eq!(sessions, HashSet::from(["agent-checkout"]));
+}
+
+#[cfg(unix)]
+#[test]
+fn compact_agent_commands_cover_advanced_office_interactions() {
+    use std::os::unix::fs::PermissionsExt;
+
+    let _test_guard = process_test_lock().lock().unwrap();
+    let temp = tempfile::tempdir().expect("tempdir");
+    let driver = temp.path().join("fake-agent-browser");
+    let log = temp.path().join("driver.log");
+    fs::write(
+        &driver,
+        r#"#!/bin/sh
+case " $* " in
+  *" --version "*)
+    printf 'agent-browser 0.26.0\n'
+    exit 0
+    ;;
+esac
+printf '%s\n' "$*" >> "$A3S_TEST_LOG"
+case " $* " in
+  *" get box "*)
+    printf '{"success":true,"data":{"x":10,"y":20,"width":100,"height":50}}\n'
+    ;;
+  *)
+    printf '{"success":true}\n'
+    ;;
+esac
+"#,
+    )
+    .expect("driver");
+    fs::set_permissions(&driver, fs::Permissions::from_mode(0o755)).expect("permissions");
+
+    let start = start_agent_session(temp.path(), &driver, &log, "advanced-actions");
+    assert!(start.status.success(), "{start:?}");
+
+    let commands = [
+        vec!["agent", "hover", "#target"],
+        vec!["agent", "focus", "#target"],
+        vec!["agent", "double-click", "#target"],
+        vec!["agent", "context-click", "#target"],
+        vec!["agent", "type", "#target", "more text"],
+        vec!["agent", "check", "#target"],
+        vec!["agent", "uncheck", "#target"],
+        vec!["agent", "select", "#target", "draft", "review"],
+        vec!["agent", "drag", "#source", "#target"],
+        vec![
+            "agent",
+            "wheel",
+            "-120",
+            "--delta-x",
+            "4",
+            "--modifier",
+            "control",
+            "--modifier",
+            "shift",
+        ],
+        vec!["agent", "viewport", "1440", "900", "--scale", "2"],
+    ];
+    for mut command in commands {
+        command.extend(["--session", "advanced-actions", "--json"]);
+        let output = Command::new(binary())
+            .args(command)
+            .current_dir(temp.path())
+            .env("A3S_TEST_LOG", &log)
+            .output()
+            .expect("advanced compact action");
+        assert!(output.status.success(), "{output:?}");
+    }
+
+    let abort = Command::new(binary())
+        .args(["agent", "abort", "--session", "advanced-actions", "--json"])
+        .current_dir(temp.path())
+        .env("A3S_TEST_LOG", &log)
+        .output()
+        .expect("abort");
+    assert!(abort.status.success(), "{abort:?}");
+
+    let driver_log = fs::read_to_string(log).expect("driver log");
+    for expected in [
+        " hover #target",
+        " focus #target",
+        " dblclick #target",
+        " get box #target",
+        " mouse move 60 45",
+        " mouse down right",
+        " mouse up right",
+        " type #target more text",
+        " check #target",
+        " uncheck #target",
+        " select #target draft review",
+        " drag #source #target",
+        " keydown Control",
+        " keydown Shift",
+        " mouse wheel -120 4",
+        " keyup Shift",
+        " keyup Control",
+        " set viewport 1440 900 2",
+    ] {
+        assert!(
+            driver_log.lines().any(|line| line.ends_with(expected)),
+            "missing {expected:?} in {driver_log}"
+        );
+    }
 }
 
 #[cfg(unix)]

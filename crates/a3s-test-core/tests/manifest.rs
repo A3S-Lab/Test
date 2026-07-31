@@ -1,6 +1,6 @@
 use a3s_test_core::{
-    Action, CaptureOperation, DialogOperation, Expectation, FrameTarget, LoadState, NetworkRoute,
-    Surface, TabOperation, Target, TestSuite, VideoOperation, WaitCondition,
+    Action, CaptureOperation, DialogOperation, Expectation, FrameTarget, LoadState, ModifierKey,
+    NetworkRoute, Surface, TabOperation, Target, TestSuite, VideoOperation, WaitCondition,
 };
 
 const VALID_SUITE: &str = r#"
@@ -353,4 +353,177 @@ suite "invalid" {
     .expect_err("route must choose abort or body");
 
     assert_eq!(error.code(), "test.spec.condition_ambiguous");
+}
+
+#[test]
+fn parses_advanced_web_interaction_actions() {
+    let suite = TestSuite::from_acl(
+        r##"
+suite "advanced-web" {
+    scenario "interactions" {
+        surface = "web"
+
+        hover "toolbar" {
+            target = role("button", "Toolbar")
+        }
+        focus "title" {
+            target = label("Title")
+        }
+        double_click "word" {
+            target = ref("@e2")
+        }
+        context_click "selection" {
+            target = css(".selection")
+        }
+        type "append" {
+            target = placeholder("Start writing")
+            value = "More text"
+        }
+        check "comments" {
+            target = testid("comments")
+        }
+        uncheck "readonly" {
+            target = css("#readonly")
+        }
+        select "status" {
+            target = ref("@e8")
+            values = ["draft", "review"]
+        }
+        drag "resize" {
+            source = ref("@e10")
+            target = css("#resize-target")
+        }
+        wheel "zoom" {
+            target = css(".document-page")
+            delta_y = -120
+            delta_x = 4
+            modifiers = ["control", "shift"]
+        }
+        viewport "desktop" {
+            width = 1440
+            height = 900
+            scale = 2
+        }
+    }
+}
+"##,
+    )
+    .expect("advanced Web suite");
+
+    let actions = &suite.scenarios[0].steps;
+    assert_eq!(
+        actions[0].action,
+        Action::Hover {
+            target: Target::Role {
+                role: "button".to_string(),
+                name: "Toolbar".to_string(),
+            }
+        }
+    );
+    assert_eq!(
+        actions[2].action,
+        Action::DoubleClick {
+            target: Target::Ref {
+                value: "@e2".to_string()
+            }
+        }
+    );
+    assert_eq!(
+        actions[4].action,
+        Action::Type {
+            target: Target::Placeholder {
+                value: "Start writing".to_string()
+            },
+            value: "More text".to_string(),
+        }
+    );
+    assert_eq!(
+        actions[7].action,
+        Action::Select {
+            target: Target::Ref {
+                value: "@e8".to_string()
+            },
+            values: vec!["draft".to_string(), "review".to_string()],
+        }
+    );
+    assert_eq!(
+        actions[8].action,
+        Action::Drag {
+            source: Target::Ref {
+                value: "@e10".to_string()
+            },
+            target: Target::Css {
+                selector: "#resize-target".to_string()
+            },
+        }
+    );
+    assert_eq!(
+        actions[9].action,
+        Action::Wheel {
+            target: Some(Target::Css {
+                selector: ".document-page".to_string()
+            }),
+            delta_x: 4,
+            delta_y: -120,
+            modifiers: vec![ModifierKey::Control, ModifierKey::Shift],
+        }
+    );
+    assert_eq!(
+        actions[10].action,
+        Action::Viewport {
+            width: 1440,
+            height: 900,
+            scale: Some(2),
+        }
+    );
+}
+
+#[test]
+fn rejects_invalid_advanced_interaction_values() {
+    for (source, code) in [
+        (
+            r#"
+suite "invalid" {
+    scenario "web" {
+        surface = "web"
+        wheel "noop" {
+            delta_y = 0
+        }
+    }
+}
+"#,
+            "test.spec.wheel_delta_required",
+        ),
+        (
+            r#"
+suite "invalid" {
+    scenario "web" {
+        surface = "web"
+        wheel "duplicate-modifier" {
+            delta_y = 120
+            modifiers = ["control", "control"]
+        }
+    }
+}
+"#,
+            "test.spec.modifier_duplicate",
+        ),
+        (
+            r#"
+suite "invalid" {
+    scenario "web" {
+        surface = "web"
+        viewport "zero" {
+            width = 0
+            height = 900
+        }
+    }
+}
+"#,
+            "test.spec.number_range",
+        ),
+    ] {
+        let error = TestSuite::from_acl(source).expect_err("invalid advanced action must fail");
+        assert_eq!(error.code(), code);
+    }
 }

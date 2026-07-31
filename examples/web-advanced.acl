@@ -1,0 +1,79 @@
+suite "web-advanced" {
+    version = 1
+
+    scenario "advanced-interactions" {
+        name = "Exercise Office-grade browser interactions"
+        surface = "web"
+        timeout_ms = 30000
+
+        navigate "open" {
+            url = "http://127.0.0.1:4173/advanced.html"
+        }
+
+        focus "title" {
+            target = css("#title")
+        }
+
+        type "append-title" {
+            target = css("#title")
+            value = " plan"
+        }
+
+        check "enable-comments" {
+            target = css("#comments")
+        }
+
+        uncheck "disable-comments" {
+            target = css("#comments")
+        }
+
+        select "status" {
+            target = css("#status")
+            values = ["draft", "review"]
+        }
+
+        double_click "open-item" {
+            target = css("#double-target")
+        }
+
+        expect "double-clicked" {
+            text = "double: passed"
+        }
+
+        context_click "open-context-menu" {
+            target = css("#context-target")
+        }
+
+        expect "context-clicked" {
+            text = "context: passed"
+        }
+
+        drag "move-item" {
+            source = css("#drag-source")
+            target = css("#drop-target")
+        }
+
+        expect "dragged" {
+            text = "drag: passed"
+        }
+
+        wheel "zoom" {
+            target = css("#wheel-target")
+            delta_y = -120
+            modifiers = ["control"]
+        }
+
+        expect "zoomed" {
+            text = "wheel: passed"
+        }
+
+        viewport "resize" {
+            width = 1024
+            height = 768
+        }
+
+        expect "viewport-updated" {
+            text = "viewport: 1024x768"
+        }
+    }
+}

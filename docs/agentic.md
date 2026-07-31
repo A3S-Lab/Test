@@ -52,6 +52,21 @@ URL-bearing actions are limited to the initial HTTP(S) origin and
 `--allow-origin` values. The generated `a3s-test agent schema` output is the
 authoritative action contract.
 
+Action protocol revision 2 covers the browser interactions needed to inspect
+document-style applications: click, hover, focus, double-click, context-click,
+fill, incremental type, check/uncheck, multi-value select, drag, key press,
+modifier-aware wheel, viewport, synchronization, assertions, browser context,
+files, network controls, and evidence. Compact CLI commands project the common
+interactions; `agent act --action-json` projects the same model without a
+second protocol.
+
+Semantic role, text, test-ID, label, and placeholder targets are used whenever
+the underlying browser command supports the requested subaction. Focus,
+double-click, context-click, type, uncheck, select, drag, and target-scoped
+wheel require a ref from the latest observation or explicit CSS selector with
+the current standalone browser protocol. This is a protocol capability
+boundary, not keyword routing or locator inference.
+
 ## Embedded host sequence
 
 ```text

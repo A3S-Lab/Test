@@ -3,9 +3,9 @@ use std::collections::HashSet;
 use a3s_acl::{Block, Value};
 
 use crate::{
-    Action, CaptureOperation, DialogOperation, Expectation, FrameTarget, LoadState, NetworkRoute,
-    SpecError, Surface, TabOperation, Target, TestScenario, TestStep, TestSuite, VideoOperation,
-    WaitCondition,
+    Action, CaptureOperation, DialogOperation, Expectation, FrameTarget, LoadState, ModifierKey,
+    NetworkRoute, SpecError, Surface, TabOperation, Target, TestScenario, TestStep, TestSuite,
+    VideoOperation, WaitCondition,
 };
 
 const DEFAULT_SCENARIO_TIMEOUT_MS: u64 = 60_000;
@@ -164,6 +164,30 @@ fn parse_step(block: &Block, scenario_path: &str) -> Result<TestStep, SpecError>
                 target: required_target(block, "target", &path)?,
             }
         }
+        "hover" => {
+            ensure_attributes(block, &["target"], &path)?;
+            Action::Hover {
+                target: required_target(block, "target", &path)?,
+            }
+        }
+        "focus" => {
+            ensure_attributes(block, &["target"], &path)?;
+            Action::Focus {
+                target: required_target(block, "target", &path)?,
+            }
+        }
+        "double_click" => {
+            ensure_attributes(block, &["target"], &path)?;
+            Action::DoubleClick {
+                target: required_target(block, "target", &path)?,
+            }
+        }
+        "context_click" => {
+            ensure_attributes(block, &["target"], &path)?;
+            Action::ContextClick {
+                target: required_target(block, "target", &path)?,
+            }
+        }
         "fill" => {
             ensure_attributes(block, &["target", "value"], &path)?;
             Action::Fill {
@@ -171,10 +195,69 @@ fn parse_step(block: &Block, scenario_path: &str) -> Result<TestStep, SpecError>
                 value: required_string(block, "value", &path)?.to_string(),
             }
         }
+        "type" => {
+            ensure_attributes(block, &["target", "value"], &path)?;
+            Action::Type {
+                target: required_target(block, "target", &path)?,
+                value: required_string(block, "value", &path)?.to_string(),
+            }
+        }
+        "check" => {
+            ensure_attributes(block, &["target"], &path)?;
+            Action::Check {
+                target: required_target(block, "target", &path)?,
+            }
+        }
+        "uncheck" => {
+            ensure_attributes(block, &["target"], &path)?;
+            Action::Uncheck {
+                target: required_target(block, "target", &path)?,
+            }
+        }
+        "select" => {
+            ensure_attributes(block, &["target", "values"], &path)?;
+            Action::Select {
+                target: required_target(block, "target", &path)?,
+                values: required_string_list(block, "values", &path)?,
+            }
+        }
+        "drag" => {
+            ensure_attributes(block, &["source", "target"], &path)?;
+            Action::Drag {
+                source: required_target(block, "source", &path)?,
+                target: required_target(block, "target", &path)?,
+            }
+        }
         "press" => {
             ensure_attributes(block, &["key"], &path)?;
             Action::Press {
                 key: required_string(block, "key", &path)?.to_string(),
+            }
+        }
+        "wheel" => {
+            ensure_attributes(block, &["target", "delta_x", "delta_y", "modifiers"], &path)?;
+            let delta_x = optional_signed_integer(block, "delta_x", 0, &path)?;
+            let delta_y = required_signed_integer(block, "delta_y", &path)?;
+            if delta_x == 0 && delta_y == 0 {
+                return Err(SpecError::new(
+                    "test.spec.wheel_delta_required",
+                    path,
+                    "wheel requires a non-zero delta_x or delta_y",
+                ));
+            }
+            Action::Wheel {
+                target: optional_target(block, "target", &path)?,
+                delta_x,
+                delta_y,
+                modifiers: optional_modifiers(block, "modifiers", &path)?,
+            }
+        }
+        "viewport" => {
+            ensure_attributes(block, &["width", "height", "scale"], &path)?;
+            Action::Viewport {
+                width: required_u32(block, "width", &path)?,
+                height: required_u32(block, "height", &path)?,
+                scale: optional_u32(block, "scale", &path)?,
             }
         }
         "wait" => {
@@ -528,6 +611,14 @@ fn required_target(block: &Block, name: &str, path: &str) -> Result<Target, Spec
     parse_target(value, &format!("{path}.{name}"))
 }
 
+fn optional_target(block: &Block, name: &str, path: &str) -> Result<Option<Target>, SpecError> {
+    block
+        .attributes
+        .get(name)
+        .map(|value| parse_target(value, &format!("{path}.{name}")))
+        .transpose()
+}
+
 fn parse_target(value: &Value, path: &str) -> Result<Target, SpecError> {
     let Value::Call(name, arguments) = value else {
         return Err(type_error(path, "target must use a typed locator function"));
@@ -693,6 +784,55 @@ fn required_string_list(block: &Block, name: &str, path: &str) -> Result<Vec<Str
         .collect()
 }
 
+fn optional_modifiers(
+    block: &Block,
+    name: &str,
+    path: &str,
+) -> Result<Vec<ModifierKey>, SpecError> {
+    let Some(value) = block.attributes.get(name) else {
+        return Ok(Vec::new());
+    };
+    let Value::List(values) = value else {
+        return Err(type_error(
+            format!("{path}.{name}"),
+            "modifiers must be a list of alt, control, meta, or shift",
+        ));
+    };
+
+    let mut seen = HashSet::new();
+    values
+        .iter()
+        .enumerate()
+        .map(|(index, value)| {
+            let item_path = format!("{path}.{name}[{index}]");
+            let modifier = match value.as_str() {
+                Some("alt") => ModifierKey::Alt,
+                Some("control") => ModifierKey::Control,
+                Some("meta") => ModifierKey::Meta,
+                Some("shift") => ModifierKey::Shift,
+                Some(_) => {
+                    return Err(SpecError::new(
+                        "test.spec.modifier_unknown",
+                        item_path,
+                        "modifier must be alt, control, meta, or shift",
+                    ));
+                }
+                None => {
+                    return Err(type_error(item_path, "modifier list items must be strings"));
+                }
+            };
+            if !seen.insert(modifier) {
+                return Err(SpecError::new(
+                    "test.spec.modifier_duplicate",
+                    item_path,
+                    "modifiers cannot contain duplicates",
+                ));
+            }
+            Ok(modifier)
+        })
+        .collect()
+}
+
 fn optional_string(
     block: &Block,
     name: &str,
@@ -729,20 +869,98 @@ fn optional_integer(block: &Block, name: &str, default: u64, path: &str) -> Resu
     let Some(value) = block.attributes.get(name) else {
         return Ok(default);
     };
-    let Some(number) = value.as_number() else {
-        return Err(type_error(
+    positive_integer(value, &format!("{path}.{name}"))
+}
+
+fn required_u32(block: &Block, name: &str, path: &str) -> Result<u32, SpecError> {
+    let value = block.attributes.get(name).ok_or_else(|| {
+        SpecError::new(
+            "test.spec.attribute_required",
             format!("{path}.{name}"),
-            "attribute must be an integer",
-        ));
+            "required positive integer is missing",
+        )
+    })?;
+    let value = positive_integer(value, &format!("{path}.{name}"))?;
+    u32::try_from(value).map_err(|_| {
+        SpecError::new(
+            "test.spec.number_range",
+            format!("{path}.{name}"),
+            "integer is outside the supported range",
+        )
+    })
+}
+
+fn optional_u32(block: &Block, name: &str, path: &str) -> Result<Option<u32>, SpecError> {
+    block
+        .attributes
+        .get(name)
+        .map(|value| {
+            let value = positive_integer(value, &format!("{path}.{name}"))?;
+            u32::try_from(value).map_err(|_| {
+                SpecError::new(
+                    "test.spec.number_range",
+                    format!("{path}.{name}"),
+                    "integer is outside the supported range",
+                )
+            })
+        })
+        .transpose()
+}
+
+fn positive_integer(value: &Value, path: &str) -> Result<u64, SpecError> {
+    let Some(number) = value.as_number() else {
+        return Err(type_error(path, "attribute must be an integer"));
     };
     if !number.is_finite() || number < 1.0 || number.fract() != 0.0 || number > u64::MAX as f64 {
         return Err(SpecError::new(
             "test.spec.number_range",
-            format!("{path}.{name}"),
+            path,
             "integer must be positive and within range",
         ));
     }
     Ok(number as u64)
+}
+
+fn required_signed_integer(block: &Block, name: &str, path: &str) -> Result<i32, SpecError> {
+    let value = block.attributes.get(name).ok_or_else(|| {
+        SpecError::new(
+            "test.spec.attribute_required",
+            format!("{path}.{name}"),
+            "required integer is missing",
+        )
+    })?;
+    signed_integer(value, &format!("{path}.{name}"))
+}
+
+fn optional_signed_integer(
+    block: &Block,
+    name: &str,
+    default: i32,
+    path: &str,
+) -> Result<i32, SpecError> {
+    block
+        .attributes
+        .get(name)
+        .map(|value| signed_integer(value, &format!("{path}.{name}")))
+        .unwrap_or(Ok(default))
+}
+
+fn signed_integer(value: &Value, path: &str) -> Result<i32, SpecError> {
+    let Some(number) = value.as_number() else {
+        return Err(type_error(path, "attribute must be an integer"));
+    };
+    if !number.is_finite()
+        || number.fract() != 0.0
+        || number < f64::from(i32::MIN)
+        || number > f64::from(i32::MAX)
+    {
+        return Err(SpecError::new(
+            "test.spec.number_range",
+            path,
+            "integer is outside the supported range",
+        ));
+    }
+    Ok(number as i32)
 }
 
 fn type_error(path: impl Into<String>, message: impl Into<String>) -> SpecError {

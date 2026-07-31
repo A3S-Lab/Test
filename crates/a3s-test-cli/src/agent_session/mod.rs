@@ -1,3 +1,4 @@
+mod args;
 mod events;
 mod policy;
 mod runtime;
@@ -8,17 +9,21 @@ use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-use a3s_test_core::{Action, DriverError, Surface, Target};
+use a3s_test_core::{Action, DriverError, Surface, Target, ACTION_PROTOCOL_REVISION};
 use a3s_test_driver_web::{
     AgentBrowserConfig, AgentBrowserConnectionConfig, AgentBrowserDriver, AgentBrowserSession,
     BrowserCommand,
 };
 use anyhow::{Context, Result};
-use clap::{Args, Subcommand, ValueEnum};
 use serde::Serialize;
 use serde_json::json;
 use url::Url;
 
+pub(crate) use self::args::AgentArgs;
+use self::args::{
+    ActArgs, AgentCommand, FinishArgs, FinishStatus, ListArgs, ObserveArgs, SchemaArgs,
+    SessionArgs, StartArgs,
+};
 use self::events::{append_success_event, append_terminal_event, record_failure};
 use self::policy::validate_action;
 use self::runtime::{
@@ -31,211 +36,6 @@ use self::store::{
 };
 use super::{validate_timeout, BrowserDriverKind};
 
-const AGENT_PROTOCOL_REVISION: u32 = 1;
-
-#[derive(Debug, Args)]
-pub(crate) struct AgentArgs {
-    #[command(subcommand)]
-    command: AgentCommand,
-}
-
-#[derive(Debug, Subcommand)]
-enum AgentCommand {
-    /// Start a persistent Web test session for an external coding agent.
-    #[command(alias = "open")]
-    Start(StartArgs),
-    /// Capture the next semantic observation from an active session.
-    #[command(alias = "snapshot")]
-    Observe(ObserveArgs),
-    /// Execute one schema-validated action in an active session.
-    Act(ActArgs),
-    /// Click a ref or CSS target in an active session.
-    Click(ClickArgs),
-    /// Replace the value of a ref or CSS target in an active session.
-    Fill(FillArgs),
-    /// Send one key or key chord to the active session.
-    Press(PressArgs),
-    /// Capture a screenshot inside the session artifact directory.
-    Screenshot(ScreenshotArgs),
-    /// Finish the session, close its surface, and write a report.
-    Finish(FinishArgs),
-    /// Abort an active session and close only its owned surface.
-    Abort(SessionArgs),
-    /// Show the persisted state for one session.
-    Show(SessionArgs),
-    /// List sessions in the current workspace.
-    List(ListArgs),
-    /// Print the external-planner protocol and typed action schema.
-    Schema(SchemaArgs),
-}
-
-#[derive(Debug, Args)]
-struct StartArgs {
-    /// Initial Web URL.
-    url: String,
-    /// Stable workspace-local session identifier.
-    #[arg(long)]
-    session: String,
-    /// Concrete test goal for the coding agent.
-    #[arg(long)]
-    goal: String,
-    /// Observable success criterion. Repeat for multiple criteria.
-    #[arg(long = "success", required = true)]
-    success_criteria: Vec<String>,
-    /// Additional navigation origin allowed during this session.
-    #[arg(long = "allow-origin")]
-    allowed_origins: Vec<String>,
-    /// Browser driver integration.
-    #[arg(long, value_enum, default_value_t = BrowserDriverKind::A3s)]
-    browser_driver: BrowserDriverKind,
-    /// Override the browser driver executable.
-    #[arg(long)]
-    browser_executable: Option<PathBuf>,
-    /// Show the browser window.
-    #[arg(long)]
-    headed: bool,
-    /// Per-command browser deadline.
-    #[arg(long, default_value_t = 30_000)]
-    command_timeout_ms: u64,
-    /// Browser daemon inactivity deadline between agent turns.
-    #[arg(long, default_value_t = 300_000)]
-    idle_timeout_ms: u64,
-    /// Emit machine-readable JSON.
-    #[arg(long)]
-    json: bool,
-}
-
-#[derive(Debug, Args)]
-struct ObserveArgs {
-    /// Active session identifier.
-    #[arg(long)]
-    session: String,
-    /// Return only interactive elements when supported.
-    #[arg(long)]
-    interactive: bool,
-    /// Emit machine-readable JSON.
-    #[arg(long)]
-    json: bool,
-}
-
-#[derive(Debug, Args)]
-struct ActArgs {
-    /// Active session identifier.
-    #[arg(long)]
-    session: String,
-    /// One JSON object matching the Action schema.
-    #[arg(long = "action-json")]
-    action_json: String,
-    /// Observation identifier that supplied any ref target used by the action.
-    #[arg(long)]
-    observation: Option<u64>,
-    /// Emit machine-readable JSON.
-    #[arg(long)]
-    json: bool,
-}
-
-#[derive(Debug, Args)]
-struct ClickArgs {
-    /// Ref such as @e3, or an explicit CSS selector.
-    target: String,
-    /// Active session identifier.
-    #[arg(long)]
-    session: String,
-    /// Observation identifier that supplied a ref target.
-    #[arg(long)]
-    observation: Option<u64>,
-    /// Emit machine-readable JSON.
-    #[arg(long)]
-    json: bool,
-}
-
-#[derive(Debug, Args)]
-struct FillArgs {
-    /// Ref such as @e3, or an explicit CSS selector.
-    target: String,
-    /// Replacement value.
-    value: String,
-    /// Active session identifier.
-    #[arg(long)]
-    session: String,
-    /// Observation identifier that supplied a ref target.
-    #[arg(long)]
-    observation: Option<u64>,
-    /// Emit machine-readable JSON.
-    #[arg(long)]
-    json: bool,
-}
-
-#[derive(Debug, Args)]
-struct PressArgs {
-    /// Key or key chord, for example Enter or Meta+z.
-    key: String,
-    /// Active session identifier.
-    #[arg(long)]
-    session: String,
-    /// Emit machine-readable JSON.
-    #[arg(long)]
-    json: bool,
-}
-
-#[derive(Debug, Args)]
-struct ScreenshotArgs {
-    /// Relative path below the session artifact directory.
-    path: String,
-    /// Active session identifier.
-    #[arg(long)]
-    session: String,
-    /// Emit machine-readable JSON.
-    #[arg(long)]
-    json: bool,
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq, ValueEnum)]
-enum FinishStatus {
-    Passed,
-    Failed,
-}
-
-#[derive(Debug, Args)]
-struct FinishArgs {
-    /// Active session identifier.
-    #[arg(long)]
-    session: String,
-    /// Final test status decided from explicit success criteria and evidence.
-    #[arg(long, value_enum)]
-    status: FinishStatus,
-    /// Concise result summary.
-    #[arg(long)]
-    summary: String,
-    /// Emit machine-readable JSON.
-    #[arg(long)]
-    json: bool,
-}
-
-#[derive(Debug, Args)]
-struct SessionArgs {
-    /// Session identifier.
-    #[arg(long)]
-    session: String,
-    /// Emit machine-readable JSON.
-    #[arg(long)]
-    json: bool,
-}
-
-#[derive(Debug, Args)]
-struct ListArgs {
-    /// Emit machine-readable JSON.
-    #[arg(long)]
-    json: bool,
-}
-
-#[derive(Debug, Args)]
-struct SchemaArgs {
-    /// Emit compact JSON instead of pretty JSON.
-    #[arg(long)]
-    compact: bool,
-}
-
 pub(crate) async fn execute(args: AgentArgs) -> Result<ExitCode> {
     match args.command {
         AgentCommand::Start(args) => start(args).await,
@@ -244,7 +44,53 @@ pub(crate) async fn execute(args: AgentArgs) -> Result<ExitCode> {
         AgentCommand::Click(args) => {
             perform_action(
                 args.session,
-                selector_action_target(&args.target, ActionTargetUse::Click, None)?,
+                Action::Click {
+                    target: compact_target(&args.target)?,
+                },
+                args.observation,
+                args.json,
+            )
+            .await
+        }
+        AgentCommand::Hover(args) => {
+            perform_action(
+                args.session,
+                Action::Hover {
+                    target: compact_target(&args.target)?,
+                },
+                args.observation,
+                args.json,
+            )
+            .await
+        }
+        AgentCommand::Focus(args) => {
+            perform_action(
+                args.session,
+                Action::Focus {
+                    target: compact_target(&args.target)?,
+                },
+                args.observation,
+                args.json,
+            )
+            .await
+        }
+        AgentCommand::DoubleClick(args) => {
+            perform_action(
+                args.session,
+                Action::DoubleClick {
+                    target: compact_target(&args.target)?,
+                },
+                args.observation,
+                args.json,
+            )
+            .await
+        }
+        AgentCommand::ContextClick(args) => {
+            perform_action(
+                args.session,
+                Action::ContextClick {
+                    target: compact_target(&args.target)?,
+                },
                 args.observation,
                 args.json,
             )
@@ -253,7 +99,68 @@ pub(crate) async fn execute(args: AgentArgs) -> Result<ExitCode> {
         AgentCommand::Fill(args) => {
             perform_action(
                 args.session,
-                selector_action_target(&args.target, ActionTargetUse::Fill, Some(args.value))?,
+                Action::Fill {
+                    target: compact_target(&args.target)?,
+                    value: args.value,
+                },
+                args.observation,
+                args.json,
+            )
+            .await
+        }
+        AgentCommand::Type(args) => {
+            perform_action(
+                args.session,
+                Action::Type {
+                    target: compact_target(&args.target)?,
+                    value: args.value,
+                },
+                args.observation,
+                args.json,
+            )
+            .await
+        }
+        AgentCommand::Check(args) => {
+            perform_action(
+                args.session,
+                Action::Check {
+                    target: compact_target(&args.target)?,
+                },
+                args.observation,
+                args.json,
+            )
+            .await
+        }
+        AgentCommand::Uncheck(args) => {
+            perform_action(
+                args.session,
+                Action::Uncheck {
+                    target: compact_target(&args.target)?,
+                },
+                args.observation,
+                args.json,
+            )
+            .await
+        }
+        AgentCommand::Select(args) => {
+            perform_action(
+                args.session,
+                Action::Select {
+                    target: compact_target(&args.target)?,
+                    values: args.values,
+                },
+                args.observation,
+                args.json,
+            )
+            .await
+        }
+        AgentCommand::Drag(args) => {
+            perform_action(
+                args.session,
+                Action::Drag {
+                    source: compact_target(&args.source)?,
+                    target: compact_target(&args.target)?,
+                },
                 args.observation,
                 args.json,
             )
@@ -263,6 +170,34 @@ pub(crate) async fn execute(args: AgentArgs) -> Result<ExitCode> {
             perform_action(
                 args.session,
                 Action::Press { key: args.key },
+                None,
+                args.json,
+            )
+            .await
+        }
+        AgentCommand::Wheel(args) => {
+            let target = args.target.as_deref().map(compact_target).transpose()?;
+            perform_action(
+                args.session,
+                Action::Wheel {
+                    target,
+                    delta_x: args.delta_x,
+                    delta_y: args.delta_y,
+                    modifiers: args.modifiers.into_iter().map(Into::into).collect(),
+                },
+                args.observation,
+                args.json,
+            )
+            .await
+        }
+        AgentCommand::Viewport(args) => {
+            perform_action(
+                args.session,
+                Action::Viewport {
+                    width: args.width,
+                    height: args.height,
+                    scale: args.scale,
+                },
                 None,
                 args.json,
             )
@@ -393,7 +328,7 @@ async fn start(args: StartArgs) -> Result<ExitCode> {
     emit(
         args.json,
         json!({
-            "protocol_revision": AGENT_PROTOCOL_REVISION,
+            "protocol_revision": ACTION_PROTOCOL_REVISION,
             "session": state.session,
             "status": state.status,
             "goal": state.goal,
@@ -447,7 +382,7 @@ async fn observe(args: ObserveArgs) -> Result<ExitCode> {
             emit(
                 args.json,
                 json!({
-                    "protocol_revision": AGENT_PROTOCOL_REVISION,
+                    "protocol_revision": ACTION_PROTOCOL_REVISION,
                     "session": state.session,
                     "status": state.status,
                     "observation_id": observation_id,
@@ -505,7 +440,7 @@ async fn perform_action(
             emit(
                 json_output,
                 json!({
-                    "protocol_revision": AGENT_PROTOCOL_REVISION,
+                    "protocol_revision": ACTION_PROTOCOL_REVISION,
                     "session": state.session,
                     "status": state.status,
                     "output": output,
@@ -527,37 +462,22 @@ async fn perform_action(
     }
 }
 
-enum ActionTargetUse {
-    Click,
-    Fill,
-}
-
-fn selector_action_target(
-    raw_target: &str,
-    use_kind: ActionTargetUse,
-    value: Option<String>,
-) -> Result<Action> {
+fn compact_target(raw_target: &str) -> Result<Target> {
     if raw_target.trim().is_empty() {
         anyhow::bail!("target must not be empty");
     }
-    let target = if raw_target.starts_with("@e")
+    if raw_target.starts_with("@e")
         && raw_target.strip_prefix("@e").is_some_and(|suffix| {
             !suffix.is_empty() && suffix.chars().all(|character| character.is_ascii_digit())
-        }) {
-        Target::Ref {
+        })
+    {
+        Ok(Target::Ref {
             value: raw_target.to_string(),
-        }
+        })
     } else {
-        Target::Css {
+        Ok(Target::Css {
             selector: raw_target.to_string(),
-        }
-    };
-    match use_kind {
-        ActionTargetUse::Click => Ok(Action::Click { target }),
-        ActionTargetUse::Fill => Ok(Action::Fill {
-            target,
-            value: value.ok_or_else(|| anyhow::anyhow!("fill value is required"))?,
-        }),
+        })
     }
 }
 
@@ -606,7 +526,7 @@ async fn finish(args: FinishArgs) -> Result<ExitCode> {
     emit(
         args.json,
         json!({
-            "protocol_revision": AGENT_PROTOCOL_REVISION,
+            "protocol_revision": ACTION_PROTOCOL_REVISION,
             "session": state.session,
             "status": state.status,
             "report": report,
@@ -654,7 +574,7 @@ async fn abort(args: SessionArgs) -> Result<ExitCode> {
     emit(
         args.json,
         json!({
-            "protocol_revision": AGENT_PROTOCOL_REVISION,
+            "protocol_revision": ACTION_PROTOCOL_REVISION,
             "session": state.session,
             "status": state.status,
             "cleanup_error": cleanup_error.as_ref().map(|error| AgentSessionError {
@@ -728,7 +648,7 @@ async fn list(args: ListArgs) -> Result<ExitCode> {
 
 fn schema(args: SchemaArgs) -> Result<ExitCode> {
     let schema = json!({
-        "protocol_revision": AGENT_PROTOCOL_REVISION,
+        "protocol_revision": ACTION_PROTOCOL_REVISION,
         "planner": "external_coding_agent",
         "turns": [
             "start",
@@ -810,7 +730,7 @@ fn emit_driver_error(
     emit(
         json_output,
         json!({
-            "protocol_revision": AGENT_PROTOCOL_REVISION,
+            "protocol_revision": ACTION_PROTOCOL_REVISION,
             "session": state.session,
             "status": state.status,
             "error": AgentSessionError {
