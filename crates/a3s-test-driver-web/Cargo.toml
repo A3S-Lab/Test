@@ -1,0 +1,18 @@
+[package]
+name = "a3s-test-driver-web"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+description = "A3S Browser surface driver for A3S Test"
+
+[dependencies]
+a3s-test-core = { path = "../a3s-test-core" }
+async-trait.workspace = true
+serde_json.workspace = true
+tempfile = "3"
+tokio.workspace = true
+
+[target.'cfg(unix)'.dependencies]
+nix = { version = "0.30", features = ["process", "signal"] }

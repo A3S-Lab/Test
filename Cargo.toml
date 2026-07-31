@@ -1,0 +1,26 @@
+[workspace]
+members = [
+    "crates/a3s-test-cli",
+    "crates/a3s-test-core",
+    "crates/a3s-test-driver-web",
+    "crates/a3s-test-runner",
+]
+resolver = "2"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+repository = "https://github.com/A3S-Lab/Test"
+rust-version = "1.82"
+
+[workspace.dependencies]
+a3s-acl = "0.3.0"
+anyhow = "1"
+async-trait = "0.1"
+clap = { version = "4", features = ["derive"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"
+tokio = { version = "1", features = ["fs", "io-util", "macros", "process", "rt-multi-thread", "signal", "sync", "time"] }
+tokio-util = "0.7"

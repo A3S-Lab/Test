@@ -1,0 +1,17 @@
+suite "web-local-smoke" {
+    version = 1
+
+    scenario "home-page" {
+        name = "Open the local fixture"
+        surface = "web"
+        timeout_ms = 15000
+
+        navigate "open" {
+            url = "http://127.0.0.1:41739"
+        }
+
+        expect "heading" {
+            text = "A3S Test is ready"
+        }
+    }
+}

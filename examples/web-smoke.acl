@@ -1,0 +1,25 @@
+suite "web-smoke" {
+    version = 1
+
+    scenario "home-page" {
+        name = "Open the home page"
+        surface = "web"
+        timeout_ms = 30000
+
+        navigate "open" {
+            url = "https://example.com"
+        }
+
+        wait "loaded" {
+            load = "networkidle"
+        }
+
+        expect "heading" {
+            text = "Example Domain"
+        }
+
+        screenshot "evidence" {
+            path = "home.png"
+        }
+    }
+}

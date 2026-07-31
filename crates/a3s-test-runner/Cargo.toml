@@ -1,0 +1,17 @@
+[package]
+name = "a3s-test-runner"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+description = "Cancellation-safe test orchestration for A3S Test"
+
+[dependencies]
+a3s-test-core = { path = "../a3s-test-core" }
+serde.workspace = true
+tokio.workspace = true
+tokio-util.workspace = true
+
+[dev-dependencies]
+async-trait.workspace = true

@@ -1,0 +1,17 @@
+suite "web-timeout" {
+    version = 1
+
+    scenario "home-page-timeout" {
+        name = "Time out while waiting for missing content"
+        surface = "web"
+        timeout_ms = 2000
+
+        navigate "open" {
+            url = "http://127.0.0.1:41739"
+        }
+
+        expect "missing" {
+            text = "This text is intentionally absent"
+        }
+    }
+}
