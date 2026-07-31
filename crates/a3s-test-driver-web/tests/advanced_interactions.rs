@@ -172,11 +172,18 @@ async fn maps_advanced_interactions_to_the_verified_browser_protocol() {
     session.close().await.expect("close");
 
     let invocations = executor.invocations.lock().unwrap();
-    let action_args = invocations
+    let mut action_args = invocations
         .iter()
         .skip(1)
         .map(|invocation| strip_session_prefix(&invocation.args))
         .collect::<Vec<_>>();
+    assert_eq!(action_args[6][0], "eval");
+    let context_menu_script = action_args[6][1].to_string_lossy();
+    assert!(context_menu_script.contains("new MouseEvent('contextmenu'"));
+    assert!(context_menu_script.contains("document.elementFromPoint(60, 45)"));
+    assert!(context_menu_script.contains("button: 2"));
+    assert!(context_menu_script.contains("buttons: 2"));
+    action_args[6] = os(&["eval", "<context-menu-script>"]);
     assert_eq!(
         action_args,
         vec![
@@ -186,8 +193,7 @@ async fn maps_advanced_interactions_to_the_verified_browser_protocol() {
             os(&["scrollintoview", ".selection"]),
             os(&["get", "box", ".selection"]),
             os(&["mouse", "move", "60", "45"]),
-            os(&["mouse", "down", "right"]),
-            os(&["mouse", "up", "right"]),
+            os(&["eval", "<context-menu-script>"]),
             os(&["type", "#title", "more text"]),
             os(&["find", "testid", "comments", "check"]),
             os(&["uncheck", "#readonly"]),

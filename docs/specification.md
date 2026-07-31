@@ -298,8 +298,10 @@ hover, fill, and check accept every target form.
 defaults to zero, at least one delta must be non-zero, and `modifiers` may
 contain unique `alt`, `control`, `meta`, or `shift` values. A wheel without a
 target is native. A target-scoped wheel is dispatched at the visible center of
-the resolved element. Viewport width, height, and optional integer scale must
-be greater than zero.
+the resolved element. Context-click also resolves the visible center, moves the
+pointer there, and dispatches a cancelable page `contextmenu` event; it does not
+open the browser-native menu. Viewport width, height, and optional integer
+scale must be greater than zero.
 
 ## Admission behavior
 

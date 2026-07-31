@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.4.1 - 2026-07-31
+
+### Fixed
+
+- Context-click now moves to the resolved target and dispatches a cancelable,
+  page-scoped `contextmenu` event instead of opening Chrome's native menu.
+  Products without a custom context menu can therefore be observed on the
+  next agent turn without a browser-command timeout.
+- Agent observations validate the browser-reported URL before issuing a new
+  observation identifier. Detached pages such as `about:blank` return
+  `test.driver.web.session_origin_lost`, while an unapproved HTTP(S) origin
+  returns `test.driver.web.navigation_origin_denied` and a malformed snapshot
+  without a URL returns `test.driver.web.output_invalid`.
+
+### Safety
+
+- Observation-origin failures remain recorded in the workspace event log and
+  leave the session available for exact-session `abort` cleanup rather than
+  silently continuing in a replacement browser page.
+
 ## 0.4.0 - 2026-07-31
 
 ### Added

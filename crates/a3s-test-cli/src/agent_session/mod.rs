@@ -25,7 +25,7 @@ use self::args::{
     SessionArgs, StartArgs,
 };
 use self::events::{append_success_event, append_terminal_event, record_failure};
-use self::policy::validate_action;
+use self::policy::{validate_action, validate_observation_origin};
 use self::runtime::{
     create_runtime_directory, remove_runtime_directory, session_namespace,
     validate_runtime_directory,
@@ -362,6 +362,11 @@ async fn observe(args: ObserveArgs) -> Result<ExitCode> {
         .await
     {
         Ok(output) => {
+            if let Err(error) = validate_observation_origin(&state, &output) {
+                state.active_video_path = browser.active_video_path().map(str::to_string);
+                record_failure(&store, &mut state, "observe", Some(action), &error).await?;
+                return emit_driver_error(args.json, &state, error);
+            }
             let observation_id = state.next_observation_id;
             state.next_observation_id = state
                 .next_observation_id

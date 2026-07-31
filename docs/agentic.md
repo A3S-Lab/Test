@@ -49,8 +49,12 @@ invocations through an isolated namespace and private runtime directory.
 
 Ref targets are bound to the latest observation identifier. Explicit
 URL-bearing actions are limited to the initial HTTP(S) origin and
-`--allow-origin` values. The generated `a3s-test agent schema` output is the
-authoritative action contract.
+`--allow-origin` values. Each observation independently verifies the reported
+page origin before returning refs. A browser page lost to `about:blank` or
+another non-Web scheme returns `test.driver.web.session_origin_lost`; an
+unapproved HTTP(S) origin returns
+`test.driver.web.navigation_origin_denied`. The generated
+`a3s-test agent schema` output is the authoritative action contract.
 
 Action protocol revision 2 covers the browser interactions needed to inspect
 document-style applications: click, hover, focus, double-click, context-click,
@@ -65,7 +69,9 @@ the underlying browser command supports the requested subaction. Focus,
 double-click, context-click, type, uncheck, select, drag, and target-scoped
 wheel require a ref from the latest observation or explicit CSS selector with
 the current standalone browser protocol. This is a protocol capability
-boundary, not keyword routing or locator inference.
+boundary, not keyword routing or locator inference. Context-click dispatches a
+page-scoped, cancelable `contextmenu` event at the visible target instead of
+opening the browser-native menu, which is outside the observable page.
 
 ## Embedded host sequence
 

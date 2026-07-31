@@ -177,8 +177,9 @@ versions. Revision 2 adds Office-grade interactions. A basic interaction uses
 the browser's semantic `find` protocol when that subaction exists. Operations
 that the current standalone semantic protocol cannot express require a direct
 ref or CSS selector. Context-click is implemented as visible-center pointer
-movement plus a bounded right-button down/up pair; drag scrolls both endpoints
-into view; wheel owns modifier press/release cleanup.
+movement plus a cancelable page `contextmenu` event, avoiding an unobservable
+browser-native menu; drag scrolls both endpoints into view; wheel owns modifier
+press/release cleanup.
 
 The adapter keeps configuration, command execution, protocol mapping, session
 behavior, and host-process supervision in separate modules. The public crate
@@ -249,9 +250,11 @@ agent finish -> report + owned cleanup
 Agent sessions live under `.a3s-test/agent-sessions/<session>/`. A ref target
 must carry the latest observation identifier, explicit URL-bearing actions are
 limited to admitted HTTP(S) origins, and evidence paths cannot leave the
-session root. The browser runtime uses an isolated namespace, an ownership
-marker, and a bounded idle timeout so persisted metadata cannot redirect
-cleanup and an abandoned external planner does not leave an unbounded process.
+session root. Successful observations must also report an admitted HTTP(S)
+origin, so a detached or page-driven replacement is surfaced before new refs
+are issued. The browser runtime uses an isolated namespace, an ownership marker,
+and a bounded idle timeout so persisted metadata cannot redirect cleanup and an
+abandoned external planner does not leave an unbounded process.
 
 Once a path is understood, the coding agent can author ACL and use
 `check --json` and `run --json` for deterministic regression coverage.

@@ -71,7 +71,7 @@ tagged Rust package manually:
 
 ```bash
 cargo install --git https://github.com/A3S-Lab/Test \
-  --tag v0.4.0 --locked a3s-test-cli
+  --tag v0.4.1 --locked a3s-test-cli
 ```
 
 ## Let a coding agent test the product
@@ -136,6 +136,13 @@ a3s-test agent viewport 1440 900 --scale 2 \
   --session editor --json
 ```
 
+Context-click moves to the resolved element and dispatches a cancelable page
+`contextmenu` event. It does not open Chrome's native menu, so the next
+observation remains under A3S Test control even when the product has no custom
+menu. Every observation also verifies that the browser still reports an
+approved HTTP(S) origin; a detached `about:blank` session is surfaced as
+`test.driver.web.session_origin_lost` instead of being reused silently.
+
 The standalone browser semantic protocol does not expose every advanced
 subaction. Focus, double-click, context-click, type, uncheck, select, drag, and
 target-scoped wheel therefore require an observation ref or explicit CSS
@@ -163,8 +170,10 @@ a3s-test agent schema
   `observation_id`; stale refs are rejected before dispatch.
 - **Actions are typed.** The CLI publishes the generated JSON Schema and
   rejects unknown action fields or variants.
-- **Explicit navigation is scoped.** URL-bearing actions such as `navigate`
-  and `tab new` are limited to the initial origin and `--allow-origin` values.
+- **Navigation remains scoped.** URL-bearing actions such as `navigate` and
+  `tab new` are admitted only for the initial origin and `--allow-origin`
+  values. Observations reject non-Web pages and unapproved origins reached by
+  page-driven navigation.
 - **Evidence is part of the run.** Every turn is appended to `events.jsonl`;
   screenshots, accessibility, console, HAR, trace, video, and downloads stay
   inside the session artifact root.

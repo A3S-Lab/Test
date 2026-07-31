@@ -1,4 +1,5 @@
 use super::*;
+use a3s_test_core::StepOutput;
 
 #[test]
 fn ref_actions_require_the_latest_observation() {
@@ -58,6 +59,51 @@ fn navigation_is_limited_to_admitted_origins() {
         None,
     )
     .is_err());
+}
+
+#[test]
+fn observations_must_remain_on_an_admitted_web_origin() {
+    let state = test_state(None);
+    let allowed = StepOutput::new("snapshot").with_data(json!({
+        "success": true,
+        "data": {
+            "origin": "https://example.test/document#section"
+        }
+    }));
+    assert!(validate_observation_origin(&state, &allowed).is_ok());
+
+    let replaced = StepOutput::new("snapshot").with_data(json!({
+        "success": true,
+        "data": {
+            "origin": "about:blank"
+        }
+    }));
+    let replaced_error =
+        validate_observation_origin(&state, &replaced).expect_err("about:blank must be rejected");
+    assert_eq!(replaced_error.code(), "test.driver.web.session_origin_lost");
+
+    let outside = StepOutput::new("snapshot").with_data(json!({
+        "success": true,
+        "data": {
+            "url": "https://outside.test/document"
+        }
+    }));
+    let outside_error = validate_observation_origin(&state, &outside)
+        .expect_err("an unapproved Web origin must be rejected");
+    assert_eq!(
+        outside_error.code(),
+        "test.driver.web.navigation_origin_denied"
+    );
+
+    let missing = StepOutput::new("snapshot").with_data(json!({
+        "success": true,
+        "data": {
+            "snapshot": "(no interactive elements)"
+        }
+    }));
+    let missing_error = validate_observation_origin(&state, &missing)
+        .expect_err("a snapshot without its page URL must be rejected");
+    assert_eq!(missing_error.code(), "test.driver.web.output_invalid");
 }
 
 fn test_state(latest_observation: Option<u64>) -> AgentSessionState {

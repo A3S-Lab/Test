@@ -148,7 +148,7 @@ esac
 printf '%s|%s|%s\n' "$AGENT_BROWSER_NAMESPACE" "$AGENT_BROWSER_SOCKET_DIR" "$*" >> "$A3S_TEST_LOG"
 case " $* " in
   *" snapshot "*)
-    printf '{"success":true,"data":{"snapshot":"@e1 [button] Continue"}}\n'
+    printf '{"success":true,"data":{"origin":"https://example.test/checkout","snapshot":"@e1 [button] Continue"}}\n'
     ;;
   *)
     printf '{"success":true}\n'
@@ -391,8 +391,6 @@ esac
         " dblclick #target",
         " get box #target",
         " mouse move 60 45",
-        " mouse down right",
-        " mouse up right",
         " type #target more text",
         " check #target",
         " uncheck #target",
@@ -410,6 +408,78 @@ esac
             "missing {expected:?} in {driver_log}"
         );
     }
+    assert!(
+        driver_log.lines().any(|line| {
+            line.contains(" eval (() => { const target = document.elementFromPoint(60, 45);")
+                && line.contains("new MouseEvent('contextmenu'")
+        }),
+        "missing page-scoped context-menu event in {driver_log}"
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn agent_observe_rejects_a_silently_replaced_browser_page() {
+    use std::os::unix::fs::PermissionsExt;
+
+    let _test_guard = process_test_lock().lock().unwrap();
+    let temp = tempfile::tempdir().expect("tempdir");
+    let driver = temp.path().join("fake-agent-browser");
+    let log = temp.path().join("driver.log");
+    fs::write(
+        &driver,
+        r#"#!/bin/sh
+case " $* " in
+  *" --version "*)
+    printf 'agent-browser 0.26.0\n'
+    exit 0
+    ;;
+esac
+printf '%s\n' "$*" >> "$A3S_TEST_LOG"
+case " $* " in
+  *" snapshot "*)
+    printf '{"success":true,"data":{"origin":"about:blank","snapshot":"(no interactive elements)"}}\n'
+    ;;
+  *)
+    printf '{"success":true}\n'
+    ;;
+esac
+"#,
+    )
+    .expect("driver");
+    fs::set_permissions(&driver, fs::Permissions::from_mode(0o755)).expect("permissions");
+
+    let start = start_agent_session(temp.path(), &driver, &log, "origin-lost");
+    assert!(start.status.success(), "{start:?}");
+
+    let observe = Command::new(binary())
+        .args([
+            "agent",
+            "observe",
+            "--session",
+            "origin-lost",
+            "--interactive",
+            "--json",
+        ])
+        .current_dir(temp.path())
+        .env("A3S_TEST_LOG", &log)
+        .output()
+        .expect("observe replaced browser page");
+    assert_eq!(observe.status.code(), Some(1), "{observe:?}");
+    let value: serde_json::Value = serde_json::from_slice(&observe.stdout).expect("observe JSON");
+    assert_eq!(
+        value["error"]["code"],
+        "test.driver.web.session_origin_lost"
+    );
+    assert_eq!(value["status"], "active");
+
+    let abort = Command::new(binary())
+        .args(["agent", "abort", "--session", "origin-lost", "--json"])
+        .current_dir(temp.path())
+        .env("A3S_TEST_LOG", &log)
+        .output()
+        .expect("abort");
+    assert!(abort.status.success(), "{abort:?}");
 }
 
 #[cfg(unix)]
@@ -433,7 +503,7 @@ esac
 printf '%s\n' "$*" >> "$A3S_TEST_LOG"
 case " $* " in
   *" snapshot "*)
-    printf '{"success":true,"data":{"snapshot":"@e1 [button] Continue"}}\n'
+    printf '{"success":true,"data":{"origin":"https://example.test/","snapshot":"@e1 [button] Continue"}}\n'
     ;;
   *" click "*)
     if [ "${A3S_TEST_FAIL_CLICK:-}" = "1" ]; then

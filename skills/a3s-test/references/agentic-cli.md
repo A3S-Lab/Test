@@ -156,6 +156,10 @@ Each workspace stores:
 - Session identifiers contain only ASCII letters, digits, `-`, or `_`.
 - Explicit HTTP and HTTPS URL actions are limited to the initial origin plus
   `--allow-origin` values.
+- Every successful observation must report an admitted HTTP(S) origin.
+  `about:blank` and other detached pages return
+  `test.driver.web.session_origin_lost`; unapproved Web origins return
+  `test.driver.web.navigation_origin_denied` before new refs are issued.
 - Ref actions require the latest observation identifier.
 - Artifact paths are relative and cannot escape the session root.
 - A persistent browser runtime uses an isolated namespace and bounded idle

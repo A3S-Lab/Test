@@ -28,6 +28,7 @@
 - [x] Persistent external-planner CLI sessions for coding agents
 - [x] Workspace-local event log, report, and evidence roots
 - [x] Observation-bound refs and origin gates for explicit URL actions
+- [x] Observation-time detection of detached pages and unapproved origins
 - [ ] Browser-level origin enforcement for link-, script-, and
       redirect-triggered navigation
 - [x] Compact pointer, form, keyboard, wheel, viewport, and evidence turns plus

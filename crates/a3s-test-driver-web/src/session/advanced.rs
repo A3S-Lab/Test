@@ -18,36 +18,21 @@ impl AgentBrowserSession {
                 y.to_string().into(),
             ])
             .await?;
-        let down = self
-            .execute_command(vec!["mouse".into(), "down".into(), "right".into()])
+        let event_data = self
+            .execute_command(vec![
+                "eval".into(),
+                targeted_context_menu_script(x, y).into(),
+            ])
             .await;
-        let down_data = match down {
+        let event_data = match event_data {
             Ok(data) => data,
-            Err(error) => {
-                let _ = self
-                    .execute_command(vec!["mouse".into(), "up".into(), "right".into()])
-                    .await;
-                return Err(error);
-            }
-        };
-        let up = self
-            .execute_command(vec!["mouse".into(), "up".into(), "right".into()])
-            .await;
-        let up_data = match up {
-            Ok(data) => data,
-            Err(error) => {
-                let _ = self
-                    .execute_command(vec!["mouse".into(), "up".into(), "right".into()])
-                    .await;
-                return Err(error);
-            }
+            Err(error) => return Err(error),
         };
 
         Ok(StepOutput::new("target context-clicked").with_data(json!({
             "box": box_data,
             "move": move_data,
-            "down": down_data,
-            "up": up_data,
+            "event": event_data,
         })))
     }
 
@@ -215,5 +200,17 @@ fn targeted_wheel_script(
          deltaY: {delta_y}, altKey: {alt}, ctrlKey: {control}, metaKey: {meta}, \
          shiftKey: {shift}, view: window }})); \
          return {{ accepted, tagName: target.tagName }}; }})()"
+    )
+}
+
+fn targeted_context_menu_script(x: i32, y: i32) -> String {
+    format!(
+        "(() => {{ const target = document.elementFromPoint({x}, {y}); \
+         if (!target) throw new Error('A3S Test context-click target is not visible'); \
+         const event = new MouseEvent('contextmenu', {{ bubbles: true, cancelable: true, \
+         composed: true, clientX: {x}, clientY: {y}, button: 2, buttons: 2, view: window }}); \
+         const accepted = target.dispatchEvent(event); \
+         return {{ accepted, defaultPrevented: event.defaultPrevented, \
+         tagName: target.tagName }}; }})()"
     )
 }

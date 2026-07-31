@@ -144,8 +144,11 @@ values, network mocks, console fixtures, or committed evidence.
 ## Reliability and cleanup
 
 - Drive one command at a time per agent session.
-- Treat navigation origin denial and stale-ref rejection as protocol safety,
-  not failures to bypass.
+- Treat navigation origin denial, session-origin loss, and stale-ref rejection
+  as protocol safety, not failures to bypass. If observation reports origin
+  loss, abort the exact session; do not continue from a replacement page.
+- Context-click is page-scoped and does not expose Chrome's native context
+  menu. Observe after it just like every other state-changing action.
 - Do not kill Chrome, A3S Browser, or agent-browser by process name.
 - Finish or abort every session. A3S Test closes only the exact session it
   owns and retains the report and evidence.
