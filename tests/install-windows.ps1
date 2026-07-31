@@ -2,7 +2,7 @@ $ErrorActionPreference = "Stop"
 
 $Root = Split-Path -Parent $PSScriptRoot
 $TempRoot = Join-Path ([IO.Path]::GetTempPath()) ("a3s-test-installer-test-" + [Guid]::NewGuid())
-$Version = "v0.3.0"
+$Version = "v0.3.1"
 $Target = "x86_64-pc-windows-msvc"
 $PayloadName = "a3s-test-$Version-$Target"
 $ReleaseDir = Join-Path $TempRoot "releases\download\$Version"
@@ -23,7 +23,8 @@ try {
     Move-Item -LiteralPath $SkillZip -Destination $SkillArchive
 
     $CliHash = (Get-FileHash -LiteralPath $CliArchive -Algorithm SHA256).Hash.ToLowerInvariant()
-    Set-Content -LiteralPath "$CliArchive.sha256" -Value "$CliHash  $PayloadName.zip"
+    $CliChecksum = Join-Path $ReleaseDir "$PayloadName.sha256"
+    Set-Content -LiteralPath $CliChecksum -Value "$CliHash  $PayloadName.zip"
     $SkillHash = (Get-FileHash -LiteralPath $SkillArchive -Algorithm SHA256).Hash.ToLowerInvariant()
     Set-Content -LiteralPath (Join-Path $ReleaseDir "a3s-test.skill.sha256") -Value "$SkillHash  a3s-test.skill"
 

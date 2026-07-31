@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.3.1 - 2026-07-31
+
+### Fixed
+
+- One-click installers now download the target checksum filename emitted by
+  the release workflow (`a3s-test-<version>-<target>.sha256`).
+- Offline installer fixtures now mirror the real GitHub Release asset names,
+  preventing archive/checksum naming drift from passing CI.
+
 ## 0.3.0 - 2026-07-31
 
 ### Added

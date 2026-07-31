@@ -183,9 +183,10 @@ try {
     if ($InstallCli) {
         $ArchiveName = "a3s-test-$Version-$Target.zip"
         $Archive = Join-Path $TempRoot $ArchiveName
-        $Checksum = "$Archive.sha256"
+        $ChecksumName = "a3s-test-$Version-$Target.sha256"
+        $Checksum = Join-Path $TempRoot $ChecksumName
         Copy-Download "$DownloadBase/$ArchiveName" $Archive
-        Copy-Download "$DownloadBase/$ArchiveName.sha256" $Checksum
+        Copy-Download "$DownloadBase/$ChecksumName" $Checksum
         Assert-Checksum $Archive $Checksum
 
         $CliExtract = Join-Path $TempRoot "cli"

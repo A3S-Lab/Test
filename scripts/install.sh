@@ -218,9 +218,10 @@ verify_checksum() {
 if [ "$INSTALL_CLI" -eq 1 ]; then
     archive_name="a3s-test-${VERSION}-${TARGET}.tar.gz"
     archive="${TMP_DIR}/${archive_name}"
-    checksum="${archive}.sha256"
+    checksum_name="a3s-test-${VERSION}-${TARGET}.sha256"
+    checksum="${TMP_DIR}/${checksum_name}"
     download "${DOWNLOAD_BASE}/${archive_name}" "$archive"
-    download "${DOWNLOAD_BASE}/${archive_name}.sha256" "$checksum"
+    download "${DOWNLOAD_BASE}/${checksum_name}" "$checksum"
     verify_checksum "$archive" "$checksum"
 
     mkdir -p "${TMP_DIR}/cli"

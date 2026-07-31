@@ -17,7 +17,7 @@ case "$(uname -s):$(uname -m)" in
         ;;
 esac
 
-VERSION="v0.3.0"
+VERSION="v0.3.1"
 RELEASE_DIR="${TMP_ROOT}/releases/download/${VERSION}"
 PAYLOAD_NAME="a3s-test-${VERSION}-${TARGET}"
 mkdir -p "${RELEASE_DIR}" "${TMP_ROOT}/payload/${PAYLOAD_NAME}" "${TMP_ROOT}/skill/a3s-test"
@@ -44,7 +44,7 @@ checksum() {
 
 checksum \
     "${RELEASE_DIR}/${PAYLOAD_NAME}.tar.gz" \
-    "${RELEASE_DIR}/${PAYLOAD_NAME}.tar.gz.sha256"
+    "${RELEASE_DIR}/${PAYLOAD_NAME}.sha256"
 checksum \
     "${RELEASE_DIR}/a3s-test.skill" \
     "${RELEASE_DIR}/a3s-test.skill.sha256"
