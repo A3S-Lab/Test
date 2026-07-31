@@ -15,6 +15,19 @@ pub enum ActionKind {
     Wait,
     Assert,
     Screenshot,
+    Tab,
+    Frame,
+    Dialog,
+    Upload,
+    Download,
+    NetworkRoute,
+    NetworkUnroute,
+    Har,
+    Trace,
+    Video,
+    Accessibility,
+    Console,
+    PageErrors,
 }
 
 impl From<&Action> for ActionKind {
@@ -28,6 +41,19 @@ impl From<&Action> for ActionKind {
             Action::Wait { .. } => Self::Wait,
             Action::Assert { .. } => Self::Assert,
             Action::Screenshot { .. } => Self::Screenshot,
+            Action::Tab { .. } => Self::Tab,
+            Action::Frame { .. } => Self::Frame,
+            Action::Dialog { .. } => Self::Dialog,
+            Action::Upload { .. } => Self::Upload,
+            Action::Download { .. } => Self::Download,
+            Action::NetworkRoute { .. } => Self::NetworkRoute,
+            Action::NetworkUnroute { .. } => Self::NetworkUnroute,
+            Action::Har { .. } => Self::Har,
+            Action::Trace { .. } => Self::Trace,
+            Action::Video { .. } => Self::Video,
+            Action::Accessibility { .. } => Self::Accessibility,
+            Action::Console { .. } => Self::Console,
+            Action::PageErrors { .. } => Self::PageErrors,
         }
     }
 }

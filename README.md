@@ -5,10 +5,12 @@ products. It gives coding agents and CI systems one typed scenario model,
 one evidence model, and one result format while keeping platform automation
 behind replaceable drivers.
 
-The first working slice runs deterministic Web scenarios through A3S Browser
-or a standalone `agent-browser` compatible executable. It also provides a
-library-level, schema-constrained LLM loop over the same Web observations and
-typed actions. GUI and TUI drivers share the core contract and remain planned.
+The v0.2 Web runtime runs deterministic scenarios through A3S Browser or a
+standalone `agent-browser` compatible executable. It covers browser protocol
+admission, tabs, frames, dialogs, file transfer, network mocks, HAR, trace,
+video, accessibility, console evidence, bounded concurrency, and
+infrastructure-only retries. A repository-owned Coding Agent Skill projects
+the same CLI and ACL contracts. GUI and TUI drivers remain planned.
 
 ## Why A3S Test
 
@@ -24,6 +26,10 @@ typed actions. GUI and TUI drivers share the core contract and remain planned.
   schema-constrained action, and never falls back to keyword routing.
 - **Evidence-first:** step output and artifacts are structured for both human
   review and automated diagnosis.
+- **Protocol-admitted:** the driver verifies a known A3S Browser or
+  agent-browser version before a session can launch.
+- **Resource-bounded:** scenario parallelism, retry count, command deadlines,
+  cleanup deadlines, and browser idle time all have explicit limits.
 
 ## Architecture
 
@@ -51,6 +57,12 @@ See [Architecture](docs/architecture.md) for ownership boundaries, lifecycle
 states, the LLM path, and the planned GUI/TUI adapters.
 
 ## Quick start
+
+Check the installed browser protocol without launching Chrome:
+
+```bash
+cargo run -p a3s-test-cli -- capabilities --json
+```
 
 Validate a suite without launching a browser:
 
@@ -81,6 +93,9 @@ a3s-test run tests/smoke.acl --json
 
 Stable process exit codes are `0` for passed, `1` for failed, `124` for timed
 out, `130` for cancelled, and `2` for invalid invocation or configuration.
+
+Prebuilt CLI archives and checksums are published on the
+[Releases](https://github.com/A3S-Lab/Test/releases) page.
 
 ## ACL test suite
 
@@ -120,6 +135,41 @@ The parser is closed by default: unknown blocks, attributes, ambiguous
 conditions, duplicate identifiers, and invalid typed locators fail before a
 surface is launched. See the [ACL specification](docs/specification.md).
 
+## Web depth
+
+The typed Web protocol includes:
+
+- navigation, snapshots, semantic locators, keyboard input, typed waits, and
+  assertions;
+- stable tab IDs and labels, frame context, and browser dialogs;
+- uploads, artifact-scoped downloads, network route mocks, and HAR capture;
+- screenshots, accessibility snapshots, console logs, page errors, traces, and
+  video evidence.
+
+`a3s-test run` retries only errors explicitly marked safe because the browser
+command was not dispatched. It does not retry assertions, command timeouts, or
+ambiguous clicks and submissions. `--max-parallel-scenarios` defaults to `1`
+and is bounded to `64`.
+
+## Coding Agent Skill
+
+The release includes
+[`a3s-test.skill`](https://github.com/A3S-Lab/Test/releases/latest/download/a3s-test.skill),
+a ZIP-compatible package containing the `$a3s-test` Coding Agent Skill. It
+teaches coding agents to discover the installed Web protocol, author closed ACL
+manifests, run JSON-first tests, collect bounded evidence, and diagnose stable
+error codes.
+
+Install the release asset for Codex:
+
+```bash
+mkdir -p "${CODEX_HOME:-$HOME/.codex}/skills"
+unzip a3s-test.skill -d "${CODEX_HOME:-$HOME/.codex}/skills"
+```
+
+The source lives in [`skills/a3s-test`](skills/a3s-test). The Skill does not
+introduce a natural-language router; it drives the same typed CLI used by CI.
+
 ## LLM-driven execution
 
 `a3s-test-agent` implements a bounded observe-decide-act loop for SDK hosts.
@@ -134,9 +184,10 @@ cost, context-size, and wall-clock budgets are mandatory. The production
 library has no scripted, keyword, or heuristic model substitute.
 
 This path is currently a library API. A host still owns surface opening,
-bounded cleanup, and cancellation, while CLI, MCP, and Skill projections remain
-on the roadmap. See the [Agentic SDK contract](docs/agentic.md) for the host
-sequence, request/response fields, budgets, policies, and result semantics.
+bounded cleanup, and cancellation. The shipped Skill drives deterministic ACL
+execution; a direct agentic CLI and MCP projection remain on the roadmap. See
+the [Agentic SDK contract](docs/agentic.md) for the host sequence,
+request/response fields, budgets, policies, and result semantics.
 
 ## Interrupt behavior
 
@@ -161,6 +212,9 @@ crates/
 ├── a3s-test-runner/      # Deadlines, cancellation, cleanup, and reports
 ├── a3s-test-driver-web/  # A3S Browser / agent-browser adapter
 └── a3s-test-cli/         # Deterministic human and coding-agent entry point
+
+skills/
+└── a3s-test/             # Coding Agent Skill and progressive ACL reference
 ```
 
 ## Development

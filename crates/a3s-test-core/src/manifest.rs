@@ -3,7 +3,8 @@ use std::collections::HashSet;
 use a3s_acl::{Block, Value};
 
 use crate::{
-    Action, Expectation, LoadState, SpecError, Surface, Target, TestScenario, TestStep, TestSuite,
+    Action, CaptureOperation, DialogOperation, Expectation, FrameTarget, LoadState, NetworkRoute,
+    SpecError, Surface, TabOperation, Target, TestScenario, TestStep, TestSuite, VideoOperation,
     WaitCondition,
 };
 
@@ -194,6 +195,90 @@ fn parse_step(block: &Block, scenario_path: &str) -> Result<TestStep, SpecError>
                 path: required_string(block, "path", &path)?.to_string(),
             }
         }
+        "tab" => {
+            ensure_attributes(block, &["operation", "url", "label", "tab"], &path)?;
+            Action::Tab {
+                operation: parse_tab_operation(block, &path)?,
+            }
+        }
+        "frame" => {
+            ensure_attributes(block, &["target"], &path)?;
+            Action::Frame {
+                target: required_frame_target(block, "target", &path)?,
+            }
+        }
+        "dialog" => {
+            ensure_attributes(block, &["operation", "text"], &path)?;
+            Action::Dialog {
+                operation: parse_dialog_operation(block, &path)?,
+            }
+        }
+        "upload" => {
+            ensure_attributes(block, &["target", "paths"], &path)?;
+            Action::Upload {
+                target: required_target(block, "target", &path)?,
+                paths: required_string_list(block, "paths", &path)?,
+            }
+        }
+        "download" => {
+            ensure_attributes(block, &["target", "path"], &path)?;
+            Action::Download {
+                target: required_target(block, "target", &path)?,
+                path: required_string(block, "path", &path)?.to_string(),
+            }
+        }
+        "network_route" => {
+            ensure_attributes(block, &["pattern", "abort", "body"], &path)?;
+            Action::NetworkRoute {
+                pattern: required_string(block, "pattern", &path)?.to_string(),
+                route: parse_network_route(block, &path)?,
+            }
+        }
+        "network_unroute" => {
+            ensure_attributes(block, &["pattern"], &path)?;
+            Action::NetworkUnroute {
+                pattern: optional_string_attribute(block, "pattern", &path)?,
+            }
+        }
+        "har" => {
+            ensure_attributes(block, &["operation", "path"], &path)?;
+            Action::Har {
+                operation: parse_capture_operation(block, &path)?,
+            }
+        }
+        "trace" => {
+            ensure_attributes(block, &["operation", "path"], &path)?;
+            Action::Trace {
+                operation: parse_capture_operation(block, &path)?,
+            }
+        }
+        "video" => {
+            ensure_attributes(block, &["operation", "path", "url"], &path)?;
+            Action::Video {
+                operation: parse_video_operation(block, &path)?,
+            }
+        }
+        "accessibility" => {
+            ensure_attributes(block, &["path", "interactive"], &path)?;
+            Action::Accessibility {
+                path: required_string(block, "path", &path)?.to_string(),
+                interactive: optional_bool(block, "interactive", false, &path)?,
+            }
+        }
+        "console" => {
+            ensure_attributes(block, &["path", "clear"], &path)?;
+            Action::Console {
+                path: required_string(block, "path", &path)?.to_string(),
+                clear: optional_bool(block, "clear", false, &path)?,
+            }
+        }
+        "page_errors" => {
+            ensure_attributes(block, &["path", "clear"], &path)?;
+            Action::PageErrors {
+                path: required_string(block, "path", &path)?.to_string(),
+                clear: optional_bool(block, "clear", false, &path)?,
+            }
+        }
         _ => {
             return Err(SpecError::new(
                 "test.spec.action_unknown",
@@ -204,6 +289,147 @@ fn parse_step(block: &Block, scenario_path: &str) -> Result<TestStep, SpecError>
     };
 
     Ok(TestStep { id, action })
+}
+
+fn parse_tab_operation(block: &Block, path: &str) -> Result<TabOperation, SpecError> {
+    match required_string(block, "operation", path)? {
+        "list" => {
+            ensure_absent(block, &["url", "label", "tab"], path)?;
+            Ok(TabOperation::List)
+        }
+        "new" => {
+            ensure_absent(block, &["tab"], path)?;
+            Ok(TabOperation::New {
+                url: optional_string_attribute(block, "url", path)?,
+                label: optional_string_attribute(block, "label", path)?,
+            })
+        }
+        "switch" => {
+            ensure_absent(block, &["url", "label"], path)?;
+            Ok(TabOperation::Switch {
+                tab: required_string(block, "tab", path)?.to_string(),
+            })
+        }
+        "close" => {
+            ensure_absent(block, &["url", "label"], path)?;
+            Ok(TabOperation::Close {
+                tab: optional_string_attribute(block, "tab", path)?,
+            })
+        }
+        _ => Err(SpecError::new(
+            "test.spec.operation_unknown",
+            format!("{path}.operation"),
+            "tab operation must be list, new, switch, or close",
+        )),
+    }
+}
+
+fn required_frame_target(block: &Block, name: &str, path: &str) -> Result<FrameTarget, SpecError> {
+    let value = block.attributes.get(name).ok_or_else(|| {
+        SpecError::new(
+            "test.spec.attribute_required",
+            format!("{path}.{name}"),
+            "required frame target is missing",
+        )
+    })?;
+    let target_path = format!("{path}.{name}");
+    let Value::Call(function, arguments) = value else {
+        return Err(type_error(
+            target_path,
+            "frame target must use main(), ref(), or css()",
+        ));
+    };
+    match (function.as_str(), arguments.as_slice()) {
+        ("main", []) => Ok(FrameTarget::Main),
+        ("ref" | "css", [value]) => {
+            Ok(FrameTarget::Selector(target_argument(value, &target_path)?))
+        }
+        _ => Err(SpecError::new(
+            "test.spec.frame_target_invalid",
+            target_path,
+            "frame target must use main(), ref(), or css() with the expected argument count",
+        )),
+    }
+}
+
+fn parse_dialog_operation(block: &Block, path: &str) -> Result<DialogOperation, SpecError> {
+    match required_string(block, "operation", path)? {
+        "status" => {
+            ensure_absent(block, &["text"], path)?;
+            Ok(DialogOperation::Status)
+        }
+        "accept" => Ok(DialogOperation::Accept {
+            text: optional_string_attribute(block, "text", path)?,
+        }),
+        "dismiss" => {
+            ensure_absent(block, &["text"], path)?;
+            Ok(DialogOperation::Dismiss)
+        }
+        _ => Err(SpecError::new(
+            "test.spec.operation_unknown",
+            format!("{path}.operation"),
+            "dialog operation must be status, accept, or dismiss",
+        )),
+    }
+}
+
+fn parse_network_route(block: &Block, path: &str) -> Result<NetworkRoute, SpecError> {
+    let count = ["abort", "body"]
+        .iter()
+        .filter(|name| block.attributes.contains_key(**name))
+        .count();
+    if count != 1 {
+        return Err(condition_count_error(path, count));
+    }
+
+    if block.attributes.contains_key("abort") {
+        if !optional_bool(block, "abort", false, path)? {
+            return Err(SpecError::new(
+                "test.spec.route_invalid",
+                format!("{path}.abort"),
+                "abort must be true when configured",
+            ));
+        }
+        return Ok(NetworkRoute::Abort);
+    }
+    Ok(NetworkRoute::Body(
+        required_string(block, "body", path)?.to_string(),
+    ))
+}
+
+fn parse_capture_operation(block: &Block, path: &str) -> Result<CaptureOperation, SpecError> {
+    match required_string(block, "operation", path)? {
+        "start" => {
+            ensure_absent(block, &["path"], path)?;
+            Ok(CaptureOperation::Start)
+        }
+        "stop" => Ok(CaptureOperation::Stop {
+            path: required_string(block, "path", path)?.to_string(),
+        }),
+        _ => Err(SpecError::new(
+            "test.spec.operation_unknown",
+            format!("{path}.operation"),
+            "capture operation must be start or stop",
+        )),
+    }
+}
+
+fn parse_video_operation(block: &Block, path: &str) -> Result<VideoOperation, SpecError> {
+    match required_string(block, "operation", path)? {
+        "start" => Ok(VideoOperation::Start {
+            path: required_string(block, "path", path)?.to_string(),
+            url: optional_string_attribute(block, "url", path)?,
+        }),
+        "stop" => {
+            ensure_absent(block, &["path", "url"], path)?;
+            Ok(VideoOperation::Stop)
+        }
+        _ => Err(SpecError::new(
+            "test.spec.operation_unknown",
+            format!("{path}.operation"),
+            "video operation must be start or stop",
+        )),
+    }
 }
 
 fn parse_wait(block: &Block, path: &str) -> Result<WaitCondition, SpecError> {
@@ -382,6 +608,20 @@ fn ensure_attributes(block: &Block, allowed: &[&str], path: &str) -> Result<(), 
     Ok(())
 }
 
+fn ensure_absent(block: &Block, names: &[&str], path: &str) -> Result<(), SpecError> {
+    if let Some(name) = names
+        .iter()
+        .find(|name| block.attributes.contains_key(**name))
+    {
+        return Err(SpecError::new(
+            "test.spec.attribute_unexpected",
+            format!("{path}.{name}"),
+            "attribute is not valid for this operation",
+        ));
+    }
+    Ok(())
+}
+
 fn required_string<'a>(block: &'a Block, name: &str, path: &str) -> Result<&'a str, SpecError> {
     let value = block.attributes.get(name).ok_or_else(|| {
         SpecError::new(
@@ -393,6 +633,58 @@ fn required_string<'a>(block: &'a Block, name: &str, path: &str) -> Result<&'a s
     value
         .as_str()
         .ok_or_else(|| type_error(format!("{path}.{name}"), "attribute must be a string"))
+}
+
+fn optional_string_attribute(
+    block: &Block,
+    name: &str,
+    path: &str,
+) -> Result<Option<String>, SpecError> {
+    block
+        .attributes
+        .get(name)
+        .map(|value| {
+            value
+                .as_str()
+                .map(ToOwned::to_owned)
+                .ok_or_else(|| type_error(format!("{path}.{name}"), "attribute must be a string"))
+        })
+        .transpose()
+}
+
+fn required_string_list(block: &Block, name: &str, path: &str) -> Result<Vec<String>, SpecError> {
+    let value = block.attributes.get(name).ok_or_else(|| {
+        SpecError::new(
+            "test.spec.attribute_required",
+            format!("{path}.{name}"),
+            "required string list is missing",
+        )
+    })?;
+    let Value::List(values) = value else {
+        return Err(type_error(
+            format!("{path}.{name}"),
+            "attribute must be a non-empty list of strings",
+        ));
+    };
+    if values.is_empty() {
+        return Err(SpecError::new(
+            "test.spec.list_empty",
+            format!("{path}.{name}"),
+            "list must contain at least one item",
+        ));
+    }
+    values
+        .iter()
+        .enumerate()
+        .map(|(index, value)| {
+            value.as_str().map(ToOwned::to_owned).ok_or_else(|| {
+                type_error(
+                    format!("{path}.{name}[{index}]"),
+                    "list items must be strings",
+                )
+            })
+        })
+        .collect()
 }
 
 fn optional_string(

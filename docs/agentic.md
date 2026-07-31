@@ -7,9 +7,10 @@ A3S Code host, another coding agent, or an SDK that already owns model
 configuration and surface lifecycle.
 
 It does not bundle a model provider, read model credentials, open a browser,
-or close a surface session. It also does not expose a CLI, MCP server, or Skill
-yet. Those adapters must project this contract instead of creating another
-planner.
+or close a surface session. The repository Skill currently drives
+deterministic ACL suites; it does not host this agentic loop. A future direct
+agentic CLI or MCP adapter must project this contract instead of creating
+another planner.
 
 ## Host sequence
 

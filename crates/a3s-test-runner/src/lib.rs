@@ -8,22 +8,43 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use a3s_test_core::{
-    DriverError, ScenarioContext, StepOutput, Surface, SurfaceDriver, TestScenario, TestSuite,
+    DriverError, DriverSession, ScenarioContext, StepOutput, Surface, SurfaceDriver, TestScenario,
+    TestStep, TestSuite,
 };
+use futures::{stream, StreamExt};
 use serde::{Deserialize, Serialize};
 use tokio_util::sync::CancellationToken;
 
 static NEXT_RUN_ID: AtomicU64 = AtomicU64::new(1);
 
 #[derive(Clone, Copy, Debug)]
+pub struct RetryPolicy {
+    pub max_retries: u32,
+    pub backoff: Duration,
+}
+
+impl Default for RetryPolicy {
+    fn default() -> Self {
+        Self {
+            max_retries: 1,
+            backoff: Duration::from_millis(100),
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
 pub struct RunnerOptions {
     pub cleanup_timeout: Duration,
+    pub retry_policy: RetryPolicy,
+    pub max_parallel_scenarios: usize,
 }
 
 impl Default for RunnerOptions {
     fn default() -> Self {
         Self {
             cleanup_timeout: Duration::from_secs(10),
+            retry_policy: RetryPolicy::default(),
+            max_parallel_scenarios: 1,
         }
     }
 }
@@ -40,6 +61,12 @@ impl Runner {
     ) -> Result<Self, String> {
         if options.cleanup_timeout.is_zero() {
             return Err("cleanup timeout must be greater than zero".to_string());
+        }
+        if options.retry_policy.max_retries > 10 {
+            return Err("infrastructure retries cannot exceed 10".to_string());
+        }
+        if !(1..=64).contains(&options.max_parallel_scenarios) {
+            return Err("parallel scenario limit must be between 1 and 64".to_string());
         }
 
         let mut by_surface = HashMap::new();
@@ -58,31 +85,25 @@ impl Runner {
 
     pub async fn run(&self, suite: &TestSuite, cancellation: CancellationToken) -> RunResult {
         let run_id = new_run_id();
-        let mut scenarios = Vec::with_capacity(suite.scenarios.len());
-
-        for scenario in &suite.scenarios {
-            if cancellation.is_cancelled() {
-                scenarios.push(ScenarioResult::not_started(
-                    scenario,
-                    RunStatus::Cancelled,
-                    "test.run.cancelled",
-                    "run cancelled before the scenario started",
-                ));
-                break;
-            }
-
-            scenarios.push(
-                self.run_scenario(&run_id, scenario, cancellation.clone())
-                    .await,
-            );
-
-            if scenarios
-                .last()
-                .is_some_and(|result| result.status == RunStatus::Cancelled)
-            {
-                break;
-            }
-        }
+        let mut indexed = stream::iter(suite.scenarios.iter().enumerate())
+            .map(|(index, scenario)| {
+                let cancellation = cancellation.clone();
+                let run_id = &run_id;
+                async move {
+                    (
+                        index,
+                        self.run_scenario(run_id, scenario, cancellation).await,
+                    )
+                }
+            })
+            .buffer_unordered(self.options.max_parallel_scenarios)
+            .collect::<Vec<_>>()
+            .await;
+        indexed.sort_by_key(|(index, _)| *index);
+        let scenarios = indexed
+            .into_iter()
+            .map(|(_, scenario)| scenario)
+            .collect::<Vec<_>>();
 
         let status = aggregate_status(scenarios.iter().map(|scenario| scenario.status));
         RunResult {
@@ -119,31 +140,65 @@ impl Runner {
                 .join(artifact_component(&scenario.id)),
         };
 
-        let open = tokio::select! {
-            biased;
-            () = cancellation.cancelled() => {
-                return ScenarioResult::not_started(
-                    scenario,
-                    RunStatus::Cancelled,
-                    "test.run.cancelled",
-                    "run cancelled while opening the surface",
-                );
-            }
-            result = tokio::time::timeout_at(deadline.into(), driver.open(&context)) => result,
-        };
+        let mut open_retries = 0;
+        let mut session = loop {
+            let open = tokio::select! {
+                biased;
+                () = cancellation.cancelled() => {
+                    return ScenarioResult::not_started(
+                        scenario,
+                        RunStatus::Cancelled,
+                        "test.run.cancelled",
+                        "run cancelled while opening the surface",
+                    );
+                }
+                result = tokio::time::timeout_at(deadline.into(), driver.open(&context)) => result,
+            };
 
-        let mut session = match open {
-            Ok(Ok(session)) => session,
-            Ok(Err(error)) => {
-                return ScenarioResult::not_started_from_driver(scenario, RunStatus::Failed, error);
-            }
-            Err(_) => {
-                return ScenarioResult::not_started(
-                    scenario,
-                    RunStatus::TimedOut,
-                    "test.run.timeout",
-                    "scenario timed out while opening the surface",
-                );
+            match open {
+                Ok(Ok(session)) => break session,
+                Ok(Err(error))
+                    if error.retryable()
+                        && open_retries < self.options.retry_policy.max_retries =>
+                {
+                    open_retries += 1;
+                    match wait_for_retry(deadline, &cancellation, self.options.retry_policy.backoff)
+                        .await
+                    {
+                        RetryWait::Continue => {}
+                        RetryWait::Cancelled => {
+                            return ScenarioResult::not_started(
+                                scenario,
+                                RunStatus::Cancelled,
+                                "test.run.cancelled",
+                                "run cancelled while retrying surface setup",
+                            );
+                        }
+                        RetryWait::TimedOut => {
+                            return ScenarioResult::not_started(
+                                scenario,
+                                RunStatus::TimedOut,
+                                "test.run.timeout",
+                                "scenario timed out while retrying surface setup",
+                            );
+                        }
+                    }
+                }
+                Ok(Err(error)) => {
+                    return ScenarioResult::not_started_from_driver(
+                        scenario,
+                        RunStatus::Failed,
+                        error,
+                    );
+                }
+                Err(_) => {
+                    return ScenarioResult::not_started(
+                        scenario,
+                        RunStatus::TimedOut,
+                        "test.run.timeout",
+                        "scenario timed out while opening the surface",
+                    );
+                }
             }
         };
 
@@ -152,24 +207,17 @@ impl Runner {
 
         for step in &scenario.steps {
             let step_started = Instant::now();
-            let execution = tokio::select! {
-                biased;
-                () = cancellation.cancelled() => StepExecution::Cancelled,
-                result = tokio::time::timeout_at(deadline.into(), session.execute(step)) => {
-                    match result {
-                        Ok(result) => StepExecution::Completed(result),
-                        Err(_) => StepExecution::TimedOut,
-                    }
-                }
-            };
+            let (execution, attempts) = self
+                .execute_step(session.as_mut(), step, deadline, cancellation.clone())
+                .await;
 
             let step_result = match execution {
                 StepExecution::Completed(Ok(output)) => {
-                    StepResult::passed(&step.id, step_started.elapsed(), output)
+                    StepResult::passed(&step.id, step_started.elapsed(), attempts, output)
                 }
                 StepExecution::Completed(Err(error)) => {
                     status = RunStatus::Failed;
-                    StepResult::failed(&step.id, step_started.elapsed(), error)
+                    StepResult::failed(&step.id, step_started.elapsed(), attempts, error)
                 }
                 StepExecution::TimedOut => {
                     status = RunStatus::TimedOut;
@@ -177,6 +225,7 @@ impl Runner {
                         &step.id,
                         RunStatus::TimedOut,
                         step_started.elapsed(),
+                        attempts,
                         "test.run.timeout",
                         "scenario deadline exceeded",
                     )
@@ -187,6 +236,7 @@ impl Runner {
                         &step.id,
                         RunStatus::Cancelled,
                         step_started.elapsed(),
+                        attempts,
                         "test.run.cancelled",
                         "run cancelled",
                     )
@@ -221,6 +271,66 @@ impl Runner {
             steps,
             error: None,
             cleanup_error,
+        }
+    }
+
+    async fn execute_step(
+        &self,
+        session: &mut dyn DriverSession,
+        step: &TestStep,
+        deadline: Instant,
+        cancellation: CancellationToken,
+    ) -> (StepExecution, u32) {
+        let mut attempts = 0_u32;
+        loop {
+            attempts = attempts.saturating_add(1);
+            let execution = tokio::select! {
+                biased;
+                () = cancellation.cancelled() => StepExecution::Cancelled,
+                result = tokio::time::timeout_at(deadline.into(), session.execute(step)) => {
+                    match result {
+                        Ok(result) => StepExecution::Completed(result),
+                        Err(_) => StepExecution::TimedOut,
+                    }
+                }
+            };
+            let retryable = matches!(
+                &execution,
+                StepExecution::Completed(Err(error)) if error.retryable()
+            );
+            if !retryable || attempts > self.options.retry_policy.max_retries {
+                return (execution, attempts);
+            }
+
+            match wait_for_retry(deadline, &cancellation, self.options.retry_policy.backoff).await {
+                RetryWait::Continue => {}
+                RetryWait::Cancelled => return (StepExecution::Cancelled, attempts),
+                RetryWait::TimedOut => return (StepExecution::TimedOut, attempts),
+            }
+        }
+    }
+}
+
+enum RetryWait {
+    Continue,
+    Cancelled,
+    TimedOut,
+}
+
+async fn wait_for_retry(
+    deadline: Instant,
+    cancellation: &CancellationToken,
+    backoff: Duration,
+) -> RetryWait {
+    tokio::select! {
+        biased;
+        () = cancellation.cancelled() => RetryWait::Cancelled,
+        result = tokio::time::timeout_at(deadline.into(), tokio::time::sleep(backoff)) => {
+            if result.is_ok() {
+                RetryWait::Continue
+            } else {
+                RetryWait::TimedOut
+            }
         }
     }
 }
@@ -293,26 +403,29 @@ pub struct StepResult {
     pub id: String,
     pub status: RunStatus,
     pub duration_ms: u64,
+    pub attempts: u32,
     pub output: Option<StepOutput>,
     pub error: Option<RunError>,
 }
 
 impl StepResult {
-    fn passed(id: &str, duration: Duration, output: StepOutput) -> Self {
+    fn passed(id: &str, duration: Duration, attempts: u32, output: StepOutput) -> Self {
         Self {
             id: id.to_string(),
             status: RunStatus::Passed,
             duration_ms: millis(duration),
+            attempts,
             output: Some(output),
             error: None,
         }
     }
 
-    fn failed(id: &str, duration: Duration, error: DriverError) -> Self {
+    fn failed(id: &str, duration: Duration, attempts: u32, error: DriverError) -> Self {
         Self {
             id: id.to_string(),
             status: RunStatus::Failed,
             duration_ms: millis(duration),
+            attempts,
             output: None,
             error: Some(RunError::from_driver(error)),
         }
@@ -322,6 +435,7 @@ impl StepResult {
         id: &str,
         status: RunStatus,
         duration: Duration,
+        attempts: u32,
         code: &str,
         message: &str,
     ) -> Self {
@@ -329,6 +443,7 @@ impl StepResult {
             id: id.to_string(),
             status,
             duration_ms: millis(duration),
+            attempts,
             output: None,
             error: Some(RunError {
                 code: code.to_string(),

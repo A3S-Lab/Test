@@ -1,4 +1,7 @@
-use a3s_test_core::{Action, Expectation, LoadState, Surface, Target, TestSuite, WaitCondition};
+use a3s_test_core::{
+    Action, CaptureOperation, DialogOperation, Expectation, FrameTarget, LoadState, NetworkRoute,
+    Surface, TabOperation, Target, TestSuite, VideoOperation, WaitCondition,
+};
 
 const VALID_SUITE: &str = r#"
 suite "office-smoke" {
@@ -167,4 +170,185 @@ suite "invalid" {
 
     assert_eq!(error.code(), "test.spec.identifier_invalid");
     assert_eq!(error.path(), "suite.invalid.scenario.../outside");
+}
+
+#[test]
+fn parses_complete_web_protocol_actions() {
+    let suite = TestSuite::from_acl(
+        r##"
+suite "web-depth" {
+    scenario "protocol" {
+        surface = "web"
+
+        tab "open-docs" {
+            operation = "new"
+            url = "https://example.test/docs"
+            label = "docs"
+        }
+        tab "switch-docs" {
+            operation = "switch"
+            tab = "docs"
+        }
+        tab "close-docs" {
+            operation = "close"
+            tab = "docs"
+        }
+        frame "payment" {
+            target = css("#payment-frame")
+        }
+        frame "main" {
+            target = main()
+        }
+        dialog "confirm" {
+            operation = "accept"
+            text = "approved"
+        }
+        upload "attachments" {
+            target = ref("@e5")
+            paths = ["fixtures/one.txt", "fixtures/two.txt"]
+        }
+        download "report" {
+            target = css("[data-testid=download]")
+            path = "downloads/report.pdf"
+        }
+        network_route "empty-users" {
+            pattern = "**/api/users"
+            body = "{\"users\":[]}"
+        }
+        network_route "block-analytics" {
+            pattern = "**/analytics"
+            abort = true
+        }
+        network_unroute "reset-users" {
+            pattern = "**/api/users"
+        }
+        har "start-har" {
+            operation = "start"
+        }
+        har "save-har" {
+            operation = "stop"
+            path = "network/session.har"
+        }
+        trace "start-trace" {
+            operation = "start"
+        }
+        trace "save-trace" {
+            operation = "stop"
+            path = "traces/session.zip"
+        }
+        video "start-video" {
+            operation = "start"
+            path = "video/session.webm"
+            url = "https://example.test"
+        }
+        video "stop-video" {
+            operation = "stop"
+        }
+        accessibility "tree" {
+            path = "evidence/tree.json"
+            interactive = false
+        }
+        console "browser-console" {
+            path = "evidence/console.json"
+            clear = true
+        }
+        page_errors "browser-errors" {
+            path = "evidence/errors.json"
+            clear = false
+        }
+    }
+}
+"##,
+    )
+    .expect("complete web suite");
+
+    let actions = &suite.scenarios[0].steps;
+    assert_eq!(
+        actions[0].action,
+        Action::Tab {
+            operation: TabOperation::New {
+                url: Some("https://example.test/docs".to_string()),
+                label: Some("docs".to_string()),
+            }
+        }
+    );
+    assert_eq!(
+        actions[3].action,
+        Action::Frame {
+            target: FrameTarget::Selector("#payment-frame".to_string())
+        }
+    );
+    assert_eq!(
+        actions[5].action,
+        Action::Dialog {
+            operation: DialogOperation::Accept {
+                text: Some("approved".to_string())
+            }
+        }
+    );
+    assert_eq!(
+        actions[8].action,
+        Action::NetworkRoute {
+            pattern: "**/api/users".to_string(),
+            route: NetworkRoute::Body("{\"users\":[]}".to_string()),
+        }
+    );
+    assert_eq!(
+        actions[12].action,
+        Action::Har {
+            operation: CaptureOperation::Stop {
+                path: "network/session.har".to_string()
+            }
+        }
+    );
+    assert_eq!(
+        actions[15].action,
+        Action::Video {
+            operation: VideoOperation::Start {
+                path: "video/session.webm".to_string(),
+                url: Some("https://example.test".to_string()),
+            }
+        }
+    );
+}
+
+#[test]
+fn rejects_capture_stop_without_an_artifact_path() {
+    let error = TestSuite::from_acl(
+        r#"
+suite "invalid" {
+    scenario "web" {
+        surface = "web"
+        trace "stop" {
+            operation = "stop"
+        }
+    }
+}
+"#,
+    )
+    .expect_err("trace stop requires a path");
+
+    assert_eq!(error.code(), "test.spec.attribute_required");
+    assert_eq!(error.path(), "suite.invalid.scenario.web.trace.stop.path");
+}
+
+#[test]
+fn rejects_ambiguous_network_routes() {
+    let error = TestSuite::from_acl(
+        r#"
+suite "invalid" {
+    scenario "web" {
+        surface = "web"
+        network_route "ambiguous" {
+            pattern = "**/api"
+            abort = true
+            body = "{}"
+        }
+    }
+}
+"#,
+    )
+    .expect_err("route must choose abort or body");
+
+    assert_eq!(error.code(), "test.spec.condition_ambiguous");
 }

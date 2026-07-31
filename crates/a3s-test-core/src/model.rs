@@ -35,14 +35,138 @@ pub struct TestStep {
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
 #[serde(tag = "type", rename_all = "snake_case", deny_unknown_fields)]
 pub enum Action {
-    Navigate { url: String },
-    Snapshot { interactive: bool },
-    Click { target: Target },
-    Fill { target: Target, value: String },
-    Press { key: String },
-    Wait { condition: WaitCondition },
-    Assert { expectation: Expectation },
-    Screenshot { path: String },
+    Navigate {
+        url: String,
+    },
+    Snapshot {
+        interactive: bool,
+    },
+    Click {
+        target: Target,
+    },
+    Fill {
+        target: Target,
+        value: String,
+    },
+    Press {
+        key: String,
+    },
+    Wait {
+        condition: WaitCondition,
+    },
+    Assert {
+        expectation: Expectation,
+    },
+    Screenshot {
+        path: String,
+    },
+    Tab {
+        operation: TabOperation,
+    },
+    Frame {
+        target: FrameTarget,
+    },
+    Dialog {
+        operation: DialogOperation,
+    },
+    Upload {
+        target: Target,
+        paths: Vec<String>,
+    },
+    Download {
+        target: Target,
+        path: String,
+    },
+    NetworkRoute {
+        pattern: String,
+        route: NetworkRoute,
+    },
+    NetworkUnroute {
+        pattern: Option<String>,
+    },
+    Har {
+        operation: CaptureOperation,
+    },
+    Trace {
+        operation: CaptureOperation,
+    },
+    Video {
+        operation: VideoOperation,
+    },
+    Accessibility {
+        path: String,
+        interactive: bool,
+    },
+    Console {
+        path: String,
+        clear: bool,
+    },
+    PageErrors {
+        path: String,
+        clear: bool,
+    },
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
+#[serde(tag = "type", rename_all = "snake_case", deny_unknown_fields)]
+pub enum TabOperation {
+    List,
+    New {
+        url: Option<String>,
+        label: Option<String>,
+    },
+    Switch {
+        tab: String,
+    },
+    Close {
+        tab: Option<String>,
+    },
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
+#[serde(
+    tag = "type",
+    content = "value",
+    rename_all = "snake_case",
+    deny_unknown_fields
+)]
+pub enum FrameTarget {
+    Main,
+    Selector(String),
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
+#[serde(tag = "type", rename_all = "snake_case", deny_unknown_fields)]
+pub enum DialogOperation {
+    Status,
+    Accept { text: Option<String> },
+    Dismiss,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
+#[serde(
+    tag = "type",
+    content = "value",
+    rename_all = "snake_case",
+    deny_unknown_fields
+)]
+pub enum NetworkRoute {
+    Abort,
+    Body(String),
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
+#[serde(tag = "type", rename_all = "snake_case", deny_unknown_fields)]
+pub enum CaptureOperation {
+    Start,
+    Stop { path: String },
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
+#[serde(tag = "type", rename_all = "snake_case", deny_unknown_fields)]
+pub enum VideoOperation {
+    Start { path: String, url: Option<String> },
+    Stop,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]

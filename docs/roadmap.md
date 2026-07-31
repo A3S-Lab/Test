@@ -16,11 +16,11 @@
 
 ## M1: Web depth
 
-- [ ] Browser capability discovery and version admission
-- [ ] Tabs, frames, dialogs, uploads, downloads, network mocks, and HAR
-- [ ] Trace, video, accessibility snapshot, and console evidence
-- [ ] Retry policy constrained to infrastructure failures
-- [ ] Parallel scenarios with explicit resource limits
+- [x] Browser capability discovery and version admission
+- [x] Tabs, frames, dialogs, uploads, downloads, network mocks, and HAR
+- [x] Trace, video, accessibility snapshot, console, and page-error evidence
+- [x] Retry policy constrained to pre-dispatch infrastructure failures
+- [x] Parallel scenarios with explicit resource limits and stable report order
 - [ ] Local fixture server for hermetic Web E2E tests
 
 ## M2: LLM agentic testing
@@ -31,7 +31,8 @@
 - [x] Safety policy and capability validation before every proposed action
 - [ ] Secret-safe provenance redaction; provider/model/prompt version, request
       ID, decision digest, usage, and model latency are already recorded
-- [ ] Coding-agent Skill and MCP projection
+- [x] Coding Agent Skill for deterministic ACL and JSON CLI workflows
+- [ ] MCP projection and direct agentic CLI host
 - [x] No keyword-based intent router or production heuristic fallback
 
 ## M3: GUI through A3S CUA

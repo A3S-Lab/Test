@@ -41,6 +41,40 @@ fn check_returns_machine_readable_suite() {
 
 #[cfg(unix)]
 #[test]
+fn capabilities_returns_the_admitted_web_protocol() {
+    use std::os::unix::fs::PermissionsExt;
+
+    let temp = tempfile::tempdir().expect("tempdir");
+    let driver = temp.path().join("fake-agent-browser");
+    fs::write(&driver, "#!/bin/sh\nprintf 'agent-browser 0.26.0\\n'\n").expect("driver");
+    fs::set_permissions(&driver, fs::Permissions::from_mode(0o755)).expect("permissions");
+
+    let output = Command::new(binary())
+        .args([
+            "capabilities",
+            "--browser-driver",
+            "standalone",
+            "--browser-executable",
+            driver.to_str().unwrap(),
+            "--json",
+        ])
+        .output()
+        .expect("run a3s-test capabilities");
+
+    assert!(output.status.success(), "{output:?}");
+    let value: serde_json::Value = serde_json::from_slice(&output.stdout).expect("JSON output");
+    assert_eq!(value["integration"], "standalone");
+    assert_eq!(value["version"], "0.26.0");
+    assert_eq!(value["protocol_revision"], 1);
+    assert!(value["features"].as_array().is_some_and(|features| {
+        features
+            .iter()
+            .any(|feature| feature.as_str() == Some("tabs"))
+    }));
+}
+
+#[cfg(unix)]
+#[test]
 fn first_sigint_cancels_and_reaps_the_command_process_group() {
     use std::os::unix::fs::PermissionsExt;
 
@@ -55,6 +89,12 @@ fn first_sigint_cancels_and_reaps_the_command_process_group() {
     fs::write(
         &driver,
         r#"#!/bin/sh
+case " $* " in
+  *" --version "*)
+    printf 'agent-browser 0.26.0\n'
+    exit 0
+    ;;
+esac
 printf '%s\n' "$*" >> "$A3S_TEST_LOG"
 case " $* " in
   *" open "*)
@@ -143,6 +183,12 @@ fn second_sigint_forces_exit_and_reaps_cleanup_commands() {
     fs::write(
         &driver,
         r#"#!/bin/sh
+case " $* " in
+  *" --version "*)
+    printf 'agent-browser 0.26.0\n'
+    exit 0
+    ;;
+esac
 printf '%s\n' "$*" >> "$A3S_TEST_LOG"
 sleep 30 &
 printf '%s\n' "$!" > "$A3S_TEST_ACTIVE_PID"

@@ -34,7 +34,7 @@ The runner never branches on backend names. Each backend is a typed
 
 ```text
 Layer 5  Agent interface
-         CLI today; MCP and SDK adapters later
+         JSON CLI and Coding Agent Skill today; MCP later
 
 Layer 4  Agentic planning
          User-supplied LLM provider -> typed action proposal -> policy gate
@@ -58,8 +58,9 @@ The deterministic manifest path implements Layers 0, 2, 3, and the CLI portion
 of Layer 5. `a3s-test-agent` implements the Layer 4 library contract: it calls
 an injected LLM, receives a schema-constrained proposal, validates it against
 capabilities and policy, executes one action, observes again, and stops at
-explicit turn, token, cost, context, cancellation, or time limits. CLI, MCP,
-and Skill projections of that loop are not implemented yet.
+explicit turn, token, cost, context, cancellation, or time limits. The shipped
+Skill projects deterministic ACL and JSON CLI workflows. Direct CLI and MCP
+hosts for the agentic loop are not implemented yet.
 
 ## Core contracts
 
@@ -139,15 +140,28 @@ BrowserCommand::Standalone
   agent-browser ...
 ```
 
-It maps typed `Action` values to the native driver protocol and exposes a full
-A3S Browser accessibility snapshot through `DriverSession::observe`. It does
-not parse natural-language intent. Refs, semantic locators, and CSS locators
-remain explicit target types in both deterministic and agentic execution.
+Before opening a session, the driver runs a version probe and admits only a
+verified protocol window. The discovered `BrowserCapabilities` records the
+typed integration, semantic version, protocol revision, and feature set.
+Concurrent scenarios share a single asynchronous capability result.
+
+The adapter maps typed `Action` values to tabs, frames, dialogs, uploads,
+artifact-scoped downloads, network routes, HAR, trace, video, screenshots,
+accessibility snapshots, console logs, and page errors. It exposes a full A3S
+Browser accessibility snapshot through `DriverSession::observe`. It does not
+parse natural-language intent. Refs, semantic locators, and CSS locators remain
+explicit target types in both deterministic and agentic execution.
 
 The adapter keeps configuration, command execution, protocol mapping, session
 behavior, and host-process supervision in separate modules. The public crate
 surface remains limited to typed configuration, the driver, the injectable
 command executor, and the emergency termination entry point.
+
+Command executor errors carry a typed dispatch phase. Only an unavailable
+executable before dispatch is retryable. A timeout or output failure may have
+already applied an action and is therefore never retried. The runner bounds
+retry count and backoff inside the scenario deadline. Scenario concurrency is
+also bounded and report order remains the manifest order.
 
 ## GUI driver plan
 
@@ -180,9 +194,16 @@ terminal even when the runner is cancelled.
 
 ## Coding-agent interface
 
-Coding agents need predictable contracts rather than a human-only dashboard:
+Coding agents need predictable contracts rather than a human-only dashboard.
+The `$a3s-test` Skill supplies the workflow and progressive ACL reference:
 
 ```text
+agent invokes $a3s-test
+      |
+      v
+a3s-test capabilities --json
+      |
+      v
 agent writes ACL
       |
       v
@@ -245,9 +266,10 @@ Artifacts live under:
 .a3s-test/runs/<run-id>/<scenario-id>/
 ```
 
-Relative artifact paths are admission-checked and cannot escape this root.
-Planned evidence types include screenshots, accessibility snapshots, terminal
-recordings, browser network logs, videos, and normalized action traces.
+Relative artifact paths are admission-checked and cannot escape this root. The
+Web adapter currently records screenshots, accessibility JSON, console and
+page-error JSON, downloads, HAR, traces, and WebM video. Terminal recordings
+and GUI visual regions remain planned with their surface drivers.
 
 Reports separate assertion failure from infrastructure failure and cleanup
 failure. This distinction is required for an agent to choose whether to repair

@@ -24,9 +24,66 @@ pub struct CommandOutput {
     pub stderr: String,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum CommandErrorKind {
+    Unavailable,
+    TimedOut,
+    Output,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CommandError {
+    kind: CommandErrorKind,
+    message: String,
+}
+
+impl CommandError {
+    #[must_use]
+    pub fn unavailable(message: impl Into<String>) -> Self {
+        Self {
+            kind: CommandErrorKind::Unavailable,
+            message: message.into(),
+        }
+    }
+
+    #[must_use]
+    pub fn timed_out(message: impl Into<String>) -> Self {
+        Self {
+            kind: CommandErrorKind::TimedOut,
+            message: message.into(),
+        }
+    }
+
+    #[must_use]
+    pub fn output(message: impl Into<String>) -> Self {
+        Self {
+            kind: CommandErrorKind::Output,
+            message: message.into(),
+        }
+    }
+
+    #[must_use]
+    pub fn kind(&self) -> CommandErrorKind {
+        self.kind
+    }
+
+    #[must_use]
+    pub fn retryable(&self) -> bool {
+        self.kind == CommandErrorKind::Unavailable
+    }
+}
+
+impl std::fmt::Display for CommandError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str(&self.message)
+    }
+}
+
+impl std::error::Error for CommandError {}
+
 #[async_trait]
 pub trait CommandExecutor: Send + Sync {
-    async fn run(&self, invocation: CommandInvocation) -> Result<CommandOutput, String>;
+    async fn run(&self, invocation: CommandInvocation) -> Result<CommandOutput, CommandError>;
 }
 
 #[derive(Default)]
@@ -34,7 +91,7 @@ pub struct TokioCommandExecutor;
 
 #[async_trait]
 impl CommandExecutor for TokioCommandExecutor {
-    async fn run(&self, invocation: CommandInvocation) -> Result<CommandOutput, String> {
+    async fn run(&self, invocation: CommandInvocation) -> Result<CommandOutput, CommandError> {
         let mut command = Command::new(&invocation.program);
         command
             .args(&invocation.args)
@@ -46,9 +103,9 @@ impl CommandExecutor for TokioCommandExecutor {
         #[cfg(unix)]
         command.process_group(0);
 
-        let child = command
-            .spawn()
-            .map_err(|error| format!("failed to execute browser command: {error}"))?;
+        let child = command.spawn().map_err(|error| {
+            CommandError::unavailable(format!("failed to execute browser command: {error}"))
+        })?;
         let mut child = ChildGuard::new(child);
         let stdout = child.take_stdout()?;
         let stderr = child.take_stderr()?;
@@ -57,8 +114,9 @@ impl CommandExecutor for TokioCommandExecutor {
 
         let status = match tokio::time::timeout(invocation.timeout, child.wait()).await {
             Ok(result) => {
-                let status = result
-                    .map_err(|error| format!("failed to wait for browser command: {error}"))?;
+                let status = result.map_err(|error| {
+                    CommandError::output(format!("failed to wait for browser command: {error}"))
+                })?;
                 child.finish();
                 status
             }
@@ -66,10 +124,10 @@ impl CommandExecutor for TokioCommandExecutor {
                 child.terminate().await;
                 stdout_task.abort();
                 stderr_task.abort();
-                return Err(format!(
+                return Err(CommandError::timed_out(format!(
                     "browser command exceeded {} ms",
                     invocation.timeout.as_millis()
-                ));
+                )));
             }
         };
         let stdout = join_output(stdout_task).await?;
@@ -98,18 +156,18 @@ impl ChildGuard {
         }
     }
 
-    fn take_stdout(&mut self) -> Result<tokio::process::ChildStdout, String> {
+    fn take_stdout(&mut self) -> Result<tokio::process::ChildStdout, CommandError> {
         self.child
             .as_mut()
             .and_then(|child| child.stdout.take())
-            .ok_or_else(|| "browser command stdout is unavailable".to_string())
+            .ok_or_else(|| CommandError::output("browser command stdout is unavailable"))
     }
 
-    fn take_stderr(&mut self) -> Result<tokio::process::ChildStderr, String> {
+    fn take_stderr(&mut self) -> Result<tokio::process::ChildStderr, CommandError> {
         self.child
             .as_mut()
             .and_then(|child| child.stderr.take())
-            .ok_or_else(|| "browser command stderr is unavailable".to_string())
+            .ok_or_else(|| CommandError::output("browser command stderr is unavailable"))
     }
 
     async fn wait(&mut self) -> std::io::Result<std::process::ExitStatus> {
@@ -159,8 +217,10 @@ where
 
 async fn join_output(
     task: tokio::task::JoinHandle<std::io::Result<Vec<u8>>>,
-) -> Result<Vec<u8>, String> {
+) -> Result<Vec<u8>, CommandError> {
     task.await
-        .map_err(|error| format!("browser output reader failed: {error}"))?
-        .map_err(|error| format!("failed to read browser command output: {error}"))
+        .map_err(|error| CommandError::output(format!("browser output reader failed: {error}")))?
+        .map_err(|error| {
+            CommandError::output(format!("failed to read browser command output: {error}"))
+        })
 }

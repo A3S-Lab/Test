@@ -42,6 +42,7 @@ impl SpecError {
 pub struct DriverError {
     code: String,
     message: String,
+    retryable: bool,
 }
 
 impl DriverError {
@@ -50,7 +51,14 @@ impl DriverError {
         Self {
             code: code.into(),
             message: message.into(),
+            retryable: false,
         }
+    }
+
+    #[must_use]
+    pub fn with_retryable(mut self, retryable: bool) -> Self {
+        self.retryable = retryable;
+        self
     }
 
     #[must_use]
@@ -61,5 +69,10 @@ impl DriverError {
     #[must_use]
     pub fn message(&self) -> &str {
         &self.message
+    }
+
+    #[must_use]
+    pub fn retryable(&self) -> bool {
+        self.retryable
     }
 }

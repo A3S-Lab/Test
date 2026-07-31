@@ -1,0 +1,36 @@
+suite "web-depth" {
+    version = 1
+
+    scenario "diagnostic-evidence" {
+        name = "Capture bounded browser diagnostics"
+        surface = "web"
+        timeout_ms = 30000
+
+        navigate "open" {
+            url = "https://example.com"
+        }
+
+        wait "loaded" {
+            load = "networkidle"
+        }
+
+        accessibility "semantic-tree" {
+            path = "evidence/tree.json"
+            interactive = false
+        }
+
+        console "console-log" {
+            path = "evidence/console.json"
+            clear = false
+        }
+
+        page_errors "javascript-errors" {
+            path = "evidence/errors.json"
+            clear = false
+        }
+
+        screenshot "final-state" {
+            path = "screenshots/final.png"
+        }
+    }
+}

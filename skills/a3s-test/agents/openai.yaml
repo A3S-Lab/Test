@@ -1,0 +1,4 @@
+interface:
+  display_name: "A3S Test"
+  short_description: "Author, run, and diagnose typed Web E2E tests"
+  default_prompt: "Use $a3s-test to create and run a typed Web E2E test for this project."
