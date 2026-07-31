@@ -1,7 +1,9 @@
 [CmdletBinding()]
 param(
     [ValidateSet(
+        "auto",
         "all",
+        "universal",
         "a3s-code",
         "codex",
         "claude-code",
@@ -13,7 +15,7 @@ param(
         "roo",
         "windsurf"
     )]
-    [string]$Agent = "all",
+    [string]$Agent = "auto",
 
     [string]$Version = "",
 
@@ -39,6 +41,119 @@ $ReleasesUrl = if ($env:A3S_TEST_RELEASES_URL) {
     $env:A3S_TEST_RELEASES_URL.TrimEnd("/")
 } else {
     "https://github.com/$Repository/releases"
+}
+
+$KnownAgents = @(
+    "a3s-code",
+    "codex",
+    "claude-code",
+    "cursor",
+    "gemini-cli",
+    "github-copilot",
+    "opencode",
+    "cline",
+    "roo",
+    "windsurf"
+)
+
+function Test-CommandAvailable {
+    param([Parameter(Mandatory = $true)][string]$Name)
+
+    return $null -ne (Get-Command -Name $Name -ErrorAction SilentlyContinue)
+}
+
+function Test-AgentInstalled {
+    param([Parameter(Mandatory = $true)][string]$AgentName)
+
+    switch ($AgentName) {
+        "a3s-code" {
+            return (
+                [bool]$env:A3S_HOME -or
+                (Test-Path -LiteralPath (Join-Path $HOME ".a3s") -PathType Container) -or
+                (Test-CommandAvailable "a3s")
+            )
+        }
+        "codex" {
+            return (
+                [bool]$env:CODEX_HOME -or
+                (Test-Path -LiteralPath (Join-Path $HOME ".codex") -PathType Container) -or
+                (Test-CommandAvailable "codex")
+            )
+        }
+        "claude-code" {
+            return (
+                [bool]$env:CLAUDE_CONFIG_DIR -or
+                (Test-Path -LiteralPath (Join-Path $HOME ".claude") -PathType Container) -or
+                (Test-CommandAvailable "claude")
+            )
+        }
+        "cursor" {
+            return (
+                [bool]$env:CURSOR_HOME -or
+                (Test-Path -LiteralPath (Join-Path $HOME ".cursor") -PathType Container) -or
+                (Test-CommandAvailable "cursor")
+            )
+        }
+        "gemini-cli" {
+            return (
+                [bool]$env:GEMINI_HOME -or
+                (Test-Path -LiteralPath (Join-Path $HOME ".gemini") -PathType Container) -or
+                (Test-CommandAvailable "gemini")
+            )
+        }
+        "github-copilot" {
+            return (
+                [bool]$env:COPILOT_HOME -or
+                (Test-Path -LiteralPath (Join-Path $HOME ".copilot") -PathType Container) -or
+                (Test-CommandAvailable "copilot")
+            )
+        }
+        "opencode" {
+            $ConfigRoot = if ($env:OPENCODE_CONFIG_DIR) {
+                $env:OPENCODE_CONFIG_DIR
+            } elseif ($env:XDG_CONFIG_HOME) {
+                Join-Path $env:XDG_CONFIG_HOME "opencode"
+            } else {
+                Join-Path $HOME ".config\opencode"
+            }
+            return (
+                [bool]$env:OPENCODE_CONFIG_DIR -or
+                (Test-Path -LiteralPath $ConfigRoot -PathType Container) -or
+                (Test-CommandAvailable "opencode")
+            )
+        }
+        "cline" {
+            return (
+                [bool]$env:CLINE_HOME -or
+                (Test-Path -LiteralPath (Join-Path $HOME ".cline") -PathType Container) -or
+                (Test-CommandAvailable "cline")
+            )
+        }
+        "roo" {
+            return (
+                [bool]$env:ROO_HOME -or
+                (Test-Path -LiteralPath (Join-Path $HOME ".roo") -PathType Container) -or
+                (Test-CommandAvailable "roo")
+            )
+        }
+        "windsurf" {
+            return (
+                [bool]$env:WINDSURF_HOME -or
+                (Test-Path -LiteralPath (Join-Path $HOME ".codeium\windsurf") -PathType Container) -or
+                (Test-CommandAvailable "windsurf")
+            )
+        }
+    }
+    return $false
+}
+
+$DetectedAgents = @()
+if ($InstallSkill -and -not $SkillDir -and $Agent -eq "auto") {
+    $DetectedAgents = @($KnownAgents | Where-Object { Test-AgentInstalled $_ })
+    if ($DetectedAgents.Count -eq 0) {
+        $DetectedAgents = @("universal")
+        Write-Host "No known coding agent detected; using the universal Agent Skills directory."
+    }
 }
 
 if (-not $InstallDir) {
@@ -166,8 +281,11 @@ function Install-AgentSkill {
             }
             Join-Path $ConfigRoot "skills"
         }
-        "cline" {
+        "universal" {
             Join-Path $(if ($env:AGENTS_HOME) { $env:AGENTS_HOME } else { Join-Path $HOME ".agents" }) "skills"
+        }
+        "cline" {
+            Join-Path $(if ($env:CLINE_HOME) { $env:CLINE_HOME } else { Join-Path $HOME ".cline" }) "skills"
         }
         "roo" {
             Join-Path $(if ($env:ROO_HOME) { $env:ROO_HOME } else { Join-Path $HOME ".roo" }) "skills"
@@ -230,8 +348,13 @@ try {
 
         if ($SkillDir) {
             Install-SkillAt "custom" $SkillDir
+        } elseif ($Agent -eq "auto") {
+            foreach ($AgentName in $DetectedAgents) {
+                Install-AgentSkill $AgentName
+            }
         } elseif ($Agent -eq "all") {
             foreach ($AgentName in @(
+                "universal",
                 "a3s-code",
                 "codex",
                 "claude-code",

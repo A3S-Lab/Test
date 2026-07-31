@@ -4,7 +4,7 @@ set -eu
 
 REPOSITORY="${A3S_TEST_REPOSITORY:-A3S-Lab/Test}"
 RELEASES_URL="${A3S_TEST_RELEASES_URL:-https://github.com/${REPOSITORY}/releases}"
-AGENT="all"
+AGENT="auto"
 VERSION=""
 INSTALL_DIR="${A3S_TEST_INSTALL_DIR:-${HOME}/.local/bin}"
 SKILL_DIR=""
@@ -19,10 +19,11 @@ Usage:
   install.sh [options]
 
 Options:
-  --agent <name>       Install the Skill for one known coding agent or all.
-                       Supported: a3s-code, codex, claude-code, cursor,
-                       gemini-cli, github-copilot, opencode, cline, roo,
-                       windsurf, all.
+  --agent <name>       Install the Skill for one coding agent, auto-detected
+                       agents, the cross-agent directory, or all targets.
+                       Supported: auto, universal, a3s-code, codex,
+                       claude-code, cursor, gemini-cli, github-copilot,
+                       opencode, cline, roo, windsurf, all.
   --version <vX.Y.Z>
   --install-dir <path>
   --skill-dir <path>   Install into a custom Skill parent directory.
@@ -40,7 +41,8 @@ Environment:
   GEMINI_HOME            Override the Gemini CLI home directory.
   COPILOT_HOME           Override the GitHub Copilot home directory.
   OPENCODE_CONFIG_DIR    Override the OpenCode config directory.
-  AGENTS_HOME            Override the shared .agents directory used by Cline.
+  AGENTS_HOME            Override the cross-agent .agents directory.
+  CLINE_HOME             Override the Cline home directory.
   ROO_HOME               Override the Roo Code home directory.
   WINDSURF_HOME          Override the Windsurf home directory.
 EOF
@@ -101,7 +103,7 @@ while [ "$#" -gt 0 ]; do
 done
 
 case "$AGENT" in
-    all|a3s-code|codex|claude-code|cursor|gemini-cli|github-copilot|opencode|cline|roo|windsurf) ;;
+    auto|all|universal|a3s-code|codex|claude-code|cursor|gemini-cli|github-copilot|opencode|cline|roo|windsurf) ;;
     *)
         echo "install.sh: unsupported agent '$AGENT'" >&2
         exit 2
@@ -111,6 +113,76 @@ esac
 if [ "$INSTALL_CLI" -eq 0 ] && [ "$INSTALL_SKILL" -eq 0 ]; then
     echo "install.sh: --skill-only and --cli-only cannot be combined" >&2
     exit 2
+fi
+
+agent_is_installed() {
+    agent_name="$1"
+    case "$agent_name" in
+        a3s-code)
+            [ -n "${A3S_HOME:-}" ] || [ -d "${HOME}/.a3s" ] ||
+                command -v a3s >/dev/null 2>&1
+            ;;
+        codex)
+            [ -n "${CODEX_HOME:-}" ] || [ -d "${HOME}/.codex" ] ||
+                command -v codex >/dev/null 2>&1
+            ;;
+        claude-code)
+            [ -n "${CLAUDE_CONFIG_DIR:-}" ] || [ -d "${HOME}/.claude" ] ||
+                command -v claude >/dev/null 2>&1
+            ;;
+        cursor)
+            [ -n "${CURSOR_HOME:-}" ] || [ -d "${HOME}/.cursor" ] ||
+                command -v cursor >/dev/null 2>&1
+            ;;
+        gemini-cli)
+            [ -n "${GEMINI_HOME:-}" ] || [ -d "${HOME}/.gemini" ] ||
+                command -v gemini >/dev/null 2>&1
+            ;;
+        github-copilot)
+            [ -n "${COPILOT_HOME:-}" ] || [ -d "${HOME}/.copilot" ] ||
+                command -v copilot >/dev/null 2>&1
+            ;;
+        opencode)
+            [ -n "${OPENCODE_CONFIG_DIR:-}" ] ||
+                [ -d "${XDG_CONFIG_HOME:-${HOME}/.config}/opencode" ] ||
+                command -v opencode >/dev/null 2>&1
+            ;;
+        cline)
+            [ -n "${CLINE_HOME:-}" ] || [ -d "${HOME}/.cline" ] ||
+                command -v cline >/dev/null 2>&1
+            ;;
+        roo)
+            [ -n "${ROO_HOME:-}" ] || [ -d "${HOME}/.roo" ] ||
+                command -v roo >/dev/null 2>&1
+            ;;
+        windsurf)
+            [ -n "${WINDSURF_HOME:-}" ] ||
+                [ -d "${HOME}/.codeium/windsurf" ] ||
+                command -v windsurf >/dev/null 2>&1
+            ;;
+    esac
+}
+
+detect_agents() {
+    detected=""
+    for candidate in \
+        a3s-code codex claude-code cursor gemini-cli github-copilot \
+        opencode cline roo windsurf
+    do
+        if agent_is_installed "$candidate"; then
+            detected="${detected}${detected:+ }${candidate}"
+        fi
+    done
+    printf '%s\n' "$detected"
+}
+
+DETECTED_AGENTS=""
+if [ "$INSTALL_SKILL" -eq 1 ] && [ -z "$SKILL_DIR" ] && [ "$AGENT" = auto ]; then
+    DETECTED_AGENTS="$(detect_agents)"
+    if [ -z "$DETECTED_AGENTS" ]; then
+        DETECTED_AGENTS="universal"
+        echo "No known coding agent detected; using the universal Agent Skills directory."
+    fi
 fi
 
 download() {
@@ -274,7 +346,8 @@ install_skill_for() {
         opencode)
             skills_parent="${OPENCODE_CONFIG_DIR:-${XDG_CONFIG_HOME:-${HOME}/.config}/opencode}/skills"
             ;;
-        cline) skills_parent="${AGENTS_HOME:-${HOME}/.agents}/skills" ;;
+        universal) skills_parent="${AGENTS_HOME:-${HOME}/.agents}/skills" ;;
+        cline) skills_parent="${CLINE_HOME:-${HOME}/.cline}/skills" ;;
         roo) skills_parent="${ROO_HOME:-${HOME}/.roo}/skills" ;;
         windsurf) skills_parent="${WINDSURF_HOME:-${HOME}/.codeium/windsurf}/skills" ;;
     esac
@@ -298,7 +371,13 @@ if [ "$INSTALL_SKILL" -eq 1 ]; then
         install_skill_at custom "$SKILL_DIR"
     else
         case "$AGENT" in
+            auto)
+                for detected_agent in $DETECTED_AGENTS; do
+                    install_skill_for "$detected_agent"
+                done
+                ;;
             all)
+                install_skill_for universal
                 install_skill_for a3s-code
                 install_skill_for codex
                 install_skill_for claude-code

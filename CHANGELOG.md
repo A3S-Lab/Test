@@ -1,5 +1,29 @@
 # Changelog
 
+## 0.4.3 - 2026-07-31
+
+### Added
+
+- The macOS/Linux and Windows one-click installers now default to `auto` and
+  install the portable Skill only for coding agents detected from their home
+  directory, environment override, or executable.
+- A `universal` target installs the Skill in the cross-client
+  `~/.agents/skills` convention. Explicit targets remain available for A3S
+  Code, Codex, Claude Code, Cursor, Gemini CLI, GitHub Copilot CLI, OpenCode,
+  Cline, Roo Code, and Windsurf.
+
+### Fixed
+
+- Cline installations now use its documented global `~/.cline/skills`
+  directory instead of conflating Cline with the cross-agent directory.
+
+### Safety
+
+- Automatic installation never creates unrelated agent-specific directories.
+  When no known client is detected, it falls back to the standard
+  `~/.agents/skills` directory; `all` and custom directories remain explicit
+  opt-ins.
+
 ## 0.4.2 - 2026-07-31
 
 ### Fixed

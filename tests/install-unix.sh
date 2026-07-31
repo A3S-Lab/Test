@@ -17,7 +17,7 @@ case "$(uname -s):$(uname -m)" in
         ;;
 esac
 
-VERSION="v0.4.2"
+VERSION="v0.4.3"
 RELEASE_DIR="${TMP_ROOT}/releases/download/${VERSION}"
 PAYLOAD_NAME="a3s-test-${VERSION}-${TARGET}"
 mkdir -p "${RELEASE_DIR}" "${TMP_ROOT}/payload/${PAYLOAD_NAME}" "${TMP_ROOT}/skill/a3s-test"
@@ -52,27 +52,58 @@ checksum \
 HOME_DIR="${TMP_ROOT}/home"
 BIN_DIR="${TMP_ROOT}/bin"
 export HOME="$HOME_DIR"
-export A3S_HOME="${TMP_ROOT}/a3s"
 export CODEX_HOME="${TMP_ROOT}/codex"
+export A3S_TEST_RELEASES_URL="file://${TMP_ROOT}/releases"
+unset A3S_HOME CLAUDE_CONFIG_DIR CURSOR_HOME GEMINI_HOME COPILOT_HOME
+unset OPENCODE_CONFIG_DIR AGENTS_HOME CLINE_HOME ROO_HOME WINDSURF_HOME
+PATH="/usr/bin:/bin"
+export PATH
+
+"${ROOT}/scripts/install.sh" \
+    --version "$VERSION" \
+    --install-dir "$BIN_DIR"
+
+test -x "${BIN_DIR}/a3s-test"
+test -f "${CODEX_HOME}/skills/a3s-test/SKILL.md"
+test ! -e "${TMP_ROOT}/a3s/skills/a3s-test"
+test ! -e "${TMP_ROOT}/claude/skills/a3s-test"
+
+NO_AGENT_HOME="${TMP_ROOT}/no-agent-home"
+(
+    unset CODEX_HOME
+    HOME="$NO_AGENT_HOME"
+    export HOME
+    "${ROOT}/scripts/install.sh" --version "$VERSION" --skill-only
+)
+test -f "${NO_AGENT_HOME}/.agents/skills/a3s-test/SKILL.md"
+
+(
+    unset CODEX_HOME
+    HOME="$NO_AGENT_HOME"
+    export HOME
+    "${ROOT}/scripts/install.sh" \
+        --version "$VERSION" \
+        --cli-only \
+        --install-dir "${TMP_ROOT}/cli-only-bin"
+)
+test -x "${TMP_ROOT}/cli-only-bin/a3s-test"
+
+export A3S_HOME="${TMP_ROOT}/a3s"
 export CLAUDE_CONFIG_DIR="${TMP_ROOT}/claude"
 export CURSOR_HOME="${TMP_ROOT}/cursor"
 export GEMINI_HOME="${TMP_ROOT}/gemini"
 export COPILOT_HOME="${TMP_ROOT}/copilot"
 export OPENCODE_CONFIG_DIR="${TMP_ROOT}/opencode"
 export AGENTS_HOME="${TMP_ROOT}/agents"
+export CLINE_HOME="${TMP_ROOT}/cline"
 export ROO_HOME="${TMP_ROOT}/roo"
 export WINDSURF_HOME="${TMP_ROOT}/windsurf"
-export A3S_TEST_RELEASES_URL="file://${TMP_ROOT}/releases"
 
 "${ROOT}/scripts/install.sh" \
     --version "$VERSION" \
-    --agent codex \
-    --install-dir "$BIN_DIR"
-
-test -x "${BIN_DIR}/a3s-test"
-test -f "${CODEX_HOME}/skills/a3s-test/SKILL.md"
-test ! -e "${A3S_HOME}/skills/a3s-test"
-test ! -e "${CLAUDE_CONFIG_DIR}/skills/a3s-test"
+    --agent universal \
+    --skill-only
+test -f "${AGENTS_HOME}/skills/a3s-test/SKILL.md"
 
 printf '%s\n' stale > "${CODEX_HOME}/skills/a3s-test/stale.txt"
 "${ROOT}/scripts/install.sh" \
@@ -89,6 +120,7 @@ for skills_parent in \
     "${COPILOT_HOME}/skills" \
     "${OPENCODE_CONFIG_DIR}/skills" \
     "${AGENTS_HOME}/skills" \
+    "${CLINE_HOME}/skills" \
     "${ROO_HOME}/skills" \
     "${WINDSURF_HOME}/skills"
 do

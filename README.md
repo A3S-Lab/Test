@@ -32,11 +32,10 @@ same entry point also upgrades an installation.
 macOS or Linux:
 
 ```bash
-# Install for every supported coding agent
-curl -fsSL https://github.com/A3S-Lab/Test/releases/latest/download/install.sh |
-  sh -s -- --agent all
+# Detect installed coding agents and install the CLI + Skill
+curl -fsSL https://github.com/A3S-Lab/Test/releases/latest/download/install.sh | sh
 
-# Or install for one agent
+# Install for one explicit agent
 curl -fsSL https://github.com/A3S-Lab/Test/releases/latest/download/install.sh |
   sh -s -- --agent codex
 ```
@@ -44,20 +43,38 @@ curl -fsSL https://github.com/A3S-Lab/Test/releases/latest/download/install.sh |
 Windows PowerShell:
 
 ```powershell
-# Install for every supported coding agent
-& ([scriptblock]::Create((irm 'https://github.com/A3S-Lab/Test/releases/latest/download/install.ps1'))) -Agent all
+# Detect installed coding agents and install the CLI + Skill
+& ([scriptblock]::Create((irm 'https://github.com/A3S-Lab/Test/releases/latest/download/install.ps1')))
 
-# Or install for one agent
+# Install for one explicit agent
 & ([scriptblock]::Create((irm 'https://github.com/A3S-Lab/Test/releases/latest/download/install.ps1'))) -Agent codex
 ```
 
-Known agent targets are `a3s-code`, `codex`, `claude-code`, `cursor`,
-`gemini-cli`, `github-copilot`, `opencode`, `cline`, `roo`, and `windsurf`.
-Use `all` for every target, or `--skill-dir <path>` / `-SkillDir <path>` for
-any other Agent Skills-compatible tool. `--skill-only`, `--cli-only`,
-`--version`, and `--install-dir` are also available for controlled
-installations. The scripts resolve the latest release through GitHub's release
-redirect rather than the rate-limited API.
+The same OS-specific script is the single installation source for every
+coding agent. Pass `--agent <target>` on macOS/Linux or `-Agent <target>` on
+Windows:
+
+| Coding agent | Target | User-level Skill directory |
+| --- | --- | --- |
+| A3S Code | `a3s-code` | `~/.a3s/skills` |
+| Codex | `codex` | `~/.codex/skills` (`CODEX_HOME` supported) |
+| Claude Code | `claude-code` | `~/.claude/skills` |
+| Cursor | `cursor` | `~/.cursor/skills` |
+| Gemini CLI | `gemini-cli` | `~/.gemini/skills` |
+| GitHub Copilot CLI | `github-copilot` | `~/.copilot/skills` |
+| OpenCode | `opencode` | `~/.config/opencode/skills` |
+| Cline | `cline` | `~/.cline/skills` |
+| Roo Code | `roo` | `~/.roo/skills` |
+| Windsurf | `windsurf` | `~/.codeium/windsurf/skills` |
+| Agent Skills-compatible tools | `universal` | `~/.agents/skills` |
+
+`auto` is the default and installs only for detected agents; if none is
+recognized, it uses the universal `~/.agents/skills` convention. Use `all` for
+every target, or `--skill-dir <path>` / `-SkillDir <path>` for another Agent
+Skills-compatible tool. `--skill-only`, `--cli-only`, `--version`, and
+`--install-dir` are available for controlled installations. The scripts
+resolve the latest release through GitHub's release redirect rather than the
+rate-limited API.
 
 The checked-in [`install.sh`](scripts/install.sh) supports macOS and Linux
 x64/ARM64. [`install.ps1`](scripts/install.ps1) supports Windows x64. Both
@@ -71,7 +88,7 @@ tagged Rust package manually:
 
 ```bash
 cargo install --git https://github.com/A3S-Lab/Test \
-  --tag v0.4.2 --locked a3s-test-cli
+  --tag v0.4.3 --locked a3s-test-cli
 ```
 
 ## Let a coding agent test the product
@@ -272,9 +289,10 @@ Install the same package for the agent you use:
 | Gemini CLI | `unzip a3s-test.skill -d ~/.gemini/skills` |
 | GitHub Copilot | `unzip a3s-test.skill -d ~/.copilot/skills` |
 | OpenCode | `unzip a3s-test.skill -d ~/.config/opencode/skills` |
-| Cline | `unzip a3s-test.skill -d ~/.agents/skills` |
+| Cline | `unzip a3s-test.skill -d ~/.cline/skills` |
 | Roo Code | `unzip a3s-test.skill -d ~/.roo/skills` |
 | Windsurf | `unzip a3s-test.skill -d ~/.codeium/windsurf/skills` |
+| Compatible agents | `unzip a3s-test.skill -d ~/.agents/skills` |
 
 For a project-scoped or not-yet-listed agent, pass its Skill parent directory
 explicitly:
