@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.4.2 - 2026-07-31
+
+### Fixed
+
+- Persistent agent sessions now derive a stable, 28-byte internal browser ID
+  when the user-facing session name would exceed the browser daemon's Unix
+  socket-path budget. Valid descriptive session names no longer fail during
+  browser startup with a socket path length error.
+
+### Safety
+
+- Short internal browser IDs remain unchanged for compatibility. Compacted IDs
+  use a SHA-256 suffix, are persisted in the ownership marker, and are
+  recomputed during metadata validation so exact-session cleanup retains the
+  same ownership guarantees across CLI invocations.
+
 ## 0.4.1 - 2026-07-31
 
 ### Fixed

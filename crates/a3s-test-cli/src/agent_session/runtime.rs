@@ -3,14 +3,31 @@ use std::hash::{Hash, Hasher};
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
+use sha2::{Digest, Sha256};
 
 const RUNTIME_OWNER_FILE: &str = ".a3s-test-owner";
+const DRIVER_SESSION_MAX_BYTES: usize = 28;
 
 pub(super) fn session_namespace(workspace: &Path, session: &str) -> String {
     let mut hasher = DefaultHasher::new();
     workspace.hash(&mut hasher);
     session.hash(&mut hasher);
     format!("a3st-{:016x}", hasher.finish())
+}
+
+pub(super) fn driver_session_id(session: &str) -> String {
+    let requested = format!("agent-{session}");
+    if requested.len() <= DRIVER_SESSION_MAX_BYTES {
+        return requested;
+    }
+
+    let readable_bytes = DRIVER_SESSION_MAX_BYTES - 17;
+    let digest = Sha256::digest(requested.as_bytes());
+    let suffix = digest[..8]
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect::<String>();
+    format!("{}-{suffix}", &requested[..readable_bytes])
 }
 
 pub(super) async fn create_runtime_directory(workspace: &Path, session: &str) -> Result<PathBuf> {
@@ -125,8 +142,9 @@ fn validate_runtime_path(path: &Path) -> Result<()> {
 
 fn runtime_owner(workspace: &Path, session: &str) -> String {
     format!(
-        "a3s-test-agent-runtime-v1\n{}\nagent-{session}\n",
-        session_namespace(workspace, session)
+        "a3s-test-agent-runtime-v1\n{}\n{}\n",
+        session_namespace(workspace, session),
+        driver_session_id(session),
     )
 }
 
@@ -174,5 +192,17 @@ mod tests {
                 .await
                 .is_err()
         );
+    }
+
+    #[test]
+    fn driver_session_ids_are_stable_and_socket_safe() {
+        assert_eq!(driver_session_id("checkout"), "agent-checkout");
+
+        let session = "office-presentation-font-v041";
+        let compact = driver_session_id(session);
+        assert_eq!(compact, driver_session_id(session));
+        assert!(compact.starts_with("agent-offic-"), "{compact}");
+        assert_eq!(compact.len(), DRIVER_SESSION_MAX_BYTES);
+        assert_ne!(compact, driver_session_id("office-presentation-font-v042"));
     }
 }

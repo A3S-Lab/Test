@@ -27,7 +27,7 @@ use self::args::{
 use self::events::{append_success_event, append_terminal_event, record_failure};
 use self::policy::{validate_action, validate_observation_origin};
 use self::runtime::{
-    create_runtime_directory, remove_runtime_directory, session_namespace,
+    create_runtime_directory, driver_session_id, remove_runtime_directory, session_namespace,
     validate_runtime_directory,
 };
 use self::store::{
@@ -283,7 +283,7 @@ async fn start(args: StartArgs) -> Result<ExitCode> {
             idle_timeout_ms: args.idle_timeout_ms,
         },
         namespace: session_namespace(&workspace, &args.session),
-        driver_session: format!("agent-{}", args.session),
+        driver_session: driver_session_id(&args.session),
         runtime_dir,
         artifacts_dir: store.artifacts_dir().to_path_buf(),
         active_video_path: None,
@@ -771,7 +771,7 @@ async fn load_session_state(
         || state.session != session
         || state.surface != Surface::Web
         || state.namespace != session_namespace(workspace, session)
-        || state.driver_session != format!("agent-{session}")
+        || state.driver_session != driver_session_id(session)
         || state.artifacts_dir != store.artifacts_dir()
     {
         anyhow::bail!(

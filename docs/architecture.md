@@ -254,7 +254,10 @@ session root. Successful observations must also report an admitted HTTP(S)
 origin, so a detached or page-driven replacement is surfaced before new refs
 are issued. The browser runtime uses an isolated namespace, an ownership marker,
 and a bounded idle timeout so persisted metadata cannot redirect cleanup and an
-abandoned external planner does not leave an unbounded process.
+abandoned external planner does not leave an unbounded process. Descriptive
+external session names are preserved in state and reports; a stable SHA-256
+suffix compacts only the driver-facing session identifier when Unix socket
+paths require it.
 
 Once a path is understood, the coding agent can author ACL and use
 `check --json` and `run --json` for deterministic regression coverage.

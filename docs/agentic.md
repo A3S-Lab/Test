@@ -45,7 +45,10 @@ agent finish -> report + DriverSession::close
 
 The session metadata, append-only event log, report, and evidence live under
 `.a3s-test/agent-sessions/<session>/`. Browser state is preserved across CLI
-invocations through an isolated namespace and private runtime directory.
+invocations through an isolated namespace and private runtime directory. The
+user-facing session name remains unchanged in commands and reports. Only the
+driver-facing identifier is deterministically compacted when necessary to fit
+the daemon's Unix socket-path budget.
 
 Ref targets are bound to the latest observation identifier. Explicit
 URL-bearing actions are limited to the initial HTTP(S) origin and

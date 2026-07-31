@@ -71,7 +71,7 @@ tagged Rust package manually:
 
 ```bash
 cargo install --git https://github.com/A3S-Lab/Test \
-  --tag v0.4.1 --locked a3s-test-cli
+  --tag v0.4.2 --locked a3s-test-cli
 ```
 
 ## Let a coding agent test the product
@@ -163,7 +163,9 @@ a3s-test agent schema
   another model for this workflow.
 - **The surface stays alive between turns.** Workspace-local sessions preserve
   the browser, event history, active evidence captures, and artifact root
-  across separate CLI invocations.
+  across separate CLI invocations. Human-readable session IDs remain intact in
+  reports while long internal browser IDs are compacted deterministically for
+  Unix socket safety.
 - **Observations are semantic.** Accessibility snapshots provide compact,
   actionable refs along with the current surface state.
 - **Refs have provenance.** A ref action must include the latest
