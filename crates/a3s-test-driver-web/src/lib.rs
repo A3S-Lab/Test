@@ -15,4 +15,4 @@ pub use executor::{
     TokioCommandExecutor,
 };
 pub use process::terminate_active_commands;
-pub use session::AgentBrowserDriver;
+pub use session::{AgentBrowserConnectionConfig, AgentBrowserDriver, AgentBrowserSession};

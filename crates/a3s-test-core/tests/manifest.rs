@@ -72,7 +72,9 @@ fn parses_ordered_typed_web_scenario() {
     assert_eq!(
         scenario.steps[2].action,
         Action::Fill {
-            target: Target::Label("Document title".to_string()),
+            target: Target::Label {
+                value: "Document title".to_string(),
+            },
             value: "Quarterly plan".to_string(),
         }
     );

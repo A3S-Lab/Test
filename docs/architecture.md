@@ -2,21 +2,28 @@
 
 ## Product boundary
 
-A3S Test is a cross-surface test runtime for coding agents. It owns scenario
-admission, orchestration, surface-driver contracts, evidence, reports, and
-process lifecycle. It does not own browser implementation, desktop perception,
+A3S Test is a cross-surface test engine delivered as the `a3s-test` CLI. It
+owns persistent agent sessions, deterministic scenario admission,
+orchestration, surface-driver contracts, evidence, reports, and process
+lifecycle. It does not own browser implementation, desktop perception,
 terminal emulation, or an LLM provider.
+
+Coding agents are external planners in the primary agentic workflow. A3S Code,
+Codex, Claude Code, or another agent repeatedly calls `agent observe` and one
+typed action command through the portable Skill. The CLI preserves the surface
+between calls and records the run. The optional `a3s-test-agent` library
+supports hosts that intentionally inject a separate LLM provider.
 
 Those capabilities are injected through typed interfaces:
 
 ```text
                          A3S Test
   +------------------------------------------------------+
-  | ACL suite                     Agent goal              |
-  |    |                              |                   |
-  |    v                              v                   |
-  | Typed test IR -> Runner     LLM -> schema -> policy   |
-  |                 \             /                       |
+  | ACL suite              Coding agent / SDK goal        |
+  |    |                      |              |             |
+  |    v                      v              v             |
+  | Typed IR -> Runner   Session CLI    LLM -> policy      |
+  |                 \        |          /                  |
   |                  Driver session                       |
   +-----------------------+------------------------------+
                           |
@@ -33,11 +40,14 @@ The runner never branches on backend names. Each backend is a typed
 ## Runtime layers
 
 ```text
-Layer 5  Agent interface
-         JSON CLI and Coding Agent Skill today; MCP later
+Layer 6  Planner interface
+         Coding Agent Skill today; MCP later
+
+Layer 5  Product interface
+         persistent agent-session CLI + deterministic JSON CLI
 
 Layer 4  Agentic planning
-         User-supplied LLM provider -> typed action proposal -> policy gate
+         external coding agent, or user-supplied LLM provider in SDK hosts
 
 Layer 3  Orchestration
          deadlines, cancellation, cleanup, events, result aggregation
@@ -54,13 +64,18 @@ Layer 0  Host supervision
          process groups, bounded shutdown, namespaces, artifact isolation
 ```
 
-The deterministic manifest path implements Layers 0, 2, 3, and the CLI portion
-of Layer 5. `a3s-test-agent` implements the Layer 4 library contract: it calls
-an injected LLM, receives a schema-constrained proposal, validates it against
-capabilities and policy, executes one action, observes again, and stops at
-explicit turn, token, cost, context, cancellation, or time limits. The shipped
-Skill projects deterministic ACL and JSON CLI workflows. Direct CLI and MCP
-hosts for the agentic loop are not implemented yet.
+The deterministic manifest path implements Layers 0, 2, 3, and the closed-run
+portion of Layer 5. The persistent agent-session path projects the same typed
+driver through `start`, `observe`, `act`, and `finish`; the external coding
+agent owns Layer 4 decisions. `a3s-test-agent` is the alternate embedded Layer
+4 contract: it calls an injected LLM, receives a schema-constrained proposal,
+validates it against capabilities and policy, executes one action, observes
+again, and stops at explicit turn, token, cost, context, cancellation, or time
+limits.
+
+The shipped Skill teaches A3S Code, Codex, Claude Code, and compatible agents
+both the interactive session protocol and deterministic ACL workflow. Future
+MCP tools must project the same application layer.
 
 ## Core contracts
 
@@ -120,10 +135,14 @@ Protection is layered:
 3. Normal scenario completion sends `close` to its browser session.
 4. A stuck `close` falls back to the exact private PID file, validates the
    executable, snapshots descendants, and kills only those process groups.
-5. Dropping an unclosed session runs the same owned-session cleanup, then
-   schedules an emergency `close` when no PID file exists yet.
-6. Browser daemons receive a bounded inactivity timeout.
-7. A second SIGINT kills all currently registered command process groups.
+5. Dropping an unclosed deterministic or embedded session runs the same
+   owned-session cleanup, then schedules an emergency `close` when no PID file
+   exists yet.
+6. External-planner session handles intentionally survive individual CLI
+   processes; `finish`, `abort`, or the bounded daemon idle timeout closes
+   them.
+7. Browser daemons receive a bounded inactivity timeout.
+8. A second SIGINT kills all currently registered command process groups.
 
 The per-run namespace prevents cleanup from touching a developer's unrelated
 browser sessions.
@@ -194,37 +213,48 @@ terminal even when the runner is cancelled.
 
 ## Coding-agent interface
 
-Coding agents need predictable contracts rather than a human-only dashboard.
-The `$a3s-test` Skill supplies the workflow and progressive ACL reference:
+Coding agents need a persistent, inspectable control loop rather than a
+human-only dashboard or one opaque prompt. The `$a3s-test` Skill supplies the
+workflow and progressive references:
 
 ```text
-agent invokes $a3s-test
+agent start [goal + success criteria]
       |
       v
-a3s-test capabilities --json
+agent observe -> observation_id + semantic snapshot
       |
       v
-agent writes ACL
+coding agent decides one typed action
       |
       v
-a3s-test check --json
+agent click/fill/press/... or agent act
+      |
+      +--> event log + scoped evidence
+      |
+      +---------------> observe again
       |
       v
-a3s-test run --json
-      |
-      +--> stable status / error code
-      +--> step output
-      +--> artifact paths
-      +--> process exit code
+agent finish -> report + owned cleanup
 ```
 
+Agent sessions live under `.a3s-test/agent-sessions/<session>/`. A ref target
+must carry the latest observation identifier, explicit URL-bearing actions are
+limited to admitted HTTP(S) origins, and evidence paths cannot leave the
+session root. The browser runtime uses an isolated namespace, an ownership
+marker, and a bounded idle timeout so persisted metadata cannot redirect
+cleanup and an abandoned external planner does not leave an unbounded process.
+
+Once a path is understood, the coding agent can author ACL and use
+`check --json` and `run --json` for deterministic regression coverage.
+
 Future MCP tools should be thin projections of the same application layer:
-`test_check`, `test_run`, `test_cancel`, `test_result`, and `test_artifact`.
-They must not create a second runner implementation.
+`test_session_start`, `test_observe`, `test_act`, `test_finish`, `test_check`,
+`test_run`, and `test_artifact`. They must not create a second runner.
 
-## Agentic execution
+## Embedded agentic execution
 
-Agentic exploration is a bounded observe-decide-act loop:
+An SDK host can alternatively inject a real LLM provider and run the bounded
+observe-decide-act library loop:
 
 ```text
 surface observation
@@ -251,8 +281,11 @@ the surface.
 
 Each trace records provider and model identity, prompt version, request ID,
 decision payload digest, turn, token and cost usage, model latency, observation,
-and action output. Provider failures preserve retryability. Secret redaction
-and a production CLI/MCP host remain future work.
+and action output. Provider failures preserve retryability. Secret-safe
+provenance redaction remains planned.
+
+The external-planner CLI does not call this provider. A3S Code, Codex, or
+Claude Code is already the planner and drives typed CLI turns directly.
 
 `AgentLoop` operates on an already-open session and deliberately does not own
 `close()`. The runner or SDK host that opens the session must retain bounded
@@ -264,6 +297,7 @@ Artifacts live under:
 
 ```text
 .a3s-test/runs/<run-id>/<scenario-id>/
+.a3s-test/agent-sessions/<session>/artifacts/
 ```
 
 Relative artifact paths are admission-checked and cannot escape this root. The

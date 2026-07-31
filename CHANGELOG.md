@@ -1,5 +1,44 @@
 # Changelog
 
+## 0.3.0 - 2026-07-31
+
+### Added
+
+- Persistent external-planner sessions that let A3S Code, Codex, Claude Code,
+  and compatible agents drive `start -> observe -> act -> finish` through the
+  CLI without a nested LLM.
+- `a3s-test agent schema` for installed-protocol discovery and generated typed
+  `Action` JSON Schema.
+- Compact `agent click`, `fill`, `press`, and `screenshot` commands plus the
+  complete `agent act --action-json` interface.
+- Workspace-local session metadata, append-only event logs, reports, and
+  artifact roots.
+- Coding Agent Skill guidance and a progressive Agentic CLI reference.
+- Checksum-verifying macOS/Linux and Windows installers with built-in targets
+  for A3S Code, Codex, Claude Code, Cursor, Gemini CLI, GitHub Copilot,
+  OpenCode, Cline, Roo Code, and Windsurf, plus a custom Skill directory.
+- Linux ARM64 release archives alongside Linux x64, macOS ARM64/x64, and
+  Windows x64 builds.
+
+### Changed
+
+- Semantic JSON targets now use explicit object fields such as
+  `{"type":"label","value":"Email"}`, fixing missing values in the generated
+  schema.
+- The README and architecture documentation now present the CLI as the
+  product boundary, the coding agent as the primary planner, and the embedded
+  `LlmProvider` loop as an optional SDK path.
+
+### Safety
+
+- Ref targets require the identifier of the latest semantic observation.
+- Observation identifiers remain monotonic across state-changing actions.
+- Explicit URL-bearing actions are limited to the initial HTTP(S) origin and
+  `--allow-origin` values.
+- Persistent browser sessions use private runtime directories, isolated
+  namespaces, ownership markers, bounded idle timeouts, and exact-session
+  `finish` or `abort` cleanup.
+
 ## 0.2.0 - 2026-07-31
 
 ### Added

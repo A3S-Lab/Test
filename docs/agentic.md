@@ -1,18 +1,58 @@
-# Agentic SDK Contract
+# Agentic CLI and SDK Contract
 
 ## Current boundary
 
-`a3s-test-agent` is the library-level LLM execution path. It is suitable for an
-A3S Code host, another coding agent, or an SDK that already owns model
-configuration and surface lifecycle.
+A3S Test supports two agentic planning boundaries over the same typed actions
+and surface drivers:
 
-It does not bundle a model provider, read model credentials, open a browser,
-or close a surface session. The repository Skill currently drives
-deterministic ACL suites; it does not host this agentic loop. A future direct
-agentic CLI or MCP adapter must project this contract instead of creating
-another planner.
+1. The primary **external-planner CLI** lets A3S Code, Codex, Claude Code, or
+   another coding agent drive a persistent session through
+   `start -> observe -> act -> finish`. The coding agent is already the LLM;
+   A3S Test does not call a nested model.
+2. The optional **embedded planner SDK** in `a3s-test-agent` is for a host that
+   intentionally injects its own `LlmProvider` and owns the surrounding
+   surface lifecycle.
 
-## Host sequence
+Both boundaries reject unknown action shapes, use typed policies, preserve
+structured evidence, and must close the exact owned surface. They do not use
+keyword routing.
+
+## External-planner CLI
+
+```text
+coding agent + $a3s-test Skill
+              |
+              v
+agent start [goal + observable success criteria]
+              |
+              v
+agent observe -> observation_id + semantic surface state
+              |
+              v
+coding agent returns one typed action
+              |
+              v
+schema + stale-ref + origin validation
+              |
+              v
+DriverSession::execute -> event log + evidence
+              |
+              +--------------------------> observe again
+              |
+              v
+agent finish -> report + DriverSession::close
+```
+
+The session metadata, append-only event log, report, and evidence live under
+`.a3s-test/agent-sessions/<session>/`. Browser state is preserved across CLI
+invocations through an isolated namespace and private runtime directory.
+
+Ref targets are bound to the latest observation identifier. Explicit
+URL-bearing actions are limited to the initial HTTP(S) origin and
+`--allow-origin` values. The generated `a3s-test agent schema` output is the
+authoritative action contract.
+
+## Embedded host sequence
 
 ```text
 host selects typed SurfaceDriver and real LlmProvider
@@ -47,8 +87,8 @@ host selects typed SurfaceDriver and real LlmProvider
 
 The host must close the session on success, model failure, policy denial,
 budget exhaustion, timeout, and cancellation. The deterministic `Runner`
-already demonstrates the required bounded-cleanup behavior; the future agentic
-application adapter will reuse it.
+and external-planner session application demonstrate the required
+bounded-cleanup behavior.
 
 ## Provider contract
 

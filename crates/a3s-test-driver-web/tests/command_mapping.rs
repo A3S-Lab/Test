@@ -10,8 +10,9 @@ use a3s_test_core::{
     SurfaceDriver, TabOperation, Target, TestStep, VideoOperation,
 };
 use a3s_test_driver_web::{
-    AgentBrowserConfig, AgentBrowserDriver, BrowserCommand, BrowserIntegration, CommandError,
-    CommandExecutor, CommandInvocation, CommandOutput, WebCapability,
+    AgentBrowserConfig, AgentBrowserConnectionConfig, AgentBrowserDriver, BrowserCommand,
+    BrowserIntegration, CommandError, CommandExecutor, CommandInvocation, CommandOutput,
+    WebCapability,
 };
 use async_trait::async_trait;
 
@@ -720,6 +721,64 @@ async fn dropped_session_schedules_emergency_close() {
         invocations[1].args,
         os(&["--session", "home", "--json", "close"])
     );
+}
+
+#[tokio::test]
+async fn persistent_connection_survives_handle_drop_until_explicit_close() {
+    let temp = tempfile::tempdir().expect("tempdir");
+    let executor = Arc::new(RecordingExecutor::default());
+    let driver = AgentBrowserDriver::with_executor(
+        AgentBrowserConfig {
+            command: BrowserCommand::Standalone {
+                executable: PathBuf::from("/opt/agent-browser"),
+            },
+            namespace: "interactive".to_string(),
+            headed: false,
+            command_timeout: Duration::from_secs(5),
+            idle_timeout: Duration::from_secs(300),
+        },
+        executor.clone(),
+    );
+    let connection = AgentBrowserConnectionConfig {
+        namespace: "interactive".to_string(),
+        session: "agent-checkout".to_string(),
+        runtime_dir: temp.path().join("runtime"),
+        artifacts_dir: temp.path().join("artifacts"),
+        active_video_path: None,
+    };
+
+    let mut first = driver.connect(connection.clone()).await.expect("connect");
+    first
+        .execute_action(
+            "open",
+            Action::Navigate {
+                url: "https://example.test".to_string(),
+            },
+        )
+        .await
+        .expect("navigate");
+    drop(first);
+
+    {
+        let invocations = executor.invocations.lock().unwrap();
+        assert_eq!(invocations.len(), 2);
+        assert_eq!(
+            strip_session_prefix(&invocations[1].args),
+            os(&["open", "https://example.test"])
+        );
+    }
+
+    let mut second = driver.connect(connection).await.expect("reconnect");
+    second.observe_surface().await.expect("observe");
+    second.close_surface().await.expect("close");
+
+    let invocations = executor.invocations.lock().unwrap();
+    assert_eq!(invocations.len(), 4);
+    assert_eq!(
+        strip_session_prefix(&invocations[2].args),
+        os(&["snapshot"])
+    );
+    assert_eq!(strip_session_prefix(&invocations[3].args), os(&["close"]));
 }
 
 #[cfg(unix)]

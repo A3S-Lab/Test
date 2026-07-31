@@ -14,7 +14,7 @@ dependencies = [
 
 [[package]]
 name = "a3s-test-agent"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "a3s-test-core",
  "async-trait",
@@ -30,22 +30,25 @@ dependencies = [
 
 [[package]]
 name = "a3s-test-cli"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "a3s-test-core",
  "a3s-test-driver-web",
  "a3s-test-runner",
  "anyhow",
  "clap",
+ "schemars",
+ "serde",
  "serde_json",
  "tempfile",
  "tokio",
  "tokio-util",
+ "url",
 ]
 
 [[package]]
 name = "a3s-test-core"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "a3s-acl",
  "async-trait",
@@ -57,7 +60,7 @@ dependencies = [
 
 [[package]]
 name = "a3s-test-driver-web"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "a3s-test-core",
  "async-trait",
@@ -71,7 +74,7 @@ dependencies = [
 
 [[package]]
 name = "a3s-test-runner"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "a3s-test-core",
  "async-trait",

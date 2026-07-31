@@ -13,11 +13,13 @@ use anyhow::{Context, Result};
 use clap::{Args, Parser, Subcommand, ValueEnum};
 use tokio_util::sync::CancellationToken;
 
+mod agent_session;
+
 #[derive(Debug, Parser)]
 #[command(
     name = "a3s-test",
     version,
-    about = "Agent-ready end-to-end testing across Web, GUI, and TUI surfaces"
+    about = "AI-native end-to-end testing across Web, GUI, and TUI surfaces"
 )]
 pub struct Cli {
     #[command(subcommand)]
@@ -26,6 +28,8 @@ pub struct Cli {
 
 #[derive(Debug, Subcommand)]
 enum Commands {
+    /// Drive a persistent test session from A3S Code, Codex, or another agent.
+    Agent(agent_session::AgentArgs),
     /// Validate and inspect an ACL test suite without launching a surface.
     Check(CheckArgs),
     /// Discover and verify the installed Web driver protocol.
@@ -105,6 +109,7 @@ struct RunArgs {
 
 pub async fn execute(cli: Cli) -> Result<ExitCode> {
     match cli.command {
+        Commands::Agent(args) => agent_session::execute(args).await,
         Commands::Check(args) => check(args).await,
         Commands::Capabilities(args) => capabilities(args).await,
         Commands::Run(args) => run(args).await,

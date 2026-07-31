@@ -21,6 +21,15 @@ use crate::protocol::{
 };
 use crate::{AgentBrowserConfig, BrowserCapabilities, CommandExecutor, TokioCommandExecutor};
 
+#[derive(Clone, Debug)]
+pub struct AgentBrowserConnectionConfig {
+    pub namespace: String,
+    pub session: String,
+    pub runtime_dir: PathBuf,
+    pub artifacts_dir: PathBuf,
+    pub active_video_path: Option<String>,
+}
+
 pub struct AgentBrowserDriver {
     config: AgentBrowserConfig,
     executor: Arc<dyn CommandExecutor>,
@@ -48,6 +57,67 @@ impl AgentBrowserDriver {
             .get_or_try_init(|| capabilities::discover(&self.config, self.executor.as_ref()))
             .await
             .cloned()
+    }
+
+    /// Connect to a browser session whose lifecycle spans multiple CLI
+    /// invocations.
+    ///
+    /// Unlike [`SurfaceDriver::open`], dropping this handle does not close the
+    /// browser session. The owning application must call
+    /// [`AgentBrowserSession::close_surface`] when the interactive run ends.
+    pub async fn connect(
+        &self,
+        connection: AgentBrowserConnectionConfig,
+    ) -> Result<AgentBrowserSession, DriverError> {
+        self.config.validate()?;
+        self.capabilities().await?;
+        validate_component(&connection.namespace, "namespace")?;
+        validate_component(&connection.session, "session id")?;
+        if !connection.runtime_dir.is_absolute() {
+            return Err(DriverError::new(
+                "test.driver.web.runtime_path_invalid",
+                "persistent browser runtime directory must be absolute",
+            ));
+        }
+
+        tokio::fs::create_dir_all(&connection.runtime_dir)
+            .await
+            .map_err(|error| {
+                DriverError::new(
+                    "test.driver.web.runtime_create_failed",
+                    format!("failed to create browser runtime directory: {error}"),
+                )
+            })?;
+        let artifacts_dir = absolute_artifacts_dir(&connection.artifacts_dir)?;
+        tokio::fs::create_dir_all(&artifacts_dir)
+            .await
+            .map_err(|error| {
+                DriverError::new(
+                    "test.driver.web.artifact_create_failed",
+                    format!("failed to create artifact directory: {error}"),
+                )
+            })?;
+        let active_video = match connection.active_video_path {
+            Some(requested) => {
+                let path = resolve_artifact_path(&artifacts_dir, &requested)?;
+                Some(ActiveVideo { requested, path })
+            }
+            None => None,
+        };
+
+        Ok(AgentBrowserSession {
+            config: self.config.clone(),
+            namespace: connection.namespace,
+            session: connection.session,
+            runtime_dir: connection.runtime_dir,
+            runtime_guard: None,
+            registration: None,
+            artifacts_dir,
+            executor: Arc::clone(&self.executor),
+            active_video,
+            close_on_drop: false,
+            closed: false,
+        })
     }
 }
 
@@ -103,12 +173,13 @@ impl SurfaceDriver for AgentBrowserDriver {
             artifacts_dir,
             executor: Arc::clone(&self.executor),
             active_video: None,
+            close_on_drop: true,
             closed: false,
         }))
     }
 }
 
-struct AgentBrowserSession {
+pub struct AgentBrowserSession {
     config: AgentBrowserConfig,
     namespace: String,
     session: String,
@@ -118,12 +189,45 @@ struct AgentBrowserSession {
     registration: Option<SessionRegistration>,
     executor: Arc<dyn CommandExecutor>,
     active_video: Option<ActiveVideo>,
+    close_on_drop: bool,
     closed: bool,
 }
 
 struct ActiveVideo {
     requested: String,
     path: PathBuf,
+}
+
+impl AgentBrowserSession {
+    pub async fn observe_surface(&mut self) -> Result<SurfaceObservation, DriverError> {
+        <Self as DriverSession>::observe(self).await
+    }
+
+    pub async fn execute_action(
+        &mut self,
+        id: impl Into<String>,
+        action: Action,
+    ) -> Result<StepOutput, DriverError> {
+        <Self as DriverSession>::execute(
+            self,
+            &TestStep {
+                id: id.into(),
+                action,
+            },
+        )
+        .await
+    }
+
+    pub async fn close_surface(&mut self) -> Result<(), DriverError> {
+        <Self as DriverSession>::close(self).await
+    }
+
+    #[must_use]
+    pub fn active_video_path(&self) -> Option<&str> {
+        self.active_video
+            .as_ref()
+            .map(|active| active.requested.as_str())
+    }
 }
 
 #[async_trait]
@@ -546,7 +650,7 @@ impl AgentBrowserSession {
 
 impl Drop for AgentBrowserSession {
     fn drop(&mut self) {
-        if self.closed {
+        if self.closed || !self.close_on_drop {
             return;
         }
 

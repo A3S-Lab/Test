@@ -551,9 +551,15 @@ fn parse_target(value: &Value, path: &str) -> Result<Target, SpecError> {
             value: target_argument(value, path)?,
             exact: *exact,
         }),
-        ("testid", [value]) => Ok(Target::TestId(target_argument(value, path)?)),
-        ("label", [value]) => Ok(Target::Label(target_argument(value, path)?)),
-        ("placeholder", [value]) => Ok(Target::Placeholder(target_argument(value, path)?)),
+        ("testid", [value]) => Ok(Target::TestId {
+            value: target_argument(value, path)?,
+        }),
+        ("label", [value]) => Ok(Target::Label {
+            value: target_argument(value, path)?,
+        }),
+        ("placeholder", [value]) => Ok(Target::Placeholder {
+            value: target_argument(value, path)?,
+        }),
         _ => Err(SpecError::new(
             "test.spec.target_invalid",
             path,

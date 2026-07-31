@@ -2,7 +2,7 @@
      width="1200" height="440" viewBox="0 0 1200 440"
      role="img" aria-labelledby="title desc">
   <title id="title">A3S Test — AI Native Test Engine</title>
-  <desc id="desc">A CLI turns a typed ACL test into browser actions, assertions, and structured evidence for developers, CI, and coding agents.</desc>
+  <desc id="desc">A3S Code, Codex, and Claude Code drive persistent observe-decide-act test sessions through one typed CLI that also runs deterministic ACL regressions.</desc>
 
   <rect width="1200" height="440" rx="28" fill="#090B0F"/>
   <path d="M0 78H1200" stroke="#202632"/>
@@ -26,10 +26,10 @@
 
     <text x="2" y="205"
           fill="#D8DEE9" font-size="28" font-weight="520"
-          font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">One CLI for typed test plans,</text>
+          font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">One CLI for agentic sessions,</text>
     <text x="2" y="241"
           fill="#D8DEE9" font-size="28" font-weight="520"
-          font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">browser actions, and evidence.</text>
+          font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">typed regressions, and evidence.</text>
 
     <g transform="translate(0 292)"
        font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace"
@@ -55,37 +55,37 @@
     <circle cx="64" cy="24" r="5" fill="#71E6B1"/>
     <text x="92" y="30"
           fill="#8D97A7" font-size="16"
-          font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">a3s-test / run</text>
+          font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">a3s-test / agent session</text>
 
     <text x="22" y="82"
           fill="#71E6B1" font-size="17" font-weight="700"
           font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">$</text>
     <text x="42" y="82"
-          fill="#D8DEE9" font-size="17"
-          font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">a3s-test run smoke.acl --json</text>
+          fill="#D8DEE9" font-size="15"
+          font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">a3s-test agent observe --session ui --json</text>
 
     <path d="M41 120V310" stroke="#354151" stroke-width="2"/>
 
     <g font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
       <circle cx="41" cy="126" r="11" fill="#102A21" stroke="#71E6B1" stroke-width="2"/>
       <path d="M36 126L40 130L47 122" fill="none" stroke="#71E6B1" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
-      <text x="70" y="124" fill="#F7F9FC" font-size="20" font-weight="700">Validate</text>
-      <text x="70" y="148" fill="#8D97A7" font-size="17">typed ACL admitted</text>
+      <text x="70" y="124" fill="#F7F9FC" font-size="20" font-weight="700">Observe</text>
+      <text x="70" y="148" fill="#8D97A7" font-size="17">semantic snapshot + refs</text>
 
       <circle cx="41" cy="190" r="11" fill="#102A21" stroke="#71E6B1" stroke-width="2"/>
       <path d="M36 190L40 194L47 186" fill="none" stroke="#71E6B1" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
-      <text x="70" y="188" fill="#F7F9FC" font-size="20" font-weight="700">Drive Web</text>
-      <text x="70" y="212" fill="#8D97A7" font-size="17">A3S Browser / agent-browser</text>
+      <text x="70" y="188" fill="#F7F9FC" font-size="20" font-weight="700">Decide</text>
+      <text x="70" y="212" fill="#8D97A7" font-size="17">coding agent plans one turn</text>
 
       <circle cx="41" cy="254" r="11" fill="#102A21" stroke="#71E6B1" stroke-width="2"/>
       <path d="M36 254L40 258L47 250" fill="none" stroke="#71E6B1" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
-      <text x="70" y="252" fill="#F7F9FC" font-size="20" font-weight="700">Assert</text>
-      <text x="70" y="276" fill="#8D97A7" font-size="17">semantic state matched</text>
+      <text x="70" y="252" fill="#F7F9FC" font-size="20" font-weight="700">Act</text>
+      <text x="70" y="276" fill="#8D97A7" font-size="17">typed action + policy gate</text>
 
       <circle cx="41" cy="318" r="11" fill="#102A21" stroke="#71E6B1" stroke-width="2"/>
       <path d="M36 318L40 322L47 314" fill="none" stroke="#71E6B1" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
       <text x="70" y="316" fill="#F7F9FC" font-size="20" font-weight="700">Evidence</text>
-      <text x="70" y="340" fill="#8D97A7" font-size="17">screenshot · trace · console</text>
+      <text x="70" y="340" fill="#8D97A7" font-size="17">turn appended to the report</text>
     </g>
 
     <g transform="translate(378 112)">

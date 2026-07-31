@@ -176,9 +176,9 @@ pub enum Target {
     Css { selector: String },
     Role { role: String, name: String },
     Text { value: String, exact: bool },
-    TestId(String),
-    Label(String),
-    Placeholder(String),
+    TestId { value: String },
+    Label { value: String },
+    Placeholder { value: String },
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]

@@ -79,7 +79,7 @@ pub(crate) fn target_action(
             }
             return Ok(args);
         }
-        Target::TestId(id) => {
+        Target::TestId { value: id } => {
             vec![
                 OsString::from("find"),
                 OsString::from("testid"),
@@ -87,7 +87,7 @@ pub(crate) fn target_action(
                 OsString::from(action),
             ]
         }
-        Target::Label(label) => {
+        Target::Label { value: label } => {
             vec![
                 OsString::from("find"),
                 OsString::from("label"),
@@ -95,7 +95,7 @@ pub(crate) fn target_action(
                 OsString::from(action),
             ]
         }
-        Target::Placeholder(placeholder) => {
+        Target::Placeholder { value: placeholder } => {
             vec![
                 OsString::from("find"),
                 OsString::from("placeholder"),

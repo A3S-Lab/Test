@@ -36,6 +36,8 @@ jobs:
         include:
           - target: x86_64-unknown-linux-gnu
             os: ubuntu-latest
+          - target: aarch64-unknown-linux-gnu
+            os: ubuntu-24.04-arm
           - target: aarch64-apple-darwin
             os: macos-14
           - target: x86_64-apple-darwin
@@ -68,6 +70,8 @@ jobs:
             CHANGELOG.md
             assets/readme/hero.svg
             assets/readme/architecture.svg
+            scripts/install.sh
+            scripts/install.ps1
           leading-dir: true
           tar: unix
           zip: windows
@@ -85,9 +89,35 @@ jobs:
 
       - name: Package Skill
         working-directory: skills
-        run: zip -X -r "${RUNNER_TEMP}/a3s-test.skill" a3s-test
+        run: |
+          zip -X -r "${RUNNER_TEMP}/a3s-test.skill" a3s-test
+          sha256sum "${RUNNER_TEMP}/a3s-test.skill" > "${RUNNER_TEMP}/a3s-test.skill.sha256"
 
       - name: Upload Skill
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release upload "${GITHUB_REF_NAME}" "${RUNNER_TEMP}/a3s-test.skill" --clobber
+        run: >-
+          gh release upload "${GITHUB_REF_NAME}"
+          "${RUNNER_TEMP}/a3s-test.skill"
+          "${RUNNER_TEMP}/a3s-test.skill.sha256"
+          --clobber
+
+  upload-installers:
+    name: Installers
+    needs: create-release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Upload installers
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >-
+          gh release upload "${GITHUB_REF_NAME}"
+          scripts/install.sh
+          scripts/install.ps1
+          --clobber

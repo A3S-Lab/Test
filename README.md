@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="./assets/readme/hero.svg" width="100%" alt="A3S Test is an AI-native test engine CLI that turns typed ACL plans into browser actions and structured evidence">
+  <img src="./assets/readme/hero.svg" width="100%" alt="A3S Test is an AI-native test engine CLI that turns coding-agent decisions and typed ACL plans into browser actions and structured evidence">
 </p>
 
 <p align="center">
@@ -9,31 +9,155 @@
   <a href="./LICENSE"><img src="https://img.shields.io/badge/license-MIT-303846?style=flat-square" alt="MIT License"></a>
 </p>
 
-**A3S Test is an AI-native test engine delivered as a CLI.** It gives
-developers, CI, and coding agents one typed test protocol, one evidence model,
-and one machine-readable result format.
+**A3S Test is an AI-native test engine delivered as the `a3s-test` CLI.**
+A3S Code, Codex, Claude Code, developers, and CI use the same typed actions,
+evidence model, reports, and cleanup contract.
 
-The Web driver is available today through
+For an exploratory test, the coding agent is the planner: it observes the
+surface, decides one action, executes it through the CLI, and repeats. For a
+known regression, the same engine runs a closed ACL suite deterministically.
+There is no keyword router and no second hidden test runtime.
+
+The Web surface is available today through
 [A3S Browser](https://github.com/A3S-Lab/Browser) or a compatible standalone
-`agent-browser` executable. GUI and TUI use the same driver boundary but remain
-planned.
+`agent-browser`. GUI and TUI drivers remain planned.
 
-## The shortest useful run
+## Install
 
-Install a prebuilt archive from
-[Releases](https://github.com/A3S-Lab/Test/releases/latest), or build the CLI
-from the tagged source:
+The installers download the matching CLI, verify its SHA-256 checksum, and
+install the Skill for the selected coding agent.
+
+macOS or Linux:
+
+```bash
+# Install for every supported coding agent
+curl -fsSL https://github.com/A3S-Lab/Test/releases/latest/download/install.sh |
+  sh -s -- --agent all
+
+# Or install for one agent
+curl -fsSL https://github.com/A3S-Lab/Test/releases/latest/download/install.sh |
+  sh -s -- --agent codex
+```
+
+Windows PowerShell:
+
+```powershell
+# Install for every supported coding agent
+& ([scriptblock]::Create((irm 'https://github.com/A3S-Lab/Test/releases/latest/download/install.ps1'))) -Agent all
+
+# Or install for one agent
+& ([scriptblock]::Create((irm 'https://github.com/A3S-Lab/Test/releases/latest/download/install.ps1'))) -Agent codex
+```
+
+Known agent targets are `a3s-code`, `codex`, `claude-code`, `cursor`,
+`gemini-cli`, `github-copilot`, `opencode`, `cline`, `roo`, and `windsurf`.
+Use `all` for every target, or `--skill-dir <path>` / `-SkillDir <path>` for
+any other Agent Skills-compatible tool. `--skill-only`, `--cli-only`,
+`--version`, and `--install-dir` are also available for controlled
+installations. The scripts resolve the latest release through GitHub's release
+redirect rather than the rate-limited API.
+
+You can also download an archive from
+[Releases](https://github.com/A3S-Lab/Test/releases/latest), or install the
+tagged Rust package manually:
 
 ```bash
 cargo install --git https://github.com/A3S-Lab/Test \
-  --tag v0.2.0 --locked a3s-test-cli
+  --tag v0.3.0 --locked a3s-test-cli
 ```
 
-Then discover the local browser protocol, validate the suite without opening a
-browser, and run it:
+## Let a coding agent test the product
+
+Start a persistent session with an explicit goal and observable success
+criterion:
+
+```bash
+a3s-test agent start http://127.0.0.1:3000 \
+  --session checkout \
+  --goal "Complete checkout with the fixture account" \
+  --success "The confirmation heading is visible" \
+  --json
+```
+
+Observe the semantic UI, decide from the returned state, then perform one
+action:
+
+```bash
+a3s-test agent observe --session checkout --interactive --json
+
+a3s-test agent click @e3 \
+  --session checkout \
+  --observation 1 \
+  --json
+```
+
+Observe again after every state-changing action. When the evidence proves the
+result, finish and write the report:
+
+```bash
+a3s-test agent screenshot screenshots/confirmation.png \
+  --session checkout --json
+
+a3s-test agent finish \
+  --session checkout \
+  --status passed \
+  --summary "Checkout completed and confirmation was observed" \
+  --json
+```
+
+`agent open` aliases `agent start`, and `agent snapshot` aliases
+`agent observe`. Compact `click`, `fill`, `press`, and `screenshot` commands
+cover common turns. `agent act --action-json` exposes the complete typed model
+for semantic targets, waits, assertions, tabs, frames, dialogs, network
+controls, and evidence.
+
+Inspect the exact protocol installed on the machine:
 
 ```bash
 a3s-test capabilities --json
+a3s-test agent schema
+```
+
+## Why this is agentic
+
+- **The coding agent is the planner.** A3S Code, Codex, or Claude Code reads
+  each observation and chooses the next action directly. The CLI does not call
+  another model for this workflow.
+- **The surface stays alive between turns.** Workspace-local sessions preserve
+  the browser, event history, active evidence captures, and artifact root
+  across separate CLI invocations.
+- **Observations are semantic.** Accessibility snapshots provide compact,
+  actionable refs along with the current surface state.
+- **Refs have provenance.** A ref action must include the latest
+  `observation_id`; stale refs are rejected before dispatch.
+- **Actions are typed.** The CLI publishes the generated JSON Schema and
+  rejects unknown action fields or variants.
+- **Explicit navigation is scoped.** URL-bearing actions such as `navigate`
+  and `tab new` are limited to the initial origin and `--allow-origin` values.
+- **Evidence is part of the run.** Every turn is appended to `events.jsonl`;
+  screenshots, accessibility, console, HAR, trace, video, and downloads stay
+  inside the session artifact root.
+- **Cleanup is owned.** `finish` and `abort` close only the exact browser
+  session created by this test. Runtime ownership markers prevent persisted
+  metadata from redirecting cleanup to another path, and a bounded idle
+  timeout covers abandoned sessions.
+
+## One engine, two primary workflows
+
+| Workflow | Planner | Best for | Interface |
+| --- | --- | --- | --- |
+| Agent session | A3S Code, Codex, Claude Code, or another coding agent | Exploration, bug reproduction, UX review, unknown paths | `agent start → observe → act → finish` |
+| ACL suite | Closed typed manifest | Stable regression tests and CI | `check` and `run` |
+| Embedded agent loop | Host-injected real `LlmProvider` | Products that embed A3S Test as an SDK | `a3s-test-agent` library |
+
+The portable Skill teaches multiple coding agents to use the first two
+workflows. It is an instruction adapter around the CLI, not another runner.
+
+## Turn a proven path into regression coverage
+
+Validate and run a typed ACL suite:
+
+```bash
 a3s-test check tests/e2e/smoke.acl --json
 a3s-test run tests/e2e/smoke.acl --json
 ```
@@ -67,145 +191,125 @@ suite "product-smoke" {
 ```
 
 The parser rejects unknown blocks, attributes, ambiguous conditions, duplicate
-identifiers, unsafe artifact paths, and invalid typed locators before a browser
-session launches.
-
-## Why AI-native
-
-A3S Test is built for software agents without turning test execution into a
-guessing game.
-
-- **CLI is the stable boundary.** Humans, CI, and coding agents invoke the same
-  commands and receive the same exit codes and JSON fields.
-- **Plans are typed.** ACL manifests compile into a closed test model instead
-  of loosely interpreted natural language.
-- **Observations are semantic.** Accessibility snapshots, stable targets, tabs,
-  frames, dialogs, console output, and page errors give an agent inspectable
-  state.
-- **Evidence is part of the result.** Screenshots, downloads, HAR, traces,
-  video, and structured browser diagnostics stay attached to the scenario that
-  produced them.
-- **LLM execution is bounded.** SDK hosts can inject a real `LlmProvider` into
-  a schema-constrained observe-decide-act loop with capability, origin, turn,
-  token, cost, context, and time limits.
-- **Cleanup is owned.** Deadlines, process groups, isolated browser namespaces,
-  bounded shutdown, and a second-interrupt emergency path are runtime
-  contracts, not test-suite conventions.
-
-The deterministic CLI never falls back to keyword routing. The agentic library
-validates every model proposal against its JSON Schema and action policy before
-it reaches a surface.
-
-## What ships today
-
-| Area | Status | Contract |
-| --- | --- | --- |
-| CLI and ACL admission | Available in `v0.2` | `check`, `capabilities`, `run`, stable JSON and exit codes |
-| Web E2E driver | Available in `v0.2` | A3S Browser or compatible standalone `agent-browser` |
-| Coding Agent Skill | Available in each release | One portable `SKILL.md` package for A3S Code, Codex, Claude Code, and compatible agents |
-| Agentic SDK loop | Library API | Injected LLM provider, typed decisions, policy gates, budgets, trace metadata |
-| GUI driver | Planned | A3S CUA adapter |
-| TUI driver | Planned | PTY and semantic terminal model |
-| MCP projection | Planned | Thin tools over the same application layer |
+identifiers, unsafe artifact paths, and invalid typed locators before a
+browser launches. Deterministic runs retry only a pre-dispatch infrastructure
+failure; they never retry assertions, timeouts, or ambiguous dispatched
+actions.
 
 ## Web testing depth
 
 | Concern | Available capabilities |
 | --- | --- |
-| Interaction | Navigate, snapshot, semantic/CSS/ref locators, click, fill, key press, typed waits, assertions |
+| Interaction | Navigate, semantic snapshots, ref/CSS/role/text/test-ID/label/placeholder targets, click, fill, key press |
+| Synchronization | Typed load, text, and URL waits; text, URL, and visibility assertions |
 | Browser state | Stable tab IDs and labels, frame context, browser dialogs |
-| Files | Upload fixtures and keep downloads inside the scenario artifact root |
+| Files | Upload fixtures and keep downloads inside the run artifact root |
 | Network | Route mocks, aborts, cleanup, HAR capture |
 | Evidence | Screenshots, accessibility trees, console logs, page errors, Chrome traces, WebM video |
-| Execution | Bounded concurrency, infrastructure-only retries, command deadlines, cleanup deadlines |
+| Execution | Persistent agent turns, bounded deterministic concurrency, command deadlines, owned cleanup |
 
-`a3s-test run` retries only an explicitly safe failure that occurred before a
-browser command was dispatched. It never retries assertions, timeouts, or
-ambiguous clicks and submissions. Parallel scenarios default to one and are
-capped at 64.
+## Coding Agent Skill
 
-## One CLI, many coding agents
-
-The release asset
-[`a3s-test.skill`](https://github.com/A3S-Lab/Test/releases/latest/download/a3s-test.skill)
-contains the portable `$a3s-test` Skill. It teaches an agent how to discover
-the installed protocol, write closed ACL manifests, run JSON-first tests,
-collect bounded evidence, and diagnose stable error codes.
-
-Download it once:
+Each release includes
+[`a3s-test.skill`](https://github.com/A3S-Lab/Test/releases/latest/download/a3s-test.skill).
+The one-click installers above place it in the user-level directory expected
+by the selected coding agent. For a manual installation, download it once:
 
 ```bash
 gh release download --repo A3S-Lab/Test --pattern a3s-test.skill
 ```
 
-Install the same package into the agent you use:
+Install the same package for the agent you use:
 
 | Agent | User-level install |
 | --- | --- |
 | A3S Code | `unzip a3s-test.skill -d ~/.a3s/skills` |
 | Codex | `unzip a3s-test.skill -d "${CODEX_HOME:-$HOME/.codex}/skills"` |
 | Claude Code | `unzip a3s-test.skill -d ~/.claude/skills` |
+| Cursor | `unzip a3s-test.skill -d ~/.cursor/skills` |
+| Gemini CLI | `unzip a3s-test.skill -d ~/.gemini/skills` |
+| GitHub Copilot | `unzip a3s-test.skill -d ~/.copilot/skills` |
+| OpenCode | `unzip a3s-test.skill -d ~/.config/opencode/skills` |
+| Cline | `unzip a3s-test.skill -d ~/.agents/skills` |
+| Roo Code | `unzip a3s-test.skill -d ~/.roo/skills` |
+| Windsurf | `unzip a3s-test.skill -d ~/.codeium/windsurf/skills` |
 
-For a project-scoped installation, extract it under `.a3s/skills`,
-`.codex/skills`, or `.claude/skills`. The source package lives in
-[`skills/a3s-test`](skills/a3s-test).
+For a project-scoped or not-yet-listed agent, pass its Skill parent directory
+explicitly:
 
-The Skill is an instruction adapter around the CLI. It does not contain a
-second test runner, hide shell scripts, or introduce a natural-language router.
+```bash
+curl -fsSL https://github.com/A3S-Lab/Test/releases/latest/download/install.sh |
+  sh -s -- --skill-only --skill-dir "$PWD/.agents/skills"
+```
+
+The source package lives in [`skills/a3s-test`](skills/a3s-test).
 
 ## Architecture
 
 <p align="center">
-  <img src="./assets/readme/architecture.svg" width="100%" alt="Developers and CI call the A3S Test CLI directly while coding agents use a portable Skill to invoke the same CLI; typed ACL runs through the runner and surface drivers to produce structured evidence">
+  <img src="./assets/readme/architecture.svg" width="100%" alt="Developers and CI call the A3S Test CLI directly while coding agents use a portable Skill to run an observe-decide-act loop over the same CLI, typed runner, surface drivers, and evidence model">
 </p>
 
-The core stays independent of browsers, desktop perception, terminal
-emulation, CLI presentation, and LLM providers. Public library APIs receive
-typed driver and provider objects; they do not select backends with raw
-strings.
+The CLI is the product boundary. Interactive agent sessions and deterministic
+ACL runs share typed `Action`, `SurfaceDriver`, `DriverSession`, evidence, and
+lifecycle contracts. Browser, desktop-perception, terminal-emulation, and LLM
+implementations remain adapters.
 
 ```text
-TestSuite
-└── TestScenario [surface, deadline]
-    └── TestStep [typed action]
-
-SurfaceDriver
-└── open(ScenarioContext) -> DriverSession
-    ├── observe() -> SurfaceObservation
-    ├── execute(TestStep) -> StepOutput
-    └── close()
+Coding agent + Skill
+       |
+       | start / observe / typed action / finish
+       v
+  a3s-test CLI
+       |
+       v
+SurfaceDriver -> DriverSession -> evidence
+       |
+       +-- Web: A3S Browser / agent-browser
+       +-- GUI: A3S CUA                         planned
+       +-- TUI: PTY + semantic terminal model planned
 ```
 
-Read [Architecture](docs/architecture.md) for lifecycle ownership and planned
-GUI/TUI adapters, [ACL specification](docs/specification.md) for the manifest
-contract, and [Agentic SDK contract](docs/agentic.md) for the LLM loop.
+Read [Architecture](docs/architecture.md), the
+[Agentic CLI and SDK contract](docs/agentic.md), and the
+[ACL specification](docs/specification.md).
 
-## Results and interrupts
+## Results and lifecycle
 
-Process exit codes are stable:
+Agent sessions are workspace-local:
+
+```text
+.a3s-test/agent-sessions/<session>/
+├── session.json
+├── events.jsonl
+├── report.json
+└── artifacts/
+```
+
+Deterministic process exit codes remain stable:
 
 | Exit | Meaning |
 | ---: | --- |
 | `0` | Passed |
-| `1` | Failed |
+| `1` | Test or action failed |
 | `2` | Invalid invocation or configuration |
 | `124` | Timed out |
 | `130` | Cancelled |
 
-The first `Ctrl+C` requests cancellation and waits for bounded surface cleanup.
-A second `Ctrl+C` terminates only command process groups owned by the current
-run and exits with `130`. Browser runs use per-run namespaces and private
-runtime directories, so cleanup does not target unrelated developer sessions.
+For `run`, the first `Ctrl+C` requests cancellation and bounded surface
+cleanup. A second `Ctrl+C` terminates only command process groups owned by the
+current run. Browser namespaces and private runtime directories prevent
+cleanup from targeting unrelated developer sessions.
 
 ## Workspace
 
 ```text
 crates/
-├── a3s-test-cli/         # CLI entry point for humans, CI, and agents
-├── a3s-test-core/        # Typed suites and surface contracts
+├── a3s-test-cli/         # CLI for agent sessions, deterministic runs, and CI
+├── a3s-test-core/        # Typed suites, actions, observations, and surface contracts
 ├── a3s-test-runner/      # Deadlines, cancellation, retries, and reports
 ├── a3s-test-driver-web/  # A3S Browser / agent-browser adapter
-└── a3s-test-agent/       # Schema-constrained LLM loop and action policy
+└── a3s-test-agent/       # Optional schema-constrained embedded LLM loop
 
 skills/
 └── a3s-test/             # Portable Coding Agent Skill

@@ -35,3 +35,34 @@ jobs:
 
       - name: Run Clippy
         run: cargo clippy --workspace --all-targets --locked -- -D warnings
+
+  unix-installers:
+    name: Installer (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - macos-14
+          - ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Test Unix installer
+        run: bash tests/install-unix.sh
+
+  windows-installer:
+    name: Installer (windows)
+    runs-on: windows-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Test PowerShell installer
+        shell: pwsh
+        run: ./tests/install-windows.ps1
