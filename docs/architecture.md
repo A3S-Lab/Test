@@ -12,12 +12,12 @@ Those capabilities are injected through typed interfaces:
 ```text
                          A3S Test
   +------------------------------------------------------+
-  | ACL / Agent request                                  |
-  |          |                                           |
-  |          v                                           |
-  | Typed test IR -> Runner -> Result + evidence          |
-  |                       |                              |
-  |                 Driver registry                       |
+  | ACL suite                     Agent goal              |
+  |    |                              |                   |
+  |    v                              v                   |
+  | Typed test IR -> Runner     LLM -> schema -> policy   |
+  |                 \             /                       |
+  |                  Driver session                       |
   +-----------------------+------------------------------+
                           |
             +-------------+-------------+
@@ -43,7 +43,7 @@ Layer 3  Orchestration
          deadlines, cancellation, cleanup, events, result aggregation
 
 Layer 2  Surface contracts
-         SurfaceDriver -> DriverSession -> execute / close
+         SurfaceDriver -> DriverSession -> observe / execute / close
 
 Layer 1  Platform adapters
          Web: A3S Browser
@@ -54,11 +54,12 @@ Layer 0  Host supervision
          process groups, bounded shutdown, namespaces, artifact isolation
 ```
 
-The deterministic manifest path currently implements Layers 0, 2, 3, and the
-CLI portion of Layer 5. Layer 4 will not be simulated with keyword rules. An
-agentic step must call a configured LLM, receive a schema-constrained proposal,
-validate it against capabilities and policy, execute one action, observe again,
-and stop at an explicit turn or cost limit.
+The deterministic manifest path implements Layers 0, 2, 3, and the CLI portion
+of Layer 5. `a3s-test-agent` implements the Layer 4 library contract: it calls
+an injected LLM, receives a schema-constrained proposal, validates it against
+capabilities and policy, executes one action, observes again, and stops at
+explicit turn, token, cost, context, cancellation, or time limits. CLI, MCP,
+and Skill projections of that loop are not implemented yet.
 
 ## Core contracts
 
@@ -72,6 +73,7 @@ TestSuite
 
 SurfaceDriver
 └── open(ScenarioContext) -> DriverSession
+    ├── observe() -> SurfaceObservation
     ├── execute(TestStep) -> StepOutput
     └── close()
 ```
@@ -137,10 +139,10 @@ BrowserCommand::Standalone
   agent-browser ...
 ```
 
-It maps typed `Action` values to the native driver protocol. It does not parse
-natural-language intent. A3S Browser snapshots remain the observation format
-for a future LLM planner, while refs, semantic locators, and CSS locators remain
-explicit target types in the deterministic suite.
+It maps typed `Action` values to the native driver protocol and exposes a full
+A3S Browser accessibility snapshot through `DriverSession::observe`. It does
+not parse natural-language intent. Refs, semantic locators, and CSS locators
+remain explicit target types in both deterministic and agentic execution.
 
 The adapter keeps configuration, command execution, protocol mapping, session
 behavior, and host-process supervision in separate modules. The public crate
@@ -199,7 +201,7 @@ Future MCP tools should be thin projections of the same application layer:
 `test_check`, `test_run`, `test_cancel`, `test_result`, and `test_artifact`.
 They must not create a second runner implementation.
 
-## Agentic execution plan
+## Agentic execution
 
 Agentic exploration is a bounded observe-decide-act loop:
 
@@ -219,10 +221,21 @@ capability and safety validation
 execute -> evidence -> next observation
 ```
 
-The LLM adapter is user-supplied as a typed object. Model names, credentials,
-and providers do not belong in the core domain. A run must record the provider
-identity, model, prompt template version, decision payload digest, turn count,
-and cost/latency envelope without storing secrets.
+The LLM adapter is user-supplied as a typed object. Model credentials and
+provider-specific transports do not belong in the core domain. The working
+loop sends a versioned system instruction, typed context, remaining budgets,
+and the generated `AgentDecision` JSON Schema. It independently parses the
+returned JSON and applies a typed capability and origin policy before calling
+the surface.
+
+Each trace records provider and model identity, prompt version, request ID,
+decision payload digest, turn, token and cost usage, model latency, observation,
+and action output. Provider failures preserve retryability. Secret redaction
+and a production CLI/MCP host remain future work.
+
+`AgentLoop` operates on an already-open session and deliberately does not own
+`close()`. The runner or SDK host that opens the session must retain bounded
+cleanup responsibility.
 
 ## Evidence and reproducibility
 

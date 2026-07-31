@@ -9,7 +9,7 @@ and the `a3s-test` CLI.
 ## Boundaries
 
 - Keep the core independent of browser, GUI, TUI, CLI, and LLM providers.
-- Inject surface drivers and future LLM providers as typed objects.
+- Inject surface drivers and LLM providers as typed objects.
 - Do not select backends with raw strings in public library APIs.
 - Do not implement agentic behavior with keyword matching. Use a real,
   schema-constrained LLM adapter and validate its typed proposals.
@@ -40,6 +40,6 @@ Run from this repository:
 
 ```bash
 cargo fmt --all -- --check
-cargo test --workspace --all-targets
-cargo clippy --workspace --all-targets -- -D warnings
+cargo test --workspace --all-targets --locked
+cargo clippy --workspace --all-targets --locked -- -D warnings
 ```

@@ -108,3 +108,12 @@ suite.office.scenario.word.navigate.open.retries
 
 Source values are not needed to route an error. Coding agents should use the
 code and path to repair manifests.
+
+## Agentic boundary
+
+The ACL grammar currently describes deterministic scenarios only. It does not
+accept free-form `agent`, `prompt`, or natural-language action blocks.
+LLM-driven execution is available through the `a3s-test-agent` library, where a
+host supplies a typed goal, a real `LlmProvider`, explicit budgets, and an
+`ActionPolicy`. A future ACL version may project that same application contract;
+it must not introduce a keyword intent router.

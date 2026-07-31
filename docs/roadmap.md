@@ -25,13 +25,14 @@
 
 ## M2: LLM agentic testing
 
-- [ ] Typed LLM planner interface
-- [ ] Schema-constrained observe-decide-act loop
-- [ ] Goal, success criteria, turn, token, cost, and time budgets
-- [ ] Safety policy and capability validation before every proposed action
-- [ ] Reproducible decision trace with secret-safe provenance
+- [x] Typed LLM provider and planner interface
+- [x] Schema-constrained observe-decide-act loop
+- [x] Goal, success criteria, turn, token, cost, context, and time budgets
+- [x] Safety policy and capability validation before every proposed action
+- [ ] Secret-safe provenance redaction; provider/model/prompt version, request
+      ID, decision digest, usage, and model latency are already recorded
 - [ ] Coding-agent Skill and MCP projection
-- [ ] No keyword-based intent router
+- [x] No keyword-based intent router or production heuristic fallback
 
 ## M3: GUI through A3S CUA
 

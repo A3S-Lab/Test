@@ -1,5 +1,6 @@
 [workspace]
 members = [
+    "crates/a3s-test-agent",
     "crates/a3s-test-cli",
     "crates/a3s-test-core",
     "crates/a3s-test-driver-web",
@@ -19,8 +20,12 @@ a3s-acl = "0.3.0"
 anyhow = "1"
 async-trait = "0.1"
 clap = { version = "4", features = ["derive"] }
+schemars = "1"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+sha2 = "0.10"
 thiserror = "2"
 tokio = { version = "1", features = ["fs", "io-util", "macros", "process", "rt-multi-thread", "signal", "sync", "time"] }
 tokio-util = "0.7"
+# Newer URL releases pull ICU versions above the workspace's Rust 1.85 MSRV.
+url = "=2.4.1"

@@ -234,6 +234,43 @@ async fn standalone_driver_uses_upstream_environment_names() {
 }
 
 #[tokio::test]
+async fn exposes_a_full_browser_snapshot_as_the_agent_observation() {
+    let temp = tempfile::tempdir().expect("tempdir");
+    let executor = Arc::new(RecordingExecutor::default());
+    let driver = AgentBrowserDriver::with_executor(
+        AgentBrowserConfig {
+            command: BrowserCommand::Standalone {
+                executable: PathBuf::from("/opt/agent-browser"),
+            },
+            namespace: "observe".to_string(),
+            headed: false,
+            command_timeout: Duration::from_secs(5),
+            idle_timeout: Duration::from_secs(2),
+        },
+        executor.clone(),
+    );
+    let mut session = driver
+        .open(&ScenarioContext {
+            run_id: "run".to_string(),
+            scenario_id: "agent".to_string(),
+            artifacts_dir: temp.path().join("artifacts"),
+        })
+        .await
+        .expect("session");
+
+    let observation = session.observe().await.expect("observation");
+    assert_eq!(observation.summary, "browser accessibility snapshot");
+    assert_eq!(observation.data["success"], true);
+    session.close().await.expect("close");
+
+    let invocations = executor.invocations.lock().unwrap();
+    assert_eq!(
+        invocations[0].args,
+        os(&["--session", "agent", "--json", "snapshot"])
+    );
+}
+
+#[tokio::test]
 async fn rejects_artifact_parent_traversal_before_invoking_browser() {
     let temp = tempfile::tempdir().expect("tempdir");
     let executor = Arc::new(RecordingExecutor::default());

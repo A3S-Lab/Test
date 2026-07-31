@@ -2,7 +2,7 @@ use std::path::PathBuf;
 
 use async_trait::async_trait;
 
-use crate::{DriverError, StepOutput, Surface, TestStep};
+use crate::{DriverError, StepOutput, Surface, SurfaceObservation, TestStep};
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ScenarioContext {
@@ -13,6 +13,13 @@ pub struct ScenarioContext {
 
 #[async_trait]
 pub trait DriverSession: Send {
+    async fn observe(&mut self) -> Result<SurfaceObservation, DriverError> {
+        Err(DriverError::new(
+            "test.driver.observation_unsupported",
+            "this surface driver does not expose agent observations",
+        ))
+    }
+
     async fn execute(&mut self, step: &TestStep) -> Result<StepOutput, DriverError>;
 
     async fn close(&mut self) -> Result<(), DriverError>;

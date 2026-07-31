@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use a3s_test_core::{
     Action, DriverError, DriverSession, Evidence, Expectation, ScenarioContext, StepOutput,
-    Surface, SurfaceDriver, TestStep,
+    Surface, SurfaceDriver, SurfaceObservation, TestStep,
 };
 use async_trait::async_trait;
 use serde_json::Value;
@@ -102,13 +102,16 @@ struct AgentBrowserSession {
 
 #[async_trait]
 impl DriverSession for AgentBrowserSession {
+    async fn observe(&mut self) -> Result<SurfaceObservation, DriverError> {
+        self.ensure_open()?;
+        let data = self
+            .execute_command(vec![OsString::from("snapshot")])
+            .await?;
+        Ok(SurfaceObservation::new("browser accessibility snapshot").with_data(data))
+    }
+
     async fn execute(&mut self, step: &TestStep) -> Result<StepOutput, DriverError> {
-        if self.closed {
-            return Err(DriverError::new(
-                "test.driver.web.session_closed",
-                "browser session is already closed",
-            ));
-        }
+        self.ensure_open()?;
 
         match &step.action {
             Action::Navigate { url } => self
@@ -174,6 +177,16 @@ impl DriverSession for AgentBrowserSession {
 }
 
 impl AgentBrowserSession {
+    fn ensure_open(&self) -> Result<(), DriverError> {
+        if self.closed {
+            return Err(DriverError::new(
+                "test.driver.web.session_closed",
+                "browser session is already closed",
+            ));
+        }
+        Ok(())
+    }
+
     async fn assert(&self, expectation: &Expectation) -> Result<StepOutput, DriverError> {
         match expectation {
             Expectation::TextVisible(text) => {

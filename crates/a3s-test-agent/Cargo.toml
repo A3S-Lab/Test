@@ -1,16 +1,23 @@
 [package]
-name = "a3s-test-core"
+name = "a3s-test-agent"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
 rust-version.workspace = true
-description = "Typed test specifications and driver contracts for A3S Test"
+description = "Schema-constrained LLM execution loop for A3S Test"
 
 [dependencies]
-a3s-acl.workspace = true
+a3s-test-core = { path = "../a3s-test-core" }
 async-trait.workspace = true
 schemars.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+sha2.workspace = true
 thiserror.workspace = true
+tokio.workspace = true
+tokio-util.workspace = true
+url.workspace = true
+
+[dev-dependencies]
+tokio.workspace = true

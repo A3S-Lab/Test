@@ -1,7 +1,8 @@
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-#[derive(Clone, Copy, Debug, Deserialize, Eq, Hash, PartialEq, Serialize)]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, Hash, JsonSchema, PartialEq, Serialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Surface {
     Web,
@@ -31,8 +32,8 @@ pub struct TestStep {
     pub action: Action,
 }
 
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[serde(tag = "type", rename_all = "snake_case")]
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
+#[serde(tag = "type", rename_all = "snake_case", deny_unknown_fields)]
 pub enum Action {
     Navigate { url: String },
     Snapshot { interactive: bool },
@@ -44,8 +45,8 @@ pub enum Action {
     Screenshot { path: String },
 }
 
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[serde(tag = "type", rename_all = "snake_case")]
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
+#[serde(tag = "type", rename_all = "snake_case", deny_unknown_fields)]
 pub enum Target {
     Ref { value: String },
     Css { selector: String },
@@ -56,23 +57,33 @@ pub enum Target {
     Placeholder(String),
 }
 
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[serde(tag = "type", content = "value", rename_all = "snake_case")]
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
+#[serde(
+    tag = "type",
+    content = "value",
+    rename_all = "snake_case",
+    deny_unknown_fields
+)]
 pub enum WaitCondition {
     Load(LoadState),
     Text(String),
     Url(String),
 }
 
-#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
 #[serde(rename_all = "lowercase")]
 pub enum LoadState {
     NetworkIdle,
     DomContentLoaded,
 }
 
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[serde(tag = "type", content = "value", rename_all = "snake_case")]
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
+#[serde(
+    tag = "type",
+    content = "value",
+    rename_all = "snake_case",
+    deny_unknown_fields
+)]
 pub enum Expectation {
     TextVisible(String),
     Url(String),
@@ -94,6 +105,36 @@ pub struct StepOutput {
 }
 
 impl StepOutput {
+    #[must_use]
+    pub fn new(summary: impl Into<String>) -> Self {
+        Self {
+            summary: summary.into(),
+            data: Value::Null,
+            evidence: Vec::new(),
+        }
+    }
+
+    #[must_use]
+    pub fn with_data(mut self, data: Value) -> Self {
+        self.data = data;
+        self
+    }
+
+    #[must_use]
+    pub fn with_evidence(mut self, evidence: Evidence) -> Self {
+        self.evidence.push(evidence);
+        self
+    }
+}
+
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+pub struct SurfaceObservation {
+    pub summary: String,
+    pub data: Value,
+    pub evidence: Vec<Evidence>,
+}
+
+impl SurfaceObservation {
     #[must_use]
     pub fn new(summary: impl Into<String>) -> Self {
         Self {
