@@ -7,6 +7,7 @@ use sha2::{Digest, Sha256};
 
 const RUNTIME_OWNER_FILE: &str = ".a3s-test-owner";
 const DRIVER_SESSION_MAX_BYTES: usize = 28;
+const HEX_DIGITS: &[u8; 16] = b"0123456789abcdef";
 
 pub(super) fn session_namespace(workspace: &Path, session: &str) -> String {
     let mut hasher = DefaultHasher::new();
@@ -23,10 +24,11 @@ pub(super) fn driver_session_id(session: &str) -> String {
 
     let readable_bytes = DRIVER_SESSION_MAX_BYTES - 17;
     let digest = Sha256::digest(requested.as_bytes());
-    let suffix = digest[..8]
-        .iter()
-        .map(|byte| format!("{byte:02x}"))
-        .collect::<String>();
+    let mut suffix = String::with_capacity(16);
+    for byte in &digest[..8] {
+        suffix.push(char::from(HEX_DIGITS[usize::from(byte >> 4)]));
+        suffix.push(char::from(HEX_DIGITS[usize::from(byte & 0x0f)]));
+    }
     format!("{}-{suffix}", &requested[..readable_bytes])
 }
 
