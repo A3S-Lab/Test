@@ -62,7 +62,12 @@ jobs:
           archive: a3s-test-$tag-$target
           locked: true
           checksum: sha256
-          include: README.md LICENSE CHANGELOG.md
+          include: >-
+            README.md
+            LICENSE
+            CHANGELOG.md
+            assets/readme/hero.svg
+            assets/readme/architecture.svg
           leading-dir: true
           tar: unix
           zip: windows

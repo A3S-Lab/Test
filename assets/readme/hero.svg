@@ -1,0 +1,98 @@
+<svg xmlns="http://www.w3.org/2000/svg"
+     width="1200" height="440" viewBox="0 0 1200 440"
+     role="img" aria-labelledby="title desc">
+  <title id="title">A3S Test — AI Native Test Engine</title>
+  <desc id="desc">A CLI turns a typed ACL test into browser actions, assertions, and structured evidence for developers, CI, and coding agents.</desc>
+
+  <rect width="1200" height="440" rx="28" fill="#090B0F"/>
+  <path d="M0 78H1200" stroke="#202632"/>
+  <path d="M612 0V440" stroke="#171C25"/>
+
+  <g transform="translate(58 48)">
+    <rect width="180" height="30" rx="15" fill="#13231E" stroke="#285847"/>
+    <circle cx="18" cy="15" r="5" fill="#71E6B1"/>
+    <text x="32" y="21"
+          fill="#9BF0C8" font-size="16" font-weight="700"
+          font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace"
+          letter-spacing="1.6">A3S / TESTING</text>
+
+    <text x="0" y="105"
+          fill="#F7F9FC" font-size="72" font-weight="760"
+          font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">A3S Test</text>
+    <text x="2" y="145"
+          fill="#71E6B1" font-size="23" font-weight="700"
+          font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace"
+          letter-spacing="3.2">AI NATIVE TEST ENGINE</text>
+
+    <text x="2" y="205"
+          fill="#D8DEE9" font-size="28" font-weight="520"
+          font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">One CLI for typed test plans,</text>
+    <text x="2" y="241"
+          fill="#D8DEE9" font-size="28" font-weight="520"
+          font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">browser actions, and evidence.</text>
+
+    <g transform="translate(0 292)"
+       font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace"
+       font-size="17" font-weight="650">
+      <rect width="112" height="38" rx="8" fill="#11151C" stroke="#2A313D"/>
+      <text x="18" y="25" fill="#F7F9FC">RUST CLI</text>
+      <rect x="126" width="120" height="38" rx="8" fill="#11151C" stroke="#2A313D"/>
+      <text x="145" y="25" fill="#F7F9FC">ACL INPUT</text>
+      <rect x="260" width="136" height="38" rx="8" fill="#11151C" stroke="#2A313D"/>
+      <text x="278" y="25" fill="#F7F9FC">JSON OUTPUT</text>
+    </g>
+
+    <text x="2" y="371"
+          fill="#7F8999" font-size="17"
+          font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">A3S CODE · CODEX · CLAUDE CODE · CI</text>
+  </g>
+
+  <g transform="translate(650 34)">
+    <rect width="506" height="372" rx="20" fill="#0E1218" stroke="#303846" stroke-width="1.5"/>
+    <path d="M0 48H506" stroke="#252C37"/>
+    <circle cx="24" cy="24" r="5" fill="#4B5565"/>
+    <circle cx="44" cy="24" r="5" fill="#4B5565"/>
+    <circle cx="64" cy="24" r="5" fill="#71E6B1"/>
+    <text x="92" y="30"
+          fill="#8D97A7" font-size="16"
+          font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">a3s-test / run</text>
+
+    <text x="22" y="82"
+          fill="#71E6B1" font-size="17" font-weight="700"
+          font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">$</text>
+    <text x="42" y="82"
+          fill="#D8DEE9" font-size="17"
+          font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">a3s-test run smoke.acl --json</text>
+
+    <path d="M41 120V310" stroke="#354151" stroke-width="2"/>
+
+    <g font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+      <circle cx="41" cy="126" r="11" fill="#102A21" stroke="#71E6B1" stroke-width="2"/>
+      <path d="M36 126L40 130L47 122" fill="none" stroke="#71E6B1" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+      <text x="70" y="124" fill="#F7F9FC" font-size="20" font-weight="700">Validate</text>
+      <text x="70" y="148" fill="#8D97A7" font-size="17">typed ACL admitted</text>
+
+      <circle cx="41" cy="190" r="11" fill="#102A21" stroke="#71E6B1" stroke-width="2"/>
+      <path d="M36 190L40 194L47 186" fill="none" stroke="#71E6B1" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+      <text x="70" y="188" fill="#F7F9FC" font-size="20" font-weight="700">Drive Web</text>
+      <text x="70" y="212" fill="#8D97A7" font-size="17">A3S Browser / agent-browser</text>
+
+      <circle cx="41" cy="254" r="11" fill="#102A21" stroke="#71E6B1" stroke-width="2"/>
+      <path d="M36 254L40 258L47 250" fill="none" stroke="#71E6B1" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+      <text x="70" y="252" fill="#F7F9FC" font-size="20" font-weight="700">Assert</text>
+      <text x="70" y="276" fill="#8D97A7" font-size="17">semantic state matched</text>
+
+      <circle cx="41" cy="318" r="11" fill="#102A21" stroke="#71E6B1" stroke-width="2"/>
+      <path d="M36 318L40 322L47 314" fill="none" stroke="#71E6B1" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+      <text x="70" y="316" fill="#F7F9FC" font-size="20" font-weight="700">Evidence</text>
+      <text x="70" y="340" fill="#8D97A7" font-size="17">screenshot · trace · console</text>
+    </g>
+
+    <g transform="translate(378 112)">
+      <rect width="96" height="40" rx="20" fill="#71E6B1"/>
+      <text x="48" y="26" text-anchor="middle"
+            fill="#07110D" font-size="17" font-weight="800"
+            font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">PASS</text>
+    </g>
+  </g>
+</svg>

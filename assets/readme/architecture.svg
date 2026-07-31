@@ -1,0 +1,103 @@
+<svg xmlns="http://www.w3.org/2000/svg"
+     width="1200" height="650" viewBox="0 0 1200 650"
+     role="img" aria-labelledby="title desc">
+  <title id="title">A3S Test CLI architecture</title>
+  <desc id="desc">Developers and CI call the A3S Test CLI directly. A3S Code, Codex, and Claude Code use a portable Skill to call the same CLI. The CLI validates ACL, runs typed scenarios through surface drivers, and emits JSON results and evidence. Web is available; GUI and TUI drivers are planned.</desc>
+
+  <rect width="1200" height="650" rx="28" fill="#090B0F"/>
+
+  <text x="56" y="70"
+        fill="#F7F9FC" font-size="42" font-weight="750"
+        font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">The CLI is the product boundary.</text>
+  <text x="56" y="104"
+        fill="#8D97A7" font-size="21"
+        font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">Skills teach coding agents how to use it; they do not create another runtime.</text>
+
+  <g font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+    <g transform="translate(56 140)">
+      <rect width="238" height="88" rx="15" fill="#11151C" stroke="#303846" stroke-width="1.5"/>
+      <text x="22" y="36" fill="#F7F9FC" font-size="22" font-weight="700">Developers + CI</text>
+      <text x="22" y="64" fill="#8D97A7" font-size="18">direct CLI invocation</text>
+    </g>
+
+    <g transform="translate(356 140)">
+      <rect width="490" height="88" rx="15" fill="#11151C" stroke="#303846" stroke-width="1.5"/>
+      <text x="22" y="34" fill="#F7F9FC" font-size="22" font-weight="700">Coding agents</text>
+      <g transform="translate(156 17)"
+         font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace"
+         font-size="16" font-weight="650">
+        <rect width="92" height="34" rx="7" fill="#171D26" stroke="#364151"/>
+        <text x="14" y="23" fill="#D8DEE9">A3S CODE</text>
+        <rect x="104" width="80" height="34" rx="7" fill="#171D26" stroke="#364151"/>
+        <text x="118" y="23" fill="#D8DEE9">CODEX</text>
+        <rect x="196" width="122" height="34" rx="7" fill="#171D26" stroke="#364151"/>
+        <text x="210" y="23" fill="#D8DEE9">CLAUDE CODE</text>
+      </g>
+      <text x="22" y="68" fill="#71E6B1" font-size="18" font-weight="650">portable SKILL.md adapter</text>
+    </g>
+
+    <path d="M294 184H325V276H464" fill="none" stroke="#465264" stroke-width="2"/>
+    <path d="M846 184H876V276H736" fill="none" stroke="#465264" stroke-width="2"/>
+    <path d="M456 270L466 276L456 282" fill="none" stroke="#71E6B1" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M744 270L734 276L744 282" fill="none" stroke="#71E6B1" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+
+    <g transform="translate(464 246)">
+      <rect width="272" height="60" rx="14" fill="#71E6B1"/>
+      <text x="136" y="38" text-anchor="middle"
+            fill="#07110D" font-size="26" font-weight="800"
+            font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">a3s-test CLI</text>
+    </g>
+
+    <path d="M600 306V342" stroke="#71E6B1" stroke-width="2.5"/>
+    <path d="M594 334L600 344L606 334" fill="none" stroke="#71E6B1" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+
+    <g transform="translate(56 344)">
+      <rect width="1088" height="82" rx="16" fill="#0E1218" stroke="#303846" stroke-width="1.5"/>
+      <g font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace"
+         font-size="19" font-weight="650">
+        <text x="28" y="49" fill="#F7F9FC">ACL ADMISSION</text>
+        <text x="298" y="49" fill="#F7F9FC">TYPED IR</text>
+        <text x="526" y="49" fill="#F7F9FC">RUNNER</text>
+        <text x="765" y="49" fill="#F7F9FC">SURFACE DRIVER</text>
+      </g>
+      <path d="M202 41H270" stroke="#465264" stroke-width="2"/>
+      <path d="M260 35L270 41L260 47" fill="none" stroke="#71E6B1" stroke-width="2"/>
+      <path d="M412 41H498" stroke="#465264" stroke-width="2"/>
+      <path d="M488 35L498 41L488 47" fill="none" stroke="#71E6B1" stroke-width="2"/>
+      <path d="M626 41H738" stroke="#465264" stroke-width="2"/>
+      <path d="M728 35L738 41L728 47" fill="none" stroke="#71E6B1" stroke-width="2"/>
+    </g>
+
+    <path d="M600 426V458" stroke="#465264" stroke-width="2"/>
+    <path d="M206 458H994" stroke="#465264" stroke-width="2"/>
+    <path d="M206 458V474M600 458V474M994 458V474" stroke="#465264" stroke-width="2"/>
+
+    <g transform="translate(56 474)">
+      <rect width="300" height="84" rx="15" fill="#102A21" stroke="#71E6B1" stroke-width="2"/>
+      <circle cx="26" cy="26" r="6" fill="#71E6B1"/>
+      <text x="46" y="34" fill="#F7F9FC" font-size="22" font-weight="750">Web driver</text>
+      <text x="22" y="64" fill="#9BF0C8" font-size="18">available · A3S Browser</text>
+    </g>
+
+    <g transform="translate(450 474)">
+      <rect width="300" height="84" rx="15" fill="#11151C" stroke="#303846" stroke-width="1.5"/>
+      <circle cx="26" cy="26" r="6" fill="#647083"/>
+      <text x="46" y="34" fill="#F7F9FC" font-size="22" font-weight="750">GUI driver</text>
+      <text x="22" y="64" fill="#8D97A7" font-size="18">planned · A3S CUA</text>
+    </g>
+
+    <g transform="translate(844 474)">
+      <rect width="300" height="84" rx="15" fill="#11151C" stroke="#303846" stroke-width="1.5"/>
+      <circle cx="26" cy="26" r="6" fill="#647083"/>
+      <text x="46" y="34" fill="#F7F9FC" font-size="22" font-weight="750">TUI driver</text>
+      <text x="22" y="64" fill="#8D97A7" font-size="18">planned · PTY model</text>
+    </g>
+
+    <g transform="translate(56 584)">
+      <rect width="1088" height="40" rx="10" fill="#171D26"/>
+      <text x="24" y="27"
+            fill="#D8DEE9" font-size="18"
+            font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">JSON RESULT  ·  SCREENSHOT  ·  ACCESSIBILITY  ·  HAR  ·  TRACE  ·  VIDEO  ·  CONSOLE</text>
+    </g>
+  </g>
+</svg>
