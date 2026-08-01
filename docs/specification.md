@@ -193,6 +193,11 @@ download "report" {
 }
 ```
 
+Relative upload paths are resolved against the working directory where the
+`a3s-test` process was started before they are sent to the browser adapter.
+Absolute paths are preserved. This keeps project-owned fixtures stable even
+when a standalone browser daemon runs from a different working directory.
+
 Download paths are artifact-relative. Network routes choose exactly one
 response mode:
 

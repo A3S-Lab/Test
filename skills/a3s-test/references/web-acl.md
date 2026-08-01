@@ -246,6 +246,11 @@ network_unroute "users" {
 network_unroute "all" {}
 ```
 
+Relative upload paths are resolved from the directory where `a3s-test` was
+started before dispatch to the browser adapter; absolute paths are passed
+through unchanged. Keep fixtures inside the project and run the suite from
+the documented project working directory.
+
 A route chooses exactly one of `body` or `abort = true`. Download paths are
 artifact-relative. Upload paths identify local fixture files and must not
 contain secrets.

@@ -1,4 +1,5 @@
 use std::ffi::OsString;
+use std::path::Path;
 
 use a3s_test_core::{
     DialogOperation, DriverError, FrameTarget, ModifierKey, NetworkRoute, TabOperation, Target,
@@ -55,11 +56,24 @@ pub(crate) fn dialog_args(operation: &DialogOperation) -> Vec<OsString> {
 }
 
 pub(crate) fn upload_args(target: &Target, paths: &[String]) -> Result<Vec<OsString>, DriverError> {
+    let working_directory = std::env::current_dir().map_err(|error| {
+        DriverError::new(
+            "test.driver.web.working_directory_failed",
+            format!("failed to resolve upload paths from the current directory: {error}"),
+        )
+    })?;
     let mut args = vec![
         OsString::from("upload"),
         OsString::from(direct_selector(target)?),
     ];
-    args.extend(paths.iter().map(OsString::from));
+    args.extend(paths.iter().map(|path| {
+        let path = Path::new(path);
+        if path.is_absolute() {
+            path.as_os_str().to_os_string()
+        } else {
+            working_directory.join(path).into_os_string()
+        }
+    }));
     Ok(args)
 }
 

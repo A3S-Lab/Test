@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.4.4 - 2026-08-01
+
+### Fixed
+
+- Relative upload fixture paths are now resolved against the `a3s-test`
+  process working directory before dispatch to an independently launched
+  browser adapter. Absolute paths remain unchanged.
+
 ## 0.4.3 - 2026-07-31
 
 ### Added

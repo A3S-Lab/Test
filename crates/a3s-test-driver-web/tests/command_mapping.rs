@@ -459,6 +459,7 @@ async fn marks_only_pre_dispatch_command_failures_as_retryable() {
 async fn maps_extended_web_actions_and_records_evidence() {
     let temp = tempfile::tempdir().expect("tempdir");
     let artifacts = temp.path().join("artifacts");
+    let absolute_upload = temp.path().join("two.txt");
     let executor = Arc::new(RecordingExecutor::default());
     let driver = AgentBrowserDriver::with_executor(
         AgentBrowserConfig {
@@ -505,7 +506,10 @@ async fn maps_extended_web_actions_and_records_evidence() {
             target: Target::Ref {
                 value: "@e5".to_string(),
             },
-            paths: vec!["one.txt".to_string(), "two.txt".to_string()],
+            paths: vec![
+                "one.txt".to_string(),
+                absolute_upload.to_string_lossy().into_owned(),
+            ],
         },
         Action::Download {
             target: Target::Css {
@@ -576,6 +580,7 @@ async fn maps_extended_web_actions_and_records_evidence() {
         .skip(1)
         .map(|invocation| strip_session_prefix(&invocation.args))
         .collect::<Vec<_>>();
+    let working_directory = std::env::current_dir().expect("working directory");
     assert_eq!(
         action_args[0],
         os(&["tab", "new", "--label", "docs", "https://example.test/docs"])
@@ -583,7 +588,15 @@ async fn maps_extended_web_actions_and_records_evidence() {
     assert_eq!(action_args[1], os(&["tab", "docs"]));
     assert_eq!(action_args[2], os(&["frame", "#payment"]));
     assert_eq!(action_args[3], os(&["dialog", "accept", "approved"]));
-    assert_eq!(action_args[4], os(&["upload", "@e5", "one.txt", "two.txt"]));
+    assert_eq!(
+        action_args[4],
+        vec![
+            OsString::from("upload"),
+            OsString::from("@e5"),
+            working_directory.join("one.txt").into_os_string(),
+            absolute_upload.into_os_string(),
+        ]
+    );
     assert_eq!(
         action_args[5],
         vec![
