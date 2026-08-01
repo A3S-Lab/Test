@@ -261,7 +261,7 @@ fn parse_step(block: &Block, scenario_path: &str) -> Result<TestStep, SpecError>
             }
         }
         "wait" => {
-            ensure_attributes(block, &["load", "text", "url"], &path)?;
+            ensure_attributes(block, &["load", "text", "url", "visible"], &path)?;
             Action::Wait {
                 condition: parse_wait(block, &path)?,
             }
@@ -516,7 +516,7 @@ fn parse_video_operation(block: &Block, path: &str) -> Result<VideoOperation, Sp
 }
 
 fn parse_wait(block: &Block, path: &str) -> Result<WaitCondition, SpecError> {
-    let count = ["load", "text", "url"]
+    let count = ["load", "text", "url", "visible"]
         .iter()
         .filter(|name| block.attributes.contains_key(**name))
         .count();
@@ -544,13 +544,19 @@ fn parse_wait(block: &Block, path: &str) -> Result<WaitCondition, SpecError> {
             format!("{path}.text"),
         )?));
     }
+    if let Some(value) = block.attributes.get("url") {
+        return Ok(WaitCondition::Url(value_string(
+            value,
+            format!("{path}.url"),
+        )?));
+    }
     let value = block
         .attributes
-        .get("url")
-        .expect("condition count guarantees a URL value");
-    Ok(WaitCondition::Url(value_string(
+        .get("visible")
+        .expect("condition count guarantees a visible target");
+    Ok(WaitCondition::Visible(parse_target(
         value,
-        format!("{path}.url"),
+        &format!("{path}.visible"),
     )?))
 }
 

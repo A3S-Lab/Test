@@ -2,7 +2,7 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-pub const ACTION_PROTOCOL_REVISION: u32 = 2;
+pub const ACTION_PROTOCOL_REVISION: u32 = 3;
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, Hash, JsonSchema, PartialEq, Serialize)]
 #[serde(rename_all = "lowercase")]
@@ -246,6 +246,7 @@ pub enum WaitCondition {
     Load(LoadState),
     Text(String),
     Url(String),
+    Visible(Target),
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]

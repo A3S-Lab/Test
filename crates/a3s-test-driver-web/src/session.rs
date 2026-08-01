@@ -343,7 +343,7 @@ impl DriverSession for AgentBrowserSession {
                     .map(|data| StepOutput::new("viewport updated").with_data(data))
             }
             Action::Wait { condition } => {
-                let args = wait_args(condition);
+                let args = wait_args(condition)?;
                 self.execute_command(args)
                     .await
                     .map(|data| StepOutput::new("wait condition satisfied").with_data(data))

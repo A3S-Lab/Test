@@ -7,7 +7,7 @@ use std::time::Duration;
 
 use a3s_test_core::{
     Action, CaptureOperation, DialogOperation, FrameTarget, NetworkRoute, ScenarioContext,
-    SurfaceDriver, TabOperation, Target, TestStep, VideoOperation,
+    SurfaceDriver, TabOperation, Target, TestStep, VideoOperation, WaitCondition,
 };
 use a3s_test_driver_web::{
     AgentBrowserConfig, AgentBrowserConnectionConfig, AgentBrowserDriver, BrowserCommand,
@@ -361,7 +361,7 @@ async fn discovers_and_admits_the_typed_browser_protocol() {
     let capabilities = driver.capabilities().await.expect("capabilities");
     assert_eq!(capabilities.integration, BrowserIntegration::Standalone);
     assert_eq!(capabilities.version, "0.26.0");
-    assert_eq!(capabilities.protocol_revision, 2);
+    assert_eq!(capabilities.protocol_revision, 3);
     assert!(capabilities.features.contains(&WebCapability::Tabs));
     assert!(capabilities.features.contains(&WebCapability::Har));
     assert!(capabilities.features.contains(&WebCapability::Video));
@@ -561,6 +561,11 @@ async fn maps_extended_web_actions_and_records_evidence() {
             path: "evidence/errors.json".to_string(),
             clear: false,
         },
+        Action::Wait {
+            condition: WaitCondition::Visible(Target::Css {
+                selector: "[data-editor-ready]".to_string(),
+            }),
+        },
     ];
 
     let mut outputs = Vec::new();
@@ -647,7 +652,8 @@ async fn maps_extended_web_actions_and_records_evidence() {
     assert_eq!(action_args[14], os(&["snapshot", "-i"]));
     assert_eq!(action_args[15], os(&["console", "--clear"]));
     assert_eq!(action_args[16], os(&["errors"]));
-    assert_eq!(action_args[17], os(&["close"]));
+    assert_eq!(action_args[17], os(&["wait", "[data-editor-ready]"]));
+    assert_eq!(action_args[18], os(&["close"]));
 
     assert_eq!(outputs[5].evidence[0].media_type, "application/pdf");
     assert_eq!(outputs[9].evidence[0].media_type, "application/json");

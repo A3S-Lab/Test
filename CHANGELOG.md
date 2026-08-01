@@ -2,6 +2,11 @@
 
 ## 0.4.4 - 2026-08-01
 
+### Added
+
+- Typed `wait { visible = css(...) }` and `wait { visible = ref(...) }`
+  conditions now block on stable UI structure without relying on display text.
+
 ### Fixed
 
 - Relative upload fixture paths are now resolved against the `a3s-test`

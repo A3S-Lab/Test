@@ -49,7 +49,7 @@ fn agent_schema_exposes_values_for_semantic_targets() {
     assert!(output.status.success(), "{output:?}");
     let value: serde_json::Value = serde_json::from_slice(&output.stdout).expect("JSON output");
     assert_eq!(value["planner"], "external_coding_agent");
-    assert_eq!(value["protocol_revision"], 2);
+    assert_eq!(value["protocol_revision"], 3);
     let action_types = value["action_schema"]["oneOf"]
         .as_array()
         .expect("action variants");
@@ -114,7 +114,7 @@ fn capabilities_returns_the_admitted_web_protocol() {
     let value: serde_json::Value = serde_json::from_slice(&output.stdout).expect("JSON output");
     assert_eq!(value["integration"], "standalone");
     assert_eq!(value["version"], "0.26.0");
-    assert_eq!(value["protocol_revision"], 2);
+    assert_eq!(value["protocol_revision"], 3);
     assert!(value["features"].as_array().is_some_and(|features| {
         features
             .iter()

@@ -135,6 +135,10 @@ wait "ready-text" {
     text = "Ready"
 }
 
+wait "editor-surface" {
+    visible = css("[data-editor-ready]")
+}
+
 wait "dashboard-url" {
     url = "**/dashboard"
 }
@@ -156,7 +160,8 @@ screenshot "final" {
 }
 ```
 
-A wait accepts exactly one of `load`, `text`, or `url`. An expectation accepts
+A wait accepts exactly one of `load`, `text`, `url`, or `visible`. Visible
+waits require a direct `ref()` or `css()` target. An expectation accepts
 exactly one of `text`, `url`, or `visible`.
 
 Focus, double-click, context-click, type, uncheck, select, drag, and

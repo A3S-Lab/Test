@@ -121,8 +121,8 @@ pub(crate) fn direct_selector(target: &Target) -> Result<&str, DriverError> {
     }
 }
 
-pub(crate) fn wait_args(condition: &WaitCondition) -> Vec<OsString> {
-    match condition {
+pub(crate) fn wait_args(condition: &WaitCondition) -> Result<Vec<OsString>, DriverError> {
+    Ok(match condition {
         WaitCondition::Load(state) => vec![
             "wait".into(),
             "--load".into(),
@@ -133,7 +133,10 @@ pub(crate) fn wait_args(condition: &WaitCondition) -> Vec<OsString> {
         ],
         WaitCondition::Text(text) => vec!["wait".into(), "--text".into(), text.into()],
         WaitCondition::Url(url) => vec!["wait".into(), "--url".into(), url.into()],
-    }
+        WaitCondition::Visible(target) => {
+            vec!["wait".into(), OsString::from(direct_selector(target)?)]
+        }
+    })
 }
 
 pub(crate) fn resolve_artifact_path(root: &Path, requested: &str) -> Result<PathBuf, DriverError> {

@@ -131,6 +131,32 @@ suite "invalid" {
 }
 
 #[test]
+fn parses_a_typed_visible_wait_target() {
+    let suite = TestSuite::from_acl(
+        r#"
+suite "visible-wait" {
+    scenario "home" {
+        surface = "web"
+        wait "editor-ready" {
+            visible = css("[data-editor-ready]")
+        }
+    }
+}
+"#,
+    )
+    .expect("visible wait must parse");
+
+    assert_eq!(
+        suite.scenarios[0].steps[0].action,
+        Action::Wait {
+            condition: WaitCondition::Visible(Target::Css {
+                selector: "[data-editor-ready]".to_string(),
+            }),
+        }
+    );
+}
+
+#[test]
 fn rejects_unrecognized_attributes_instead_of_silently_ignoring_them() {
     let error = TestSuite::from_acl(
         r#"

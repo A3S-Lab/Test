@@ -109,6 +109,10 @@ wait "loaded" {
     load = "networkidle"
 }
 
+wait "editor-surface" {
+    visible = css("[data-editor-ready]")
+}
+
 expect "saved" {
     text = "Saved"
 }
@@ -123,6 +127,9 @@ screenshot "final" {
 - `load = "networkidle"` or `load = "domcontentloaded"`
 - `text = "..."`
 - `url = "..."`
+- `visible = css("...")` or `visible = ref("@e1")`
+
+Visible waits require a direct CSS selector or current observation ref.
 
 `expect` accepts exactly one of:
 
