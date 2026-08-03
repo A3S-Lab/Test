@@ -956,6 +956,9 @@ fn strip_session_prefix(args: &[OsString]) -> Vec<OsString> {
 
 fn assert_short_runtime(runtime: &OsString) {
     let path = PathBuf::from(runtime);
+    #[cfg(unix)]
+    let expected_parent = canonical_test_path(std::path::Path::new("/tmp"));
+    #[cfg(not(unix))]
     let expected_parent = canonical_test_path(&std::env::temp_dir());
     assert_eq!(path.parent(), Some(expected_parent.as_path()));
     assert!(
