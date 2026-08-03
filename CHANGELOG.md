@@ -41,6 +41,9 @@
 
 ### Fixed
 
+- CI test failures now retain their complete Cargo output and publish bounded
+  panic/error tails as check-run annotations, so cross-platform failures remain
+  diagnosable even when unauthenticated workflow logs are unavailable.
 - Made the hermetic Web fixture use blocking accept with transient-handshake
   recovery and Content-Length-framed client reads, preventing intermittent
   Windows connection-aborted failures while retaining bounded response sizes.

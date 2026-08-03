@@ -38,7 +38,10 @@ jobs:
         run: cargo fmt --all -- --check
 
       - name: Run tests
-        run: cargo test --workspace --all-targets --locked
+        shell: bash
+        run: >-
+          bash .github/scripts/run-cargo-test.sh
+          cargo test --workspace --all-targets --locked
 
       - name: Run Clippy
         run: cargo clippy --workspace --all-targets --locked -- -D warnings
@@ -69,9 +72,11 @@ jobs:
           agent-browser --version
 
       - name: Run the real browser suite
+        shell: bash
         run: |
           export A3S_TEST_AGENT_BROWSER="$(command -v agent-browser)"
-          cargo test -p a3s-test-cli --test web_e2e \
+          bash .github/scripts/run-cargo-test.sh \
+            cargo test -p a3s-test-cli --test web_e2e \
             real_agent_browser_runs_the_hermetic_web_suite \
             --locked -- --ignored --exact --nocapture
 
