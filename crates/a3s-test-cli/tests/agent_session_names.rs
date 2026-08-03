@@ -70,9 +70,15 @@ printf '{"success":true}\n'
 
         let driver_log = fs::read_to_string(&log).expect("driver log");
         assert!(
-            driver_log
-                .lines()
-                .any(|line| line.contains(&format!("--session {driver_session} --json open"))),
+            driver_log.lines().any(|line| {
+                let arguments = line.split_whitespace().collect::<Vec<_>>();
+                arguments
+                    .windows(2)
+                    .any(|pair| pair == ["--session", driver_session])
+                    && arguments
+                        .windows(2)
+                        .any(|pair| pair == ["open", "https://example.test"])
+            }),
             "{driver_log}"
         );
 
