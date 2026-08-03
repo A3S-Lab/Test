@@ -138,7 +138,7 @@ fn capabilities_returns_the_admitted_web_protocol() {
 fn coding_agent_can_drive_a_persistent_typed_test_session() {
     use std::os::unix::fs::PermissionsExt;
 
-    let _test_guard = process_test_lock().lock().unwrap();
+    let _test_guard = process_test_guard();
     let temp = tempfile::tempdir().expect("tempdir");
     let driver = temp.path().join("fake-agent-browser");
     let log = temp.path().join("driver.log");
@@ -284,29 +284,36 @@ esac
     assert!(!runtime.exists(), "runtime directory survived finish");
 
     let driver_log = fs::read_to_string(log).expect("driver log");
-    assert!(
-        driver_log
-            .lines()
-            .any(|line| line.ends_with(" open https://example.test/checkout")),
-        "{driver_log}"
-    );
-    assert!(
-        driver_log
-            .lines()
-            .any(|line| line.ends_with(" snapshot -i")),
-        "{driver_log}"
-    );
-    assert!(
-        driver_log.lines().any(|line| line.ends_with(" click @e1")),
-        "{driver_log}"
-    );
-    assert!(
-        driver_log.lines().any(|line| line.ends_with(" close")),
-        "{driver_log}"
-    );
-    let sessions = driver_log
+    let driver_arguments = driver_log
         .lines()
         .filter_map(|line| line.split('|').nth(2))
+        .collect::<Vec<_>>();
+    assert!(
+        driver_arguments
+            .iter()
+            .any(|arguments| arguments.ends_with(" open https://example.test/checkout")),
+        "{driver_log}"
+    );
+    assert!(
+        driver_arguments
+            .iter()
+            .any(|arguments| arguments.ends_with(" snapshot -i")),
+        "{driver_log}"
+    );
+    assert!(
+        driver_arguments
+            .iter()
+            .any(|arguments| arguments.ends_with(" click @e1")),
+        "{driver_log}"
+    );
+    assert!(
+        driver_arguments
+            .iter()
+            .any(|arguments| arguments.ends_with(" close")),
+        "{driver_log}"
+    );
+    let sessions = driver_arguments
+        .iter()
         .filter_map(|args| {
             let values = args.split_whitespace().collect::<Vec<_>>();
             values
@@ -332,7 +339,7 @@ esac
 fn compact_agent_commands_cover_advanced_office_interactions() {
     use std::os::unix::fs::PermissionsExt;
 
-    let _test_guard = process_test_lock().lock().unwrap();
+    let _test_guard = process_test_guard();
     let temp = tempfile::tempdir().expect("tempdir");
     let driver = temp.path().join("fake-agent-browser");
     let log = temp.path().join("driver.log");
@@ -442,7 +449,7 @@ esac
 fn agent_observe_rejects_a_silently_replaced_browser_page() {
     use std::os::unix::fs::PermissionsExt;
 
-    let _test_guard = process_test_lock().lock().unwrap();
+    let _test_guard = process_test_guard();
     let temp = tempfile::tempdir().expect("tempdir");
     let driver = temp.path().join("fake-agent-browser");
     let log = temp.path().join("driver.log");
@@ -507,7 +514,7 @@ esac
 fn failed_agent_action_invalidates_observation_refs_before_retry() {
     use std::os::unix::fs::PermissionsExt;
 
-    let _test_guard = process_test_lock().lock().unwrap();
+    let _test_guard = process_test_guard();
     let temp = tempfile::tempdir().expect("tempdir");
     let driver = temp.path().join("fake-agent-browser");
     let log = temp.path().join("driver.log");
@@ -625,7 +632,7 @@ esac
 fn failed_finish_preserves_runtime_until_exact_cleanup_can_be_retried() {
     use std::os::unix::fs::PermissionsExt;
 
-    let _test_guard = process_test_lock().lock().unwrap();
+    let _test_guard = process_test_guard();
     let temp = tempfile::tempdir().expect("tempdir");
     let driver = temp.path().join("fake-agent-browser");
     let log = temp.path().join("driver.log");
@@ -736,4 +743,11 @@ fn start_agent_session(
 fn process_test_lock() -> &'static Mutex<()> {
     static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
     LOCK.get_or_init(|| Mutex::new(()))
+}
+
+#[cfg(unix)]
+fn process_test_guard() -> std::sync::MutexGuard<'static, ()> {
+    process_test_lock()
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
 }

@@ -41,6 +41,9 @@
 
 ### Fixed
 
+- Made the agent-session CLI assertions parse their structured driver-log
+  fields, recover the serial test lock after a failure, and use the Rust test
+  binary itself for portable owned-process-tree fixtures.
 - CI test failures now retain their complete Cargo output and publish bounded
   panic/error tails as check-run annotations, so cross-platform failures remain
   diagnosable even when unauthenticated workflow logs are unavailable.

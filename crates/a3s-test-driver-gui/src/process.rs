@@ -270,8 +270,10 @@ mod tests {
     use std::path::Path;
     use std::process::Stdio;
 
-    #[cfg(windows)]
-    use std::path::PathBuf;
+    const DESCENDANT_FIXTURE_TEST: &str = "process::tests::owned_process_tree_descendant_fixture";
+    const DESCENDANT_MODE_ENV: &str = "A3S_TEST_CUA_DESCENDANT_MODE";
+    const DESCENDANT_GATE_ENV: &str = "A3S_TEST_CUA_DESCENDANT_GATE";
+    const DESCENDANT_PID_ENV: &str = "A3S_TEST_CUA_DESCENDANT_PID_FILE";
 
     #[tokio::test]
     async fn owned_process_tree_terminates_a_late_spawned_descendant() {
@@ -348,52 +350,53 @@ mod tests {
         }
     }
 
-    #[cfg(unix)]
     fn descendant_fixture_command(gate: &Path, pid_file: &Path) -> Command {
-        let mut command = Command::new("/bin/sh");
+        let mut command = Command::new(std::env::current_exe().expect("current test executable"));
         command
-            .arg("-c")
-            .arg(
-                "while [ ! -f \"$1\" ]; do sleep 0.1; done; \
-                 sleep 30 & child=$!; printf '%s' \"$child\" > \"$2\"; wait \"$child\"",
-            )
-            .arg("a3s-test-cua-tree")
-            .arg(gate)
-            .arg(pid_file);
+            .args([DESCENDANT_FIXTURE_TEST, "--ignored", "--exact"])
+            .env(DESCENDANT_MODE_ENV, "parent")
+            .env(DESCENDANT_GATE_ENV, gate)
+            .env(DESCENDANT_PID_ENV, pid_file);
         command
     }
 
-    #[cfg(windows)]
-    fn descendant_fixture_command(gate: &Path, pid_file: &Path) -> Command {
-        let powershell = system_executable(r"WindowsPowerShell\v1.0\powershell.exe");
-        let gate = powershell_literal(gate);
-        let pid_file = powershell_literal(pid_file);
-        let script = format!(
-            "while (-not (Test-Path -LiteralPath '{gate}')) {{ \
-             Start-Sleep -Milliseconds 10 }}; \
-             $child = Start-Process -FilePath $env:ComSpec \
-             -ArgumentList @('/D', '/C', 'ping -n 30 127.0.0.1') \
-             -WindowStyle Hidden -PassThru; \
-             [IO.File]::WriteAllText('{pid_file}', [string]$child.Id); \
-             $child.WaitForExit()"
-        );
-        let mut command = Command::new(powershell);
-        command.args(["-NoLogo", "-NoProfile", "-NonInteractive", "-Command"]);
-        command.arg(script);
-        command
-    }
+    #[test]
+    #[ignore = "helper process for owned process-tree lifecycle tests"]
+    fn owned_process_tree_descendant_fixture() {
+        let mode = std::env::var(DESCENDANT_MODE_ENV).expect("descendant fixture mode");
+        if mode == "leaf" {
+            std::thread::sleep(Duration::from_secs(30));
+            return;
+        }
+        assert_eq!(mode, "parent");
 
-    #[cfg(windows)]
-    fn powershell_literal(path: &Path) -> String {
-        path.to_string_lossy().replace('\'', "''")
-    }
+        let gate = std::env::var_os(DESCENDANT_GATE_ENV)
+            .map(std::path::PathBuf::from)
+            .expect("descendant fixture gate");
+        let pid_file = std::env::var_os(DESCENDANT_PID_ENV)
+            .map(std::path::PathBuf::from)
+            .expect("descendant fixture PID file");
+        let deadline = std::time::Instant::now() + Duration::from_secs(5);
+        while !gate.is_file() {
+            assert!(
+                std::time::Instant::now() < deadline,
+                "descendant fixture gate was not released"
+            );
+            std::thread::sleep(Duration::from_millis(10));
+        }
 
-    #[cfg(windows)]
-    fn system_executable(relative: &str) -> PathBuf {
-        let root = PathBuf::from(std::env::var_os("SystemRoot").expect("SystemRoot"));
-        let executable = root.join("System32").join(relative);
-        assert!(executable.is_file(), "missing {}", executable.display());
-        executable
+        let mut child = std::process::Command::new(
+            std::env::current_exe().expect("current descendant fixture executable"),
+        )
+        .args([DESCENDANT_FIXTURE_TEST, "--ignored", "--exact"])
+        .env(DESCENDANT_MODE_ENV, "leaf")
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .expect("spawn descendant fixture leaf");
+        std::fs::write(pid_file, child.id().to_string()).expect("publish descendant PID");
+        let _ = child.wait();
     }
 
     #[cfg(unix)]
@@ -437,11 +440,6 @@ mod tests {
         let mut exit_code = 0;
         let queried = unsafe { GetExitCodeProcess(handle.as_raw_handle(), &mut exit_code) != 0 };
         queried && exit_code == STILL_ACTIVE as u32
-    }
-
-    #[cfg(not(any(unix, windows)))]
-    fn descendant_fixture_command(_gate: &Path, _pid_file: &Path) -> Command {
-        Command::new("false")
     }
 
     #[cfg(not(any(unix, windows)))]

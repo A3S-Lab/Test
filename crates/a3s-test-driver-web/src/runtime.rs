@@ -151,6 +151,7 @@ impl RuntimeIdentity {
         {
             use std::os::unix::fs::MetadataExt as _;
 
+            let _ = path;
             Ok(Self {
                 device: metadata.dev(),
                 inode: metadata.ino(),

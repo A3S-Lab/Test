@@ -22,6 +22,15 @@ printf '%s\n' '::group::Rust test failure tail'
 tail -n 200 "$log_path"
 printf '%s\n' '::endgroup::'
 
+# GitHub's public annotations API does not expose grouped step output. Include a
+# bounded tail in one annotation so unauthenticated CI triage retains assertion
+# context such as stdout, stderr, and expected/actual values.
+context=$(tail -n 120 "$log_path" | tail -c 24000)
+escaped_context=${context//'%'/'%25'}
+escaped_context=${escaped_context//$'\r'/'%0D'}
+escaped_context=${escaped_context//$'\n'/'%0A'}
+printf '::error title=Rust test failure context::%s\n' "$escaped_context"
+
 annotations=0
 while IFS= read -r line; do
     escaped=${line//'%'/'%25'}
