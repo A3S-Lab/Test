@@ -277,22 +277,30 @@ mod tests {
 
     #[tokio::test]
     async fn owned_process_tree_terminates_a_late_spawned_descendant() {
+        let _test_guard = process_tree_test_lock().lock().await;
         assert_descendant_is_terminated(OwnedProcessTree::terminate).await;
     }
 
     #[tokio::test]
     async fn dropping_owned_process_tree_terminates_a_late_spawned_descendant() {
+        let _test_guard = process_tree_test_lock().lock().await;
         assert_descendant_is_terminated(drop).await;
     }
 
     #[cfg(unix)]
     #[tokio::test]
     async fn emergency_registry_terminates_a_late_spawned_descendant() {
+        let _test_guard = process_tree_test_lock().lock().await;
         assert_descendant_is_terminated(|mut process_tree| {
             terminate_active_cua_processes();
             process_tree.disarm();
         })
         .await;
+    }
+
+    fn process_tree_test_lock() -> &'static tokio::sync::Mutex<()> {
+        static LOCK: std::sync::OnceLock<tokio::sync::Mutex<()>> = std::sync::OnceLock::new();
+        LOCK.get_or_init(|| tokio::sync::Mutex::new(()))
     }
 
     async fn assert_descendant_is_terminated(terminate: impl FnOnce(OwnedProcessTree)) {

@@ -243,6 +243,12 @@ fn run_agent_domain_containment(browser: &Path, fixture: &WebFixture, workspace:
         "contained observation did not remain on the allowed page: {}",
         String::from_utf8_lossy(&observe.stdout)
     );
+    std::thread::sleep(Duration::from_millis(250));
+    let load_requests = fixture.blocked_requests();
+    assert!(
+        load_requests.is_empty(),
+        "browser domain policy allowed a script, image, fetch, iframe, or redirect while loading the containment page: {load_requests:?}"
+    );
 
     let click = Command::new(binary())
         .args([
@@ -262,9 +268,10 @@ fn run_agent_domain_containment(browser: &Path, fixture: &WebFixture, workspace:
     assert_eq!(click_json["session"], "domain-containment");
 
     std::thread::sleep(Duration::from_millis(250));
+    let blocked_requests = fixture.blocked_requests();
     assert!(
-        fixture.blocked_requests().is_empty(),
-        "browser domain policy allowed a link, script, image, fetch, or redirect request"
+        blocked_requests.is_empty(),
+        "browser domain policy allowed a link, script, image, fetch, or redirect request: {blocked_requests:?}"
     );
 
     let abort = cleanup.abort();
