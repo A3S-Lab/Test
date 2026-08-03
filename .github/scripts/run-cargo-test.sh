@@ -22,10 +22,18 @@ printf '%s\n' '::group::Rust test failure tail'
 tail -n 200 "$log_path"
 printf '%s\n' '::endgroup::'
 
-# GitHub's public annotations API does not expose grouped step output. Include a
-# bounded tail in one annotation so unauthenticated CI triage retains assertion
-# context such as stdout, stderr, and expected/actual values.
-context=$(tail -n 120 "$log_path" | tail -c 24000)
+# GitHub's public annotations API does not expose grouped step output. Include
+# bounded panic blocks (or the final tail for non-panics) in one annotation so
+# unauthenticated CI triage retains stdout, stderr, and expected/actual values.
+context=$(
+    awk '
+        /panicked at/ { remaining = 80 }
+        remaining > 0 { print; remaining-- }
+    ' "$log_path" | tail -c 24000
+)
+if [[ -z "$context" ]]; then
+    context=$(tail -n 120 "$log_path" | tail -c 24000)
+fi
 escaped_context=${context//'%'/'%25'}
 escaped_context=${escaped_context//$'\r'/'%0D'}
 escaped_context=${escaped_context//$'\n'/'%0A'}

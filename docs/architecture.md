@@ -153,7 +153,9 @@ Protection is layered:
 6. External-planner session handles intentionally survive individual CLI
    processes; `finish`, `abort`, or the bounded daemon idle timeout closes
    them.
-7. Browser daemons receive a bounded inactivity timeout.
+7. Browser daemons receive a bounded inactivity timeout. The adapter floors the
+   daemon-side value at the per-command deadline because admitted 0.26.x
+   runtimes start idle accounting when a command begins.
 8. A second SIGINT kills all currently registered command process groups.
 
 The per-run namespace prevents cleanup from touching a developer's unrelated

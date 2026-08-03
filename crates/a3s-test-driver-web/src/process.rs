@@ -473,7 +473,10 @@ mod tests {
             panic!("failed to create namespace link: {error}");
         }
 
-        assert_eq!(session_runtime_directories(&runtime, "contained"), [root]);
+        assert_eq!(
+            session_runtime_directories(&runtime, "contained"),
+            [runtime.path().to_path_buf()]
+        );
     }
 
     #[tokio::test]

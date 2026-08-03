@@ -300,7 +300,7 @@ async fn maps_typed_actions_and_scopes_browser_lifecycle() {
 }
 
 #[tokio::test]
-async fn standalone_driver_uses_upstream_environment_names() {
+async fn standalone_driver_uses_upstream_environment_names_and_a_safe_idle_floor() {
     let temp = tempfile::tempdir().expect("tempdir");
     let artifacts = temp.path().join("artifacts");
     let executor = Arc::new(RecordingExecutor::default());
@@ -344,7 +344,7 @@ async fn standalone_driver_uses_upstream_environment_names() {
             ),
             (
                 OsString::from("AGENT_BROWSER_IDLE_TIMEOUT_MS"),
-                OsString::from("2000")
+                OsString::from("5000")
             ),
             (OsString::from("AGENT_BROWSER_SOCKET_DIR"), runtime.clone()),
             (

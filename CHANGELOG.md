@@ -41,9 +41,14 @@
 
 ### Fixed
 
+- Made `domcontentloaded` waits evaluate the current document readiness state
+  and kept the browser daemon idle deadline at least as long as one admitted
+  command, preventing standalone 0.26.x from expiring a live session during a
+  long wait.
 - Made the agent-session CLI assertions parse their structured driver-log
   fields, recover the serial test lock after a failure, and use the Rust test
-  binary itself for portable owned-process-tree fixtures.
+  binary itself for portable owned-process-tree fixtures. Link-containment
+  tests now compare the canonical runtime binding on path-aliasing hosts.
 - CI test failures now retain their complete Cargo output and publish bounded
   panic/error tails as check-run annotations, so cross-platform failures remain
   diagnosable even when unauthenticated workflow logs are unavailable.

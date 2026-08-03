@@ -130,6 +130,9 @@ screenshot "final" {
 - `visible = css("...")` or `visible = ref("@e1")`
 
 Visible waits require a direct CSS selector or current observation ref.
+`domcontentloaded` is evaluated against the current document readiness state,
+so it remains deterministic when navigation completed before the separate wait
+command began. `networkidle` uses the browser runtime's bounded idle detector.
 
 `expect` accepts exactly one of:
 

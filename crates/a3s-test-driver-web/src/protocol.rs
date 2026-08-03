@@ -29,7 +29,12 @@ pub(crate) fn invocation(
     let mut env = BTreeMap::new();
     let (namespace_name, namespace_value) = config.command.namespace_environment(namespace);
     env.insert(namespace_name, namespace_value);
-    let (idle_name, idle_value) = config.command.idle_environment(config.idle_timeout);
+    // agent-browser 0.26.x resets its idle timer when a command starts, not
+    // when it completes. Keep the daemon alive for every command that A3S Test
+    // still considers valid, even when the requested between-turn deadline is
+    // shorter than the per-command deadline.
+    let daemon_idle_timeout = config.idle_timeout.max(config.command_timeout);
+    let (idle_name, idle_value) = config.command.idle_environment(daemon_idle_timeout);
     env.insert(idle_name, idle_value);
     let (runtime_name, runtime_value) = config.command.runtime_environment(runtime_dir);
     env.insert(runtime_name, runtime_value);
@@ -135,13 +140,17 @@ pub(crate) fn direct_selector(target: &Target) -> Result<&str, DriverError> {
 
 pub(crate) fn wait_args(condition: &WaitCondition) -> Result<Vec<OsString>, DriverError> {
     Ok(match condition {
-        WaitCondition::Load(state) => vec![
+        WaitCondition::Load(LoadState::NetworkIdle) => {
+            vec!["wait".into(), "--load".into(), "networkidle".into()]
+        }
+        // The admitted standalone 0.26.x runtime subscribes only to future
+        // lifecycle events. A separate command issued after navigation can
+        // therefore miss DOMContentLoaded and wait for its entire deadline.
+        // readyState expresses the same condition as current page state.
+        WaitCondition::Load(LoadState::DomContentLoaded) => vec![
             "wait".into(),
-            "--load".into(),
-            match state {
-                LoadState::NetworkIdle => "networkidle".into(),
-                LoadState::DomContentLoaded => "domcontentloaded".into(),
-            },
+            "--fn".into(),
+            "document.readyState !== 'loading'".into(),
         ],
         WaitCondition::Text(text) => vec!["wait".into(), "--text".into(), text.into()],
         WaitCondition::Url(url) => vec!["wait".into(), "--url".into(), url.into()],
@@ -196,4 +205,38 @@ pub(crate) fn scalar_bool(value: &Value) -> Option<bool> {
 
 pub(crate) fn bounded(value: &str, max_chars: usize) -> String {
     value.chars().take(max_chars).collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use std::ffi::OsString;
+
+    use a3s_test_core::{LoadState, WaitCondition};
+
+    use super::wait_args;
+
+    #[test]
+    fn dom_content_loaded_wait_checks_current_document_state() {
+        assert_eq!(
+            wait_args(&WaitCondition::Load(LoadState::DomContentLoaded))
+                .expect("DOMContentLoaded wait"),
+            [
+                OsString::from("wait"),
+                OsString::from("--fn"),
+                OsString::from("document.readyState !== 'loading'"),
+            ]
+        );
+    }
+
+    #[test]
+    fn network_idle_wait_uses_the_native_load_state() {
+        assert_eq!(
+            wait_args(&WaitCondition::Load(LoadState::NetworkIdle)).expect("network idle wait"),
+            [
+                OsString::from("wait"),
+                OsString::from("--load"),
+                OsString::from("networkidle"),
+            ]
+        );
+    }
 }
