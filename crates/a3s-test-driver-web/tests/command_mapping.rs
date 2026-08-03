@@ -300,7 +300,7 @@ async fn maps_typed_actions_and_scopes_browser_lifecycle() {
 }
 
 #[tokio::test]
-async fn standalone_driver_uses_upstream_environment_names_and_a_safe_idle_floor() {
+async fn standalone_driver_uses_the_upstream_policy_contract_and_a_safe_idle_floor() {
     let temp = tempfile::tempdir().expect("tempdir");
     let artifacts = temp.path().join("artifacts");
     let executor = Arc::new(RecordingExecutor::default());
@@ -327,9 +327,36 @@ async fn standalone_driver_uses_upstream_environment_names_and_a_safe_idle_floor
         .await
         .expect("session");
 
+    session
+        .execute(&step(
+            "open",
+            Action::Navigate {
+                url: "http://127.0.0.1/".to_string(),
+            },
+        ))
+        .await
+        .expect("navigate");
     session.close().await.expect("close");
 
     let invocations = executor.invocations.lock().unwrap();
+    assert_eq!(
+        invocations[1].args,
+        os(&[
+            "--session",
+            "home",
+            "--json",
+            "--allowed-domains",
+            "127.0.0.1",
+            "--engine",
+            "chrome",
+            "open",
+            "http://127.0.0.1/",
+        ])
+    );
+    assert_eq!(
+        invocations[2].args,
+        os(&["--session", "home", "--json", "close",])
+    );
     let runtime = invocations[1]
         .env
         .get(&OsString::from("AGENT_BROWSER_SOCKET_DIR"))
@@ -643,6 +670,7 @@ async fn maps_extended_web_actions_and_records_evidence() {
     session.close().await.expect("close");
 
     let invocations = executor.invocations.lock().unwrap();
+    let canonical_artifacts = canonical_test_path(&artifacts);
     let action_args = invocations
         .iter()
         .skip(1)
@@ -670,7 +698,7 @@ async fn maps_extended_web_actions_and_records_evidence() {
         vec![
             OsString::from("download"),
             OsString::from("#download"),
-            artifacts
+            canonical_artifacts
                 .join("downloads")
                 .join("report.pdf")
                 .into_os_string(),
@@ -694,7 +722,7 @@ async fn maps_extended_web_actions_and_records_evidence() {
             OsString::from("network"),
             OsString::from("har"),
             OsString::from("stop"),
-            artifacts
+            canonical_artifacts
                 .join("network")
                 .join("session.har")
                 .into_os_string(),
@@ -706,7 +734,7 @@ async fn maps_extended_web_actions_and_records_evidence() {
         vec![
             OsString::from("trace"),
             OsString::from("stop"),
-            artifacts
+            canonical_artifacts
                 .join("traces")
                 .join("session.zip")
                 .into_os_string(),
@@ -717,7 +745,7 @@ async fn maps_extended_web_actions_and_records_evidence() {
         vec![
             OsString::from("record"),
             OsString::from("start"),
-            artifacts
+            canonical_artifacts
                 .join("video")
                 .join("session.webm")
                 .into_os_string(),
@@ -929,7 +957,9 @@ fn strip_session_prefix(args: &[OsString]) -> Vec<OsString> {
 fn assert_short_runtime(runtime: &OsString) {
     let path = PathBuf::from(runtime);
     #[cfg(unix)]
-    let expected_parent = PathBuf::from("/tmp");
+    let expected_parent = PathBuf::from("/tmp")
+        .canonicalize()
+        .expect("canonical temporary directory");
     #[cfg(not(unix))]
     let expected_parent = std::env::temp_dir();
     assert_eq!(path.parent(), Some(expected_parent.as_path()));
@@ -940,4 +970,27 @@ fn assert_short_runtime(runtime: &OsString) {
         "{}",
         path.display()
     );
+}
+
+fn canonical_test_path(path: &std::path::Path) -> PathBuf {
+    let canonical = path.canonicalize().expect("canonical test path");
+    #[cfg(windows)]
+    {
+        use std::ffi::OsString;
+        use std::os::windows::ffi::{OsStrExt as _, OsStringExt as _};
+
+        const VERBATIM_PREFIX: &[u16] = &[b'\\' as u16, b'\\' as u16, b'?' as u16, b'\\' as u16];
+        const UNC_PREFIX: &[u16] = &[b'U' as u16, b'N' as u16, b'C' as u16, b'\\' as u16];
+
+        let wide = canonical.as_os_str().encode_wide().collect::<Vec<_>>();
+        if wide.starts_with(VERBATIM_PREFIX) {
+            if wide[VERBATIM_PREFIX.len()..].starts_with(UNC_PREFIX) {
+                let mut normalized = vec![b'\\' as u16, b'\\' as u16];
+                normalized.extend_from_slice(&wide[VERBATIM_PREFIX.len() + UNC_PREFIX.len()..]);
+                return PathBuf::from(OsString::from_wide(&normalized));
+            }
+            return PathBuf::from(OsString::from_wide(&wide[VERBATIM_PREFIX.len()..]));
+        }
+    }
+    canonical
 }

@@ -64,6 +64,25 @@ impl BrowserCommand {
         Some((OsString::from(name), value))
     }
 
+    pub(crate) fn domain_policy_args(&self, policy: &BrowserNetworkPolicy) -> Vec<OsString> {
+        let Some(value) = policy.environment_value() else {
+            return Vec::new();
+        };
+        match self {
+            Self::A3s { .. } => Vec::new(),
+            Self::Standalone { .. } => vec![
+                OsString::from("--allowed-domains"),
+                value,
+                // Standalone 0.26.x does not install its domain interceptor
+                // from the implicit auto-launch path. An explicit engine
+                // makes it dispatch the launch command that installs Fetch
+                // interception before the first navigation.
+                OsString::from("--engine"),
+                OsString::from("chrome"),
+            ],
+        }
+    }
+
     pub(crate) fn process_markers(&self) -> Vec<String> {
         let mut markers = Vec::new();
         if let Ok(executable) = self.program().canonicalize() {

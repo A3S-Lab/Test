@@ -41,6 +41,10 @@
 
 ### Fixed
 
+- Forced restricted standalone 0.26.x browser sessions through its explicit
+  Chrome launch path, ensuring the daemon installs domain interception before
+  the first navigation instead of leaking page-driven subresource requests
+  through the upstream implicit auto-launch path.
 - Made `domcontentloaded` waits evaluate the current document readiness state
   and kept the browser daemon idle deadline at least as long as one admitted
   command, preventing standalone 0.26.x from expiring a live session during a

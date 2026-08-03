@@ -24,6 +24,10 @@ pub(crate) fn invocation(
     if config.headed {
         args.push(OsString::from("--headed"));
     }
+    let closes_session = action_args.first().is_some_and(|action| action == "close");
+    if !closes_session {
+        args.extend(config.command.domain_policy_args(&config.network_policy));
+    }
     args.extend(action_args);
 
     let mut env = BTreeMap::new();

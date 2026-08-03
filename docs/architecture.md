@@ -156,7 +156,11 @@ Protection is layered:
 7. Browser daemons receive a bounded inactivity timeout. The adapter floors the
    daemon-side value at the per-command deadline because admitted 0.26.x
    runtimes start idle accounting when a command begins.
-8. A second SIGINT kills all currently registered command process groups.
+8. Restricted standalone 0.26.x sessions carry both the allowlist and an
+   explicit Chrome engine selection. This selects the upstream launch path
+   that installs request interception before the initial navigation; its
+   implicit auto-launch path does not install the domain interceptor.
+9. A second SIGINT kills all currently registered command process groups.
 
 The per-run namespace prevents cleanup from touching a developer's unrelated
 browser sessions.

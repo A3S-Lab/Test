@@ -312,6 +312,21 @@ esac
             .any(|arguments| arguments.ends_with(" close")),
         "{driver_log}"
     );
+    assert!(
+        driver_arguments
+            .iter()
+            .filter(|arguments| !arguments.ends_with(" close"))
+            .all(|arguments| arguments
+                .contains("--allowed-domains cdn.example.test,example.test --engine chrome")),
+        "restricted standalone turns did not force the explicit policy launch path: {driver_log}"
+    );
+    assert!(
+        driver_arguments
+            .iter()
+            .filter(|arguments| arguments.ends_with(" close"))
+            .all(|arguments| !arguments.contains("--engine")),
+        "browser cleanup must not launch a replacement daemon: {driver_log}"
+    );
     let sessions = driver_arguments
         .iter()
         .filter_map(|args| {
