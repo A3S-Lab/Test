@@ -93,6 +93,60 @@ fn parses_ordered_typed_web_scenario() {
 }
 
 #[test]
+fn parses_gui_automation_id_target() {
+    let suite = TestSuite::from_acl(
+        r#"
+suite "gui-smoke" {
+    scenario "editor" {
+        surface = "gui"
+        click "save" {
+            target = automation_id("save-button")
+        }
+    }
+}
+"#,
+    )
+    .expect("valid GUI target");
+
+    assert_eq!(
+        suite.scenarios[0].steps[0].action,
+        Action::Click {
+            target: Target::AutomationId {
+                value: "save-button".to_string(),
+            },
+        }
+    );
+}
+
+#[test]
+fn parses_gui_visual_point_target() {
+    let suite = TestSuite::from_acl(
+        r#"
+suite "gui-vision" {
+    scenario "canvas" {
+        surface = "gui"
+        click "draw" {
+            target = visual_point("@v3", 120, 80)
+        }
+    }
+}
+"#,
+    )
+    .expect("valid visual point");
+
+    assert_eq!(
+        suite.scenarios[0].steps[0].action,
+        Action::Click {
+            target: Target::VisualPoint {
+                snapshot: "@v3".to_string(),
+                x: 120,
+                y: 80,
+            },
+        }
+    );
+}
+
+#[test]
 fn rejects_unknown_actions_with_a_stable_location() {
     let error = TestSuite::from_acl(
         r#"

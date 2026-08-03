@@ -84,20 +84,35 @@ pub(super) async fn validate_runtime_directory(
     must_exist: bool,
 ) -> Result<()> {
     validate_runtime_path(path)?;
-    if !tokio::fs::try_exists(path)
-        .await
-        .with_context(|| format!("failed to inspect runtime directory {}", path.display()))?
-    {
-        if must_exist {
-            anyhow::bail!(
-                "active agent session runtime is missing: {}",
-                path.display()
-            );
+    let metadata = match tokio::fs::symlink_metadata(path).await {
+        Ok(metadata) => metadata,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            if must_exist {
+                anyhow::bail!(
+                    "active agent session runtime is missing: {}",
+                    path.display()
+                );
+            }
+            return Ok(());
         }
-        return Ok(());
+        Err(error) => {
+            return Err(error).with_context(|| {
+                format!("failed to inspect runtime directory {}", path.display())
+            });
+        }
+    };
+    if is_link_like(&metadata) || !metadata.is_dir() {
+        anyhow::bail!("agent runtime path is a link or non-directory entry");
     }
 
-    let owner = tokio::fs::read_to_string(path.join(RUNTIME_OWNER_FILE))
+    let owner_path = path.join(RUNTIME_OWNER_FILE);
+    let owner_metadata = tokio::fs::symlink_metadata(&owner_path)
+        .await
+        .with_context(|| format!("runtime ownership marker is missing for {}", path.display()))?;
+    if is_link_like(&owner_metadata) || !owner_metadata.is_file() {
+        anyhow::bail!("runtime ownership marker is a link or non-file entry");
+    }
+    let owner = tokio::fs::read_to_string(&owner_path)
         .await
         .with_context(|| format!("runtime ownership marker is missing for {}", path.display()))?;
     if owner != runtime_owner(workspace, session) {
@@ -142,6 +157,23 @@ fn validate_runtime_path(path: &Path) -> Result<()> {
     Ok(())
 }
 
+fn is_link_like(metadata: &std::fs::Metadata) -> bool {
+    if metadata.file_type().is_symlink() {
+        return true;
+    }
+    #[cfg(windows)]
+    {
+        use std::os::windows::fs::MetadataExt as _;
+
+        const FILE_ATTRIBUTE_REPARSE_POINT: u32 = 0x0400;
+        metadata.file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT != 0
+    }
+    #[cfg(not(windows))]
+    {
+        false
+    }
+}
+
 fn runtime_owner(workspace: &Path, session: &str) -> String {
     format!(
         "a3s-test-agent-runtime-v1\n{}\n{}\n",
@@ -163,6 +195,34 @@ fn runtime_base() -> PathBuf {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[cfg(unix)]
+    fn symlink_directory(target: &Path, link: &Path) -> std::io::Result<()> {
+        std::os::unix::fs::symlink(target, link)
+    }
+
+    #[cfg(windows)]
+    fn symlink_directory(target: &Path, link: &Path) -> std::io::Result<()> {
+        std::os::windows::fs::symlink_dir(target, link)
+    }
+
+    #[cfg(unix)]
+    fn symlink_file(target: &Path, link: &Path) -> std::io::Result<()> {
+        std::os::unix::fs::symlink(target, link)
+    }
+
+    #[cfg(windows)]
+    fn symlink_file(target: &Path, link: &Path) -> std::io::Result<()> {
+        std::os::windows::fs::symlink_file(target, link)
+    }
+
+    fn unavailable_without_host_privilege(error: &std::io::Error) -> bool {
+        cfg!(windows)
+            && matches!(
+                error.kind(),
+                std::io::ErrorKind::PermissionDenied | std::io::ErrorKind::Unsupported
+            )
+    }
 
     #[tokio::test]
     async fn runtime_marker_binds_directory_to_workspace_and_session() {
@@ -194,6 +254,86 @@ mod tests {
                 .await
                 .is_err()
         );
+    }
+
+    #[tokio::test]
+    async fn runtime_directory_must_not_be_a_link() {
+        let workspace = tempfile::tempdir().expect("workspace");
+        let runtime = create_runtime_directory(workspace.path(), "checkout")
+            .await
+            .expect("create runtime");
+        let outside = runtime.with_file_name(format!(
+            "{}-outside",
+            runtime.file_name().unwrap().to_string_lossy()
+        ));
+        tokio::fs::create_dir(&outside)
+            .await
+            .expect("outside directory");
+        tokio::fs::remove_dir_all(&runtime)
+            .await
+            .expect("remove runtime");
+        if let Err(error) = symlink_directory(&outside, &runtime) {
+            tokio::fs::remove_dir_all(&outside)
+                .await
+                .expect("remove outside directory");
+            if unavailable_without_host_privilege(&error) {
+                return;
+            }
+            panic!("failed to create runtime link: {error}");
+        }
+
+        assert!(
+            validate_runtime_directory(&runtime, workspace.path(), "checkout", true)
+                .await
+                .is_err()
+        );
+
+        #[cfg(unix)]
+        tokio::fs::remove_file(&runtime)
+            .await
+            .expect("remove runtime link");
+        #[cfg(windows)]
+        tokio::fs::remove_dir(&runtime)
+            .await
+            .expect("remove runtime link");
+        tokio::fs::remove_dir_all(&outside)
+            .await
+            .expect("remove outside directory");
+    }
+
+    #[tokio::test]
+    async fn runtime_owner_marker_must_not_be_a_link() {
+        let workspace = tempfile::tempdir().expect("workspace");
+        let runtime = create_runtime_directory(workspace.path(), "checkout")
+            .await
+            .expect("create runtime");
+        let marker = runtime.join(RUNTIME_OWNER_FILE);
+        let target = runtime.join("copied-owner");
+        tokio::fs::write(&target, runtime_owner(workspace.path(), "checkout"))
+            .await
+            .expect("write copied marker");
+        tokio::fs::remove_file(&marker)
+            .await
+            .expect("remove owner marker");
+        if let Err(error) = symlink_file(&target, &marker) {
+            tokio::fs::remove_dir_all(&runtime)
+                .await
+                .expect("remove runtime");
+            if unavailable_without_host_privilege(&error) {
+                return;
+            }
+            panic!("failed to create owner link: {error}");
+        }
+
+        assert!(
+            validate_runtime_directory(&runtime, workspace.path(), "checkout", true)
+                .await
+                .is_err()
+        );
+
+        tokio::fs::remove_dir_all(&runtime)
+            .await
+            .expect("remove runtime");
     }
 
     #[test]

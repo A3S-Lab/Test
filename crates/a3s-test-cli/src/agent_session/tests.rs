@@ -42,7 +42,11 @@ fn ref_actions_require_the_latest_observation() {
 
 #[test]
 fn navigation_is_limited_to_admitted_origins() {
-    let state = test_state(None);
+    let mut state = test_state(None);
+    state.browser_allowed_domains = Some(vec![
+        "cdn.example.test".to_string(),
+        "example.test".to_string(),
+    ]);
     assert!(validate_action(
         &state,
         &Action::Navigate {
@@ -54,11 +58,52 @@ fn navigation_is_limited_to_admitted_origins() {
     assert!(validate_action(
         &state,
         &Action::Navigate {
-            url: "https://outside.test/".to_string(),
+            url: "https://cdn.example.test/".to_string(),
         },
         None,
     )
     .is_err());
+}
+
+#[test]
+fn browser_network_policy_combines_origin_hosts_and_network_only_domains() {
+    let policy = browser_network_policy(
+        &[
+            "https://example.test".to_string(),
+            "https://api.example.test:8443".to_string(),
+        ],
+        &["*.cdn.example.test".to_string(), "EXAMPLE.TEST".to_string()],
+    )
+    .expect("browser network policy");
+
+    assert_eq!(
+        policy.allowed_domains(),
+        ["*.cdn.example.test", "api.example.test", "example.test"]
+    );
+}
+
+#[test]
+fn legacy_session_metadata_remains_readable_but_cannot_execute_turns() {
+    let mut encoded = serde_json::to_value(test_state(Some(7))).expect("session JSON");
+    encoded
+        .as_object_mut()
+        .expect("session object")
+        .remove("browser_allowed_domains");
+
+    let legacy: AgentSessionState =
+        serde_json::from_value(encoded).expect("legacy session metadata");
+    assert!(legacy.browser_allowed_domains.is_none());
+
+    let turn_error = validate_turn_browser_network_policy(&legacy)
+        .expect_err("legacy session turn must fail closed");
+    assert_eq!(
+        turn_error.code(),
+        "test.session.browser_network_policy_missing"
+    );
+
+    let cleanup_policy = stored_browser_network_policy(&legacy, BrowserConnectionPurpose::Cleanup)
+        .expect("legacy cleanup policy");
+    assert!(cleanup_policy.allowed_domains().is_empty());
 }
 
 #[test]
@@ -116,6 +161,7 @@ fn test_state(latest_observation: Option<u64>) -> AgentSessionState {
         goal: "Test".to_string(),
         success_criteria: vec!["Pass".to_string()],
         allowed_origins: vec!["https://example.test".to_string()],
+        browser_allowed_domains: Some(vec!["example.test".to_string()]),
         browser: StoredBrowserConfig {
             driver: StoredBrowserDriver::Standalone,
             executable: PathBuf::from("agent-browser"),

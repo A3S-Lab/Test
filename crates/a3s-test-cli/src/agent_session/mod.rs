@@ -12,7 +12,7 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use a3s_test_core::{Action, DriverError, Surface, Target, ACTION_PROTOCOL_REVISION};
 use a3s_test_driver_web::{
     AgentBrowserConfig, AgentBrowserConnectionConfig, AgentBrowserDriver, AgentBrowserSession,
-    BrowserCommand,
+    BrowserCommand, BrowserNetworkPolicy,
 };
 use anyhow::{Context, Result};
 use serde::Serialize;
@@ -253,6 +253,8 @@ async fn start(args: StartArgs) -> Result<ExitCode> {
             Url::parse(origin).with_context(|| format!("allowed origin '{origin}' is invalid"))?;
         allowed_origins.insert(web_origin(&parsed)?);
     }
+    let allowed_origins = allowed_origins.into_iter().collect::<Vec<_>>();
+    let browser_network_policy = browser_network_policy(&allowed_origins, &args.allowed_domains)?;
 
     store.create_directories().await?;
     let runtime_dir = create_runtime_directory(&workspace, &args.session).await?;
@@ -271,7 +273,8 @@ async fn start(args: StartArgs) -> Result<ExitCode> {
         status: AgentSessionStatus::Active,
         goal: args.goal,
         success_criteria: args.success_criteria,
-        allowed_origins: allowed_origins.into_iter().collect(),
+        allowed_origins,
+        browser_allowed_domains: Some(browser_network_policy.allowed_domains().to_vec()),
         browser: StoredBrowserConfig {
             driver: match args.browser_driver {
                 BrowserDriverKind::A3s => StoredBrowserDriver::A3s,
@@ -295,7 +298,7 @@ async fn start(args: StartArgs) -> Result<ExitCode> {
         summary: None,
     };
 
-    let mut browser = match connect(&state).await {
+    let mut browser = match connect(&state, BrowserConnectionPurpose::Turn).await {
         Ok(browser) => browser,
         Err(error) => {
             cleanup_failed_start(&store, &state).await;
@@ -334,6 +337,7 @@ async fn start(args: StartArgs) -> Result<ExitCode> {
             "goal": state.goal,
             "success_criteria": state.success_criteria,
             "allowed_origins": state.allowed_origins,
+            "browser_allowed_domains": state.browser_allowed_domains,
             "output": output,
             "artifacts_dir": state.artifacts_dir,
             "next": format!("a3s-test agent observe --session {} --interactive --json", state.session),
@@ -350,10 +354,15 @@ async fn observe(args: ObserveArgs) -> Result<ExitCode> {
     let workspace = canonical_workspace().await?;
     let store = load_store(&workspace, &args.session)?;
     let mut state = load_active(&store, &workspace, &args.session).await?;
-    let mut browser = connect(&state).await?;
     let action = Action::Snapshot {
         interactive: args.interactive,
     };
+    if let Err(error) = validate_turn_browser_network_policy(&state) {
+        state.latest_observation = None;
+        record_failure(&store, &mut state, "observe", Some(action), &error).await?;
+        return emit_driver_error_with_next(args.json, &state, error, abort_next_command(&state));
+    }
+    let mut browser = connect(&state, BrowserConnectionPurpose::Turn).await?;
     match browser
         .execute_action(
             format!("agent-observe-{}", state.next_sequence),
@@ -430,9 +439,14 @@ async fn perform_action(
     let workspace = canonical_workspace().await?;
     let store = load_store(&workspace, &session)?;
     let mut state = load_active(&store, &workspace, &session).await?;
+    if let Err(error) = validate_turn_browser_network_policy(&state) {
+        state.latest_observation = None;
+        record_failure(&store, &mut state, "act", Some(action), &error).await?;
+        return emit_driver_error_with_next(json_output, &state, error, abort_next_command(&state));
+    }
     validate_action(&state, &action, observation)?;
 
-    let mut browser = connect(&state).await?;
+    let mut browser = connect(&state, BrowserConnectionPurpose::Turn).await?;
     match browser
         .execute_action(format!("agent-act-{}", state.next_sequence), action.clone())
         .await
@@ -493,7 +507,7 @@ async fn finish(args: FinishArgs) -> Result<ExitCode> {
     let workspace = canonical_workspace().await?;
     let store = load_store(&workspace, &args.session)?;
     let mut state = load_active(&store, &workspace, &args.session).await?;
-    let mut browser = connect(&state).await?;
+    let mut browser = connect(&state, BrowserConnectionPurpose::Cleanup).await?;
     let cleanup_error = close_and_remove_runtime(&mut browser, &state).await;
     state.active_video_path = None;
     state.status = match args.status {
@@ -519,6 +533,7 @@ async fn finish(args: FinishArgs) -> Result<ExitCode> {
         goal: state.goal.clone(),
         success_criteria: state.success_criteria.clone(),
         allowed_origins: state.allowed_origins.clone(),
+        browser_allowed_domains: state.browser_allowed_domains.clone().unwrap_or_default(),
         event_count: state.next_sequence.saturating_sub(1),
         artifacts_dir: state.artifacts_dir.clone(),
         events_path: store.events_path().to_path_buf(),
@@ -558,7 +573,7 @@ async fn abort(args: SessionArgs) -> Result<ExitCode> {
     let store = load_store(&workspace, &args.session)?;
     let mut state = load_session_state(&store, &workspace, &args.session).await?;
     let cleanup_error = if state.runtime_dir.exists() {
-        let mut browser = connect(&state).await?;
+        let mut browser = connect(&state, BrowserConnectionPurpose::Cleanup).await?;
         close_and_remove_runtime(&mut browser, &state).await
     } else {
         None
@@ -666,6 +681,7 @@ fn schema(args: SchemaArgs) -> Result<ExitCode> {
             "typed_actions": true,
             "ref_targets_require_latest_observation": true,
             "explicit_navigation_is_origin_scoped": true,
+            "browser_network_is_domain_scoped": true,
             "sessions_are_workspace_local": true,
             "evidence_is_session_scoped": true
         },
@@ -679,7 +695,16 @@ fn schema(args: SchemaArgs) -> Result<ExitCode> {
     Ok(ExitCode::SUCCESS)
 }
 
-async fn connect(state: &AgentSessionState) -> Result<AgentBrowserSession> {
+#[derive(Clone, Copy)]
+enum BrowserConnectionPurpose {
+    Turn,
+    Cleanup,
+}
+
+async fn connect(
+    state: &AgentSessionState,
+    purpose: BrowserConnectionPurpose,
+) -> Result<AgentBrowserSession> {
     validate_timeout(state.browser.command_timeout_ms, "command timeout")?;
     validate_timeout(state.browser.idle_timeout_ms, "idle timeout")?;
     let command = match state.browser.driver {
@@ -696,6 +721,7 @@ async fn connect(state: &AgentSessionState) -> Result<AgentBrowserSession> {
         headed: state.browser.headed,
         command_timeout: Duration::from_millis(state.browser.command_timeout_ms),
         idle_timeout: Duration::from_millis(state.browser.idle_timeout_ms),
+        network_policy: stored_browser_network_policy(state, purpose)?,
     });
     driver
         .connect(AgentBrowserConnectionConfig {
@@ -732,6 +758,23 @@ fn emit_driver_error(
     state: &AgentSessionState,
     error: a3s_test_core::DriverError,
 ) -> Result<ExitCode> {
+    emit_driver_error_with_next(
+        json_output,
+        state,
+        error,
+        format!(
+            "a3s-test agent observe --session {} --interactive --json",
+            state.session
+        ),
+    )
+}
+
+fn emit_driver_error_with_next(
+    json_output: bool,
+    state: &AgentSessionState,
+    error: a3s_test_core::DriverError,
+    next: String,
+) -> Result<ExitCode> {
     emit(
         json_output,
         json!({
@@ -742,10 +785,7 @@ fn emit_driver_error(
                 code: error.code().to_string(),
                 message: error.message().to_string(),
             },
-            "next": format!(
-                "a3s-test agent observe --session {} --interactive --json",
-                state.session
-            ),
+            "next": next,
         }),
         format!("{}: {}", error.code(), error.message()),
     )?;
@@ -822,6 +862,51 @@ fn web_origin(url: &Url) -> Result<String> {
         anyhow::bail!("agent Web sessions allow only http and https URLs");
     }
     Ok(url.origin().ascii_serialization())
+}
+
+fn web_domain(url: &Url) -> Result<String> {
+    web_origin(url)?;
+    url.host_str()
+        .map(str::to_string)
+        .context("agent Web session URL does not contain a hostname")
+}
+
+fn browser_network_policy(
+    allowed_origins: &[String],
+    additional_domains: &[String],
+) -> Result<BrowserNetworkPolicy> {
+    let mut domains = BTreeSet::new();
+    for origin in allowed_origins {
+        let parsed = Url::parse(origin)
+            .with_context(|| format!("stored allowed origin '{origin}' is invalid"))?;
+        domains.insert(web_domain(&parsed)?);
+    }
+    domains.extend(additional_domains.iter().cloned());
+    BrowserNetworkPolicy::restricted_to_domains(domains).map_err(anyhow::Error::new)
+}
+
+fn validate_turn_browser_network_policy(state: &AgentSessionState) -> Result<(), DriverError> {
+    stored_browser_network_policy(state, BrowserConnectionPurpose::Turn).map(drop)
+}
+
+fn stored_browser_network_policy(
+    state: &AgentSessionState,
+    purpose: BrowserConnectionPurpose,
+) -> Result<BrowserNetworkPolicy, DriverError> {
+    match &state.browser_allowed_domains {
+        Some(domains) => BrowserNetworkPolicy::restricted_to_domains(domains.clone()),
+        None if matches!(purpose, BrowserConnectionPurpose::Cleanup) => {
+            Ok(BrowserNetworkPolicy::default())
+        }
+        None => Err(DriverError::new(
+            "test.session.browser_network_policy_missing",
+            "agent session predates browser domain containment; abort it and start a new session before executing another turn",
+        )),
+    }
+}
+
+fn abort_next_command(state: &AgentSessionState) -> String {
+    format!("a3s-test agent abort --session {} --json", state.session)
 }
 
 async fn canonical_workspace() -> Result<PathBuf> {

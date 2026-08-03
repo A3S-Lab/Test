@@ -8,8 +8,8 @@ use a3s_test_agent::{
     StructuredLlmResponse,
 };
 use a3s_test_core::{
-    Action, DriverError, DriverSession, ModifierKey, StepOutput, Surface, SurfaceObservation,
-    Target, TestStep,
+    Action, DriverError, DriverSession, Evidence, ModifierKey, StepOutput, Surface,
+    SurfaceObservation, Target, TestStep,
 };
 use async_trait::async_trait;
 use tokio_util::sync::CancellationToken;
@@ -138,7 +138,7 @@ async fn executes_schema_constrained_llm_decisions_until_success() {
         .await;
 
     assert_eq!(result.status, AgentStatus::Succeeded);
-    assert_eq!(result.prompt_version, "a3s-test-agent/v1");
+    assert_eq!(result.prompt_version, "a3s-test-agent/v2");
     assert_eq!(result.summary.as_deref(), Some("The document was created"));
     assert_eq!(result.turns.len(), 2);
     assert_eq!(result.usage, usage(45, 9, 85));
@@ -159,12 +159,51 @@ async fn executes_schema_constrained_llm_decisions_until_success() {
     assert!(schema.contains("\"act\""));
     assert!(schema.contains("\"finish\""));
     assert!(schema.contains("\"navigate\""));
-    assert_eq!(requests[0].prompt_version, "a3s-test-agent/v1");
+    assert_eq!(requests[0].prompt_version, "a3s-test-agent/v2");
+    assert!(requests[0].image_attachments.is_empty());
     assert!(requests[0].context.history.is_empty());
     assert_eq!(requests[1].context.history.len(), 1);
     assert_eq!(requests[1].context.remaining.turns, 3);
     assert_eq!(requests[1].context.remaining.tokens, 975);
     assert_eq!(requests[1].context.remaining.cost_microusd, 960);
+}
+
+#[tokio::test]
+async fn forwards_grounding_images_as_explicit_multimodal_attachments() {
+    let provider = Arc::new(ScriptedProvider::new([response(
+        AgentDecision::Finish {
+            summary: "The visual criterion is satisfied".to_string(),
+        },
+        usage(10, 2, 5),
+    )]));
+    let policy = Arc::new(CapabilityPolicy::new([], NavigationScope::Denied));
+    let agent = AgentLoop::new(provider.clone(), policy, options()).expect("valid agent");
+    let mut session =
+        FakeSession::new([
+            SurfaceObservation::new("GUI window").with_evidence(Evidence {
+                name: "gui-frame".to_string(),
+                path: "/artifacts/gui-frame.png".to_string(),
+                media_type: "image/png".to_string(),
+            }),
+        ]);
+
+    let result = agent
+        .run(
+            &goal(),
+            Surface::Gui,
+            &mut session,
+            CancellationToken::new(),
+        )
+        .await;
+
+    assert_eq!(result.status, AgentStatus::Succeeded);
+    let requests = provider.requests.lock().unwrap();
+    assert_eq!(requests[0].image_attachments.len(), 1);
+    assert_eq!(requests[0].image_attachments[0].media_type, "image/png");
+    assert_eq!(
+        requests[0].image_attachments[0].path,
+        "/artifacts/gui-frame.png"
+    );
 }
 
 #[tokio::test]
@@ -458,6 +497,7 @@ fn options() -> AgentOptions {
         max_cost_microusd: 1_000,
         max_context_bytes: 64 * 1_024,
         timeout: Duration::from_secs(2),
+        provenance_redactor: Default::default(),
     }
 }
 

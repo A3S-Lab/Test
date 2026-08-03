@@ -136,6 +136,13 @@ Common actions:
 The generated schema is authoritative if an example and the installed binary
 differ.
 
+Artifact paths must stay relative and contain no linked/reparse directory or
+file component. A zero-exit browser command is insufficient by itself: A3S
+Test returns evidence only after the expected browser output is a regular file
+inside the canonical session artifact root. Treat
+`test.driver.web.artifact_output_invalid` as an infrastructure/evidence
+failure, not as a successful capture.
+
 ## Session state and evidence
 
 Each workspace stores:
@@ -163,6 +170,16 @@ Each workspace stores:
 - Ref actions require the latest observation identifier.
 - Artifact paths are relative and cannot escape the session root.
 - A persistent browser runtime uses an isolated namespace and bounded idle
-  timeout.
+  timeout. Its canonical directory identity is revalidated before each browser
+  command and cleanup; link/reparse and same-path directory replacement fail
+  with `test.driver.web.runtime_binding_lost` before dispatch.
+- Sessions without a persisted browser domain policy can be shown, finished,
+  or aborted, but observations and actions fail with
+  `test.session.browser_network_policy_missing`; restart them rather than
+  retrying a turn.
 - `finish` and `abort` close only the current owned browser session; a runtime
   ownership marker prevents cleanup from following edited session metadata.
+  The runtime directory and ownership marker must both be non-link entries.
+  Windows emergency PID cleanup additionally requires a bounded process
+  command-line query to match an owned browser marker; query failure or mismatch
+  fails closed without calling `taskkill`.

@@ -9,7 +9,16 @@ pub struct StructuredLlmRequest {
     pub prompt_version: String,
     pub system_instruction: String,
     pub context: PlannerContext,
+    #[serde(default)]
+    pub image_attachments: Vec<LlmImageAttachment>,
     pub response_schema: Value,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct LlmImageAttachment {
+    pub name: String,
+    pub path: String,
+    pub media_type: String,
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]

@@ -4,6 +4,7 @@ mod error;
 mod model;
 mod policy;
 mod provider;
+mod redaction;
 mod runtime;
 
 pub use error::{AgentError, LlmError};
@@ -12,5 +13,6 @@ pub use model::{
     LlmIdentity, LlmUsage, PlannerContext, RemainingBudget,
 };
 pub use policy::{ActionKind, ActionPolicy, CapabilityPolicy, NavigationScope, PolicyContext};
-pub use provider::{LlmProvider, StructuredLlmRequest, StructuredLlmResponse};
+pub use provider::{LlmImageAttachment, LlmProvider, StructuredLlmRequest, StructuredLlmResponse};
+pub use redaction::{ProvenanceRedactor, REDACTED_VALUE};
 pub use runtime::{AgentLoop, AGENT_PROMPT_VERSION};

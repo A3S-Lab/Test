@@ -9,18 +9,18 @@ use tokio_util::sync::CancellationToken;
 
 use crate::{
     ActionHistory, ActionPolicy, AgentDecision, AgentError, AgentGoal, AgentOptions,
-    AgentRunResult, AgentStatus, AgentTurn, LlmIdentity, LlmProvider, LlmUsage, PlannerContext,
-    PolicyContext, RemainingBudget, StructuredLlmRequest,
+    AgentRunResult, AgentStatus, AgentTurn, LlmIdentity, LlmImageAttachment, LlmProvider, LlmUsage,
+    PlannerContext, PolicyContext, RemainingBudget, StructuredLlmRequest,
 };
 
 const SYSTEM_INSTRUCTION: &str = "\
 You are the planning component of an end-to-end test agent. Inspect the typed \
-surface observation and prior action history, then return exactly one JSON \
+surface observation, attached grounding images, and prior action history, then return exactly one JSON \
 object matching the supplied response schema. Propose only an action needed \
 to reach the goal, finish only when the success criteria are visible in the \
 observation, and fail when the goal cannot be completed safely. Do not emit \
 commands, prose outside the JSON object, or keyword-routed shortcuts.";
-pub const AGENT_PROMPT_VERSION: &str = "a3s-test-agent/v1";
+pub const AGENT_PROMPT_VERSION: &str = "a3s-test-agent/v2";
 
 pub struct AgentLoop {
     provider: Arc<dyn LlmProvider>,
@@ -157,6 +157,16 @@ impl AgentLoop {
             let request = StructuredLlmRequest {
                 prompt_version: AGENT_PROMPT_VERSION.to_string(),
                 system_instruction: SYSTEM_INSTRUCTION.to_string(),
+                image_attachments: observation
+                    .evidence
+                    .iter()
+                    .filter(|evidence| evidence.media_type.starts_with("image/"))
+                    .map(|evidence| LlmImageAttachment {
+                        name: evidence.name.clone(),
+                        path: evidence.path.clone(),
+                        media_type: evidence.media_type.clone(),
+                    })
+                    .collect(),
                 context,
                 response_schema: self.response_schema.clone(),
             };
@@ -390,15 +400,17 @@ impl AgentLoop {
         turns: Vec<AgentTurn>,
         error: Option<AgentError>,
     ) -> AgentRunResult {
-        AgentRunResult {
-            provider: self.identity.clone(),
-            prompt_version: AGENT_PROMPT_VERSION.to_string(),
-            status,
-            summary,
-            usage,
-            turns,
-            error,
-        }
+        self.options
+            .provenance_redactor
+            .redact_result(AgentRunResult {
+                provider: self.identity.clone(),
+                prompt_version: AGENT_PROMPT_VERSION.to_string(),
+                status,
+                summary,
+                usage,
+                turns,
+                error,
+            })
     }
 }
 

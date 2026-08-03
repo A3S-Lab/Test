@@ -4,7 +4,7 @@ use a3s_test_core::{Action, StepOutput, Surface, SurfaceObservation};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
-use crate::AgentError;
+use crate::{AgentError, ProvenanceRedactor};
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct AgentGoal {
@@ -42,6 +42,8 @@ pub struct AgentOptions {
     pub max_cost_microusd: u64,
     pub max_context_bytes: usize,
     pub timeout: Duration,
+    /// Sanitizes the serializable result without changing provider or driver inputs.
+    pub provenance_redactor: ProvenanceRedactor,
 }
 
 impl Default for AgentOptions {
@@ -52,6 +54,7 @@ impl Default for AgentOptions {
             max_cost_microusd: 1_000_000,
             max_context_bytes: 512 * 1_024,
             timeout: Duration::from_secs(120),
+            provenance_redactor: ProvenanceRedactor::default(),
         }
     }
 }

@@ -180,7 +180,6 @@ impl ChildGuard {
     }
 
     fn finish(&mut self) {
-        terminate_process_group(self.process_id);
         unregister_process_group(self.process_id);
         self.child.take();
     }
@@ -223,4 +222,50 @@ async fn join_output(
         .map_err(|error| {
             CommandError::output(format!("failed to read browser command output: {error}"))
         })
+}
+
+#[cfg(all(test, unix))]
+mod tests {
+    use std::ffi::OsString;
+    use std::path::PathBuf;
+    use std::time::Duration;
+
+    use nix::sys::signal::{kill, Signal};
+    use nix::unistd::Pid;
+
+    use super::{CommandExecutor, CommandInvocation, TokioCommandExecutor};
+
+    #[tokio::test]
+    async fn successful_command_keeps_its_persistent_descendant_alive() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let pid_file = temp.path().join("daemon.pid");
+        let script = format!(
+            "sleep 30 >/dev/null 2>&1 & echo $! > '{}' && printf '{{}}'",
+            pid_file.display()
+        );
+        let invocation = CommandInvocation {
+            program: PathBuf::from("/bin/sh"),
+            args: vec![OsString::from("-c"), OsString::from(script)],
+            env: Default::default(),
+            timeout: Duration::from_secs(5),
+        };
+
+        let output = TokioCommandExecutor
+            .run(invocation)
+            .await
+            .expect("successful launcher command");
+        assert_eq!(output.exit_code, 0);
+
+        let process_id = std::fs::read_to_string(pid_file)
+            .expect("daemon PID")
+            .trim()
+            .parse::<i32>()
+            .expect("numeric daemon PID");
+        let process_id = Pid::from_raw(process_id);
+        assert!(
+            kill(process_id, None).is_ok(),
+            "successful command cleanup killed the persistent daemon"
+        );
+        let _ = kill(process_id, Signal::SIGKILL);
+    }
 }

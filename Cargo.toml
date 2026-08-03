@@ -3,8 +3,10 @@ members = [
     "crates/a3s-test-agent",
     "crates/a3s-test-cli",
     "crates/a3s-test-core",
+    "crates/a3s-test-driver-gui",
     "crates/a3s-test-driver-web",
     "crates/a3s-test-runner",
+    "crates/a3s-test-session",
 ]
 resolver = "2"
 

@@ -4,6 +4,12 @@ use a3s_test_core::{Action, ModifierKey, Target};
 fn semantic_target_values_round_trip_through_agent_action_json() {
     for (kind, expected) in [
         (
+            "automation_id",
+            Target::AutomationId {
+                value: "checkout-button".to_string(),
+            },
+        ),
+        (
             "test_id",
             Target::TestId {
                 value: "checkout".to_string(),
@@ -25,7 +31,8 @@ fn semantic_target_values_round_trip_through_agent_action_json() {
         let encoded = format!(
             r#"{{"type":"click","target":{{"type":"{kind}","value":"{}"}}}}"#,
             match &expected {
-                Target::TestId { value }
+                Target::AutomationId { value }
+                | Target::TestId { value }
                 | Target::Label { value }
                 | Target::Placeholder { value } => value,
                 _ => unreachable!(),
@@ -94,4 +101,20 @@ fn advanced_web_actions_round_trip_through_agent_action_json() {
         let decoded: Action = serde_json::from_str(&encoded).expect("deserialize action");
         assert_eq!(decoded, action);
     }
+}
+
+#[test]
+fn visual_point_round_trips_with_its_grounding_snapshot() {
+    let action = Action::Click {
+        target: Target::VisualPoint {
+            snapshot: "@v7".to_string(),
+            x: 240,
+            y: 160,
+        },
+    };
+    let encoded = serde_json::to_string(&action).expect("serialize visual action");
+    let decoded: Action = serde_json::from_str(&encoded).expect("deserialize visual action");
+
+    assert_eq!(decoded, action);
+    assert!(encoded.contains("@v7"));
 }

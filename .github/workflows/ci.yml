@@ -13,9 +13,16 @@ concurrency:
 
 jobs:
   quality:
-    name: Rust quality
-    runs-on: macos-14
+    name: Rust quality (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
     timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - macos-14
+          - ubuntu-latest
+          - windows-latest
 
     steps:
       - name: Check out repository
@@ -35,6 +42,38 @@ jobs:
 
       - name: Run Clippy
         run: cargo clippy --workspace --all-targets --locked -- -D warnings
+
+  web-e2e:
+    name: Hermetic Web E2E
+    runs-on: macos-14
+    timeout-minutes: 20
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Install Rust 1.85
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: 1.85.0
+
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install the admitted standalone browser
+        run: |
+          npm install --global agent-browser@0.26.0
+          agent-browser install
+          agent-browser --version
+
+      - name: Run the real browser suite
+        run: |
+          export A3S_TEST_AGENT_BROWSER="$(command -v agent-browser)"
+          cargo test -p a3s-test-cli --test web_e2e \
+            real_agent_browser_runs_the_hermetic_web_suite \
+            --locked -- --ignored --exact --nocapture
 
   unix-installers:
     name: Installer (${{ matrix.os }})

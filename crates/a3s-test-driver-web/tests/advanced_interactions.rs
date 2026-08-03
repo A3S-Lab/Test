@@ -86,6 +86,7 @@ async fn maps_advanced_interactions_to_the_verified_browser_protocol() {
             headed: false,
             command_timeout: Duration::from_secs(5),
             idle_timeout: Duration::from_secs(2),
+            network_policy: Default::default(),
         },
         executor.clone(),
     );
@@ -225,6 +226,7 @@ async fn releases_wheel_modifiers_in_reverse_order_after_a_driver_failure() {
             headed: false,
             command_timeout: Duration::from_secs(5),
             idle_timeout: Duration::from_secs(2),
+            network_policy: Default::default(),
         },
         executor.clone(),
     );
@@ -284,6 +286,7 @@ async fn maps_targeted_wheel_to_a_scoped_event_with_explicit_modifier_state() {
             headed: false,
             command_timeout: Duration::from_secs(5),
             idle_timeout: Duration::from_secs(2),
+            network_policy: Default::default(),
         },
         executor.clone(),
     );

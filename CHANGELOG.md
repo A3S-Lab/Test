@@ -1,5 +1,116 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- Added the `a3s-test-driver-gui` foundation with typed CUA endpoints and
+  application identities, a window-only capture profile, bounded MCP stdio
+  transport, and fail-closed version/schema/capability admission.
+- Added `compat/cua-stack.acl` as the reviewed source of truth for the exact
+  A3S CUA revision and protocol surface, plus an architecture decision record
+  for the adapter boundary.
+- Added the GUI semantic driver with application launch/attach, deterministic
+  window binding, accessibility observations, opaque generation-bound refs,
+  semantic pointer/keyboard actions, assertions, and PNG window evidence.
+- Added the surface-neutral `a3s-test-session` application layer and an MCP
+  stdio projection for GUI start, observe, typed action, finish, abort, and
+  action-schema discovery.
+- Added the window-vision GUI profile with SHA-256-bound screenshot evidence,
+  observation-scoped visual points, pixel click/drag/scroll actions, and
+  explicit multimodal image attachments for embedded LLM hosts.
+- Added `automation_id` and `visual_point` targets and advanced the typed
+  action protocol to revision 5.
+- Added a locked three-platform/two-endpoint GUI certification matrix,
+  `gui-certification` inventory output, and a `gui-certify` real-host
+  observation/cleanup harness. The locked CUA 0.10.0 macOS profiles are
+  contract-tested; Windows and Linux remain explicitly unsupported.
+- Added a typed `ProvenanceRedactor` for embedded agent runs. It removes
+  registered exact secrets across the complete serializable result, redacts
+  common credential-shaped JSON fields and input-bearing action payloads, and
+  strips URL user information, queries, and fragments without changing the
+  values sent to the trusted provider or surface driver.
+- Added a loopback-only Web fixture server with dynamic ports, deterministic
+  routes, a cross-origin request sentinel, owned worker cleanup, and a pinned
+  standalone `agent-browser` 0.26.0 macOS CI suite that retains screenshot
+  evidence and verifies removal of private browser runtime directories.
+- Added a typed, bounded browser domain policy for persistent agent sessions.
+  Initial and navigation-approved hosts are admitted automatically, while
+  `--allow-domain` permits additional network hostnames without adding them to
+  A3S Test's exact-origin action and observation gates.
+
+### Fixed
+
+- Made Web runtime-path tests and CLI test imports respect non-Unix hosts so
+  the complete workspace test and Clippy gates also pass on Windows.
+- Expanded the Rust formatting, test, and warning-free Clippy gate to a
+  fail-fast-disabled macOS, Linux, and Windows matrix.
+- Cancelled session opens now release their reserved name and capacity.
+  Failed observations invalidate the previous observation ID, and MCP shutdown
+  closes independent sessions concurrently instead of multiplying the cleanup
+  deadline by the session count.
+- Successful standalone browser commands now leave their session daemon alive
+  for the next command. Windows emergency `taskkill` output is suppressed so
+  machine-readable CLI reports remain valid JSON.
+- MCP surface cleanup now runs in an owned task, so caller timeout or
+  cancellation no longer cancels an already-dispatched `close`. The session
+  reports retryable `cleanup_in_progress` until completion; an eventual
+  retryable failure retains the exact driver in a cleanup-only state where
+  `finish` or `abort` can retry without releasing its name or ownership handle.
+
+### Safety
+
+- Web runtime/socket directories are now canonicalized and identity-bound for
+  the lifetime of each driver handle. Every command and emergency cleanup
+  revalidates the binding, rejects link/reparse and same-path directory
+  replacement, and refuses linked namespace components or PID sidecars. The
+  persistent CLI also rejects linked runtime owner markers. Windows emergency
+  cleanup now performs a bounded command-line query and requires an owned
+  browser marker before invoking `taskkill`; missing or mismatched identity
+  evidence terminates nothing.
+- GUI transport startup now requires an absolute, existing CUA policy file,
+  rejects unreviewed daemon contracts before session creation, bounds JSON-RPC
+  messages, and kills a desynchronized proxy after timeout or protocol error.
+- GUI cleanup re-checks the exact application identity before terminating only
+  a process proven absent before launch; attached and pre-existing processes
+  are never terminated. Permission checks are non-prompting and fail closed.
+- GUI observations and input actions now revalidate the configured application
+  identity, PID, and bound top-level window immediately before CUA dispatch.
+  Runtime identity/window drift invalidates the old snapshot and fails with no
+  input sent to a replacement application or window.
+- GUI screenshot evidence now uses a canonical session root, component-wise
+  directory preparation that rejects symbolic links and Windows reparse
+  points, and post-capture plus pre-input regular-file containment checks.
+- A retryable GUI app-termination or CUA session-end failure no longer closes
+  the transport or marks the driver session closed before cleanup succeeds.
+  Retrying cleanup rechecks the exact PID/application identity first.
+- Unsupported GUI platform/endpoint combinations fail before a CUA transport
+  starts. Lifecycle tests cover embedded permission attribution, PID reuse,
+  dropped sessions, idempotent cleanup, and 32 repeated open/close cycles.
+- The MCP server now enforces the locked `2025-06-18` initialize/version/
+  initialized lifecycle, advertises only registered surfaces, and rejects
+  tool calls before negotiation. GUI opening owns a cancellation guard that
+  finishes ownership discovery before cleanup, even when cancellation lands
+  after `launch_app` is dispatched but before its response arrives; the owned
+  application and CUA session are then reaped.
+- Provenance redactor configuration is bounded and fail-closed, and its
+  `Debug` representation reports only the number of registered values rather
+  than the values themselves.
+- Browser-level domain containment now blocks page-driven cross-domain links,
+  redirects, scripts, images, fetches, and related requests. Exact scheme and
+  port admission remains independently enforced for explicit actions and
+  observations because the admitted browser protocols expose hostname policy.
+- Web evidence now uses a canonical artifact root with component-wise
+  link/reparse rejection. Screenshot, download, HAR, trace, and video commands
+  must produce a fresh root-contained regular file before evidence is returned;
+  stale output is removed before dispatch, while active-video reconnect
+  validates without deleting the in-progress file. Adapter-written JSON uses
+  the same path admission and post-write validation.
+- Agent sessions created before browser domain policy persistence now reject
+  observation and action turns with a stable machine-readable error. They
+  remain inspectable and retain `finish`/`abort` cleanup so callers can close
+  the exact owned browser session before starting a contained replacement.
+
 ## 0.4.4 - 2026-08-01
 
 ### Added

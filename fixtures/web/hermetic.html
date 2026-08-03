@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>A3S Test hermetic Web fixture</title>
+    <style>
+      body {
+        font: 16px/1.5 system-ui, sans-serif;
+        margin: 24px;
+      }
+
+      main,
+      form {
+        display: grid;
+        gap: 12px;
+        max-width: 560px;
+      }
+
+      input,
+      button {
+        font: inherit;
+        padding: 8px 10px;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>A3S Test hermetic Web E2E</h1>
+
+      <form id="profile-form">
+        <label for="display-name">Display name</label>
+        <input id="display-name" name="display-name" autocomplete="off" />
+        <button id="submit" type="submit">Save profile</button>
+      </form>
+
+      <output id="submitted" aria-live="polite">submitted: pending</output>
+
+      <nav aria-label="Fixture navigation">
+        <a id="same-origin" href="/next">Continue on the fixture origin</a>
+        <a id="cross-origin" href="__BLOCKED_ORIGIN__/blocked">
+          Leave the fixture origin
+        </a>
+        <a id="cross-redirect" href="/redirect-cross">
+          Follow a cross-origin redirect
+        </a>
+      </nav>
+    </main>
+
+    <script>
+      document.getElementById("profile-form").addEventListener("submit", (event) => {
+        event.preventDefault();
+        const value = document.getElementById("display-name").value;
+        document.getElementById("submitted").textContent = `submitted: ${value}`;
+      });
+    </script>
+  </body>
+</html>

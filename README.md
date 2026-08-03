@@ -20,7 +20,11 @@ There is no keyword router and no second hidden test runtime.
 
 The Web surface is available today through
 [A3S Browser](https://github.com/A3S-Lab/Browser) or a compatible standalone
-`agent-browser`. GUI and TUI drivers remain planned.
+`agent-browser`. The GUI adapter now provides a locked A3S CUA protocol,
+semantic accessibility observations and actions, SHA-256-bound window-vision
+grounding, strict window binding, MCP agent sessions, and owned-application
+cleanup. The locked CUA 0.10.0 execution profiles currently support macOS;
+Windows/Linux GUI execution and the TUI driver remain planned.
 
 ## Install
 
@@ -103,6 +107,16 @@ a3s-test agent start http://127.0.0.1:3000 \
   --success "The confirmation heading is visible" \
   --json
 ```
+
+`--allow-origin https://auth.example.test` permits explicit top-level
+navigation to that exact scheme, host, and port and admits its hostname to the
+browser network policy. Use `--allow-domain cdn.example.test` only for a
+hostname that the page must contact; it does not add that hostname to A3S
+Test's exact-origin permission for explicit `navigate` or `tab new` actions.
+Session metadata created before browser domain containment remains inspectable
+and can still be closed with `finish` or `abort`, but `observe` and action turns
+fail with `test.session.browser_network_policy_missing`. Start a new session
+instead of assuming that a running browser daemon accepted a retrofitted policy.
 
 Observe the semantic UI, decide from the returned state, then perform one
 action:
@@ -193,24 +207,41 @@ a3s-test agent schema
   `tab new` are admitted only for the initial origin and `--allow-origin`
   values. Observations reject non-Web pages and unapproved origins reached by
   page-driven navigation.
+- **Browser requests are domain-contained.** The driver prefilters page-driven
+  links, redirects, scripts, images, fetches, and other requests to the initial
+  and explicitly admitted hostnames. The upstream browser policy is
+  hostname-based, so exact scheme and port checks remain in A3S Test's action
+  and observation gates. A network-admitted hostname can still be rejected as
+  a top-level page by the next observation.
 - **Evidence is part of the run.** Every turn is appended to `events.jsonl`;
   screenshots, accessibility, console, HAR, trace, video, and downloads stay
-  inside the session artifact root.
+  inside a canonical session artifact root. Linked/reparse descendants are
+  rejected before dispatch, and browser-written files must exist as regular
+  root-contained files before evidence is returned.
 - **Cleanup is owned.** `finish` and `abort` close only the exact browser
   session created by this test. Runtime ownership markers prevent persisted
-  metadata from redirecting cleanup to another path, and a bounded idle
-  timeout covers abandoned sessions.
+  metadata from redirecting cleanup to another path. The Web driver also binds
+  the canonical runtime directory identity and revalidates it before every
+  browser command and emergency cleanup; link/reparse or same-path directory
+  replacement fails closed. Windows PID cleanup also requires a bounded
+  command-line query to match an owned browser marker before `taskkill`; query
+  failure or mismatch terminates nothing. A bounded idle timeout covers
+  abandoned sessions.
 
 ## One engine, two primary workflows
 
 | Workflow | Planner | Best for | Interface |
 | --- | --- | --- | --- |
-| Agent session | A3S Code, Codex, Claude Code, or another coding agent | Exploration, bug reproduction, UX review, unknown paths | `agent start → observe → act → finish` |
+| Agent session | A3S Code, Codex, Claude Code, or another coding agent | Exploration, bug reproduction, UX review, unknown paths | Persistent CLI (Web) or MCP stdio (GUI) |
 | ACL suite | Closed typed manifest | Stable regression tests and CI | `check` and `run` |
 | Embedded agent loop | Host-injected real `LlmProvider` | Products that embed A3S Test as an SDK | `a3s-test-agent` library |
 
 The portable Skill teaches multiple coding agents to use the first two
 workflows. It is an instruction adapter around the CLI, not another runner.
+The embedded `AgentLoop` applies a typed provenance redactor before returning
+its serializable trace: credential-shaped JSON fields and secret-bearing input
+payloads are removed by default, and hosts can register exact runtime secret
+values that may appear in unstructured observations or provider errors.
 
 ## Turn a proven path into regression coverage
 
@@ -263,9 +294,76 @@ actions.
 | Synchronization | Typed load, text, and URL waits; text, URL, and visibility assertions |
 | Browser state | Stable tab IDs and labels, frame context, browser dialogs |
 | Files | Upload fixtures and keep downloads inside the run artifact root |
-| Network | Route mocks, aborts, cleanup, HAR capture |
+| Network | Session domain containment, route mocks, aborts, cleanup, HAR capture |
 | Evidence | Screenshots, accessibility trees, console logs, page errors, Chrome traces, WebM video |
 | Execution | Persistent agent turns, bounded deterministic concurrency, command deadlines, owned cleanup |
+
+Web E2E coverage is hermetic. A test-owned loopback server chooses an available
+port at runtime, serves the form and navigation fixtures, records any contact
+with a second-origin sentinel, and joins its worker threads on cleanup. The
+standard test gate checks the server contract without requiring Chrome; a
+dedicated macOS CI job pins standalone `agent-browser` 0.26.0 and drives the
+real semantic form, same-origin navigation, screenshot evidence, cross-domain
+link/script/image/fetch/redirect containment, and browser runtime cleanup path.
+The normal Rust formatting, test, and warning-free Clippy gate runs on macOS,
+Linux, and Windows.
+
+## GUI agentic testing
+
+GUI testing stays behind the typed A3S CUA adapter. Application identity,
+launch versus attach, the selected window, endpoint mode, policy file, and
+perception profile are host configuration; an agent cannot replace them with
+an arbitrary executable or capture scope during a session.
+
+Inspect the reviewed platform matrix without starting CUA:
+
+```bash
+a3s-test gui-certification --json
+```
+
+The locked CUA 0.10.0 matrix marks installed-daemon and embedded-socket macOS
+profiles as `contract_tested`. Windows and Linux combinations are
+`unsupported` and fail before the transport starts. A macOS host can exercise
+the real permission, observation, and cleanup path before enabling a worker:
+
+```bash
+a3s-test gui-certify \
+  --gui-policy-file ./cua-policy.yaml \
+  --gui-macos-bundle-id com.example.Editor \
+  --gui-profile window-vision \
+  --json
+```
+
+For coding-agent integration, start the surface-neutral MCP stdio projection
+with the same trusted host configuration:
+
+```bash
+a3s-test mcp \
+  --gui-policy-file ./cua-policy.yaml \
+  --gui-macos-bundle-id com.example.Editor \
+  --gui-profile window-vision
+```
+
+The MCP server exposes `test_session_start`, `test_observe`, `test_act`,
+`test_finish`, `test_abort`, and `test_schema` after the exact MCP `2025-06-18`
+initialize handshake. Its schema lists only surfaces registered by the host.
+Semantic refs and visual image refs are valid only for the latest successful
+observation; a failed observation invalidates the previous generation. Every
+pixel action carries the verified screenshot as evidence. Immediately before
+each observation or input dispatch, the adapter rechecks that the configured
+application identity still owns the bound PID and that the bound top-level
+window still belongs to it. Identity or window drift invalidates the snapshot
+and fails before input. Screenshot roots are canonicalized; linked/reparse
+descendants are rejected before capture, and generated or reused grounding
+files are rechecked as bounded regular files inside that root. Launched
+applications are killed only after their identity is rechecked again. If an
+open is cancelled while the launch response is in flight, ownership discovery
+finishes in the background before that cleanup runs. Attached applications are
+never terminated. A caller deadline does not cancel cleanup already dispatched
+to the driver; the session reports `cleanup_in_progress` until that background
+operation resolves. A retryable driver failure then enters terminal
+`cleanup_required`: observation and action tools are rejected, while
+`test_finish` or `test_abort` can retry the same owned cleanup handle.
 
 ## Coding Agent Skill
 
@@ -326,7 +424,7 @@ Coding agent + Skill
 SurfaceDriver -> DriverSession -> evidence
        |
        +-- Web: A3S Browser / agent-browser
-       +-- GUI: A3S CUA                         planned
+       +-- GUI: A3S CUA semantic + window-vision adapter
        +-- TUI: PTY + semantic terminal model planned
 ```
 
@@ -368,6 +466,8 @@ crates/
 ├── a3s-test-cli/         # CLI for agent sessions, deterministic runs, and CI
 ├── a3s-test-core/        # Typed suites, actions, observations, and surface contracts
 ├── a3s-test-runner/      # Deadlines, cancellation, retries, and reports
+├── a3s-test-session/     # Surface-neutral long-lived session application layer
+├── a3s-test-driver-gui/  # Locked MCP adapter boundary for A3S CUA
 ├── a3s-test-driver-web/  # A3S Browser / agent-browser adapter
 └── a3s-test-agent/       # Optional schema-constrained embedded LLM loop
 

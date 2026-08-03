@@ -33,9 +33,12 @@ name = "a3s-test-cli"
 version = "0.4.4"
 dependencies = [
  "a3s-test-core",
+ "a3s-test-driver-gui",
  "a3s-test-driver-web",
  "a3s-test-runner",
+ "a3s-test-session",
  "anyhow",
+ "async-trait",
  "clap",
  "schemars",
  "serde",
@@ -57,6 +60,22 @@ dependencies = [
  "serde",
  "serde_json",
  "thiserror",
+]
+
+[[package]]
+name = "a3s-test-driver-gui"
+version = "0.4.4"
+dependencies = [
+ "a3s-acl",
+ "a3s-test-core",
+ "async-trait",
+ "semver",
+ "serde",
+ "serde_json",
+ "sha2",
+ "tempfile",
+ "thiserror",
+ "tokio",
 ]
 
 [[package]]
@@ -83,6 +102,18 @@ dependencies = [
  "serde",
  "tokio",
  "tokio-util",
+]
+
+[[package]]
+name = "a3s-test-session"
+version = "0.4.4"
+dependencies = [
+ "a3s-test-core",
+ "async-trait",
+ "futures",
+ "serde",
+ "serde_json",
+ "tokio",
 ]
 
 [[package]]

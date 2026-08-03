@@ -264,6 +264,31 @@ video "stop-video" {
 }
 ```
 
+All Web evidence paths are relative to a canonical scenario/session artifact
+root. Descendant symbolic links, Windows reparse points, and non-directory
+components fail with `test.driver.web.artifact_path_invalid` before browser
+dispatch or adapter writes. After screenshot, download, HAR, trace, or video
+commands complete, the expected fresh output must exist as a regular file that
+still resolves inside that root. Existing regular output is removed before a
+new capture so a zero-exit command cannot reuse stale evidence. Reconnecting an
+active video validates but preserves its in-progress file. Any output failure
+causes the turn to fail with
+`test.driver.web.artifact_output_invalid` and returns no evidence.
+
+The browser runtime/socket directory is canonicalized and bound to its
+filesystem identity when a Web session is opened or reconnected. The driver
+revalidates that binding immediately before each command and emergency cleanup.
+A missing directory, a symbolic link or Windows reparse point, or a different
+directory installed at the same path fails with
+`test.driver.web.runtime_binding_lost` before dispatch. Emergency cleanup also
+rejects linked namespace components and linked or non-regular PID sidecars.
+On Windows, a PID alone never authorizes `taskkill`: a bounded process
+command-line query must contain one of the configured browser executable
+markers. A failed, timed-out, empty, or mismatched query fails closed without
+terminating the process.
+Persistent CLI metadata remains subject to its workspace/session ownership
+marker, and neither the runtime directory nor that marker may be a link.
+
 Accessibility, browser-console, and page-error output is serialized directly
 to JSON evidence:
 
@@ -298,6 +323,8 @@ target = text("Save", true)
 target = testid("save")
 target = label("Document title")
 target = placeholder("Search")
+target = automation_id("save-button")
+target = visual_point("@v3", 120, 80)
 ```
 
 The optional second argument to `text` controls exact matching. Visibility
@@ -305,6 +332,11 @@ assertions, non-main frame switching, uploads, downloads, focus, double-click,
 context-click, type, uncheck, select, drag, and target-scoped wheel require
 `ref()` or `css()` because those map directly to the browser protocol. Click,
 hover, fill, and check accept every target form.
+
+`automation_id()` is a GUI semantic target. `visual_point()` is a GUI-only,
+observation-scoped pixel target: its first argument must be the latest visual
+reference returned by a window-vision observation and its coordinates are
+unsigned 32-bit image pixels. Web drivers reject both GUI-only target forms.
 
 `select` requires at least one value. `wheel` requires `delta_y`; `delta_x`
 defaults to zero, at least one delta must be non-zero, and `modifiers` may
@@ -331,9 +363,22 @@ code and path to repair manifests.
 ## Browser admission and runner bounds
 
 `a3s-test capabilities --json` probes the configured executable before any
-browser session launches. Action protocol revision 2 admits A3S Browser
+browser session launches. Action protocol revision 5 admits A3S Browser
 `>= 0.1.1, < 0.2.0` and standalone agent-browser `>= 0.26.0, < 0.27.0`.
 Unverified versions fail with `test.driver.web.version_unsupported`.
+
+Persistent agent sessions derive a browser hostname allowlist from the initial
+URL and each `--allow-origin`. `--allow-origin` also permits explicit
+navigation to that exact HTTP(S) origin. `--allow-domain` adds a hostname or a
+leading `*.` wildcard to the browser's network policy for required
+requests, but does not add an A3S navigation origin. The browser filter also
+admits document requests for that hostname; explicit URL actions and successful
+observations remain separately constrained by scheme, host, and effective port.
+The normalized hostname policy is persisted in new agent session metadata.
+Legacy metadata without that policy remains readable and terminally cleanable,
+but observation and action turns fail with
+`test.session.browser_network_policy_missing`; callers must abort or finish the
+old session and start a new one.
 
 The runner defaults to one scenario at a time and accepts an explicit
 `--max-parallel-scenarios` limit from 1 through 64. Infrastructure retry count
@@ -350,3 +395,27 @@ the generated action schema. A host that intentionally embeds its own model
 can instead use `a3s-test-agent` with a typed goal, real `LlmProvider`, explicit
 budgets, and an `ActionPolicy`. A future ACL version may project that same
 application contract; it must not introduce a keyword intent router.
+
+GUI sessions revalidate their host-selected application identity, PID, and
+top-level window binding immediately before each observation and effectful
+action. `test.driver.gui.application_binding_lost` and
+`test.driver.gui.window_binding_lost` are fail-closed, non-retryable turn
+errors: the prior observation generation is invalidated and no input tool is
+called. The session remains terminally cleanable with `finish` or `abort`.
+
+GUI screenshot paths must be relative PNG paths. The adapter canonicalizes the
+session artifact root, rejects symbolic-link or reparse-point descendants while
+preparing the path, and verifies that the generated regular file resolves
+inside the same root both after capture and before visual input. Containment or
+file replacement failures produce `test.driver.gui.artifact_path_invalid`,
+`test.driver.gui.screenshot_invalid`, or `test.driver.gui.stale_image` before an
+input tool is called.
+
+Surface-neutral MCP sessions reserve their identifier while terminal cleanup
+is running. A caller deadline or cancellation does not cancel a dispatched
+driver close; operations return retryable
+`test.session.cleanup_in_progress` until the owned background task resolves.
+An eventual retryable close failure restores the same driver session in
+`cleanup_required` state. Observation and action operations then fail with
+`test.session.cleanup_required`; only `finish` or `abort` may retry cleanup.
+Success or a non-retryable cleanup failure releases the session identifier.

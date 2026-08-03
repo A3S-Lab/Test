@@ -11,8 +11,8 @@ use a3s_test_core::{
 };
 use a3s_test_driver_web::{
     AgentBrowserConfig, AgentBrowserConnectionConfig, AgentBrowserDriver, BrowserCommand,
-    BrowserIntegration, CommandError, CommandExecutor, CommandInvocation, CommandOutput,
-    WebCapability,
+    BrowserIntegration, BrowserNetworkPolicy, CommandError, CommandExecutor, CommandInvocation,
+    CommandOutput, WebCapability,
 };
 use async_trait::async_trait;
 
@@ -36,6 +36,38 @@ impl RecordingExecutor {
     }
 }
 
+fn materialize_external_artifact(invocation: &CommandInvocation) {
+    let args = &invocation.args;
+    let path = args.iter().enumerate().find_map(|(index, argument)| {
+        let argument = argument.to_str()?;
+        let offset = match argument {
+            "screenshot" => Some(1),
+            "download" => Some(2),
+            "network"
+                if args.get(index + 1).and_then(|value| value.to_str()) == Some("har")
+                    && args.get(index + 2).and_then(|value| value.to_str()) == Some("stop") =>
+            {
+                Some(3)
+            }
+            "trace" if args.get(index + 1).and_then(|value| value.to_str()) == Some("stop") => {
+                Some(2)
+            }
+            "record" if args.get(index + 1).and_then(|value| value.to_str()) == Some("start") => {
+                Some(2)
+            }
+            _ => None,
+        }?;
+        args.get(index + offset).map(PathBuf::from)
+    });
+    let Some(path) = path else {
+        return;
+    };
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent).expect("fake artifact parent");
+    }
+    std::fs::write(path, b"fake-browser-artifact").expect("fake browser artifact");
+}
+
 #[cfg(unix)]
 #[derive(Default)]
 struct DaemonExecutor {
@@ -54,6 +86,9 @@ impl CommandExecutor for RecordingExecutor {
         } else {
             "agent-browser 0.26.0"
         };
+        if !version_probe {
+            materialize_external_artifact(&invocation);
+        }
         self.invocations.lock().unwrap().push(invocation);
         Ok(CommandOutput {
             exit_code: 0,
@@ -163,6 +198,11 @@ async fn maps_typed_actions_and_scopes_browser_lifecycle() {
         headed: false,
         command_timeout: Duration::from_secs(5),
         idle_timeout: Duration::from_secs(30),
+        network_policy: BrowserNetworkPolicy::restricted_to_domains([
+            "example.test",
+            "*.cdn.example.test",
+        ])
+        .expect("network policy"),
     };
     let driver = AgentBrowserDriver::with_executor(config, executor.clone());
     let context = ScenarioContext {
@@ -251,6 +291,10 @@ async fn maps_typed_actions_and_scopes_browser_lifecycle() {
                 OsString::from("A3S_USE_BROWSER_SOCKET_DIR"),
                 runtime.clone()
             ),
+            (
+                OsString::from("A3S_USE_BROWSER_ALLOWED_DOMAINS"),
+                OsString::from("*.cdn.example.test,example.test")
+            ),
         ])
     );
 }
@@ -269,6 +313,8 @@ async fn standalone_driver_uses_upstream_environment_names() {
             headed: false,
             command_timeout: Duration::from_secs(5),
             idle_timeout: Duration::from_secs(2),
+            network_policy: BrowserNetworkPolicy::restricted_to_domains(["127.0.0.1"])
+                .expect("network policy"),
         },
         executor.clone(),
     );
@@ -301,6 +347,10 @@ async fn standalone_driver_uses_upstream_environment_names() {
                 OsString::from("2000")
             ),
             (OsString::from("AGENT_BROWSER_SOCKET_DIR"), runtime.clone()),
+            (
+                OsString::from("AGENT_BROWSER_ALLOWED_DOMAINS"),
+                OsString::from("127.0.0.1")
+            ),
         ])
     );
 }
@@ -318,6 +368,7 @@ async fn exposes_a_full_browser_snapshot_as_the_agent_observation() {
             headed: false,
             command_timeout: Duration::from_secs(5),
             idle_timeout: Duration::from_secs(2),
+            network_policy: Default::default(),
         },
         executor.clone(),
     );
@@ -354,6 +405,7 @@ async fn discovers_and_admits_the_typed_browser_protocol() {
             headed: false,
             command_timeout: Duration::from_secs(5),
             idle_timeout: Duration::from_secs(2),
+            network_policy: Default::default(),
         },
         executor.clone(),
     );
@@ -361,13 +413,16 @@ async fn discovers_and_admits_the_typed_browser_protocol() {
     let capabilities = driver.capabilities().await.expect("capabilities");
     assert_eq!(capabilities.integration, BrowserIntegration::Standalone);
     assert_eq!(capabilities.version, "0.26.0");
-    assert_eq!(capabilities.protocol_revision, 3);
+    assert_eq!(capabilities.protocol_revision, 5);
     assert!(capabilities.features.contains(&WebCapability::Tabs));
     assert!(capabilities.features.contains(&WebCapability::Har));
     assert!(capabilities.features.contains(&WebCapability::Video));
     assert!(capabilities
         .features
         .contains(&WebCapability::ContextClicks));
+    assert!(capabilities
+        .features
+        .contains(&WebCapability::DomainContainment));
     assert!(capabilities.features.contains(&WebCapability::MouseWheel));
     assert!(capabilities.features.contains(&WebCapability::Viewport));
 
@@ -389,6 +444,7 @@ async fn rejects_an_unadmitted_browser_version_before_opening_a_session() {
             headed: false,
             command_timeout: Duration::from_secs(5),
             idle_timeout: Duration::from_secs(2),
+            network_policy: Default::default(),
         },
         executor.clone(),
     );
@@ -429,8 +485,9 @@ async fn marks_only_pre_dispatch_command_failures_as_retryable() {
                 headed: false,
                 command_timeout: Duration::from_secs(5),
                 idle_timeout: Duration::from_secs(2),
+                network_policy: Default::default(),
             },
-            executor,
+            executor.clone(),
         );
         let mut session = driver
             .open(&ScenarioContext {
@@ -452,6 +509,11 @@ async fn marks_only_pre_dispatch_command_failures_as_retryable() {
             .expect_err("planned command failure");
         assert_eq!(error.retryable(), expected_retryable);
         session.close().await.expect("close");
+        assert_eq!(
+            executor.calls.load(Ordering::SeqCst),
+            2,
+            "a failed initial command must not dispatch another close command"
+        );
     }
 }
 
@@ -470,6 +532,7 @@ async fn maps_extended_web_actions_and_records_evidence() {
             headed: false,
             command_timeout: Duration::from_secs(5),
             idle_timeout: Duration::from_secs(2),
+            network_policy: Default::default(),
         },
         executor.clone(),
     );
@@ -607,7 +670,10 @@ async fn maps_extended_web_actions_and_records_evidence() {
         vec![
             OsString::from("download"),
             OsString::from("#download"),
-            artifacts.join("downloads/report.pdf").into_os_string(),
+            artifacts
+                .join("downloads")
+                .join("report.pdf")
+                .into_os_string(),
         ]
     );
     assert_eq!(
@@ -628,7 +694,10 @@ async fn maps_extended_web_actions_and_records_evidence() {
             OsString::from("network"),
             OsString::from("har"),
             OsString::from("stop"),
-            artifacts.join("network/session.har").into_os_string(),
+            artifacts
+                .join("network")
+                .join("session.har")
+                .into_os_string(),
         ]
     );
     assert_eq!(action_args[10], os(&["trace", "start"]));
@@ -637,7 +706,10 @@ async fn maps_extended_web_actions_and_records_evidence() {
         vec![
             OsString::from("trace"),
             OsString::from("stop"),
-            artifacts.join("traces/session.zip").into_os_string(),
+            artifacts
+                .join("traces")
+                .join("session.zip")
+                .into_os_string(),
         ]
     );
     assert_eq!(
@@ -645,7 +717,10 @@ async fn maps_extended_web_actions_and_records_evidence() {
         vec![
             OsString::from("record"),
             OsString::from("start"),
-            artifacts.join("video/session.webm").into_os_string(),
+            artifacts
+                .join("video")
+                .join("session.webm")
+                .into_os_string(),
         ]
     );
     assert_eq!(action_args[13], os(&["record", "stop"]));
@@ -677,6 +752,7 @@ async fn rejects_artifact_parent_traversal_before_invoking_browser() {
             headed: false,
             command_timeout: Duration::from_secs(5),
             idle_timeout: Duration::from_secs(2),
+            network_policy: Default::default(),
         },
         executor.clone(),
     );
@@ -716,6 +792,7 @@ async fn dropped_session_schedules_emergency_close() {
             headed: false,
             command_timeout: Duration::from_secs(5),
             idle_timeout: Duration::from_secs(2),
+            network_policy: Default::default(),
         },
         executor.clone(),
     );
@@ -760,6 +837,7 @@ async fn persistent_connection_survives_handle_drop_until_explicit_close() {
             headed: false,
             command_timeout: Duration::from_secs(5),
             idle_timeout: Duration::from_secs(300),
+            network_policy: Default::default(),
         },
         executor.clone(),
     );
@@ -821,6 +899,7 @@ async fn failed_close_kills_the_exact_daemon_from_its_private_pid_file() {
             headed: false,
             command_timeout: Duration::from_secs(5),
             idle_timeout: Duration::from_secs(2),
+            network_policy: Default::default(),
         },
         executor.clone(),
     );
@@ -849,7 +928,11 @@ fn strip_session_prefix(args: &[OsString]) -> Vec<OsString> {
 
 fn assert_short_runtime(runtime: &OsString) {
     let path = PathBuf::from(runtime);
-    assert_eq!(path.parent(), Some(std::path::Path::new("/tmp")));
+    #[cfg(unix)]
+    let expected_parent = PathBuf::from("/tmp");
+    #[cfg(not(unix))]
+    let expected_parent = std::env::temp_dir();
+    assert_eq!(path.parent(), Some(expected_parent.as_path()));
     assert!(
         path.file_name()
             .and_then(|name| name.to_str())

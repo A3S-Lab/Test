@@ -1,5 +1,6 @@
 use std::ffi::OsString;
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicU8, Ordering};
 use std::sync::Arc;
 
 use a3s_test_core::{
@@ -14,15 +15,23 @@ use crate::actions::{
     dialog_args, frame_args, network_route_args, network_unroute_args, select_args, tab_args,
     upload_args, viewport_args,
 };
+use crate::artifact::{
+    admit_artifact_path, prepare_artifact_path, prepare_artifact_root, validate_artifact_file,
+};
 use crate::capabilities;
 use crate::process::{create_runtime_directory, terminate_owned_session, SessionRegistration};
 use crate::protocol::{
-    bounded, compact_component, direct_selector, invocation, resolve_artifact_path, scalar_bool,
-    scalar_string, target_action, validate_component, wait_args,
+    bounded, compact_component, direct_selector, invocation, scalar_bool, scalar_string,
+    target_action, validate_component, wait_args,
 };
+use crate::runtime::RuntimeDirectory;
 use crate::{AgentBrowserConfig, BrowserCapabilities, CommandExecutor, TokioCommandExecutor};
 
 mod advanced;
+
+const SESSION_FRESH: u8 = 0;
+const SESSION_ACTIVE: u8 = 1;
+const SESSION_START_FAILED: u8 = 2;
 
 #[derive(Clone, Debug)]
 pub struct AgentBrowserConnectionConfig {
@@ -73,46 +82,24 @@ impl AgentBrowserDriver {
         connection: AgentBrowserConnectionConfig,
     ) -> Result<AgentBrowserSession, DriverError> {
         self.config.validate()?;
-        self.capabilities().await?;
         validate_component(&connection.namespace, "namespace")?;
         validate_component(&connection.session, "session id")?;
-        if !connection.runtime_dir.is_absolute() {
-            return Err(DriverError::new(
-                "test.driver.web.runtime_path_invalid",
-                "persistent browser runtime directory must be absolute",
-            ));
-        }
-
-        tokio::fs::create_dir_all(&connection.runtime_dir)
-            .await
-            .map_err(|error| {
-                DriverError::new(
-                    "test.driver.web.runtime_create_failed",
-                    format!("failed to create browser runtime directory: {error}"),
-                )
-            })?;
-        let artifacts_dir = absolute_artifacts_dir(&connection.artifacts_dir)?;
-        tokio::fs::create_dir_all(&artifacts_dir)
-            .await
-            .map_err(|error| {
-                DriverError::new(
-                    "test.driver.web.artifact_create_failed",
-                    format!("failed to create artifact directory: {error}"),
-                )
-            })?;
+        let runtime = RuntimeDirectory::bind_or_create(&connection.runtime_dir).await?;
+        let artifacts_dir = prepare_artifact_root(&connection.artifacts_dir).await?;
         let active_video = match connection.active_video_path {
             Some(requested) => {
-                let path = resolve_artifact_path(&artifacts_dir, &requested)?;
+                let path = admit_artifact_path(&artifacts_dir, &requested).await?;
                 Some(ActiveVideo { requested, path })
             }
             None => None,
         };
+        self.capabilities().await?;
 
         Ok(AgentBrowserSession {
             config: self.config.clone(),
             namespace: connection.namespace,
             session: connection.session,
-            runtime_dir: connection.runtime_dir,
+            runtime,
             runtime_guard: None,
             registration: None,
             artifacts_dir,
@@ -120,6 +107,7 @@ impl AgentBrowserDriver {
             active_video,
             close_on_drop: false,
             closed: false,
+            lifecycle: AtomicU8::new(SESSION_ACTIVE),
         })
     }
 }
@@ -143,7 +131,7 @@ impl SurfaceDriver for AgentBrowserDriver {
         validate_component(&context.scenario_id, "scenario id")?;
         let namespace = compact_component(&requested_namespace, 24);
         let session = compact_component(&context.scenario_id, 32);
-        let artifacts_dir = absolute_artifacts_dir(&context.artifacts_dir)?;
+        let artifacts_dir = prepare_artifact_root(&context.artifacts_dir).await?;
         let runtime_guard = tokio::task::spawn_blocking(create_runtime_directory)
             .await
             .map_err(|error| {
@@ -159,8 +147,9 @@ impl SurfaceDriver for AgentBrowserDriver {
                 )
             })?;
         let runtime_dir = runtime_guard.path().to_path_buf();
+        let runtime = RuntimeDirectory::bind_existing(&runtime_dir).await?;
         let registration = SessionRegistration::new(
-            runtime_dir.clone(),
+            runtime.clone(),
             namespace.clone(),
             session.clone(),
             self.config.command.process_markers(),
@@ -170,7 +159,7 @@ impl SurfaceDriver for AgentBrowserDriver {
             config: self.config.clone(),
             namespace,
             session,
-            runtime_dir,
+            runtime,
             runtime_guard: Some(runtime_guard),
             registration: Some(registration),
             artifacts_dir,
@@ -178,6 +167,7 @@ impl SurfaceDriver for AgentBrowserDriver {
             active_video: None,
             close_on_drop: true,
             closed: false,
+            lifecycle: AtomicU8::new(SESSION_FRESH),
         }))
     }
 }
@@ -187,13 +177,14 @@ pub struct AgentBrowserSession {
     namespace: String,
     session: String,
     artifacts_dir: PathBuf,
-    runtime_dir: PathBuf,
+    runtime: RuntimeDirectory,
     runtime_guard: Option<tempfile::TempDir>,
     registration: Option<SessionRegistration>,
     executor: Arc<dyn CommandExecutor>,
     active_video: Option<ActiveVideo>,
     close_on_drop: bool,
     closed: bool,
+    lifecycle: AtomicU8,
 }
 
 struct ActiveVideo {
@@ -411,6 +402,12 @@ impl DriverSession for AgentBrowserSession {
             return Ok(());
         }
 
+        if self.lifecycle.load(Ordering::Acquire) == SESSION_START_FAILED {
+            let _ = self.emergency_cleanup().await;
+            self.closed = true;
+            return Ok(());
+        }
+
         if self.active_video.is_some() {
             let _ = self
                 .execute_command(vec![OsString::from("record"), OsString::from("stop")])
@@ -497,6 +494,7 @@ impl AgentBrowserSession {
         let data = self
             .execute_command(vec!["screenshot".into(), path.as_os_str().to_os_string()])
             .await?;
+        validate_artifact_file(&self.artifacts_dir, &path).await?;
         Ok(StepOutput::new("screenshot captured")
             .with_data(data)
             .with_evidence(evidence(requested, &path, media_type_for_path(&path))))
@@ -512,6 +510,7 @@ impl AgentBrowserSession {
                 path.as_os_str().to_os_string(),
             ])
             .await?;
+        validate_artifact_file(&self.artifacts_dir, &path).await?;
         Ok(StepOutput::new("file downloaded")
             .with_data(data)
             .with_evidence(evidence(requested, &path, media_type_for_path(&path))))
@@ -533,6 +532,7 @@ impl AgentBrowserSession {
                         path.as_os_str().to_os_string(),
                     ])
                     .await?;
+                validate_artifact_file(&self.artifacts_dir, &path).await?;
                 Ok(StepOutput::new("HAR recording saved")
                     .with_data(data)
                     .with_evidence(evidence(requested, &path, "application/json")))
@@ -555,6 +555,7 @@ impl AgentBrowserSession {
                         path.as_os_str().to_os_string(),
                     ])
                     .await?;
+                validate_artifact_file(&self.artifacts_dir, &path).await?;
                 Ok(StepOutput::new("trace recording saved")
                     .with_data(data)
                     .with_evidence(evidence(requested, &path, "application/zip")))
@@ -605,6 +606,7 @@ impl AgentBrowserSession {
                     .execute_command(vec![OsString::from("record"), OsString::from("stop")])
                     .await?;
                 self.active_video = None;
+                validate_artifact_file(&self.artifacts_dir, &path).await?;
                 Ok(StepOutput::new("video recording saved")
                     .with_data(data)
                     .with_evidence(evidence(&requested, &path, "video/webm")))
@@ -632,51 +634,40 @@ impl AgentBrowserSession {
                 format!("failed to write browser evidence: {error}"),
             )
         })?;
+        validate_artifact_file(&self.artifacts_dir, &path).await?;
         Ok(StepOutput::new(summary)
             .with_data(data)
             .with_evidence(evidence(requested, &path, "application/json")))
     }
 
     async fn prepare_artifact(&self, requested: &str) -> Result<PathBuf, DriverError> {
-        let path = resolve_artifact_path(&self.artifacts_dir, requested)?;
-        let parent = path.parent().ok_or_else(|| {
-            DriverError::new(
-                "test.driver.web.artifact_path_invalid",
-                "artifact path has no parent directory",
-            )
-        })?;
-        tokio::fs::create_dir_all(parent).await.map_err(|error| {
-            DriverError::new(
-                "test.driver.web.artifact_create_failed",
-                format!("failed to create artifact directory: {error}"),
-            )
-        })?;
-        Ok(path)
+        prepare_artifact_path(&self.artifacts_dir, requested).await
     }
 
     async fn execute_command(&self, action_args: Vec<OsString>) -> Result<Value, DriverError> {
-        tokio::fs::create_dir_all(&self.runtime_dir)
-            .await
-            .map_err(|error| {
-                DriverError::new(
-                    "test.driver.web.runtime_create_failed",
-                    format!("failed to create browser runtime directory: {error}"),
-                )
-            })?;
+        self.runtime.verify().await?;
         let invocation = invocation(
             &self.config,
             &self.namespace,
             &self.session,
-            &self.runtime_dir,
+            self.runtime.path(),
             action_args,
         );
-        let output = self.executor.run(invocation).await.map_err(|error| {
-            let retryable = error.retryable();
-            DriverError::new("test.driver.web.command_unavailable", error.to_string())
-                .with_retryable(retryable)
-        })?;
+        let output = match self.executor.run(invocation).await {
+            Ok(output) => output,
+            Err(error) => {
+                self.mark_start_failed();
+                let retryable = error.retryable();
+                return Err(DriverError::new(
+                    "test.driver.web.command_unavailable",
+                    error.to_string(),
+                )
+                .with_retryable(retryable));
+            }
+        };
 
         if output.exit_code != 0 {
+            self.mark_start_failed();
             let detail = if output.stderr.trim().is_empty() {
                 output.stdout.trim()
             } else {
@@ -688,6 +679,8 @@ impl AgentBrowserSession {
             ));
         }
 
+        self.lifecycle.store(SESSION_ACTIVE, Ordering::Release);
+
         let trimmed = output.stdout.trim();
         if trimmed.is_empty() {
             return Ok(Value::Null);
@@ -696,12 +689,12 @@ impl AgentBrowserSession {
     }
 
     async fn emergency_cleanup(&self) -> bool {
-        let runtime_dir = self.runtime_dir.clone();
+        let runtime = self.runtime.clone();
         let namespace = self.namespace.clone();
         let session = self.session.clone();
         let markers = self.config.command.process_markers();
         tokio::task::spawn_blocking(move || {
-            terminate_owned_session(&runtime_dir, &namespace, &session, &markers)
+            terminate_owned_session(&runtime, &namespace, &session, &markers)
         })
         .await
         .unwrap_or(false)
@@ -709,11 +702,20 @@ impl AgentBrowserSession {
 
     fn emergency_cleanup_sync(&self) -> bool {
         terminate_owned_session(
-            &self.runtime_dir,
+            &self.runtime,
             &self.namespace,
             &self.session,
             &self.config.command.process_markers(),
         )
+    }
+
+    fn mark_start_failed(&self) {
+        let _ = self.lifecycle.compare_exchange(
+            SESSION_FRESH,
+            SESSION_START_FAILED,
+            Ordering::AcqRel,
+            Ordering::Acquire,
+        );
     }
 }
 
@@ -723,7 +725,16 @@ impl Drop for AgentBrowserSession {
             return;
         }
 
+        if self.lifecycle.load(Ordering::Acquire) == SESSION_START_FAILED {
+            let _ = self.emergency_cleanup_sync();
+            return;
+        }
+
         if self.emergency_cleanup_sync() {
+            return;
+        }
+
+        if self.runtime.verify_sync().is_err() {
             return;
         }
 
@@ -731,7 +742,7 @@ impl Drop for AgentBrowserSession {
             &self.config,
             &self.namespace,
             &self.session,
-            &self.runtime_dir,
+            self.runtime.path(),
             vec![OsString::from("close")],
         );
         let executor = Arc::clone(&self.executor);
@@ -745,20 +756,6 @@ impl Drop for AgentBrowserSession {
             });
         }
     }
-}
-
-fn absolute_artifacts_dir(path: &std::path::Path) -> Result<PathBuf, DriverError> {
-    if path.is_absolute() {
-        return Ok(path.to_path_buf());
-    }
-    std::env::current_dir()
-        .map(|current| current.join(path))
-        .map_err(|error| {
-            DriverError::new(
-                "test.driver.web.working_directory_failed",
-                format!("failed to resolve current directory: {error}"),
-            )
-        })
 }
 
 fn evidence(requested: &str, path: &std::path::Path, media_type: &str) -> Evidence {

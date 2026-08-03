@@ -2,9 +2,12 @@ use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::{Mutex, OnceLock};
 
+use crate::path_security::is_link_like;
+use crate::runtime::RuntimeDirectory;
+
 #[derive(Clone)]
 struct ActiveSession {
-    runtime_dir: PathBuf,
+    runtime: RuntimeDirectory,
     namespace: String,
     session: String,
     process_markers: Vec<String>,
@@ -16,13 +19,14 @@ pub(crate) struct SessionRegistration {
 
 impl SessionRegistration {
     pub(crate) fn new(
-        runtime_dir: PathBuf,
+        runtime: RuntimeDirectory,
         namespace: String,
         session: String,
         process_markers: Vec<String>,
     ) -> Self {
+        let runtime_dir = runtime.path().to_path_buf();
         let active = ActiveSession {
-            runtime_dir: runtime_dir.clone(),
+            runtime,
             namespace,
             session,
             process_markers,
@@ -72,24 +76,26 @@ pub(crate) fn unregister_process_group(process_id: u32) {
 }
 
 pub(crate) fn terminate_owned_session(
-    runtime_dir: &Path,
+    runtime: &RuntimeDirectory,
     namespace: &str,
     session: &str,
     process_markers: &[String],
 ) -> bool {
-    let runtime_dirs = [
-        runtime_dir.to_path_buf(),
-        runtime_dir.join("namespaces").join(namespace).join("run"),
-    ];
+    if runtime.verify_sync().is_err() {
+        return false;
+    }
     let mut terminated = false;
-    for directory in runtime_dirs {
-        let pid_path = directory.join(format!("{session}.pid"));
-        let Ok(pid_source) = std::fs::read_to_string(&pid_path) else {
-            continue;
-        };
-        let Ok(process_id) = pid_source.trim().parse::<u32>() else {
-            cleanup_session_sidecars(&directory, session);
-            continue;
+    for directory in session_runtime_directories(runtime, namespace) {
+        if runtime.verify_sync().is_err() {
+            break;
+        }
+        let process_id = match read_session_pid(&directory, session) {
+            SessionPid::Missing => continue,
+            SessionPid::Invalid => {
+                cleanup_session_sidecars(&directory, session);
+                continue;
+            }
+            SessionPid::Valid(process_id) => process_id,
         };
         if terminate_process_tree(process_id, process_markers) {
             terminated = true;
@@ -126,12 +132,14 @@ fn terminate_active_sessions() {
         .unwrap_or_default();
     for active in sessions {
         terminate_owned_session(
-            &active.runtime_dir,
+            &active.runtime,
             &active.namespace,
             &active.session,
             &active.process_markers,
         );
-        let _ = std::fs::remove_dir_all(&active.runtime_dir);
+        if active.runtime.verify_sync().is_ok() {
+            let _ = std::fs::remove_dir_all(active.runtime.path());
+        }
     }
 }
 
@@ -166,10 +174,55 @@ pub(crate) fn terminate_process_group(process_id: u32) {
 #[cfg(windows)]
 pub(crate) fn terminate_process_group(process_id: u32) {
     if process_id > 1 {
-        let _ = std::process::Command::new("taskkill")
+        let Some(taskkill) = windows_system_executable("taskkill.exe") else {
+            return;
+        };
+        let _ = hidden_windows_command(&taskkill)
             .args(["/PID", &process_id.to_string(), "/T", "/F"])
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
             .status();
     }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum SessionPid {
+    Missing,
+    Invalid,
+    Valid(u32),
+}
+
+fn session_runtime_directories(runtime: &RuntimeDirectory, namespace: &str) -> Vec<PathBuf> {
+    let mut directories = vec![runtime.path().to_path_buf()];
+    let mut current = runtime.path().to_path_buf();
+    for component in ["namespaces", namespace, "run"] {
+        let candidate = current.join(component);
+        let Ok(metadata) = std::fs::symlink_metadata(&candidate) else {
+            return directories;
+        };
+        if is_link_like(&metadata) || !metadata.is_dir() {
+            return directories;
+        }
+        current = candidate;
+    }
+    directories.push(current);
+    directories
+}
+
+fn read_session_pid(directory: &Path, session: &str) -> SessionPid {
+    let pid_path = directory.join(format!("{session}.pid"));
+    let metadata = match std::fs::symlink_metadata(&pid_path) {
+        Ok(metadata) => metadata,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return SessionPid::Missing,
+        Err(_) => return SessionPid::Invalid,
+    };
+    if is_link_like(&metadata) || !metadata.is_file() {
+        return SessionPid::Invalid;
+    }
+    std::fs::read_to_string(pid_path)
+        .ok()
+        .and_then(|source| source.trim().parse::<u32>().ok())
+        .map_or(SessionPid::Invalid, SessionPid::Valid)
 }
 
 #[cfg(not(any(unix, windows)))]
@@ -266,17 +319,249 @@ fn terminate_process_tree(process_id: u32, process_markers: &[String]) -> bool {
 }
 
 #[cfg(windows)]
-fn terminate_process_tree(process_id: u32, _process_markers: &[String]) -> bool {
-    if process_id <= 1 {
+fn terminate_process_tree(process_id: u32, process_markers: &[String]) -> bool {
+    if process_id <= 1 || process_id == std::process::id() {
         return false;
     }
-    std::process::Command::new("taskkill")
+    let Some(command_line) = windows_process_command_line(process_id) else {
+        return false;
+    };
+    if !windows_command_matches_process_markers(&command_line, process_markers) {
+        return false;
+    }
+    let Some(taskkill) = windows_system_executable("taskkill.exe") else {
+        return false;
+    };
+    hidden_windows_command(&taskkill)
         .args(["/PID", &process_id.to_string(), "/T", "/F"])
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
         .status()
         .is_ok_and(|status| status.success())
+}
+
+#[cfg(windows)]
+fn windows_process_command_line(process_id: u32) -> Option<String> {
+    let powershell = windows_system_executable(r"WindowsPowerShell\v1.0\powershell.exe")?;
+    let script = format!(
+        "$process = Get-CimInstance Win32_Process -Filter 'ProcessId = {process_id}' \
+         -ErrorAction Stop; if ($null -eq $process -or \
+         [string]::IsNullOrEmpty($process.CommandLine)) {{ exit 3 }}; \
+         [Console]::OutputEncoding = [System.Text.Encoding]::UTF8; \
+         [Console]::Out.Write($process.CommandLine)"
+    );
+    let mut command = hidden_windows_command(&powershell);
+    command
+        .args(["-NoLogo", "-NoProfile", "-NonInteractive", "-Command"])
+        .arg(script);
+    let output = bounded_windows_output(command, std::time::Duration::from_secs(5))?;
+    if !output.status.success() {
+        return None;
+    }
+    let command_line = String::from_utf8(output.stdout).ok()?;
+    let command_line = command_line.trim_matches(|character: char| {
+        character.is_whitespace() || character == '\u{feff}' || character == '\0'
+    });
+    (!command_line.is_empty()).then(|| command_line.to_string())
+}
+
+#[cfg(windows)]
+fn windows_command_matches_process_markers(command_line: &str, process_markers: &[String]) -> bool {
+    let command_line = command_line.to_lowercase();
+    process_markers
+        .iter()
+        .any(|marker| !marker.is_empty() && command_line.contains(marker.to_lowercase().as_str()))
+}
+
+#[cfg(windows)]
+fn windows_system_executable(relative: &str) -> Option<PathBuf> {
+    let root = PathBuf::from(std::env::var_os("SystemRoot")?);
+    if !root.is_absolute() {
+        return None;
+    }
+    let executable = root.join("System32").join(relative);
+    executable.is_file().then_some(executable)
+}
+
+#[cfg(windows)]
+fn hidden_windows_command(program: &Path) -> std::process::Command {
+    use std::os::windows::process::CommandExt as _;
+
+    const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+    let mut command = std::process::Command::new(program);
+    command.creation_flags(CREATE_NO_WINDOW);
+    command
+}
+
+#[cfg(windows)]
+fn bounded_windows_output(
+    mut command: std::process::Command,
+    timeout: std::time::Duration,
+) -> Option<std::process::Output> {
+    command
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::null());
+    let mut child = command.spawn().ok()?;
+    let deadline = std::time::Instant::now() + timeout;
+    loop {
+        match child.try_wait() {
+            Ok(Some(_)) => return child.wait_with_output().ok(),
+            Ok(None) if std::time::Instant::now() < deadline => {
+                std::thread::sleep(std::time::Duration::from_millis(10));
+            }
+            Ok(None) | Err(_) => {
+                let _ = child.kill();
+                let _ = child.wait();
+                return None;
+            }
+        }
+    }
 }
 
 #[cfg(not(any(unix, windows)))]
 fn terminate_process_tree(_process_id: u32, _process_markers: &[String]) -> bool {
     false
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[cfg(unix)]
+    fn symlink_directory(target: &Path, link: &Path) -> std::io::Result<()> {
+        std::os::unix::fs::symlink(target, link)
+    }
+
+    #[cfg(windows)]
+    fn symlink_directory(target: &Path, link: &Path) -> std::io::Result<()> {
+        std::os::windows::fs::symlink_dir(target, link)
+    }
+
+    #[cfg(unix)]
+    fn symlink_file(target: &Path, link: &Path) -> std::io::Result<()> {
+        std::os::unix::fs::symlink(target, link)
+    }
+
+    #[cfg(windows)]
+    fn symlink_file(target: &Path, link: &Path) -> std::io::Result<()> {
+        std::os::windows::fs::symlink_file(target, link)
+    }
+
+    fn unavailable_without_host_privilege(error: &std::io::Error) -> bool {
+        cfg!(windows)
+            && matches!(
+                error.kind(),
+                std::io::ErrorKind::PermissionDenied | std::io::ErrorKind::Unsupported
+            )
+    }
+
+    #[tokio::test]
+    async fn namespaced_runtime_link_is_not_admitted_for_cleanup() {
+        let temp = tempfile::tempdir().expect("temp dir");
+        let root = temp.path().join("runtime");
+        let namespaces = root.join("namespaces");
+        let outside = temp.path().join("outside");
+        std::fs::create_dir_all(&namespaces).expect("namespaces");
+        std::fs::create_dir(&outside).expect("outside");
+        let runtime = RuntimeDirectory::bind_existing(&root)
+            .await
+            .expect("bind runtime");
+        if let Err(error) = symlink_directory(&outside, &namespaces.join("contained")) {
+            if unavailable_without_host_privilege(&error) {
+                return;
+            }
+            panic!("failed to create namespace link: {error}");
+        }
+
+        assert_eq!(session_runtime_directories(&runtime, "contained"), [root]);
+    }
+
+    #[tokio::test]
+    async fn linked_pid_file_is_not_followed() {
+        let temp = tempfile::tempdir().expect("temp dir");
+        let root = temp.path().join("runtime");
+        let target = temp.path().join("outside.pid");
+        std::fs::create_dir(&root).expect("runtime");
+        std::fs::write(&target, "4294967295").expect("outside pid");
+        let runtime = RuntimeDirectory::bind_existing(&root)
+            .await
+            .expect("bind runtime");
+        if let Err(error) = symlink_file(&target, &root.join("contained.pid")) {
+            if unavailable_without_host_privilege(&error) {
+                return;
+            }
+            panic!("failed to create pid link: {error}");
+        }
+
+        assert_eq!(
+            read_session_pid(runtime.path(), "contained"),
+            SessionPid::Invalid
+        );
+        assert_eq!(
+            std::fs::read_to_string(target).expect("outside pid"),
+            "4294967295"
+        );
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn windows_process_query_reports_the_current_executable() {
+        let command_line = windows_process_command_line(std::process::id())
+            .expect("query current process command line");
+        let executable = std::env::current_exe().expect("current executable");
+        let marker = executable
+            .file_name()
+            .and_then(|name| name.to_str())
+            .expect("executable name")
+            .to_string();
+
+        assert!(windows_command_matches_process_markers(
+            &command_line,
+            &[marker]
+        ));
+        assert!(!windows_command_matches_process_markers(
+            &command_line,
+            &["definitely-not-this-process".to_string()]
+        ));
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn windows_emergency_cleanup_rejects_an_unmatched_owned_child() {
+        let cmd = windows_system_executable("cmd.exe").expect("cmd.exe");
+        let mut child = hidden_windows_command(&cmd)
+            .args(["/D", "/S", "/C", "ping -n 30 127.0.0.1 >NUL"])
+            .spawn()
+            .expect("spawn child");
+
+        let terminated = terminate_process_tree(
+            child.id(),
+            &["definitely-not-the-owned-browser".to_string()],
+        );
+        let remained_running = child.try_wait().expect("inspect child").is_none();
+        let _ = child.kill();
+        let _ = child.wait();
+
+        assert!(!terminated);
+        assert!(remained_running);
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn windows_emergency_cleanup_terminates_a_marker_matched_owned_child() {
+        let cmd = windows_system_executable("cmd.exe").expect("cmd.exe");
+        let mut child = hidden_windows_command(&cmd)
+            .args(["/D", "/S", "/C", "ping -n 30 127.0.0.1 >NUL"])
+            .spawn()
+            .expect("spawn child");
+
+        let terminated = terminate_process_tree(child.id(), &["cmd.exe".to_string()]);
+        if !terminated {
+            let _ = child.kill();
+        }
+        let status = child.wait().expect("reap child");
+
+        assert!(terminated);
+        assert!(!status.success());
+    }
 }

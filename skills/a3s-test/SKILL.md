@@ -1,6 +1,6 @@
 ---
 name: a3s-test
-description: Drive interactive agentic Web tests or author deterministic A3S Test ACL suites. Use when a coding agent needs to explore a Web application, reproduce a UI bug, make observe-decide-act testing decisions, capture bounded evidence, turn a discovered workflow into regression coverage, or diagnose a3s-test JSON results.
+description: Drive interactive agentic Web or GUI tests and author deterministic A3S Test ACL suites. Use when a coding agent needs to explore an application, reproduce a UI bug, make observe-decide-act testing decisions, capture bounded evidence, turn a discovered workflow into regression coverage, or diagnose a3s-test JSON results.
 ---
 
 # A3S Test
@@ -13,6 +13,9 @@ surface sessions, typed actions, assertions, evidence, reports, and cleanup.
 
 - Use an **agent session** for exploration, bug reproduction, UX review, and
   any workflow where the next action depends on the latest observation.
+- Use the persistent **agent CLI** for Web and the configured **MCP tools** for
+  GUI. Read [references/gui-mcp.md](references/gui-mcp.md) before driving a GUI
+  session.
 - Use an **ACL suite** for a known regression flow that should run
   deterministically in local development and CI.
 
@@ -42,9 +45,14 @@ to an ACL suite.
      --json
    ```
 
-   Add `--allow-origin` only for another origin the test must intentionally
-   visit. Use `--browser-driver standalone` only when the project explicitly
-   uses a compatible standalone `agent-browser`.
+   Add `--allow-origin` only for another exact origin the test must
+   intentionally visit. Add `--allow-domain` only for a network hostname such
+   as a CDN that the page must contact without adding it to A3S Test's exact
+   origin gate. Use `--browser-driver standalone` only when the project
+   explicitly uses a compatible standalone `agent-browser`.
+   If a turn returns `test.session.browser_network_policy_missing`, do not
+   retry it. Abort or finish that legacy session, then start a new one so the
+   browser daemon is created with the persisted network policy.
 
 4. Observe before deciding:
 
@@ -137,6 +145,10 @@ Capture the smallest evidence set that proves the result:
   can be large.
 - Keep artifact paths relative. A3S Test confines them to the session or
   scenario artifact directory.
+- Do not place links or Windows reparse points inside artifact paths. Web and
+  GUI adapters reject them before external dispatch; Web verifies each browser
+  output before returning evidence, and GUI rechecks grounding files before
+  input.
 
 Never place passwords, tokens, cookies, or production data in action JSON, ACL
 values, network mocks, console fixtures, or committed evidence.
@@ -147,11 +159,23 @@ values, network mocks, console fixtures, or committed evidence.
 - Treat navigation origin denial, session-origin loss, and stale-ref rejection
   as protocol safety, not failures to bypass. If observation reports origin
   loss, abort the exact session; do not continue from a replacement page.
+- Do not broaden `--allow-domain` to work around a blocked page. It is a
+  hostname-level network exception, applies to document requests too, and
+  cannot distinguish schemes or ports. Explicit navigation and successful
+  observations still require `--allow-origin` for the exact origin.
 - Context-click is page-scoped and does not expose Chrome's native context
   menu. Observe after it just like every other state-changing action.
 - Do not kill Chrome, A3S Browser, or agent-browser by process name.
 - Finish or abort every session. A3S Test closes only the exact session it
   owns and retains the report and evidence.
+- Treat `application_binding_lost` and `window_binding_lost` as terminal turn
+  safety failures. Do not reuse an old GUI ref or try to target a replacement
+  process/window; finish or abort the session.
+- If MCP `test_finish` or `test_abort` reports a retryable `cleanup_error`, do
+  not observe or act again. `test.session.cleanup_in_progress` means the
+  dispatched close is still running; retry the terminal operation until it
+  completes or becomes `cleanup_required`, then use the same session ID so the
+  retained ownership handle can finish cleanup.
 - For deterministic runs, the first `Ctrl+C` requests bounded cleanup. A
   second `Ctrl+C` terminates only process groups owned by that run.
 - Do not add arbitrary sleeps. Use typed observations, waits, and assertions.
@@ -164,3 +188,7 @@ problems. Use `test.assert.*` errors to compare expected product state with
 evidence. Use `test.run.*` errors for deterministic-run cancellation,
 deadlines, and cleanup. Agent-session metadata and events live under
 `.a3s-test/agent-sessions/<session>/`.
+Use `test.session.*` for surface-neutral MCP session admission and lifecycle
+errors. Use `test.driver.gui.*` for CUA compatibility, permission, grounding,
+application ownership, or GUI lifecycle failures. GUI MCP artifacts live under
+the host-configured MCP artifact root.

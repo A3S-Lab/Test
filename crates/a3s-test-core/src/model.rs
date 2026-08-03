@@ -2,7 +2,7 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-pub const ACTION_PROTOCOL_REVISION: u32 = 3;
+pub const ACTION_PROTOCOL_REVISION: u32 = 5;
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, Hash, JsonSchema, PartialEq, Serialize)]
 #[serde(rename_all = "lowercase")]
@@ -230,6 +230,8 @@ pub enum Target {
     Css { selector: String },
     Role { role: String, name: String },
     Text { value: String, exact: bool },
+    AutomationId { value: String },
+    VisualPoint { snapshot: String, x: u32, y: u32 },
     TestId { value: String },
     Label { value: String },
     Placeholder { value: String },

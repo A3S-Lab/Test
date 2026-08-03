@@ -42,6 +42,8 @@ pub(crate) struct AgentSessionState {
     pub(crate) goal: String,
     pub(crate) success_criteria: Vec<String>,
     pub(crate) allowed_origins: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) browser_allowed_domains: Option<Vec<String>>,
     pub(crate) browser: StoredBrowserConfig,
     pub(crate) namespace: String,
     pub(crate) driver_session: String,
@@ -82,6 +84,8 @@ pub(crate) struct AgentSessionReport {
     pub(crate) goal: String,
     pub(crate) success_criteria: Vec<String>,
     pub(crate) allowed_origins: Vec<String>,
+    #[serde(default)]
+    pub(crate) browser_allowed_domains: Vec<String>,
     pub(crate) event_count: u64,
     pub(crate) artifacts_dir: PathBuf,
     pub(crate) events_path: PathBuf,

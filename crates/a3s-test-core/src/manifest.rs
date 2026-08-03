@@ -648,6 +648,14 @@ fn parse_target(value: &Value, path: &str) -> Result<Target, SpecError> {
             value: target_argument(value, path)?,
             exact: *exact,
         }),
+        ("automation_id", [value]) => Ok(Target::AutomationId {
+            value: target_argument(value, path)?,
+        }),
+        ("visual_point", [snapshot, x, y]) => Ok(Target::VisualPoint {
+            snapshot: target_argument(snapshot, path)?,
+            x: target_coordinate(x, path)?,
+            y: target_coordinate(y, path)?,
+        }),
         ("testid", [value]) => Ok(Target::TestId {
             value: target_argument(value, path)?,
         }),
@@ -663,6 +671,24 @@ fn parse_target(value: &Value, path: &str) -> Result<Target, SpecError> {
             "unsupported locator function or argument count",
         )),
     }
+}
+
+fn target_coordinate(value: &Value, path: &str) -> Result<u32, SpecError> {
+    let Some(number) = value.as_number() else {
+        return Err(type_error(
+            path,
+            "visual point coordinates must be integers",
+        ));
+    };
+    if !number.is_finite() || number < 0.0 || number.fract() != 0.0 || number > f64::from(u32::MAX)
+    {
+        return Err(SpecError::new(
+            "test.spec.target_invalid",
+            path,
+            "visual point coordinates must be unsigned 32-bit integers",
+        ));
+    }
+    Ok(number as u32)
 }
 
 fn target_argument(value: &Value, path: &str) -> Result<String, SpecError> {

@@ -13,17 +13,20 @@ path = "src/main.rs"
 
 [dependencies]
 a3s-test-core = { path = "../a3s-test-core" }
+a3s-test-driver-gui = { path = "../a3s-test-driver-gui" }
 a3s-test-driver-web = { path = "../a3s-test-driver-web" }
 a3s-test-runner = { path = "../a3s-test-runner" }
+a3s-test-session = { path = "../a3s-test-session" }
 anyhow.workspace = true
 clap.workspace = true
 schemars.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 sha2.workspace = true
-tokio.workspace = true
+tokio = { workspace = true, features = ["io-std"] }
 tokio-util.workspace = true
 url.workspace = true
 
 [dev-dependencies]
+async-trait.workspace = true
 tempfile = "3"

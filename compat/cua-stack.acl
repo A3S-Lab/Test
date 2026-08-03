@@ -1,0 +1,188 @@
+cua_stack "gui" {
+    schema_version = 2
+    repository = "https://github.com/A3S-Lab/cua"
+    revision = "7ac41be61e6b1c0034cd9d4de48ac2d5f7bf6b13"
+    driver_version = "0.10.0"
+    mcp_protocol = "2025-06-18"
+    tools_schema = "1"
+    capability_vocabulary = "1"
+
+    profile "linux-embedded" {
+        platform = "linux"
+        endpoint = "embedded_socket"
+        semantic = false
+        window_vision = false
+        lifecycle = false
+        status = "unsupported"
+        reason = "The locked CUA 0.10.0 revision has no reviewed Linux application backend."
+    }
+
+    profile "linux-installed" {
+        platform = "linux"
+        endpoint = "installed_daemon"
+        semantic = false
+        window_vision = false
+        lifecycle = false
+        status = "unsupported"
+        reason = "The locked CUA 0.10.0 revision has no reviewed Linux application backend."
+    }
+
+    profile "macos-embedded" {
+        platform = "macos"
+        endpoint = "embedded_socket"
+        semantic = true
+        window_vision = true
+        lifecycle = true
+        status = "contract_tested"
+    }
+
+    profile "macos-installed" {
+        platform = "macos"
+        endpoint = "installed_daemon"
+        semantic = true
+        window_vision = true
+        lifecycle = true
+        status = "contract_tested"
+    }
+
+    profile "windows-embedded" {
+        platform = "windows"
+        endpoint = "embedded_socket"
+        semantic = false
+        window_vision = false
+        lifecycle = false
+        status = "unsupported"
+        reason = "The locked CUA 0.10.0 revision has no reviewed Windows application backend."
+    }
+
+    profile "windows-installed" {
+        platform = "windows"
+        endpoint = "installed_daemon"
+        semantic = false
+        window_vision = false
+        lifecycle = false
+        status = "unsupported"
+        reason = "The locked CUA 0.10.0 revision has no reviewed Windows application backend."
+    }
+
+    observation "get_window_state" {
+        required_fields = [
+            "pid",
+            "window_id",
+            "element_count",
+            "tree_markdown",
+            "elements",
+            "snapshot_id",
+        ]
+        visual_fields = [
+            "screenshot_width",
+            "screenshot_height",
+            "screenshot_mime_type",
+        ]
+    }
+
+    tool "start_session" {
+        capabilities = ["session.lifecycle.start", "session.capture_scope"]
+    }
+
+    tool "get_session_state" {
+        capabilities = ["session.capture_scope.read"]
+    }
+
+    tool "end_session" {
+        capabilities = ["session.lifecycle.end"]
+    }
+
+    tool "check_permissions" {
+        capabilities = [
+            "system.permissions.tcc",
+            "system.permissions.tcc.accessibility",
+            "system.permissions.tcc.screen_recording",
+        ]
+    }
+
+    tool "launch_app" {
+        capabilities = ["app.launch"]
+    }
+
+    tool "list_apps" {
+        capabilities = ["app.list"]
+    }
+
+    tool "kill_app" {
+        capabilities = ["app.kill"]
+    }
+
+    tool "list_windows" {
+        capabilities = ["window.list"]
+    }
+
+    tool "bring_to_front" {
+        capabilities = ["window.activate"]
+    }
+
+    tool "get_window_state" {
+        capabilities = [
+            "accessibility.window_state",
+            "accessibility.tree",
+            "accessibility.tree.structured",
+            "accessibility.tree.bounded",
+            "accessibility.element_tokens",
+            "screen.capture",
+            "screen.capture.window",
+        ]
+    }
+
+    tool "click" {
+        capabilities = [
+            "input.pointer.click",
+            "input.pointer.click.left",
+            "accessibility.element_tokens",
+        ]
+    }
+
+    tool "double_click" {
+        capabilities = [
+            "input.pointer.click",
+            "input.pointer.click.left",
+            "input.pointer.click.double",
+            "accessibility.element_tokens",
+        ]
+    }
+
+    tool "right_click" {
+        capabilities = [
+            "input.pointer.click",
+            "input.pointer.click.right",
+            "accessibility.element_tokens",
+        ]
+    }
+
+    tool "drag" {
+        capabilities = ["input.pointer.drag"]
+    }
+
+    tool "scroll" {
+        capabilities = ["input.pointer.scroll", "accessibility.element_tokens"]
+    }
+
+    tool "type_text" {
+        capabilities = [
+            "input.keyboard.type",
+            "input.keyboard.type.terminal_safe",
+            "accessibility.element_tokens",
+        ]
+    }
+
+    tool "set_value" {
+        capabilities = ["input.keyboard.type", "accessibility.element_tokens"]
+    }
+
+    tool "press_key" {
+        capabilities = ["input.keyboard.press", "accessibility.element_tokens"]
+    }
+
+    tool "hotkey" {
+        capabilities = ["input.keyboard.hotkey"]
+    }
+}

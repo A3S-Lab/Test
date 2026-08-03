@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 use std::ffi::OsString;
 use std::hash::{DefaultHasher, Hash, Hasher};
-use std::path::{Component, Path, PathBuf};
+use std::path::Path;
 
 use a3s_test_core::{DriverError, LoadState, Target, WaitCondition};
 use serde_json::Value;
@@ -33,6 +33,12 @@ pub(crate) fn invocation(
     env.insert(idle_name, idle_value);
     let (runtime_name, runtime_value) = config.command.runtime_environment(runtime_dir);
     env.insert(runtime_name, runtime_value);
+    if let Some((policy_name, policy_value)) = config
+        .command
+        .allowed_domains_environment(&config.network_policy)
+    {
+        env.insert(policy_name, policy_value);
+    }
 
     CommandInvocation {
         program: config.command.program().to_path_buf(),
@@ -103,6 +109,12 @@ pub(crate) fn target_action(
                 OsString::from(action),
             ]
         }
+        Target::AutomationId { .. } | Target::VisualPoint { .. } => {
+            return Err(DriverError::new(
+                "test.driver.web.target_unsupported",
+                "automation_id and visual_point targets are only available on GUI surfaces",
+            ));
+        }
     };
     if let Some(value) = value {
         args.push(OsString::from(value));
@@ -137,25 +149,6 @@ pub(crate) fn wait_args(condition: &WaitCondition) -> Result<Vec<OsString>, Driv
             vec!["wait".into(), OsString::from(direct_selector(target)?)]
         }
     })
-}
-
-pub(crate) fn resolve_artifact_path(root: &Path, requested: &str) -> Result<PathBuf, DriverError> {
-    let relative = Path::new(requested);
-    if relative.as_os_str().is_empty()
-        || relative.is_absolute()
-        || relative.components().any(|component| {
-            matches!(
-                component,
-                Component::ParentDir | Component::RootDir | Component::Prefix(_)
-            )
-        })
-    {
-        return Err(DriverError::new(
-            "test.driver.web.artifact_path_invalid",
-            "artifact path must be a non-empty relative path without parent traversal",
-        ));
-    }
-    Ok(root.join(relative))
 }
 
 pub(crate) fn compact_component(value: &str, max_readable_bytes: usize) -> String {

@@ -1,9 +1,14 @@
+use std::num::NonZeroU32;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 use std::sync::Arc;
 use std::time::Duration;
 
-use a3s_test_core::TestSuite;
+use a3s_test_core::{Surface, SurfaceDriver, TestSuite};
+use a3s_test_driver_gui::{
+    ApplicationIdentity, AttachSpec, CuaEndpoint, GuiAppTarget, GuiCaptureScope, GuiDriver,
+    GuiDriverConfig, GuiProfile, LaunchSpec, WindowSelector,
+};
 use a3s_test_driver_web::{
     terminate_active_commands, AgentBrowserConfig, AgentBrowserDriver, BrowserCapabilities,
     BrowserCommand,
@@ -14,6 +19,8 @@ use clap::{Args, Parser, Subcommand, ValueEnum};
 use tokio_util::sync::CancellationToken;
 
 mod agent_session;
+mod gui_certification;
+mod mcp;
 
 #[derive(Debug, Parser)]
 #[command(
@@ -34,6 +41,12 @@ enum Commands {
     Check(CheckArgs),
     /// Discover and verify the installed Web driver protocol.
     Capabilities(CapabilitiesArgs),
+    /// Print the locked GUI platform and endpoint certification matrix.
+    GuiCertification(gui_certification::GuiCertificationArgs),
+    /// Exercise one real GUI profile and verify observation plus owned cleanup.
+    GuiCertify(gui_certification::GuiCertifyArgs),
+    /// Serve surface-neutral agent sessions over MCP stdio.
+    Mcp(McpArgs),
     /// Run a test suite.
     Run(RunArgs),
 }
@@ -102,9 +115,79 @@ struct RunArgs {
     /// Maximum scenarios that may own browser sessions concurrently.
     #[arg(long, default_value_t = 1)]
     max_parallel_scenarios: usize,
+    #[command(flatten)]
+    gui: GuiRunArgs,
     /// Emit machine-readable JSON.
     #[arg(long)]
     json: bool,
+}
+
+#[derive(Debug, Args)]
+struct McpArgs {
+    #[command(flatten)]
+    gui: GuiRunArgs,
+    /// Per-command CUA deadline.
+    #[arg(long, default_value_t = 30_000)]
+    command_timeout_ms: u64,
+    /// Bounded cleanup deadline for each MCP session.
+    #[arg(long, default_value_t = 10_000)]
+    cleanup_timeout_ms: u64,
+    /// Maximum GUI sessions held by this MCP server.
+    #[arg(long, default_value_t = 4)]
+    max_sessions: usize,
+    /// Artifact root for MCP sessions.
+    #[arg(long, default_value = ".a3s-test/mcp-sessions")]
+    artifacts_root: PathBuf,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq, ValueEnum)]
+enum GuiTargetMode {
+    /// Launch a new application instance and own its cleanup.
+    Launch,
+    /// Attach to an already-running application and never terminate it.
+    Attach,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq, ValueEnum)]
+enum GuiProfileArg {
+    /// Accessibility semantics without an automatic screenshot on observation.
+    Semantic,
+    /// Accessibility semantics plus a SHA-256-bound window screenshot.
+    WindowVision,
+}
+
+#[derive(Debug, Args)]
+struct GuiRunArgs {
+    /// Absolute or workspace-relative CUA policy file required by GUI scenarios.
+    #[arg(long)]
+    gui_policy_file: Option<PathBuf>,
+    /// CUA MCP proxy executable.
+    #[arg(long)]
+    cua_proxy_executable: Option<PathBuf>,
+    /// Connect the proxy to this embedded CUA socket instead of the installed daemon.
+    #[arg(long)]
+    cua_embedded_socket: Option<PathBuf>,
+    /// macOS bundle identifier for the GUI application.
+    #[arg(long)]
+    gui_macos_bundle_id: Option<String>,
+    /// Launch a new app or attach to a running app.
+    #[arg(long, value_enum, default_value_t = GuiTargetMode::Launch)]
+    gui_target_mode: GuiTargetMode,
+    /// GUI perception profile.
+    #[arg(long, value_enum, default_value_t = GuiProfileArg::Semantic)]
+    gui_profile: GuiProfileArg,
+    /// Existing process ID used in attach mode; omit only when the bundle has one instance.
+    #[arg(long)]
+    gui_attach_pid: Option<NonZeroU32>,
+    /// Application argument used in launch mode. Repeat to pass multiple arguments.
+    #[arg(long = "gui-arg")]
+    gui_arguments: Vec<std::ffi::OsString>,
+    /// Select a top-level window by exact title instead of the primary window.
+    #[arg(long, conflicts_with = "gui_window_automation_id")]
+    gui_window_title: Option<String>,
+    /// Select a top-level window by exact automation ID instead of the primary window.
+    #[arg(long, conflicts_with = "gui_window_title")]
+    gui_window_automation_id: Option<String>,
 }
 
 pub async fn execute(cli: Cli) -> Result<ExitCode> {
@@ -112,6 +195,9 @@ pub async fn execute(cli: Cli) -> Result<ExitCode> {
         Commands::Agent(args) => agent_session::execute(args).await,
         Commands::Check(args) => check(args).await,
         Commands::Capabilities(args) => capabilities(args).await,
+        Commands::GuiCertification(args) => gui_certification::print_matrix(args),
+        Commands::GuiCertify(args) => gui_certification::certify(args).await,
+        Commands::Mcp(args) => serve_mcp(args).await,
         Commands::Run(args) => run(args).await,
     }
 }
@@ -139,6 +225,7 @@ async fn capabilities(args: CapabilitiesArgs) -> Result<ExitCode> {
         headed: false,
         command_timeout: Duration::from_millis(args.command_timeout_ms),
         idle_timeout: Duration::from_secs(30),
+        network_policy: Default::default(),
     });
     let capabilities = browser.capabilities().await.map_err(anyhow::Error::new)?;
     if args.json {
@@ -161,6 +248,10 @@ async fn run(args: RunArgs) -> Result<ExitCode> {
     }
 
     let suite = read_suite(&args.manifest).await?;
+    let has_gui = suite
+        .scenarios
+        .iter()
+        .any(|scenario| scenario.surface == Surface::Gui);
     let command = browser_command(args.browser_driver, args.browser_executable);
     let browser = AgentBrowserDriver::new(AgentBrowserConfig {
         command,
@@ -168,9 +259,18 @@ async fn run(args: RunArgs) -> Result<ExitCode> {
         headed: args.headed,
         command_timeout: Duration::from_millis(args.command_timeout_ms),
         idle_timeout: Duration::from_millis(args.idle_timeout_ms),
+        network_policy: Default::default(),
     });
+    let mut drivers: Vec<Arc<dyn SurfaceDriver>> = vec![Arc::new(browser)];
+    if has_gui {
+        drivers.push(Arc::new(
+            gui_driver(&args.gui, Duration::from_millis(args.command_timeout_ms)).await?,
+        ));
+    } else if args.gui.requested() {
+        anyhow::bail!("GUI options were provided but the suite has no GUI scenarios");
+    }
     let runner = Runner::new(
-        vec![Arc::new(browser)],
+        drivers,
         RunnerOptions {
             cleanup_timeout: Duration::from_millis(args.cleanup_timeout_ms),
             retry_policy: RetryPolicy {
@@ -194,6 +294,117 @@ async fn run(args: RunArgs) -> Result<ExitCode> {
         print_human_result(&result);
     }
     Ok(status_exit_code(result.status))
+}
+
+async fn serve_mcp(args: McpArgs) -> Result<ExitCode> {
+    validate_timeout(args.command_timeout_ms, "command timeout")?;
+    validate_timeout(args.cleanup_timeout_ms, "cleanup timeout")?;
+    if !(1..=64).contains(&args.max_sessions) {
+        anyhow::bail!("maximum MCP sessions must be between 1 and 64");
+    }
+    let driver = gui_driver(&args.gui, Duration::from_millis(args.command_timeout_ms)).await?;
+    let artifacts_root = if args.artifacts_root.is_absolute() {
+        args.artifacts_root
+    } else {
+        std::env::current_dir()
+            .context("failed to resolve current directory")?
+            .join(args.artifacts_root)
+    };
+    let manager = a3s_test_session::AgentSessionManager::new(
+        vec![Arc::new(driver)],
+        a3s_test_session::SessionManagerOptions {
+            artifacts_root,
+            cleanup_timeout: Duration::from_millis(args.cleanup_timeout_ms),
+            max_sessions: args.max_sessions,
+        },
+    )
+    .map_err(anyhow::Error::new)?;
+    mcp::serve(Arc::new(manager)).await?;
+    Ok(ExitCode::SUCCESS)
+}
+
+impl GuiRunArgs {
+    fn requested(&self) -> bool {
+        self.gui_policy_file.is_some()
+            || self.cua_proxy_executable.is_some()
+            || self.cua_embedded_socket.is_some()
+            || self.gui_macos_bundle_id.is_some()
+            || self.gui_target_mode != GuiTargetMode::Launch
+            || self.gui_profile != GuiProfileArg::Semantic
+            || self.gui_attach_pid.is_some()
+            || !self.gui_arguments.is_empty()
+            || self.gui_window_title.is_some()
+            || self.gui_window_automation_id.is_some()
+    }
+}
+
+async fn gui_driver(args: &GuiRunArgs, command_timeout: Duration) -> Result<GuiDriver> {
+    let policy = args
+        .gui_policy_file
+        .as_ref()
+        .context("GUI scenarios require --gui-policy-file")?;
+    let policy_file = tokio::fs::canonicalize(policy)
+        .await
+        .with_context(|| format!("failed to resolve GUI policy file {}", policy.display()))?;
+    let proxy_executable = args
+        .cua_proxy_executable
+        .clone()
+        .unwrap_or_else(|| PathBuf::from("cua-driver"));
+    let endpoint = match &args.cua_embedded_socket {
+        Some(socket) => CuaEndpoint::EmbeddedSocket {
+            proxy_executable,
+            socket: socket.clone(),
+        },
+        None => CuaEndpoint::InstalledDaemon { proxy_executable },
+    };
+    let bundle_id = args
+        .gui_macos_bundle_id
+        .as_ref()
+        .context("GUI scenarios require --gui-macos-bundle-id")?
+        .clone();
+    let application = ApplicationIdentity::MacOsBundle { bundle_id };
+    let target = match args.gui_target_mode {
+        GuiTargetMode::Launch => {
+            if args.gui_attach_pid.is_some() {
+                anyhow::bail!("--gui-attach-pid is only valid with --gui-target-mode attach");
+            }
+            GuiAppTarget::Launch(LaunchSpec {
+                application,
+                arguments: args.gui_arguments.clone(),
+                working_directory: None,
+            })
+        }
+        GuiTargetMode::Attach => {
+            if !args.gui_arguments.is_empty() {
+                anyhow::bail!("--gui-arg is only valid with --gui-target-mode launch");
+            }
+            GuiAppTarget::Attach(AttachSpec {
+                application,
+                process_id: args.gui_attach_pid,
+            })
+        }
+    };
+    let window = if let Some(title) = &args.gui_window_title {
+        WindowSelector::ExactTitle(title.clone())
+    } else if let Some(automation_id) = &args.gui_window_automation_id {
+        WindowSelector::AutomationId(automation_id.clone())
+    } else {
+        WindowSelector::Primary
+    };
+    let config = GuiDriverConfig {
+        endpoint,
+        policy_file,
+        target,
+        window,
+        capture_scope: GuiCaptureScope::Window,
+        profile: match args.gui_profile {
+            GuiProfileArg::Semantic => GuiProfile::Semantic,
+            GuiProfileArg::WindowVision => GuiProfile::WindowVision,
+        },
+        command_timeout,
+    };
+    config.validate().map_err(anyhow::Error::new)?;
+    Ok(GuiDriver::new(config))
 }
 
 async fn read_suite(path: &Path) -> Result<TestSuite> {
@@ -315,5 +526,47 @@ mod tests {
                 executable: PathBuf::from("agent-browser")
             }
         );
+    }
+
+    #[test]
+    fn exposes_the_locked_gui_certification_matrix_without_starting_cua() {
+        let cli = Cli::try_parse_from(["a3s-test", "gui-certification", "--json"])
+            .expect("GUI certification command");
+        let Commands::GuiCertification(args) = cli.command else {
+            panic!("expected GUI certification command");
+        };
+        assert!(args.json);
+
+        let matrix =
+            a3s_test_driver_gui::GuiCertificationMatrix::locked().expect("certification matrix");
+        assert_eq!(matrix.profiles().len(), 6);
+    }
+
+    #[tokio::test]
+    async fn builds_a_typed_gui_driver_for_run_and_mcp_hosts() {
+        let temp = tempfile::TempDir::new().expect("temp dir");
+        let policy = temp.path().join("policy.yaml");
+        tokio::fs::write(&policy, "rules: []")
+            .await
+            .expect("policy fixture");
+        let driver = gui_driver(
+            &GuiRunArgs {
+                gui_policy_file: Some(policy),
+                cua_proxy_executable: Some(PathBuf::from("cua-driver")),
+                cua_embedded_socket: None,
+                gui_macos_bundle_id: Some("com.example.Editor".to_string()),
+                gui_target_mode: GuiTargetMode::Launch,
+                gui_profile: GuiProfileArg::WindowVision,
+                gui_attach_pid: None,
+                gui_arguments: vec![std::ffi::OsString::from("--safe-mode")],
+                gui_window_title: Some("Document".to_string()),
+                gui_window_automation_id: None,
+            },
+            Duration::from_secs(2),
+        )
+        .await
+        .expect("GUI driver");
+
+        assert_eq!(driver.surface(), Surface::Gui);
     }
 }
