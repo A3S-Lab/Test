@@ -177,7 +177,8 @@ values, network mocks, console fixtures, or committed evidence.
   completes or becomes `cleanup_required`, then use the same session ID so the
   retained ownership handle can finish cleanup.
 - For deterministic runs, the first `Ctrl+C` requests bounded cleanup. A
-  second `Ctrl+C` terminates only process groups owned by that run.
+  second `Ctrl+C` terminates only browser command groups and CUA proxy trees
+  owned by that process.
 - Do not add arbitrary sleeps. Use typed observations, waits, and assertions.
 
 ## Diagnosis

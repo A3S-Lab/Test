@@ -103,6 +103,9 @@ digest as evidence.
 - A launched application is terminated only when the adapter proves it was
   absent before launch and its PID still has the configured identity.
 - An attached or pre-existing application is never terminated.
+- The CUA proxy is a separate owned process tree. Timeout, protocol failure,
+  transport drop, or emergency interruption terminates that proxy tree without
+  changing the launch/attach ownership rule for the tested application.
 - `test.session.stale_observation` means the action did not name the latest
   observation ID.
 - `test.driver.gui.stale_reference` and `test.driver.gui.stale_image` require a

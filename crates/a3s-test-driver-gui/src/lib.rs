@@ -9,6 +9,7 @@ mod artifact;
 mod compatibility;
 mod config;
 mod lifecycle;
+mod process;
 mod protocol;
 mod semantic;
 mod session;
@@ -23,6 +24,7 @@ pub use config::{
     ApplicationIdentity, AttachSpec, CuaEndpoint, GuiAppTarget, GuiCaptureScope, GuiDriverConfig,
     GuiProfile, LaunchSpec, WindowSelector,
 };
+pub use process::terminate_active_cua_processes;
 pub use protocol::{
     CuaToolAnnotations, CuaToolDefinition, JsonRpcError, JsonRpcNotification, JsonRpcRequest,
     JsonRpcResponse,

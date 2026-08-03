@@ -10,6 +10,7 @@ use tokio::io::{AsyncBufRead, AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufR
 use tokio::process::{Child, ChildStdin, ChildStdout, Command};
 use tokio::sync::Mutex;
 
+use crate::process::{configure_owned_process, terminate_unattached_child, OwnedProcessTree};
 use crate::{CuaEndpoint, GuiDriverConfig, JsonRpcNotification, JsonRpcRequest, JsonRpcResponse};
 
 const MAX_REQUEST_BYTES: usize = 8 * 1_024 * 1_024;
@@ -98,6 +99,7 @@ pub struct StdioCuaTransport {
 
 struct StdioState {
     child: Child,
+    process_tree: Option<OwnedProcessTree>,
     stdin: Option<ChildStdin>,
     stdout: BufReader<ChildStdout>,
     closed: bool,
@@ -134,18 +136,8 @@ impl StdioCuaTransport {
             .env("CUA_DRIVER_POLICY_FILE", &config.policy_file)
             .stdin(std::process::Stdio::piped())
             .stdout(std::process::Stdio::piped())
-            .stderr(std::process::Stdio::piped())
-            .kill_on_drop(true);
-
-        #[cfg(unix)]
-        command.process_group(0);
-
-        #[cfg(windows)]
-        {
-            use std::os::windows::process::CommandExt as _;
-            const CREATE_NO_WINDOW: u32 = 0x0800_0000;
-            command.as_std_mut().creation_flags(CREATE_NO_WINDOW);
-        }
+            .stderr(std::process::Stdio::piped());
+        configure_owned_process(&mut command);
 
         let mut child = command.spawn().map_err(|error| {
             DriverError::new(
@@ -157,6 +149,19 @@ impl StdioCuaTransport {
             )
             .with_retryable(true)
         })?;
+        let process_tree = match OwnedProcessTree::attach(&child) {
+            Ok(process_tree) => process_tree,
+            Err(error) => {
+                terminate_unattached_child(&mut child, EMERGENCY_CLOSE_TIMEOUT).await;
+                return Err(DriverError::new(
+                    "test.driver.gui.process_supervision_unavailable",
+                    format!(
+                        "failed to bind CUA MCP proxy {} to an owned process tree: {error}",
+                        program.display()
+                    ),
+                ));
+            }
+        };
         let stdin = child.stdin.take().ok_or_else(|| {
             DriverError::new(
                 "test.driver.gui.cua_unavailable",
@@ -182,6 +187,7 @@ impl StdioCuaTransport {
         Ok(Self {
             state: Mutex::new(StdioState {
                 child,
+                process_tree: Some(process_tree),
                 stdin: Some(stdin),
                 stdout: BufReader::new(stdout),
                 closed: false,
@@ -251,6 +257,7 @@ impl CuaTransport for StdioCuaTransport {
         state.stdin.take();
         match tokio::time::timeout(EMERGENCY_CLOSE_TIMEOUT, state.child.wait()).await {
             Ok(Ok(_)) => {
+                terminate_process_tree(&mut state);
                 state.closed = true;
                 Ok(())
             }
@@ -312,15 +319,21 @@ fn ensure_running(state: &mut StdioState) -> Result<(), CuaTransportError> {
     match state.child.try_wait() {
         Ok(None) => Ok(()),
         Ok(Some(status)) => {
+            terminate_process_tree(state);
             state.closed = true;
             state.stdin.take();
             Err(CuaTransportError::unavailable(format!(
                 "CUA MCP proxy exited with {status}"
             )))
         }
-        Err(error) => Err(CuaTransportError::protocol(format!(
-            "failed to inspect CUA MCP proxy: {error}"
-        ))),
+        Err(error) => {
+            terminate_process_tree(state);
+            state.stdin.take();
+            state.closed = true;
+            Err(CuaTransportError::protocol(format!(
+                "failed to inspect CUA MCP proxy: {error}"
+            )))
+        }
     }
 }
 
@@ -364,9 +377,16 @@ where
 
 async fn terminate(state: &mut StdioState) {
     state.stdin.take();
+    terminate_process_tree(state);
     let _ = state.child.start_kill();
     let _ = tokio::time::timeout(EMERGENCY_CLOSE_TIMEOUT, state.child.wait()).await;
     state.closed = true;
+}
+
+fn terminate_process_tree(state: &mut StdioState) {
+    if let Some(process_tree) = state.process_tree.take() {
+        process_tree.terminate();
+    }
 }
 
 #[cfg(test)]

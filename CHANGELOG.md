@@ -41,6 +41,9 @@
 
 ### Fixed
 
+- Made the hermetic Web fixture use blocking accept with transient-handshake
+  recovery and Content-Length-framed client reads, preventing intermittent
+  Windows connection-aborted failures while retaining bounded response sizes.
 - Made Web runtime-path tests and CLI test imports respect non-Unix hosts so
   the complete workspace test and Clippy gates also pass on Windows.
 - Expanded the Rust formatting, test, and warning-free Clippy gate to a
@@ -71,6 +74,10 @@
 - GUI transport startup now requires an absolute, existing CUA policy file,
   rejects unreviewed daemon contracts before session creation, bounds JSON-RPC
   messages, and kills a desynchronized proxy after timeout or protocol error.
+- CUA proxy transport now owns the complete spawned process tree: Unix uses a
+  registered process group and Windows uses a kill-on-close Job Object. Normal
+  close, timeout, protocol failure, early exit, Drop, startup rollback, and the
+  second-interrupt emergency path no longer leave proxy descendants behind.
 - GUI cleanup re-checks the exact application identity before terminating only
   a process proven absent before launch; attached and pre-existing processes
   are never terminated. Permission checks are non-prompting and fail closed.

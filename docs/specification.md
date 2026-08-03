@@ -411,6 +411,15 @@ file replacement failures produce `test.driver.gui.artifact_path_invalid`,
 `test.driver.gui.screenshot_invalid`, or `test.driver.gui.stale_image` before an
 input tool is called.
 
+The CUA MCP proxy must be admitted into an owned process-tree boundary before
+the transport can be returned. Unix uses a dedicated process group; Windows
+uses a kill-on-close Job Object. Closing stdin is bounded, and every successful
+close still terminates descendants that outlive the proxy root. Timeout,
+protocol failure, early exit, transport drop, and the CLI emergency interrupt
+terminate the same owned boundary. If supervision cannot be established,
+startup fails with `test.driver.gui.process_supervision_unavailable` after
+bounded fallback cleanup.
+
 Surface-neutral MCP sessions reserve their identifier while terminal cleanup
 is running. A caller deadline or cancellation does not cancel a dispatched
 driver close; operations return retryable

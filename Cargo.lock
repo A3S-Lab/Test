@@ -69,6 +69,7 @@ dependencies = [
  "a3s-acl",
  "a3s-test-core",
  "async-trait",
+ "nix",
  "semver",
  "serde",
  "serde_json",
@@ -76,6 +77,7 @@ dependencies = [
  "tempfile",
  "thiserror",
  "tokio",
+ "windows-sys",
 ]
 
 [[package]]

@@ -365,6 +365,12 @@ operation resolves. A retryable driver failure then enters terminal
 `cleanup_required`: observation and action tools are rejected, while
 `test_finish` or `test_abort` can retry the same owned cleanup handle.
 
+The CUA MCP proxy is supervised separately from the tested application. Unix
+hosts place it in a registered process group; Windows hosts assign it to a
+kill-on-close Job Object. Graceful close, command timeout, protocol failure,
+transport drop, and the CLI emergency interrupt path therefore terminate the
+complete proxy tree without targeting an attached application.
+
 ## Coding Agent Skill
 
 Each release includes
@@ -455,9 +461,10 @@ Deterministic process exit codes remain stable:
 | `130` | Cancelled |
 
 For `run`, the first `Ctrl+C` requests cancellation and bounded surface
-cleanup. A second `Ctrl+C` terminates only command process groups owned by the
-current run. Browser namespaces and private runtime directories prevent
-cleanup from targeting unrelated developer sessions.
+cleanup. A second `Ctrl+C` terminates only browser command groups and CUA proxy
+groups owned by the current process. Windows CUA proxies are also protected by
+kill-on-close Job Objects. Browser namespaces and private runtime directories
+prevent cleanup from targeting unrelated developer sessions.
 
 ## Workspace
 

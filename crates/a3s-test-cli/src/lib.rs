@@ -6,8 +6,8 @@ use std::time::Duration;
 
 use a3s_test_core::{Surface, SurfaceDriver, TestSuite};
 use a3s_test_driver_gui::{
-    ApplicationIdentity, AttachSpec, CuaEndpoint, GuiAppTarget, GuiCaptureScope, GuiDriver,
-    GuiDriverConfig, GuiProfile, LaunchSpec, WindowSelector,
+    terminate_active_cua_processes, ApplicationIdentity, AttachSpec, CuaEndpoint, GuiAppTarget,
+    GuiCaptureScope, GuiDriver, GuiDriverConfig, GuiProfile, LaunchSpec, WindowSelector,
 };
 use a3s_test_driver_web::{
     terminate_active_commands, AgentBrowserConfig, AgentBrowserDriver, BrowserCapabilities,
@@ -433,6 +433,7 @@ fn install_interrupt_handler(cancellation: CancellationToken) -> tokio::task::Jo
         cancellation.cancel();
 
         if tokio::signal::ctrl_c().await.is_ok() {
+            terminate_active_cua_processes();
             terminate_active_commands();
             std::process::exit(130);
         }

@@ -1,12 +1,13 @@
 use std::collections::BTreeMap;
 use std::io::{self, Read, Write};
-use std::net::{Ipv4Addr, SocketAddr, TcpListener, TcpStream};
+use std::net::{Ipv4Addr, Shutdown, SocketAddr, TcpListener, TcpStream};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread::{self, JoinHandle};
 use std::time::Duration;
 
 const MAX_REQUEST_BYTES: usize = 16 * 1024;
+const MAX_RESPONSE_BYTES: usize = 2 * 1024 * 1024;
 const IO_TIMEOUT: Duration = Duration::from_secs(2);
 
 const HERMETIC_HTML: &str = include_str!("../../../../fixtures/web/hermetic.html");
@@ -76,9 +77,9 @@ pub fn get(origin: &str, path: &str) -> io::Result<TestHttpResponse> {
         "GET {path} HTTP/1.1\r\nHost: {address}\r\nConnection: close\r\n\r\n"
     )?;
     stream.flush()?;
+    stream.shutdown(Shutdown::Write)?;
 
-    let mut response = Vec::new();
-    stream.read_to_end(&mut response)?;
+    let response = read_response(&mut stream)?;
     parse_response(&response)
 }
 
@@ -86,14 +87,13 @@ struct FixtureServer {
     address: SocketAddr,
     requests: Arc<Mutex<Vec<RecordedRequest>>>,
     stop: Arc<AtomicBool>,
-    worker: Option<JoinHandle<()>>,
+    worker: Option<JoinHandle<io::Result<()>>>,
 }
 
 impl FixtureServer {
     fn start(site: Site) -> io::Result<Self> {
         let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, 0))?;
         let address = listener.local_addr()?;
-        listener.set_nonblocking(true)?;
 
         let requests = Arc::new(Mutex::new(Vec::new()));
         let stop = Arc::new(AtomicBool::new(false));
@@ -139,7 +139,10 @@ impl Drop for FixtureServer {
         self.stop.store(true, Ordering::Release);
         let _ = TcpStream::connect_timeout(&self.address, Duration::from_millis(250));
         if let Some(worker) = self.worker.take() {
-            worker.join().expect("Web fixture worker must not panic");
+            worker
+                .join()
+                .expect("Web fixture worker must not panic")
+                .expect("Web fixture listener must remain available until drop");
         }
     }
 }
@@ -155,7 +158,7 @@ fn serve(
     site: Site,
     requests: &Mutex<Vec<RecordedRequest>>,
     stop: &AtomicBool,
-) {
+) -> io::Result<()> {
     while !stop.load(Ordering::Acquire) {
         match listener.accept() {
             Ok((mut stream, _)) => {
@@ -173,12 +176,21 @@ fn serve(
                     let _ = write_response(&mut stream, &request.method, response);
                 }
             }
-            Err(error) if error.kind() == io::ErrorKind::WouldBlock => {
-                thread::sleep(Duration::from_millis(5));
-            }
-            Err(_) => break,
+            Err(error) if transient_accept_error(&error) => continue,
+            Err(error) => return Err(error),
         }
     }
+    Ok(())
+}
+
+fn transient_accept_error(error: &io::Error) -> bool {
+    matches!(
+        error.kind(),
+        io::ErrorKind::Interrupted
+            | io::ErrorKind::WouldBlock
+            | io::ErrorKind::ConnectionAborted
+            | io::ErrorKind::ConnectionReset
+    )
 }
 
 fn read_request(stream: &mut TcpStream) -> io::Result<RecordedRequest> {
@@ -363,7 +375,81 @@ fn write_response(stream: &mut TcpStream, method: &str, response: Response) -> i
     if method != "HEAD" {
         stream.write_all(&response.body)?;
     }
-    stream.flush()
+    stream.flush()?;
+    stream.shutdown(Shutdown::Write)
+}
+
+fn read_response(stream: &mut TcpStream) -> io::Result<Vec<u8>> {
+    let mut response = Vec::with_capacity(1024);
+    let mut buffer = [0_u8; 4096];
+    loop {
+        if let Some(expected_length) = framed_response_length(&response)? {
+            if response.len() >= expected_length {
+                response.truncate(expected_length);
+                return Ok(response);
+            }
+        }
+        if response.len() >= MAX_RESPONSE_BYTES {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "fixture response exceeded the size limit",
+            ));
+        }
+        let remaining = MAX_RESPONSE_BYTES - response.len();
+        let read_length = remaining.min(buffer.len());
+        let count = stream.read(&mut buffer[..read_length])?;
+        if count == 0 {
+            return Err(io::Error::new(
+                io::ErrorKind::UnexpectedEof,
+                "fixture response ended before its declared Content-Length",
+            ));
+        }
+        response.extend_from_slice(&buffer[..count]);
+    }
+}
+
+fn framed_response_length(response: &[u8]) -> io::Result<Option<usize>> {
+    let Some(header_end) = response.windows(4).position(|window| window == b"\r\n\r\n") else {
+        return Ok(None);
+    };
+    let headers = std::str::from_utf8(&response[..header_end]).map_err(|_| {
+        io::Error::new(
+            io::ErrorKind::InvalidData,
+            "response headers were not UTF-8",
+        )
+    })?;
+    let content_length = headers
+        .lines()
+        .skip(1)
+        .find_map(|line| {
+            let (name, value) = line.split_once(':')?;
+            name.eq_ignore_ascii_case("content-length")
+                .then_some(value.trim())
+        })
+        .ok_or_else(|| {
+            io::Error::new(
+                io::ErrorKind::InvalidData,
+                "fixture response omitted Content-Length",
+            )
+        })?
+        .parse::<usize>()
+        .map_err(|_| {
+            io::Error::new(
+                io::ErrorKind::InvalidData,
+                "fixture response Content-Length was invalid",
+            )
+        })?;
+    let total = header_end
+        .checked_add(4)
+        .and_then(|length| length.checked_add(content_length))
+        .filter(|length| *length <= MAX_RESPONSE_BYTES)
+        .ok_or_else(|| {
+            io::Error::new(
+                io::ErrorKind::InvalidData,
+                "fixture response Content-Length exceeded the size limit",
+            )
+        })?;
+    Ok(Some(total))
 }
 
 fn parse_response(response: &[u8]) -> io::Result<TestHttpResponse> {

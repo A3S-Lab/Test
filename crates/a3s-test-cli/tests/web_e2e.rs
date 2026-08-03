@@ -74,6 +74,21 @@ fn local_web_fixture_has_deterministic_routes_and_owned_lifecycle() {
 }
 
 #[test]
+fn local_web_fixture_handles_repeated_short_lived_connections() {
+    let fixture = WebFixture::start().expect("start Web fixture");
+    let origin = fixture.origin();
+
+    for request in 0..128 {
+        let health = get(&origin, "/health")
+            .unwrap_or_else(|error| panic!("fixture health request {request} failed: {error}"));
+        assert_eq!(health.status, 200);
+        assert_eq!(health.body, b"ready");
+    }
+
+    assert_eq!(fixture.primary_requests().len(), 128);
+}
+
+#[test]
 #[ignore = "requires the exact standalone agent-browser 0.26.x runtime"]
 fn real_agent_browser_runs_the_hermetic_web_suite() {
     let Some(browser) = std::env::var_os("A3S_TEST_AGENT_BROWSER").map(PathBuf::from) else {

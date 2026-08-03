@@ -356,6 +356,16 @@ release automation still needs to record a macOS host result. Windows and
 Linux fail during configuration, before a transport starts, because the
 locked CUA 0.10.0 revision has no reviewed application backend for them.
 
+The CUA stdio proxy has lifecycle ownership independent of the target
+application. On Unix it starts in a new process group that remains registered
+for the CLI emergency interrupt path. On Windows it is assigned immediately to
+a private Job Object configured with `KILL_ON_JOB_CLOSE`. Normal protocol
+shutdown first closes stdin within a fixed deadline and then terminates any
+remaining descendants. Request timeout, malformed or truncated protocol data,
+early proxy exit, transport drop, and emergency shutdown use the same tree
+boundary. A failure to establish that boundary aborts transport admission and
+reaps the just-started process tree.
+
 ## TUI driver plan
 
 The TUI driver will own a PTY session and expose semantic terminal state:

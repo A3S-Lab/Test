@@ -85,6 +85,9 @@
       with fail-closed zero-input behavior and stale-generation invalidation
 - [x] Canonical GUI evidence-root containment with link/reparse rejection and
       post-capture plus pre-input grounding-file validation
+- [x] Complete CUA proxy-tree supervision across graceful close, timeout,
+      protocol failure, Drop, and emergency interrupt paths, using Unix process
+      groups and Windows kill-on-close Job Objects
 - [ ] Record a real macOS host certification in release automation
 - [ ] Windows and Linux execution, pending reviewed backends in the locked CUA
       stack
