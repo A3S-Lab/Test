@@ -203,9 +203,10 @@ jobs:
 
           find_survivors() {
             ps -axo pid=,stat=,command= | awk '
-              /agent-browser/ && $2 !~ /^Z/ && $0 !~ /awk/ { print }
-              /Google Chrome/ && /agent-browser-chrome-/ && $2 !~ /^Z/ { print }
-              /a3s-test-browser-watchdog/ && $2 !~ /^Z/ && $0 !~ /awk/ { print }
+              $2 ~ /^Z/ || $3 ~ /(^|\/)awk$/ { next }
+              /agent-browser/ { print; next }
+              /Google Chrome/ && /agent-browser-chrome-/ { print; next }
+              /a3s-test-browser-watchdog/ { print }
             '
           }
           find_runtimes() {
