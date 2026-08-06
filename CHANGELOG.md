@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.5.0 - 2026-08-06
+
 ### Added
 
 - Added the `a3s-test-driver-gui` foundation with typed CUA endpoints and

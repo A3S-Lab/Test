@@ -92,7 +92,7 @@ tagged Rust package manually:
 
 ```bash
 cargo install --git https://github.com/A3S-Lab/Test \
-  --tag v0.4.4 --locked a3s-test-cli
+  --tag v0.5.0 --locked a3s-test-cli
 ```
 
 ## Let a coding agent test the product

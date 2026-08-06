@@ -2,7 +2,7 @@ $ErrorActionPreference = "Stop"
 
 $Root = Split-Path -Parent $PSScriptRoot
 $TempRoot = Join-Path ([IO.Path]::GetTempPath()) ("a3s-test-installer-test-" + [Guid]::NewGuid())
-$Version = "v0.4.4"
+$Version = "v0.5.0"
 $Target = "x86_64-pc-windows-msvc"
 $PayloadName = "a3s-test-$Version-$Target"
 $ReleaseDir = Join-Path $TempRoot "releases\download\$Version"
