@@ -168,7 +168,9 @@ jobs:
           $executable = Join-Path $root 'chrome-headless-shell-win64\chrome-headless-shell.exe'
           "AGENT_BROWSER_EXECUTABLE_PATH=$executable" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           'AGENT_BROWSER_ARGS=--no-sandbox' | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-          Write-Output "Chrome Headless Shell $version: $executable"
+          Write-Output "Chrome Headless Shell ${version}: $executable"
+          & $executable --version
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Run the real browser suite
         if: runner.os != 'Windows'
@@ -200,10 +202,10 @@ jobs:
           fi
 
           find_survivors() {
-            ps -axo pid=,command= | awk '
-              /agent-browser/ && $0 !~ /awk/ { print }
-              /Google Chrome/ && /agent-browser-chrome-/ { print }
-              /a3s-test-browser-watchdog/ && $0 !~ /awk/ { print }
+            ps -axo pid=,stat=,command= | awk '
+              /agent-browser/ && $2 !~ /^Z/ && $0 !~ /awk/ { print }
+              /Google Chrome/ && /agent-browser-chrome-/ && $2 !~ /^Z/ { print }
+              /a3s-test-browser-watchdog/ && $2 !~ /^Z/ && $0 !~ /awk/ { print }
             '
           }
           find_runtimes() {

@@ -148,7 +148,7 @@ impl UnixWatchdog {
         use std::process::Stdio;
 
         let script = "IFS= read -r _ || true; \
-                      kill -KILL -- \"-$1\" 2>/dev/null || true";
+                      /bin/kill -KILL -- \"-$1\" 2>/dev/null || true";
         let mut child = std::process::Command::new("/bin/sh")
             .arg("-c")
             .arg(script)

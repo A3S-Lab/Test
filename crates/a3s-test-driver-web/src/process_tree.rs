@@ -241,7 +241,7 @@ mod platform {
                             esac; \
                           done; \
                           for group in $groups; do \
-                            kill -KILL -- \"-$group\" 2>/dev/null || true; \
+                            /bin/kill -KILL -- \"-$group\" 2>/dev/null || true; \
                           done";
             let mut child = Command::new("/bin/sh")
                 .args(["-c", script, "a3s-test-browser-watchdog"])

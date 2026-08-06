@@ -71,7 +71,11 @@
   grandchildren from retaining the calling process's capture pipes.
 - Hermetic standalone-browser CI now pins Chrome Headless Shell
   147.0.7727.117 instead of downloading an unreviewed latest full-Chrome
-  build, and gives asynchronous browser teardown a bounded convergence window.
+  build, gives asynchronous browser teardown a bounded convergence window,
+  and treats reaped Unix zombies as stopped during cleanup verification.
+- Unix host-death watchdogs now invoke the external `kill` utility explicitly,
+  avoiding shell-builtin differences when terminating negative process-group
+  identifiers.
 - Cancelled session opens now release their reserved name and capacity.
   Failed observations invalidate the previous observation ID, and MCP shutdown
   closes independent sessions concurrently instead of multiplying the cleanup
