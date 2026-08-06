@@ -299,6 +299,15 @@ assignment succeeds. Close, timeout, cancellation, and Drop terminate the Job,
 wait for it to empty, and reap the direct command child. A persistent agent
 turn uses a temporary Job and clears kill-on-close only after the command exits
 successfully; failed, timed-out, or cancelled turns keep the Job armed.
+Command stdout and stderr are written to private temporary regular files and
+read on a blocking worker after the direct launcher exits. Each stream is
+limited to 8 MiB. A persistent daemon may inherit those file handles without
+holding an EOF-sensitive pipe open or back-pressuring the launcher; oversized
+or unreadable output fails the command instead of entering the protocol parser.
+On Windows, process creation is serialized while the executor temporarily
+clears inheritance from its own standard handles, then restores their original
+flags immediately after spawn. This prevents generic handle inheritance from
+leaking a calling process's capture pipes into the persistent browser daemon.
 
 PID cleanup is a secondary, identity-checked path. On Windows, a PID alone
 never authorizes `taskkill`: a bounded process command-line query must contain

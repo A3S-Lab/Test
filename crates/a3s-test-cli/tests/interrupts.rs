@@ -386,12 +386,26 @@ fn wait_until_not_alive_result(pid: &str, timeout: Duration) -> bool {
 }
 
 fn process_is_alive(pid: &str) -> bool {
-    Command::new("kill")
+    let signalled = Command::new("kill")
         .args(["-0", pid])
         .stdout(Stdio::null())
         .stderr(Stdio::null())
         .status()
-        .is_ok_and(|status| status.success())
+        .is_ok_and(|status| status.success());
+    if !signalled {
+        return false;
+    }
+
+    Command::new("ps")
+        .args(["-o", "stat=", "-p", pid])
+        .output()
+        .ok()
+        .filter(|output| output.status.success())
+        .map(|output| {
+            let state = String::from_utf8_lossy(&output.stdout);
+            !state.trim().is_empty() && !state.trim_start().starts_with('Z')
+        })
+        .unwrap_or(true)
 }
 
 fn process_test_lock() -> &'static Mutex<()> {

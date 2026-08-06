@@ -237,7 +237,13 @@ fn run_agent_domain_containment(browser: &Path, fixture: &WebFixture, workspace:
         .current_dir(workspace)
         .output()
         .expect("observe contained agent session");
-    assert_process_success("observe contained agent session", &observe);
+    assert!(
+        observe.status.success(),
+        "observe contained agent session failed\nstart stdout:\n{}\nobserve stdout:\n{}\nobserve stderr:\n{}",
+        String::from_utf8_lossy(&start.stdout),
+        String::from_utf8_lossy(&observe.stdout),
+        String::from_utf8_lossy(&observe.stderr)
+    );
     assert!(
         String::from_utf8_lossy(&observe.stdout).contains("Browser containment fixture ready"),
         "contained observation did not remain on the allowed page: {}",

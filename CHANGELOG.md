@@ -65,6 +65,13 @@
   the complete workspace test and Clippy gates also pass on Windows.
 - Expanded the Rust formatting, test, and warning-free Clippy gate to a
   fail-fast-disabled macOS, Linux, and Windows matrix.
+- Browser command stdout and stderr now use bounded file-backed capture, so a
+  persistent daemon cannot keep an inherited pipe open and stall a successful
+  command after its launcher exits. Windows browser spawns also prevent daemon
+  grandchildren from retaining the calling process's capture pipes.
+- Hermetic standalone-browser CI now pins Chrome Headless Shell
+  147.0.7727.117 instead of downloading an unreviewed latest full-Chrome
+  build, and gives asynchronous browser teardown a bounded convergence window.
 - Cancelled session opens now release their reserved name and capacity.
   Failed observations invalidate the previous observation ID, and MCP shutdown
   closes independent sessions concurrently instead of multiplying the cleanup
