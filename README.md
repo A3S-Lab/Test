@@ -223,10 +223,24 @@ a3s-test agent schema
   metadata from redirecting cleanup to another path. The Web driver also binds
   the canonical runtime directory identity and revalidates it before every
   browser command and emergency cleanup; link/reparse or same-path directory
-  replacement fails closed. Windows PID cleanup also requires a bounded
-  command-line query to match an owned browser marker before `taskkill`; query
-  failure or mismatch terminates nothing. A bounded idle timeout covers
-  abandoned sessions.
+  replacement fails closed. Deterministic runs retain the complete command and
+  browser tree until session cleanup: Unix uses owned process groups, while
+  Windows creates each command suspended, assigns it to a kill-on-close Job
+  Object, and only then resumes it. One EOF watchdog per active Unix boundary
+  kills every recorded process group if the host disappears without running
+  Drop, including an uncatchable `SIGKILL`; groups with no remaining
+  descendants are removed immediately so a reused PGID cannot become cleanup
+  authority. Persistent agent turns use a temporary boundary that is disarmed
+  only after a successful command, so
+  timeout, cancellation, and abandoned futures cannot strand reparented
+  browser descendants. PID cleanup remains a fail-closed fallback: a bounded
+  Windows command-line query must match an owned browser marker before
+  `taskkill`, and mismatch terminates nothing. A bounded idle timeout covers
+  abandoned persistent sessions. Agent start
+  publishes recovery metadata before the first browser command. If both the
+  initial action and its cleanup fail, the failed state and exact runtime are
+  retained so `agent abort` can retry instead of deleting the only PID/socket
+  ownership evidence.
 
 ## One engine, two primary workflows
 
@@ -366,10 +380,14 @@ operation resolves. A retryable driver failure then enters terminal
 `test_finish` or `test_abort` can retry the same owned cleanup handle.
 
 The CUA MCP proxy is supervised separately from the tested application. Unix
-hosts place it in a registered process group; Windows hosts assign it to a
-kill-on-close Job Object. Graceful close, command timeout, protocol failure,
-transport drop, and the CLI emergency interrupt path therefore terminate the
-complete proxy tree without targeting an attached application.
+hosts place it in a registered process group coupled to an EOF watchdog, so an
+uncatchable host exit still kills the proxy tree. Windows creates it suspended,
+assigns it to a kill-on-close Job Object, and resumes it only after assignment,
+so an eager proxy cannot launch an escaping child. Request, notification, and
+close cancellation synchronously signal the owned tree; graceful close,
+command timeout, protocol failure, transport drop, and the CLI emergency
+interrupt path terminate the complete proxy tree, wait for descendants, and
+reap the direct proxy without targeting an attached application.
 
 ## Coding Agent Skill
 
@@ -461,10 +479,11 @@ Deterministic process exit codes remain stable:
 | `130` | Cancelled |
 
 For `run`, the first `Ctrl+C` requests cancellation and bounded surface
-cleanup. A second `Ctrl+C` terminates only browser command groups and CUA proxy
-groups owned by the current process. Windows CUA proxies are also protected by
-kill-on-close Job Objects. Browser namespaces and private runtime directories
-prevent cleanup from targeting unrelated developer sessions.
+cleanup. A second `Ctrl+C` terminates only browser and CUA process boundaries
+owned by the current process. Windows browser commands and CUA proxies are
+protected by kill-on-close Job Objects. Browser namespaces, private runtime
+directories, and per-session Jobs prevent cleanup from targeting unrelated
+developer sessions.
 
 ## Workspace
 

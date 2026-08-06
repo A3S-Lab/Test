@@ -11,7 +11,9 @@
 - [x] A3S Browser and standalone agent-browser command layouts
 - [x] Private runtime, unique sessions, graceful close, PID-validated emergency
       cleanup including fail-closed Windows command-line marker admission, idle
-      timeout, and process groups
+      timeout, Unix process groups, suspended-before-assignment Windows Job
+      Objects, per-boundary Unix host-death watchdogs, and cancellation-safe
+      direct-child reaping
 - [x] Canonical Web runtime identity binding with per-command and cleanup
       revalidation, plus link-safe namespace and PID-sidecar admission
 - [x] Single and repeated SIGINT integration tests
@@ -34,6 +36,8 @@
 
 - [x] Persistent external-planner CLI sessions for coding agents
 - [x] Workspace-local event log, report, and evidence roots
+- [x] Pre-dispatch recovery metadata and failed-start runtime retention when
+      exact browser cleanup must be retried
 - [x] Observation-bound refs and origin gates for explicit URL actions
 - [x] Observation-time detection of detached pages and unapproved origins
 - [x] Browser-level cross-domain containment for links, redirects, scripts,
@@ -86,8 +90,10 @@
 - [x] Canonical GUI evidence-root containment with link/reparse rejection and
       post-capture plus pre-input grounding-file validation
 - [x] Complete CUA proxy-tree supervision across graceful close, timeout,
-      protocol failure, Drop, and emergency interrupt paths, using Unix process
-      groups and Windows kill-on-close Job Objects
+      cancellation, protocol failure, Drop, and emergency interrupt paths,
+      using Unix process groups and suspended-before-assignment Windows
+      kill-on-close Job Objects, plus Unix host-death watchdogs, bounded
+      descendant wait, and direct-child reaping
 - [ ] Record a real macOS host certification in release automation
 - [ ] Windows and Linux execution, pending reviewed backends in the locked CUA
       stack

@@ -285,12 +285,31 @@ A missing directory, a symbolic link or Windows reparse point, or a different
 directory installed at the same path fails with
 `test.driver.web.runtime_binding_lost` before dispatch. Emergency cleanup also
 rejects linked namespace components and linked or non-regular PID sidecars.
-On Windows, a PID alone never authorizes `taskkill`: a bounded process
-command-line query must contain one of the configured browser executable
-markers. A failed, timed-out, empty, or mismatched query fails closed without
-terminating the process.
+Every deterministic Web session owns its complete launched process tree.
+Unix commands enter dedicated process groups retained until session cleanup.
+Each active Unix boundary owns one EOF watchdog containing all recorded groups;
+loss of the host-side control pipe, including host `SIGKILL`, terminates those
+groups, while normal release stops and reaps the watchdog. A successful
+persistent command explicitly releases that temporary boundary so its intended
+daemon can outlive the CLI turn. Any group found empty after its command root
+is reaped is removed from both registries before its numeric PGID can be reused.
+Windows commands are created with `CREATE_SUSPENDED`, assigned to a private Job
+Object with `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE`, and resumed only after the
+assignment succeeds. Close, timeout, cancellation, and Drop terminate the Job,
+wait for it to empty, and reap the direct command child. A persistent agent
+turn uses a temporary Job and clears kill-on-close only after the command exits
+successfully; failed, timed-out, or cancelled turns keep the Job armed.
+
+PID cleanup is a secondary, identity-checked path. On Windows, a PID alone
+never authorizes `taskkill`: a bounded process command-line query must contain
+one of the configured browser executable markers. A failed, timed-out, empty,
+or mismatched query fails closed without terminating the process.
 Persistent CLI metadata remains subject to its workspace/session ownership
 marker, and neither the runtime directory nor that marker may be a link.
+`agent start` publishes the session metadata before dispatching the first
+browser command. When the initial action and exact close both fail, the session
+is stored as `failed` and its owned runtime remains available to `agent abort`;
+cleanup failure must never erase the only PID/socket ownership evidence.
 
 Accessibility, browser-console, and page-error output is serialized directly
 to JSON evidence:
@@ -415,13 +434,17 @@ file replacement failures produce `test.driver.gui.artifact_path_invalid`,
 input tool is called.
 
 The CUA MCP proxy must be admitted into an owned process-tree boundary before
-the transport can be returned. Unix uses a dedicated process group; Windows
-uses a kill-on-close Job Object. Closing stdin is bounded, and every successful
-close still terminates descendants that outlive the proxy root. Timeout,
-protocol failure, early exit, transport drop, and the CLI emergency interrupt
-terminate the same owned boundary. If supervision cannot be established,
-startup fails with `test.driver.gui.process_supervision_unavailable` after
-bounded fallback cleanup.
+the transport can be returned. Unix uses a dedicated process group and EOF
+watchdog, so abrupt host death still terminates the group. Windows creates the
+proxy suspended, assigns it to a kill-on-close Job Object, and then resumes it.
+Closing stdin is bounded, and every successful close still terminates and waits
+for descendants that outlive the proxy root. Cancellation of an in-flight
+request, notification, or close signals the same boundary before the transport
+lock is released. Timeout, protocol failure, early exit, transport drop, and
+the CLI emergency interrupt terminate that boundary and reap the direct child.
+If supervision cannot be established, startup fails with
+`test.driver.gui.process_supervision_unavailable` after bounded fallback
+cleanup.
 
 Surface-neutral MCP sessions reserve their identifier while terminal cleanup
 is running. A caller deadline or cancellation does not cancel a dispatched

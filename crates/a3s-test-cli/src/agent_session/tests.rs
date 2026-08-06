@@ -151,6 +151,48 @@ fn observations_must_remain_on_an_admitted_web_origin() {
     assert_eq!(missing_error.code(), "test.driver.web.output_invalid");
 }
 
+#[tokio::test]
+async fn failed_start_cleanup_preserves_a_retryable_session_record() {
+    let temp = tempfile::tempdir().expect("tempdir");
+    let workspace = temp.path().join("workspace");
+    tokio::fs::create_dir(&workspace).await.expect("workspace");
+    let store = AgentSessionStore::for_workspace(&workspace, "failed-start");
+    store
+        .create_directories()
+        .await
+        .expect("session directories");
+    let runtime = temp.path().join("owned-runtime");
+    tokio::fs::create_dir(&runtime)
+        .await
+        .expect("owned runtime");
+    let mut state = test_state(None);
+    state.workspace = workspace;
+    state.session = "failed-start".to_string();
+    state.runtime_dir = runtime.clone();
+    state.artifacts_dir = store.artifacts_dir().to_path_buf();
+    let cleanup_error = DriverError::new(
+        "test.driver.web.process_cleanup_failed",
+        "owned browser tree did not stop",
+    );
+
+    preserve_failed_start(&store, &mut state, None, &cleanup_error)
+        .await
+        .expect("preserve failed start");
+
+    let stored = store.load().await.expect("load preserved state");
+    assert_eq!(stored.status, AgentSessionStatus::Failed);
+    assert!(stored.latest_observation.is_none());
+    assert!(stored
+        .summary
+        .as_deref()
+        .is_some_and(|summary| summary.contains("cleanup must be retried")));
+    assert!(runtime.is_dir(), "cleanup evidence was removed");
+    assert!(
+        store.events_path().is_file(),
+        "cleanup failure was not recorded"
+    );
+}
+
 fn test_state(latest_observation: Option<u64>) -> AgentSessionState {
     AgentSessionState {
         schema_version: SESSION_SCHEMA_VERSION,

@@ -139,28 +139,49 @@ one test run
 
 Protection is layered:
 
-1. Each driver command runs in a process group owned by A3S Test.
-2. Dropping a cancelled command kills that complete process group.
-3. Normal scenario completion sends `close` to its browser session.
-4. A stuck `close` falls back to the exact private PID file and validates the
+1. Each Unix driver command runs in a new process group. Windows creates the
+   command suspended, assigns it to a private kill-on-close Job Object, and
+   resumes it only after assignment succeeds, so no descendant can win a
+   launch-before-containment race.
+2. Deterministic sessions retain every command boundary for the complete
+   session. Timeout, cancellation, Drop, and cleanup terminate the boundary,
+   wait for descendants to exit, and reap the direct command child. A single
+   Unix EOF watchdog records all groups in that boundary and kills them if the
+   host dies before Rust cleanup can run; normal cleanup also reaps the
+   watchdog. After each command root is reaped, groups without descendants are
+   removed from both registries so later PGID reuse cannot inherit ownership.
+3. A persistent agent turn uses a temporary process boundary. Successful Unix
+   commands stop and reap their watchdog, and successful Windows commands
+   clear kill-on-close before releasing the Job handle, so the daemon survives
+   the turn. Unsuccessful or cancelled commands leave containment armed and
+   kill the full tree.
+4. Normal scenario completion sends `close` and then terminates any survivor
+   still inside the owned session boundary.
+5. A stuck `close` falls back to the exact private PID file and validates the
    process before termination. Unix snapshots the command and descendants,
-   then kills only their process groups. Windows performs a bounded command-line
-   query and calls `taskkill /T` only when an owned-browser marker matches;
+   then kills only their process groups; the `ps` snapshot command itself runs
+   in a private group, writes bounded output outside a pipe, and is killed and
+   reaped with its descendants. Windows performs a bounded command-line query
+   without a back-pressured output pipe and calls `taskkill /T` only when an
+   owned-browser marker matches;
    unavailable, timed-out, or mismatched identity evidence terminates nothing.
-5. Dropping an unclosed deterministic or embedded session runs the same
+6. Dropping an unclosed deterministic or embedded session runs the same
    owned-session cleanup, then schedules an emergency `close` when no PID file
    exists yet.
-6. External-planner session handles intentionally survive individual CLI
+7. External-planner session handles intentionally survive individual CLI
    processes; `finish`, `abort`, or the bounded daemon idle timeout closes
-   them.
-7. Browser daemons receive a bounded inactivity timeout. The adapter floors the
+   them. `agent start` saves recovery metadata before dispatching the first
+   browser command, and a failed start never deletes its runtime when exact
+   cleanup also failed.
+8. Browser daemons receive a bounded inactivity timeout. The adapter floors the
    daemon-side value at the per-command deadline because admitted 0.26.x
    runtimes start idle accounting when a command begins.
-8. Restricted standalone 0.26.x sessions carry both the allowlist and an
+9. Restricted standalone 0.26.x sessions carry both the allowlist and an
    explicit Chrome engine selection. This selects the upstream launch path
    that installs request interception before the initial navigation; its
    implicit auto-launch path does not install the domain interceptor.
-9. A second SIGINT kills all currently registered command process groups.
+10. A second SIGINT terminates all currently registered command and session
+    boundaries before exit.
 
 The per-run namespace prevents cleanup from touching a developer's unrelated
 browser sessions.
@@ -364,13 +385,17 @@ locked CUA 0.10.0 revision has no reviewed application backend for them.
 
 The CUA stdio proxy has lifecycle ownership independent of the target
 application. On Unix it starts in a new process group that remains registered
-for the CLI emergency interrupt path. On Windows it is assigned immediately to
-a private Job Object configured with `KILL_ON_JOB_CLOSE`. Normal protocol
-shutdown first closes stdin within a fixed deadline and then terminates any
-remaining descendants. Request timeout, malformed or truncated protocol data,
+for the CLI emergency interrupt path; an EOF watchdog kills that group if the
+host is terminated before Drop can run. On Windows it is created suspended,
+assigned to a private Job Object configured with `KILL_ON_JOB_CLOSE`, and only
+then resumed. Normal protocol shutdown first closes stdin within a fixed
+deadline and then terminates and waits for remaining descendants. Cancellation
+guards on requests, notifications, and close signal the tree before releasing
+the transport lock. Request timeout, malformed or truncated protocol data,
 early proxy exit, transport drop, and emergency shutdown use the same tree
-boundary. A failure to establish that boundary aborts transport admission and
-reaps the just-started process tree.
+boundary and synchronously reap the direct proxy on final Drop. A failure to
+establish that boundary aborts transport admission and reaps the just-started
+process tree.
 
 ## TUI driver plan
 

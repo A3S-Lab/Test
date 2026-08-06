@@ -725,6 +725,96 @@ printf '{"success":true}\n'
 }
 
 #[cfg(unix)]
+#[test]
+fn failed_agent_start_preserves_cleanup_evidence_when_close_fails() {
+    use std::os::unix::fs::PermissionsExt;
+
+    let _test_guard = process_test_guard();
+    let temp = tempfile::tempdir().expect("tempdir");
+    let driver = temp.path().join("fake-agent-browser");
+    let log = temp.path().join("driver.log");
+    fs::write(
+        &driver,
+        r#"#!/bin/sh
+case " $* " in
+  *" --version "*)
+    printf 'agent-browser 0.26.0\n'
+    exit 0
+    ;;
+esac
+printf '%s\n' "$*" >> "$A3S_TEST_LOG"
+case " $* " in
+  *" open "*)
+    printf '{"success":false,"error":"open failed"}\n'
+    exit 1
+    ;;
+  *" close "*)
+    if [ "${A3S_TEST_FAIL_CLOSE:-}" = "1" ]; then
+      printf '{"success":false,"error":"close failed"}\n'
+      exit 1
+    fi
+    ;;
+esac
+printf '{"success":true}\n'
+"#,
+    )
+    .expect("driver");
+    fs::set_permissions(&driver, fs::Permissions::from_mode(0o755)).expect("permissions");
+
+    let start = Command::new(binary())
+        .args([
+            "agent",
+            "start",
+            "https://example.test",
+            "--session",
+            "failed-start-cleanup",
+            "--goal",
+            "Exercise failed-start cleanup",
+            "--success",
+            "No browser process survives",
+            "--browser-driver",
+            "standalone",
+            "--browser-executable",
+            driver.to_str().unwrap(),
+            "--json",
+        ])
+        .current_dir(temp.path())
+        .env("A3S_TEST_LOG", &log)
+        .env("A3S_TEST_FAIL_CLOSE", "1")
+        .output()
+        .expect("failed start");
+    assert!(!start.status.success(), "{start:?}");
+
+    let state_path = temp
+        .path()
+        .join(".a3s-test/agent-sessions/failed-start-cleanup/session.json");
+    let state: serde_json::Value =
+        serde_json::from_slice(&fs::read(&state_path).expect("preserved state"))
+            .expect("state JSON");
+    assert_eq!(state["status"], "failed");
+    let runtime = PathBuf::from(state["runtime_dir"].as_str().expect("runtime path"));
+    assert!(
+        runtime.is_dir(),
+        "failed-start cleanup removed the only owned runtime evidence"
+    );
+
+    let abort = Command::new(binary())
+        .args([
+            "agent",
+            "abort",
+            "--session",
+            "failed-start-cleanup",
+            "--json",
+        ])
+        .current_dir(temp.path())
+        .env("A3S_TEST_LOG", &log)
+        .output()
+        .expect("retry failed-start cleanup");
+    assert!(abort.status.success(), "{abort:?}");
+    assert!(!runtime.exists(), "runtime survived cleanup retry");
+}
+
+#[cfg(unix)]
 fn start_agent_session(
     workspace: &std::path::Path,
     driver: &std::path::Path,

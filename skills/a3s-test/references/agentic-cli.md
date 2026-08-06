@@ -180,6 +180,15 @@ Each workspace stores:
 - `finish` and `abort` close only the current owned browser session; a runtime
   ownership marker prevents cleanup from following edited session metadata.
   The runtime directory and ownership marker must both be non-link entries.
-  Windows emergency PID cleanup additionally requires a bounded process
-  command-line query to match an owned browser marker; query failure or mismatch
-  fails closed without calling `taskkill`.
+  Each Windows turn first assigns its suspended command to a temporary Job
+  Object. Successful turns disarm kill-on-close so the persistent daemon
+  survives; timeout, cancellation, and failed commands keep the Job armed.
+  Unix turns use the equivalent temporary process-group boundary and an EOF
+  watchdog; successful turns stop and reap it, while abrupt host death kills
+  every still-owned group.
+  Emergency PID cleanup additionally requires a bounded process command-line
+  query to match an owned browser marker; query failure or mismatch fails
+  closed without calling `taskkill`.
+- `agent start` writes recovery metadata before the first browser action. If
+  start and cleanup both fail, keep the session directory and retry exact
+  cleanup with `a3s-test agent abort --session <id> --json`.

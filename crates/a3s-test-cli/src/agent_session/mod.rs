@@ -298,6 +298,11 @@ async fn start(args: StartArgs) -> Result<ExitCode> {
         summary: None,
     };
 
+    if let Err(error) = store.save(&state).await {
+        cleanup_failed_start(&store, &state).await;
+        return Err(error.context("failed to publish agent session recovery metadata"));
+    }
+
     let mut browser = match connect(&state, BrowserConnectionPurpose::Turn).await {
         Ok(browser) => browser,
         Err(error) => {
@@ -311,7 +316,24 @@ async fn start(args: StartArgs) -> Result<ExitCode> {
     let output = match browser.execute_action("agent-start", action.clone()).await {
         Ok(output) => output,
         Err(error) => {
-            let _ = browser.close_surface().await;
+            if let Err(cleanup_error) = browser.close_surface().await {
+                let preservation =
+                    preserve_failed_start(&store, &mut state, Some(action), &cleanup_error).await;
+                let recovery = match preservation {
+                    Ok(()) => format!(
+                        "cleanup evidence was preserved; retry with `a3s-test agent abort --session {} --json`",
+                        state.session
+                    ),
+                    Err(preservation_error) => format!(
+                        "the owned runtime was retained, but recovery metadata could not be saved: {preservation_error:#}"
+                    ),
+                };
+                anyhow::bail!(
+                    "browser start failed: {}; cleanup also failed: {}; {recovery}",
+                    error.message(),
+                    cleanup_error.message()
+                );
+            }
             cleanup_failed_start(&store, &state).await;
             return Err(anyhow::Error::new(error));
         }
@@ -323,7 +345,23 @@ async fn start(args: StartArgs) -> Result<ExitCode> {
     }
     .await;
     if let Err(error) = persistence {
-        let _ = browser.close_surface().await;
+        if let Err(cleanup_error) = browser.close_surface().await {
+            let preservation =
+                preserve_failed_start(&store, &mut state, None, &cleanup_error).await;
+            let recovery = match preservation {
+                Ok(()) => format!(
+                    "cleanup evidence was preserved; retry with `a3s-test agent abort --session {} --json`",
+                    state.session
+                ),
+                Err(preservation_error) => format!(
+                    "the owned runtime was retained, but recovery metadata could not be saved: {preservation_error:#}"
+                ),
+            };
+            return Err(error.context(format!(
+                "browser cleanup also failed: {}; {recovery}",
+                cleanup_error.message()
+            )));
+        }
         cleanup_failed_start(&store, &state).await;
         return Err(error);
     }
@@ -919,6 +957,21 @@ async fn canonical_workspace() -> Result<PathBuf> {
 async fn cleanup_failed_start(store: &AgentSessionStore, state: &AgentSessionState) {
     let _ = remove_runtime_directory(&state.runtime_dir, &state.workspace, &state.session).await;
     let _ = tokio::fs::remove_dir_all(store.root()).await;
+}
+
+async fn preserve_failed_start(
+    store: &AgentSessionStore,
+    state: &mut AgentSessionState,
+    action: Option<Action>,
+    cleanup_error: &DriverError,
+) -> Result<()> {
+    state.status = AgentSessionStatus::Failed;
+    state.latest_observation = None;
+    state.summary = Some(format!(
+        "Agent session start failed and browser cleanup must be retried: {}",
+        cleanup_error.message()
+    ));
+    record_failure(store, state, "start_cleanup", action, cleanup_error).await
 }
 
 fn unix_ms() -> u64 {

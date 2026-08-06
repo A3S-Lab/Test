@@ -1,4 +1,5 @@
 use std::ffi::OsString;
+use std::ops::{Deref, DerefMut};
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
@@ -105,6 +106,49 @@ struct StdioState {
     closed: bool,
 }
 
+struct InFlightGuard<'a> {
+    state: &'a mut StdioState,
+    armed: bool,
+}
+
+impl<'a> InFlightGuard<'a> {
+    fn new(state: &'a mut StdioState) -> Self {
+        Self { state, armed: true }
+    }
+
+    fn disarm(&mut self) {
+        self.armed = false;
+    }
+}
+
+impl Deref for InFlightGuard<'_> {
+    type Target = StdioState;
+
+    fn deref(&self) -> &Self::Target {
+        self.state
+    }
+}
+
+impl DerefMut for InFlightGuard<'_> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        self.state
+    }
+}
+
+impl Drop for InFlightGuard<'_> {
+    fn drop(&mut self) {
+        if self.armed {
+            abort_now(self.state);
+        }
+    }
+}
+
+impl Drop for StdioState {
+    fn drop(&mut self) {
+        abort_now(self);
+    }
+}
+
 impl StdioCuaTransport {
     pub async fn spawn(config: &GuiDriverConfig) -> Result<Self, DriverError> {
         config.validate()?;
@@ -162,24 +206,14 @@ impl StdioCuaTransport {
                 ));
             }
         };
-        let stdin = child.stdin.take().ok_or_else(|| {
-            DriverError::new(
+        let pipes = (child.stdin.take(), child.stdout.take(), child.stderr.take());
+        let (Some(stdin), Some(stdout), Some(mut stderr)) = pipes else {
+            terminate_attached_child(&mut child, process_tree).await;
+            return Err(DriverError::new(
                 "test.driver.gui.cua_unavailable",
-                "CUA MCP proxy stdin is unavailable",
-            )
-        })?;
-        let stdout = child.stdout.take().ok_or_else(|| {
-            DriverError::new(
-                "test.driver.gui.cua_unavailable",
-                "CUA MCP proxy stdout is unavailable",
-            )
-        })?;
-        let mut stderr = child.stderr.take().ok_or_else(|| {
-            DriverError::new(
-                "test.driver.gui.cua_unavailable",
-                "CUA MCP proxy stderr is unavailable",
-            )
-        })?;
+                "CUA MCP proxy stdio pipes are unavailable",
+            ));
+        };
         tokio::spawn(async move {
             let _ = tokio::io::copy(&mut stderr, &mut tokio::io::sink()).await;
         });
@@ -202,18 +236,29 @@ impl CuaTransport for StdioCuaTransport {
     async fn request(&self, request: JsonRpcRequest) -> Result<JsonRpcResponse, CuaTransportError> {
         let payload = serialize_line(&request)?;
         let mut state = self.state.lock().await;
-        ensure_running(&mut state)?;
+        if let Err(error) = ensure_running(&mut state) {
+            if !state.closed {
+                terminate(&mut state).await;
+            }
+            return Err(error);
+        }
 
-        let exchange = async {
-            write_line(&mut state, &payload).await?;
-            let response = read_bounded_line(&mut state.stdout).await?;
-            serde_json::from_slice(&response).map_err(|error| {
-                CuaTransportError::protocol(format!(
-                    "CUA MCP proxy returned invalid JSON-RPC: {error}"
-                ))
-            })
+        let result = {
+            let mut in_flight = InFlightGuard::new(&mut state);
+            let exchange = async {
+                write_line(&mut in_flight, &payload).await?;
+                let response = read_bounded_line(&mut in_flight.stdout).await?;
+                serde_json::from_slice(&response).map_err(|error| {
+                    CuaTransportError::protocol(format!(
+                        "CUA MCP proxy returned invalid JSON-RPC: {error}"
+                    ))
+                })
+            };
+            let result = tokio::time::timeout(self.command_timeout, exchange).await;
+            in_flight.disarm();
+            result
         };
-        match tokio::time::timeout(self.command_timeout, exchange).await {
+        match result {
             Ok(Ok(response)) => Ok(response),
             Ok(Err(error)) => {
                 terminate(&mut state).await;
@@ -232,8 +277,21 @@ impl CuaTransport for StdioCuaTransport {
     async fn notify(&self, notification: JsonRpcNotification) -> Result<(), CuaTransportError> {
         let payload = serialize_line(&notification)?;
         let mut state = self.state.lock().await;
-        ensure_running(&mut state)?;
-        match tokio::time::timeout(self.command_timeout, write_line(&mut state, &payload)).await {
+        if let Err(error) = ensure_running(&mut state) {
+            if !state.closed {
+                terminate(&mut state).await;
+            }
+            return Err(error);
+        }
+        let result = {
+            let mut in_flight = InFlightGuard::new(&mut state);
+            let result =
+                tokio::time::timeout(self.command_timeout, write_line(&mut in_flight, &payload))
+                    .await;
+            in_flight.disarm();
+            result
+        };
+        match result {
             Ok(Ok(())) => Ok(()),
             Ok(Err(error)) => {
                 terminate(&mut state).await;
@@ -254,10 +312,22 @@ impl CuaTransport for StdioCuaTransport {
         if state.closed {
             return Ok(());
         }
-        state.stdin.take();
-        match tokio::time::timeout(EMERGENCY_CLOSE_TIMEOUT, state.child.wait()).await {
+        let result = {
+            let mut in_flight = InFlightGuard::new(&mut state);
+            in_flight.stdin.take();
+            let result =
+                tokio::time::timeout(EMERGENCY_CLOSE_TIMEOUT, in_flight.child.wait()).await;
+            in_flight.disarm();
+            result
+        };
+        match result {
             Ok(Ok(_)) => {
-                terminate_process_tree(&mut state);
+                if let Err(error) = terminate_process_tree_and_wait(&mut state).await {
+                    state.closed = true;
+                    return Err(CuaTransportError::protocol(format!(
+                        "failed to finish CUA MCP proxy process cleanup: {error}"
+                    )));
+                }
                 state.closed = true;
                 Ok(())
             }
@@ -318,22 +388,12 @@ fn ensure_running(state: &mut StdioState) -> Result<(), CuaTransportError> {
     }
     match state.child.try_wait() {
         Ok(None) => Ok(()),
-        Ok(Some(status)) => {
-            terminate_process_tree(state);
-            state.closed = true;
-            state.stdin.take();
-            Err(CuaTransportError::unavailable(format!(
-                "CUA MCP proxy exited with {status}"
-            )))
-        }
-        Err(error) => {
-            terminate_process_tree(state);
-            state.stdin.take();
-            state.closed = true;
-            Err(CuaTransportError::protocol(format!(
-                "failed to inspect CUA MCP proxy: {error}"
-            )))
-        }
+        Ok(Some(status)) => Err(CuaTransportError::unavailable(format!(
+            "CUA MCP proxy exited with {status}"
+        ))),
+        Err(error) => Err(CuaTransportError::protocol(format!(
+            "failed to inspect CUA MCP proxy: {error}"
+        ))),
     }
 }
 
@@ -377,21 +437,69 @@ where
 
 async fn terminate(state: &mut StdioState) {
     state.stdin.take();
-    terminate_process_tree(state);
+    let process_tree = state.process_tree.take();
+    if let Some(process_tree) = &process_tree {
+        process_tree.terminate_now();
+    }
     let _ = state.child.start_kill();
     let _ = tokio::time::timeout(EMERGENCY_CLOSE_TIMEOUT, state.child.wait()).await;
+    if let Some(process_tree) = process_tree {
+        let _ = wait_for_process_tree(process_tree).await;
+    }
     state.closed = true;
 }
 
-fn terminate_process_tree(state: &mut StdioState) {
-    if let Some(process_tree) = state.process_tree.take() {
-        process_tree.terminate();
+async fn terminate_process_tree_and_wait(state: &mut StdioState) -> std::io::Result<()> {
+    match state.process_tree.take() {
+        Some(process_tree) => wait_for_process_tree(process_tree).await,
+        None => Ok(()),
+    }
+}
+
+async fn wait_for_process_tree(process_tree: OwnedProcessTree) -> std::io::Result<()> {
+    tokio::task::spawn_blocking(move || process_tree.terminate_and_wait(EMERGENCY_CLOSE_TIMEOUT))
+        .await
+        .map_err(|error| std::io::Error::other(format!("process cleanup task failed: {error}")))?
+}
+
+async fn terminate_attached_child(child: &mut Child, process_tree: OwnedProcessTree) {
+    process_tree.terminate_now();
+    let _ = child.start_kill();
+    let _ = tokio::time::timeout(EMERGENCY_CLOSE_TIMEOUT, child.wait()).await;
+    let _ = wait_for_process_tree(process_tree).await;
+}
+
+fn abort_now(state: &mut StdioState) {
+    state.stdin.take();
+    let process_tree = state.process_tree.take();
+    if let Some(process_tree) = &process_tree {
+        process_tree.terminate_now();
+    }
+    let _ = state.child.start_kill();
+    reap_child(&mut state.child, EMERGENCY_CLOSE_TIMEOUT);
+    if let Some(process_tree) = process_tree {
+        let _ = process_tree.terminate_and_wait(EMERGENCY_CLOSE_TIMEOUT);
+    }
+    state.closed = true;
+}
+
+fn reap_child(child: &mut Child, timeout: Duration) {
+    let deadline = std::time::Instant::now() + timeout;
+    loop {
+        match child.try_wait() {
+            Ok(Some(_)) | Err(_) => return,
+            Ok(None) if std::time::Instant::now() < deadline => {
+                std::thread::sleep(Duration::from_millis(10));
+            }
+            Ok(None) => return,
+        }
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::Arc;
 
     #[test]
     fn builds_only_supported_proxy_commands() {
@@ -434,5 +542,117 @@ mod tests {
 
         assert_eq!(first, b"{\"jsonrpc\":\"2.0\",\"id\":1}\n");
         assert_eq!(second, b"second\n");
+    }
+
+    #[tokio::test]
+    async fn cancelling_an_in_flight_request_terminates_the_proxy_immediately() {
+        let (transport, process_id) = hanging_transport().await;
+        let request = tokio::spawn({
+            let transport = Arc::clone(&transport);
+            async move {
+                transport
+                    .request(JsonRpcRequest::new(1, "fixture/hang", None))
+                    .await
+            }
+        });
+        wait_until_request_holds_transport(&transport).await;
+
+        request.abort();
+        assert!(request
+            .await
+            .expect_err("request cancellation")
+            .is_cancelled());
+        let terminated = wait_until_child_exits(&transport, Duration::from_secs(1)).await;
+        if !terminated {
+            let _ = transport.close().await;
+        }
+
+        assert!(
+            terminated,
+            "cancelled request left CUA proxy {process_id} running"
+        );
+    }
+
+    async fn hanging_transport() -> (Arc<StdioCuaTransport>, u32) {
+        let mut command = hanging_command();
+        command
+            .stdin(std::process::Stdio::piped())
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::null());
+        configure_owned_process(&mut command);
+        let mut child = command.spawn().expect("spawn hanging CUA proxy");
+        let process_id = child.id().expect("hanging proxy PID");
+        let process_tree = OwnedProcessTree::attach(&child).expect("contain hanging CUA proxy");
+        let stdin = child.stdin.take().expect("hanging proxy stdin");
+        let stdout = child.stdout.take().expect("hanging proxy stdout");
+        (
+            Arc::new(StdioCuaTransport {
+                state: Mutex::new(StdioState {
+                    child,
+                    process_tree: Some(process_tree),
+                    stdin: Some(stdin),
+                    stdout: BufReader::new(stdout),
+                    closed: false,
+                }),
+                command_timeout: Duration::from_secs(30),
+            }),
+            process_id,
+        )
+    }
+
+    #[cfg(unix)]
+    fn hanging_command() -> Command {
+        let mut command = Command::new("/bin/sh");
+        command.args(["-c", "sleep 30"]);
+        command
+    }
+
+    #[cfg(windows)]
+    fn hanging_command() -> Command {
+        let system_root = PathBuf::from(std::env::var_os("SystemRoot").expect("SystemRoot"));
+        let mut command = Command::new(system_root.join("System32").join("cmd.exe"));
+        command.args(["/D", "/S", "/C", "ping -n 30 127.0.0.1 >NUL"]);
+        command
+    }
+
+    #[cfg(not(any(unix, windows)))]
+    fn hanging_command() -> Command {
+        let mut command = Command::new("sleep");
+        command.arg("30");
+        command
+    }
+
+    async fn wait_until_request_holds_transport(transport: &StdioCuaTransport) {
+        let deadline = tokio::time::Instant::now() + Duration::from_secs(5);
+        loop {
+            if transport.state.try_lock().is_err() {
+                return;
+            }
+            assert!(
+                tokio::time::Instant::now() < deadline,
+                "request never acquired the CUA transport"
+            );
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+    }
+
+    async fn wait_until_child_exits(transport: &StdioCuaTransport, timeout: Duration) -> bool {
+        let deadline = tokio::time::Instant::now() + timeout;
+        loop {
+            let exited = transport
+                .state
+                .lock()
+                .await
+                .child
+                .try_wait()
+                .is_ok_and(|status| status.is_some());
+            if exited {
+                return true;
+            }
+            if tokio::time::Instant::now() >= deadline {
+                return false;
+            }
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
     }
 }

@@ -46,10 +46,71 @@ jobs:
       - name: Run Clippy
         run: cargo clippy --workspace --all-targets --locked -- -D warnings
 
+      - name: Assert Unix process-test cleanup
+        if: always() && runner.os != 'Windows'
+        shell: bash
+        run: |
+          set -euo pipefail
+          survivors="$(
+            ps -axo pid=,command= | awk '
+              /a3s-test-(browser|cua)-watchdog/ && $0 !~ /awk/ { print }
+              /successful_command_descendant_fixture/ && $0 !~ /awk/ { print }
+              /owned_process_tree_descendant_fixture/ && $0 !~ /awk/ { print }
+              /fake-agent-browser/ && $0 !~ /awk/ { print }
+            '
+          )"
+          runtime_roots=(/tmp)
+          if [[ -n "${TMPDIR:-}" && "$TMPDIR" != /tmp ]]; then
+            runtime_roots+=("$TMPDIR")
+          fi
+          runtimes="$(
+            for runtime_root in "${runtime_roots[@]}"; do
+              find "$runtime_root" -maxdepth 1 -type d \
+                \( -name 'a3st-*' -o -name 'a3s-test-browser-*' \) -print
+            done
+          )"
+          if [[ -n "$survivors" || -n "$runtimes" ]]; then
+            printf 'Surviving process-test helpers:\n%s\n' "$survivors" >&2
+            printf 'Surviving private runtimes:\n%s\n' "$runtimes" >&2
+            exit 1
+          fi
+
+      - name: Assert Windows process-test cleanup
+        if: always() && runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $survivors = @(
+            Get-CimInstance Win32_Process | Where-Object {
+              $_.CommandLine -match 'successful_command_descendant_fixture' -or
+              $_.CommandLine -match 'owned_process_tree_descendant_fixture'
+            }
+          )
+          $runtimeRoot = [System.IO.Path]::GetTempPath()
+          $runtimes = @(
+            Get-ChildItem -LiteralPath $runtimeRoot -Directory -ErrorAction SilentlyContinue |
+              Where-Object {
+                $_.Name -like 'a3st-*' -or
+                $_.Name -like 'a3s-test-browser-*'
+              }
+          )
+          if ($survivors.Count -gt 0 -or $runtimes.Count -gt 0) {
+            $survivors |
+              Select-Object ProcessId, ParentProcessId, Name, CommandLine |
+              Format-List | Out-String | Write-Error
+            $runtimes | Select-Object FullName | Format-List | Out-String | Write-Error
+            exit 1
+          }
+
   web-e2e:
-    name: Hermetic Web E2E
-    runs-on: macos-14
+    name: Hermetic Web E2E (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
     timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - macos-14
+          - windows-latest
 
     steps:
       - name: Check out repository
@@ -72,6 +133,7 @@ jobs:
           agent-browser --version
 
       - name: Run the real browser suite
+        if: runner.os != 'Windows'
         shell: bash
         run: |
           export A3S_TEST_AGENT_BROWSER="$(command -v agent-browser)"
@@ -79,6 +141,70 @@ jobs:
             cargo test -p a3s-test-cli --test web_e2e \
             real_agent_browser_runs_the_hermetic_web_suite \
             --locked -- --ignored --exact --nocapture
+
+      - name: Run the real browser suite on Windows
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $env:A3S_TEST_AGENT_BROWSER = (Get-Command agent-browser.cmd).Source
+          cargo test -p a3s-test-cli --test web_e2e `
+            real_agent_browser_runs_the_hermetic_web_suite `
+            --locked -- --ignored --exact --nocapture
+
+      - name: Assert Unix browser cleanup
+        if: always() && runner.os != 'Windows'
+        shell: bash
+        run: |
+          set -euo pipefail
+          survivors="$(
+            ps -axo pid=,command= | awk '
+              /agent-browser/ && $0 !~ /awk/ { print }
+              /Google Chrome/ && /agent-browser-chrome-/ { print }
+              /a3s-test-browser-watchdog/ && $0 !~ /awk/ { print }
+            '
+          )"
+          runtime_roots=(/tmp)
+          if [[ -n "${TMPDIR:-}" && "$TMPDIR" != /tmp ]]; then
+            runtime_roots+=("$TMPDIR")
+          fi
+          runtimes="$(
+            for runtime_root in "${runtime_roots[@]}"; do
+              find "$runtime_root" -maxdepth 1 -type d \
+                \( -name 'a3st-*' -o -name 'a3s-test-browser-*' \) -print
+            done
+          )"
+          if [[ -n "$survivors" || -n "$runtimes" ]]; then
+            printf 'Surviving browser processes:\n%s\n' "$survivors" >&2
+            printf 'Surviving private runtimes:\n%s\n' "$runtimes" >&2
+            exit 1
+          fi
+
+      - name: Assert Windows browser cleanup
+        if: always() && runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $survivors = @(
+            Get-CimInstance Win32_Process | Where-Object {
+              $_.Name -eq 'agent-browser-win32-x64.exe' -or
+              ($_.Name -in @('chrome.exe', 'msedge.exe') -and
+                $_.CommandLine -match 'agent-browser-chrome-')
+            }
+          )
+          $runtimeRoot = [System.IO.Path]::GetTempPath()
+          $runtimes = @(
+            Get-ChildItem -LiteralPath $runtimeRoot -Directory -ErrorAction SilentlyContinue |
+              Where-Object {
+                $_.Name -like 'a3st-*' -or
+                $_.Name -like 'a3s-test-browser-*'
+              }
+          )
+          if ($survivors.Count -gt 0 -or $runtimes.Count -gt 0) {
+            $survivors |
+              Select-Object ProcessId, ParentProcessId, Name, CommandLine |
+              Format-List | Out-String | Write-Error
+            $runtimes | Select-Object FullName | Format-List | Out-String | Write-Error
+            exit 1
+          }
 
   unix-installers:
     name: Installer (${{ matrix.os }})

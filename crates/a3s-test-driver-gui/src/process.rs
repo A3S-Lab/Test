@@ -13,14 +13,19 @@ pub(crate) fn configure_owned_process(command: &mut Command) {
     {
         use std::os::windows::process::CommandExt as _;
 
+        const CREATE_SUSPENDED: u32 = 0x0000_0004;
         const CREATE_NO_WINDOW: u32 = 0x0800_0000;
-        command.as_std_mut().creation_flags(CREATE_NO_WINDOW);
+        command
+            .as_std_mut()
+            .creation_flags(CREATE_SUSPENDED | CREATE_NO_WINDOW);
     }
 }
 
 pub(crate) struct OwnedProcessTree {
     #[cfg(unix)]
     process_group: u32,
+    #[cfg(unix)]
+    watchdog: UnixWatchdog,
     #[cfg(windows)]
     job: windows::Job,
     armed: bool,
@@ -31,9 +36,11 @@ impl OwnedProcessTree {
         #[cfg(unix)]
         {
             let process_id = valid_process_id(child)?;
+            let watchdog = UnixWatchdog::spawn(process_id)?;
             register_process_group(process_id)?;
             Ok(Self {
                 process_group: process_id,
+                watchdog,
                 armed: true,
             })
         }
@@ -52,9 +59,21 @@ impl OwnedProcessTree {
         }
     }
 
-    pub(crate) fn terminate(mut self) {
+    #[cfg(test)]
+    fn terminate(mut self) {
         self.terminate_inner();
-        self.disarm();
+        let _ = self.disarm();
+    }
+
+    pub(crate) fn terminate_now(&self) {
+        self.terminate_inner();
+    }
+
+    pub(crate) fn terminate_and_wait(mut self, timeout: Duration) -> io::Result<()> {
+        self.terminate_inner();
+        let result = self.wait_for_exit(timeout);
+        let disarm_result = self.disarm();
+        result.and(disarm_result)
     }
 
     fn terminate_inner(&self) {
@@ -65,14 +84,34 @@ impl OwnedProcessTree {
         self.job.terminate();
     }
 
-    fn disarm(&mut self) {
+    fn wait_for_exit(&self, timeout: Duration) -> io::Result<()> {
+        #[cfg(unix)]
+        return wait_for_process_group(self.process_group, timeout);
+
+        #[cfg(windows)]
+        return self.job.wait_for_exit(timeout);
+
+        #[cfg(not(any(unix, windows)))]
+        {
+            let _ = timeout;
+            Ok(())
+        }
+    }
+
+    fn disarm(&mut self) -> io::Result<()> {
         if !self.armed {
-            return;
+            return Ok(());
         }
         self.armed = false;
 
         #[cfg(unix)]
-        unregister_process_group(self.process_group);
+        {
+            unregister_process_group(self.process_group);
+            self.watchdog.trigger()
+        }
+
+        #[cfg(not(unix))]
+        Ok(())
     }
 }
 
@@ -92,12 +131,79 @@ impl Drop for OwnedProcessTree {
     fn drop(&mut self) {
         if self.armed {
             self.terminate_inner();
-            self.disarm();
+            let _ = self.disarm();
         }
     }
 }
 
+#[cfg(unix)]
+struct UnixWatchdog {
+    input: Option<std::process::ChildStdin>,
+    child: std::process::Child,
+}
+
+#[cfg(unix)]
+impl UnixWatchdog {
+    fn spawn(process_group: u32) -> io::Result<Self> {
+        use std::process::Stdio;
+
+        let script = "IFS= read -r _ || true; \
+                      kill -KILL -- \"-$1\" 2>/dev/null || true";
+        let mut child = std::process::Command::new("/bin/sh")
+            .arg("-c")
+            .arg(script)
+            .arg("a3s-test-cua-watchdog")
+            .arg(process_group.to_string())
+            .stdin(Stdio::piped())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn()?;
+        let Some(input) = child.stdin.take() else {
+            let _ = child.kill();
+            let _ = child.wait();
+            return Err(io::Error::other(
+                "CUA process-group watchdog stdin is unavailable",
+            ));
+        };
+        Ok(Self {
+            input: Some(input),
+            child,
+        })
+    }
+
+    fn trigger(&mut self) -> io::Result<()> {
+        self.input.take();
+        let deadline = std::time::Instant::now() + Duration::from_secs(5);
+        loop {
+            match self.child.try_wait() {
+                Ok(Some(_)) => return Ok(()),
+                Ok(None) if std::time::Instant::now() < deadline => {
+                    std::thread::sleep(Duration::from_millis(10));
+                }
+                Ok(None) => {
+                    let _ = self.child.kill();
+                    let _ = self.child.wait();
+                    return Err(io::Error::new(
+                        io::ErrorKind::TimedOut,
+                        "CUA process-group watchdog did not exit",
+                    ));
+                }
+                Err(error) => return Err(error),
+            }
+        }
+    }
+}
+
+#[cfg(unix)]
+impl Drop for UnixWatchdog {
+    fn drop(&mut self) {
+        let _ = self.trigger();
+    }
+}
+
 pub(crate) async fn terminate_unattached_child(child: &mut Child, timeout: Duration) {
+    let deadline = std::time::Instant::now() + timeout;
+
     #[cfg(any(unix, windows))]
     let process_id = child.id();
 
@@ -108,11 +214,23 @@ pub(crate) async fn terminate_unattached_child(child: &mut Child, timeout: Durat
 
     #[cfg(windows)]
     if let Some(process_id) = process_id {
-        windows::terminate_process_tree(process_id, timeout).await;
+        windows::terminate_process_tree(process_id, timeout / 2).await;
     }
 
     let _ = child.start_kill();
-    let _ = tokio::time::timeout(timeout, child.wait()).await;
+    let _ = tokio::time::timeout(remaining_until(deadline), child.wait()).await;
+
+    #[cfg(unix)]
+    if let Some(process_group) = process_id {
+        let remaining = remaining_until(deadline);
+        let _ =
+            tokio::task::spawn_blocking(move || wait_for_process_group(process_group, remaining))
+                .await;
+    }
+}
+
+fn remaining_until(deadline: std::time::Instant) -> Duration {
+    deadline.saturating_duration_since(std::time::Instant::now())
 }
 
 /// Immediately terminate CUA proxy process groups owned by this process.
@@ -170,21 +288,52 @@ fn terminate_process_group(process_group: u32) {
     let _ = killpg(Pid::from_raw(process_group), Signal::SIGKILL);
 }
 
+#[cfg(unix)]
+fn wait_for_process_group(process_group: u32, timeout: Duration) -> io::Result<()> {
+    use nix::errno::Errno;
+    use nix::sys::signal::killpg;
+    use nix::unistd::Pid;
+
+    let process_group = i32::try_from(process_group)
+        .map_err(|_| io::Error::other("CUA process-group identifier is too large"))?;
+    let deadline = std::time::Instant::now() + timeout;
+    loop {
+        match killpg(Pid::from_raw(process_group), None) {
+            Err(Errno::ESRCH) => return Ok(()),
+            Ok(()) | Err(Errno::EPERM) => {}
+            Err(error) => return Err(io::Error::from_raw_os_error(error as i32)),
+        }
+        if std::time::Instant::now() >= deadline {
+            return Err(io::Error::new(
+                io::ErrorKind::TimedOut,
+                "CUA process group did not stop before the cleanup deadline",
+            ));
+        }
+        std::thread::sleep(Duration::from_millis(10));
+    }
+}
+
 #[cfg(windows)]
 mod windows {
     use std::ffi::c_void;
     use std::io;
-    use std::mem::size_of;
+    use std::mem::{size_of, MaybeUninit};
     use std::os::windows::io::{AsRawHandle, FromRawHandle, OwnedHandle};
     use std::path::PathBuf;
-    use std::time::Duration;
+    use std::time::{Duration, Instant};
 
     use tokio::process::{Child, Command};
-    use windows_sys::Win32::System::JobObjects::{
-        AssignProcessToJobObject, CreateJobObjectW, JobObjectExtendedLimitInformation,
-        SetInformationJobObject, TerminateJobObject, JOBOBJECT_EXTENDED_LIMIT_INFORMATION,
-        JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE,
+    use windows_sys::Win32::Foundation::INVALID_HANDLE_VALUE;
+    use windows_sys::Win32::System::Diagnostics::ToolHelp::{
+        CreateToolhelp32Snapshot, Thread32First, Thread32Next, TH32CS_SNAPTHREAD, THREADENTRY32,
     };
+    use windows_sys::Win32::System::JobObjects::{
+        AssignProcessToJobObject, CreateJobObjectW, JobObjectBasicAccountingInformation,
+        JobObjectExtendedLimitInformation, QueryInformationJobObject, SetInformationJobObject,
+        TerminateJobObject, JOBOBJECT_BASIC_ACCOUNTING_INFORMATION,
+        JOBOBJECT_EXTENDED_LIMIT_INFORMATION, JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE,
+    };
+    use windows_sys::Win32::System::Threading::{OpenThread, ResumeThread, THREAD_SUSPEND_RESUME};
 
     pub(super) struct Job {
         handle: OwnedHandle,
@@ -192,6 +341,7 @@ mod windows {
 
     impl Job {
         pub(super) fn attach(child: &Child) -> io::Result<Self> {
+            let process_id = super::valid_process_id(child)?;
             let raw_handle = unsafe { CreateJobObjectW(std::ptr::null(), std::ptr::null()) };
             if raw_handle.is_null() {
                 return Err(io::Error::last_os_error());
@@ -226,12 +376,89 @@ mod windows {
             if assigned == 0 {
                 return Err(io::Error::last_os_error());
             }
-            Ok(Self { handle })
+            let job = Self { handle };
+            if let Err(error) = resume_process(process_id) {
+                job.terminate();
+                return Err(error);
+            }
+            Ok(job)
         }
 
         pub(super) fn terminate(&self) {
             let _ = unsafe { TerminateJobObject(self.handle.as_raw_handle(), 1) };
         }
+
+        pub(super) fn wait_for_exit(&self, timeout: Duration) -> io::Result<()> {
+            let deadline = Instant::now() + timeout;
+            while self.active_process_count()? > 0 {
+                if Instant::now() >= deadline {
+                    return Err(io::Error::new(
+                        io::ErrorKind::TimedOut,
+                        "CUA Job Object did not empty before the cleanup deadline",
+                    ));
+                }
+                std::thread::sleep(Duration::from_millis(10));
+            }
+            Ok(())
+        }
+
+        fn active_process_count(&self) -> io::Result<u32> {
+            let mut accounting = MaybeUninit::<JOBOBJECT_BASIC_ACCOUNTING_INFORMATION>::uninit();
+            let information_length =
+                u32::try_from(size_of::<JOBOBJECT_BASIC_ACCOUNTING_INFORMATION>())
+                    .map_err(|_| io::Error::other("Windows Job accounting is too large"))?;
+            let queried = unsafe {
+                QueryInformationJobObject(
+                    self.handle.as_raw_handle(),
+                    JobObjectBasicAccountingInformation,
+                    accounting.as_mut_ptr().cast::<c_void>(),
+                    information_length,
+                    std::ptr::null_mut(),
+                )
+            };
+            if queried == 0 {
+                return Err(io::Error::last_os_error());
+            }
+            Ok(unsafe { accounting.assume_init() }.ActiveProcesses)
+        }
+    }
+
+    fn resume_process(process_id: u32) -> io::Result<()> {
+        let raw_snapshot = unsafe { CreateToolhelp32Snapshot(TH32CS_SNAPTHREAD, 0) };
+        if raw_snapshot == INVALID_HANDLE_VALUE {
+            return Err(io::Error::last_os_error());
+        }
+        let snapshot = unsafe { OwnedHandle::from_raw_handle(raw_snapshot) };
+        let mut entry = THREADENTRY32 {
+            dwSize: u32::try_from(size_of::<THREADENTRY32>())
+                .map_err(|_| io::Error::other("Windows thread entry is too large"))?,
+            ..Default::default()
+        };
+        let mut found = false;
+        let mut available = unsafe { Thread32First(snapshot.as_raw_handle(), &mut entry) } != 0;
+        while available {
+            if entry.th32OwnerProcessID == process_id {
+                let raw_thread =
+                    unsafe { OpenThread(THREAD_SUSPEND_RESUME, 0, entry.th32ThreadID) };
+                if raw_thread.is_null() {
+                    return Err(io::Error::last_os_error());
+                }
+                let thread = unsafe { OwnedHandle::from_raw_handle(raw_thread) };
+                let previous_count = unsafe { ResumeThread(thread.as_raw_handle()) };
+                if previous_count == u32::MAX {
+                    return Err(io::Error::last_os_error());
+                }
+                found = true;
+            }
+            available = unsafe { Thread32Next(snapshot.as_raw_handle(), &mut entry) } != 0;
+        }
+        if !found {
+            return Err(io::Error::new(
+                io::ErrorKind::NotFound,
+                "suspended CUA MCP proxy thread was not found",
+            ));
+        }
+        Ok(())
     }
 
     pub(super) async fn terminate_process_tree(process_id: u32, timeout: Duration) {
@@ -271,9 +498,14 @@ mod tests {
     use std::process::Stdio;
 
     const DESCENDANT_FIXTURE_TEST: &str = "process::tests::owned_process_tree_descendant_fixture";
+    #[cfg(unix)]
+    const WATCHDOG_HOST_FIXTURE_TEST: &str =
+        "process::tests::owned_process_tree_watchdog_host_fixture";
     const DESCENDANT_MODE_ENV: &str = "A3S_TEST_CUA_DESCENDANT_MODE";
     const DESCENDANT_GATE_ENV: &str = "A3S_TEST_CUA_DESCENDANT_GATE";
     const DESCENDANT_PID_ENV: &str = "A3S_TEST_CUA_DESCENDANT_PID_FILE";
+    #[cfg(unix)]
+    const WATCHDOG_PROXY_PID_ENV: &str = "A3S_TEST_CUA_WATCHDOG_PROXY_PID_FILE";
 
     #[tokio::test]
     async fn owned_process_tree_terminates_a_late_spawned_descendant() {
@@ -287,13 +519,97 @@ mod tests {
         assert_descendant_is_terminated(drop).await;
     }
 
+    #[tokio::test]
+    async fn owned_process_tree_contains_a_descendant_that_spawns_before_attachment() {
+        let _test_guard = process_tree_test_lock().lock().await;
+        let temp = tempfile::tempdir().expect("temp dir");
+        let gate = temp.path().join("unused-gate");
+        let pid_file = temp.path().join("immediate-child.pid");
+        let mut command = descendant_fixture_command(&gate, &pid_file);
+        command.env(DESCENDANT_MODE_ENV, "parent-immediate");
+        configure_owned_process(&mut command);
+        command
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null());
+
+        let mut child = command.spawn().expect("spawn immediate proxy fixture");
+        tokio::time::sleep(Duration::from_millis(250)).await;
+        let process_tree = OwnedProcessTree::attach(&child).expect("bind owned process tree");
+        let descendant = wait_for_pid(&pid_file).await;
+
+        process_tree.terminate();
+        let _ = tokio::time::timeout(Duration::from_secs(5), child.wait()).await;
+        let stopped = wait_until_stopped(descendant).await;
+        if !stopped {
+            terminate_fixture(descendant).await;
+        }
+        assert!(
+            stopped,
+            "a descendant spawned before Job attachment escaped containment"
+        );
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn host_sigkill_triggers_watchdog_for_proxy_and_descendant() {
+        let _test_guard = process_tree_test_lock().lock().await;
+        let temp = tempfile::tempdir().expect("temp dir");
+        let proxy_pid_file = temp.path().join("proxy.pid");
+        let descendant_pid_file = temp.path().join("descendant.pid");
+        let mut host = std::process::Command::new(
+            std::env::current_exe().expect("current watchdog host executable"),
+        )
+        .args([WATCHDOG_HOST_FIXTURE_TEST, "--ignored", "--exact"])
+        .env(WATCHDOG_PROXY_PID_ENV, &proxy_pid_file)
+        .env(DESCENDANT_PID_ENV, &descendant_pid_file)
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .expect("spawn watchdog host fixture");
+
+        let proxy = wait_for_pid(&proxy_pid_file).await;
+        let descendant = wait_for_pid(&descendant_pid_file).await;
+        assert!(process_is_running(proxy), "proxy fixture never started");
+        assert!(
+            process_is_running(descendant),
+            "proxy descendant fixture never started"
+        );
+
+        let host_pid = i32::try_from(host.id()).expect("watchdog host PID");
+        nix::sys::signal::kill(
+            nix::unistd::Pid::from_raw(host_pid),
+            nix::sys::signal::Signal::SIGKILL,
+        )
+        .expect("kill watchdog host fixture");
+        wait_for_host_exit(&mut host).await;
+
+        let proxy_stopped = wait_until_stopped(proxy).await;
+        let descendant_stopped = wait_until_stopped(descendant).await;
+        if !proxy_stopped {
+            terminate_fixture(proxy).await;
+        }
+        if !descendant_stopped {
+            terminate_fixture(descendant).await;
+        }
+        assert!(
+            proxy_stopped,
+            "CUA proxy {proxy} survived its host's SIGKILL"
+        );
+        assert!(
+            descendant_stopped,
+            "CUA proxy descendant {descendant} survived its host's SIGKILL"
+        );
+    }
+
     #[cfg(unix)]
     #[tokio::test]
     async fn emergency_registry_terminates_a_late_spawned_descendant() {
         let _test_guard = process_tree_test_lock().lock().await;
         assert_descendant_is_terminated(|mut process_tree| {
             terminate_active_cua_processes();
-            process_tree.disarm();
+            let _ = process_tree.disarm();
         })
         .await;
     }
@@ -328,7 +644,10 @@ mod tests {
             .expect("owned proxy termination deadline")
             .expect("wait for owned proxy");
         assert!(!status.success());
-        wait_until_stopped(descendant).await;
+        assert!(
+            wait_until_stopped(descendant).await,
+            "descendant process {descendant} survived owned-tree termination"
+        );
     }
 
     async fn wait_for_pid(path: &Path) -> u32 {
@@ -347,12 +666,27 @@ mod tests {
         }
     }
 
-    async fn wait_until_stopped(process_id: u32) {
+    async fn wait_until_stopped(process_id: u32) -> bool {
         let deadline = tokio::time::Instant::now() + Duration::from_secs(5);
         while process_is_running(process_id) {
+            if tokio::time::Instant::now() >= deadline {
+                return false;
+            }
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+        true
+    }
+
+    #[cfg(unix)]
+    async fn wait_for_host_exit(child: &mut std::process::Child) {
+        let deadline = tokio::time::Instant::now() + Duration::from_secs(5);
+        loop {
+            if child.try_wait().expect("poll watchdog host").is_some() {
+                return;
+            }
             assert!(
                 tokio::time::Instant::now() < deadline,
-                "descendant process {process_id} survived owned-tree termination"
+                "watchdog host did not stop after SIGKILL"
             );
             tokio::time::sleep(Duration::from_millis(10)).await;
         }
@@ -376,7 +710,7 @@ mod tests {
             std::thread::sleep(Duration::from_secs(30));
             return;
         }
-        assert_eq!(mode, "parent");
+        assert!(matches!(mode.as_str(), "parent" | "parent-immediate"));
 
         let gate = std::env::var_os(DESCENDANT_GATE_ENV)
             .map(std::path::PathBuf::from)
@@ -384,13 +718,15 @@ mod tests {
         let pid_file = std::env::var_os(DESCENDANT_PID_ENV)
             .map(std::path::PathBuf::from)
             .expect("descendant fixture PID file");
-        let deadline = std::time::Instant::now() + Duration::from_secs(5);
-        while !gate.is_file() {
-            assert!(
-                std::time::Instant::now() < deadline,
-                "descendant fixture gate was not released"
-            );
-            std::thread::sleep(Duration::from_millis(10));
+        if mode == "parent" {
+            let deadline = std::time::Instant::now() + Duration::from_secs(5);
+            while !gate.is_file() {
+                assert!(
+                    std::time::Instant::now() < deadline,
+                    "descendant fixture gate was not released"
+                );
+                std::thread::sleep(Duration::from_millis(10));
+            }
         }
 
         let mut child = std::process::Command::new(
@@ -406,6 +742,57 @@ mod tests {
         std::fs::write(pid_file, child.id().to_string()).expect("publish descendant PID");
         let _ = child.wait();
     }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    #[ignore = "helper process for watchdog host-death lifecycle test"]
+    async fn owned_process_tree_watchdog_host_fixture() {
+        let proxy_pid_file = std::env::var_os(WATCHDOG_PROXY_PID_ENV)
+            .map(std::path::PathBuf::from)
+            .expect("watchdog proxy PID file");
+        let descendant_pid_file = std::env::var_os(DESCENDANT_PID_ENV)
+            .map(std::path::PathBuf::from)
+            .expect("watchdog descendant PID file");
+        let unused_gate = proxy_pid_file.with_extension("gate");
+        let mut command = descendant_fixture_command(&unused_gate, &descendant_pid_file);
+        command.env(DESCENDANT_MODE_ENV, "parent-immediate");
+        configure_owned_process(&mut command);
+        command
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null());
+
+        let child = command.spawn().expect("spawn watchdog-owned CUA proxy");
+        let process_tree = OwnedProcessTree::attach(&child).expect("attach watchdog-owned proxy");
+        std::fs::write(
+            &proxy_pid_file,
+            child.id().expect("watchdog-owned proxy PID").to_string(),
+        )
+        .expect("publish watchdog-owned proxy PID");
+
+        let _owned_child = child;
+        let _owned_process_tree = process_tree;
+        std::future::pending::<()>().await;
+    }
+
+    #[cfg(unix)]
+    async fn terminate_fixture(process_id: u32) {
+        let Ok(process_id) = i32::try_from(process_id) else {
+            return;
+        };
+        let _ = nix::sys::signal::kill(
+            nix::unistd::Pid::from_raw(process_id),
+            nix::sys::signal::Signal::SIGKILL,
+        );
+    }
+
+    #[cfg(windows)]
+    async fn terminate_fixture(process_id: u32) {
+        windows::terminate_process_tree(process_id, Duration::from_secs(5)).await;
+    }
+
+    #[cfg(not(any(unix, windows)))]
+    async fn terminate_fixture(_process_id: u32) {}
 
     #[cfg(unix)]
     fn process_is_running(process_id: u32) -> bool {

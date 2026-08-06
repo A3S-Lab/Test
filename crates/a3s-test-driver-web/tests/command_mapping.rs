@@ -25,6 +25,7 @@ struct RecordingExecutor {
 struct FailingActionExecutor {
     calls: AtomicUsize,
     error: CommandError,
+    cleanup_error: Option<CommandError>,
 }
 
 impl RecordingExecutor {
@@ -119,6 +120,9 @@ impl CommandExecutor for FailingActionExecutor {
         }
         if call == 1 {
             return Err(self.error.clone());
+        }
+        if let Some(error) = &self.cleanup_error {
+            return Err(error.clone());
         }
         Ok(CommandOutput {
             exit_code: 0,
@@ -502,6 +506,7 @@ async fn marks_only_pre_dispatch_command_failures_as_retryable() {
         let executor = Arc::new(FailingActionExecutor {
             calls: AtomicUsize::new(0),
             error: command_error,
+            cleanup_error: None,
         });
         let driver = AgentBrowserDriver::with_executor(
             AgentBrowserConfig {
@@ -538,10 +543,58 @@ async fn marks_only_pre_dispatch_command_failures_as_retryable() {
         session.close().await.expect("close");
         assert_eq!(
             executor.calls.load(Ordering::SeqCst),
-            2,
-            "a failed initial command must not dispatch another close command"
+            3,
+            "a failed initial command must dispatch one exact cleanup command"
         );
     }
+}
+
+#[tokio::test]
+async fn failed_initial_command_does_not_mask_failed_exact_cleanup() {
+    let temp = tempfile::tempdir().expect("tempdir");
+    let executor = Arc::new(FailingActionExecutor {
+        calls: AtomicUsize::new(0),
+        error: CommandError::output("initial browser command failed"),
+        cleanup_error: Some(CommandError::timed_out("exact close timed out")),
+    });
+    let driver = AgentBrowserDriver::with_executor(
+        AgentBrowserConfig {
+            command: BrowserCommand::Standalone {
+                executable: PathBuf::from("/opt/agent-browser"),
+            },
+            namespace: "failed-cleanup".to_string(),
+            headed: false,
+            command_timeout: Duration::from_secs(5),
+            idle_timeout: Duration::from_secs(2),
+            network_policy: Default::default(),
+        },
+        executor.clone(),
+    );
+    let mut session = driver
+        .open(&ScenarioContext {
+            run_id: "run".to_string(),
+            scenario_id: "failed-cleanup".to_string(),
+            artifacts_dir: temp.path().join("artifacts"),
+        })
+        .await
+        .expect("session");
+
+    session
+        .execute(&step(
+            "open",
+            Action::Navigate {
+                url: "https://example.test".to_string(),
+            },
+        ))
+        .await
+        .expect_err("planned initial command failure");
+    let cleanup_error = session
+        .close()
+        .await
+        .expect_err("failed exact cleanup must be reported");
+
+    assert_eq!(cleanup_error.code(), "test.driver.web.command_unavailable");
+    assert_eq!(executor.calls.load(Ordering::SeqCst), 3);
 }
 
 #[tokio::test]

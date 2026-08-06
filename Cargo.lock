@@ -92,6 +92,7 @@ dependencies = [
  "serde_json",
  "tempfile",
  "tokio",
+ "windows-sys",
 ]
 
 [[package]]

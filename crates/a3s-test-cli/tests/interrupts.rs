@@ -186,6 +186,117 @@ suite "interrupt-twice" {
     assert_no_new_runtimes(&runtimes_before);
 }
 
+#[test]
+fn sigkill_during_agent_start_triggers_watchdog_and_retains_cleanup_metadata() {
+    let _test_guard = process_test_lock().lock().unwrap();
+    let runtimes_before = runtime_directories();
+    let temp = tempfile::tempdir().expect("tempdir");
+    let driver = temp.path().join("fake-agent-browser");
+
+    fs::write(
+        &driver,
+        r#"#!/bin/sh
+case " $* " in
+  *" --version "*)
+    printf 'agent-browser 0.26.0\n'
+    exit 0
+    ;;
+  *" open "*)
+    printf '%s\n' "$$" > "$AGENT_BROWSER_SOCKET_DIR/agent-crash-recovery.pid"
+    sleep 30
+    ;;
+  *" close "*)
+    printf '{"success":true}\n'
+    exit 0
+    ;;
+esac
+printf '{"success":true}\n'
+"#,
+    )
+    .expect("driver");
+    fs::set_permissions(&driver, fs::Permissions::from_mode(0o755)).expect("permissions");
+
+    let mut child = Command::new(binary())
+        .args([
+            "agent",
+            "start",
+            "https://example.test",
+            "--session",
+            "crash-recovery",
+            "--goal",
+            "Prove exact orphan cleanup",
+            "--success",
+            "The orphan is reaped",
+            "--browser-driver",
+            "standalone",
+            "--browser-executable",
+            driver.to_str().unwrap(),
+            "--command-timeout-ms",
+            "60000",
+            "--idle-timeout-ms",
+            "60000",
+            "--json",
+        ])
+        .current_dir(temp.path())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .expect("spawn agent start");
+
+    let state_path = temp
+        .path()
+        .join(".a3s-test/agent-sessions/crash-recovery/session.json");
+    wait_for_file(&state_path, Duration::from_secs(5));
+    let state: serde_json::Value =
+        serde_json::from_slice(&fs::read(&state_path).expect("recovery state"))
+            .expect("recovery state JSON");
+    let runtime = PathBuf::from(state["runtime_dir"].as_str().expect("runtime path"));
+    let daemon_pid_path = runtime.join("agent-crash-recovery.pid");
+    wait_for_file(&daemon_pid_path, Duration::from_secs(5));
+    let daemon_pid = fs::read_to_string(&daemon_pid_path)
+        .expect("daemon PID")
+        .trim()
+        .to_string();
+    wait_for_child_command(
+        child.id(),
+        "a3s-test-browser-watchdog",
+        Duration::from_secs(5),
+    );
+
+    let signal = Command::new("kill")
+        .args(["-KILL", &child.id().to_string()])
+        .status()
+        .expect("kill agent host");
+    assert!(signal.success());
+    let _ = child.wait();
+    let watchdog_stopped = wait_until_not_alive_result(&daemon_pid, Duration::from_secs(3));
+
+    let abort = Command::new(binary())
+        .args(["agent", "abort", "--session", "crash-recovery", "--json"])
+        .current_dir(temp.path())
+        .output()
+        .expect("abort interrupted session");
+    let stopped = wait_until_not_alive_result(&daemon_pid, Duration::from_secs(3));
+    if !stopped {
+        let _ = Command::new("kill").args(["-KILL", &daemon_pid]).status();
+    }
+
+    assert!(
+        watchdog_stopped,
+        "browser watchdog did not stop process group {daemon_pid} after host SIGKILL"
+    );
+    assert!(abort.status.success(), "{abort:?}");
+    assert!(
+        stopped,
+        "browser wrapper {daemon_pid} survived recovery abort"
+    );
+    assert!(
+        !runtime.exists(),
+        "interrupted session runtime survived abort"
+    );
+    assert_no_new_runtimes(&runtimes_before);
+}
+
 fn send_sigint(pid: u32) {
     let signal = Command::new("kill")
         .args(["-INT", &pid.to_string()])
@@ -219,6 +330,31 @@ fn wait_for_log_line(path: &std::path::Path, suffix: &str, timeout: Duration) {
     panic!("timed out waiting for {suffix:?} in {}", path.display());
 }
 
+fn wait_for_child_command(parent_pid: u32, marker: &str, timeout: Duration) {
+    let deadline = Instant::now() + timeout;
+    while Instant::now() < deadline {
+        let found = Command::new("ps")
+            .args(["-axo", "ppid=,command="])
+            .output()
+            .ok()
+            .filter(|output| output.status.success())
+            .is_some_and(|output| {
+                String::from_utf8_lossy(&output.stdout).lines().any(|line| {
+                    let mut fields = line.trim_start().splitn(2, char::is_whitespace);
+                    fields.next().and_then(|value| value.parse::<u32>().ok()) == Some(parent_pid)
+                        && fields
+                            .next()
+                            .is_some_and(|command| command.contains(marker))
+                })
+            });
+        if found {
+            return;
+        }
+        thread::sleep(Duration::from_millis(10));
+    }
+    panic!("timed out waiting for child command marker {marker:?} under host {parent_pid}");
+}
+
 fn wait_for_exit(child: &mut std::process::Child, timeout: Duration) {
     let deadline = Instant::now() + timeout;
     while Instant::now() < deadline {
@@ -232,20 +368,30 @@ fn wait_for_exit(child: &mut std::process::Child, timeout: Duration) {
 }
 
 fn wait_until_not_alive(pid: &str, timeout: Duration) {
+    assert!(
+        wait_until_not_alive_result(pid, timeout),
+        "grandchild process {pid} survived cancellation"
+    );
+}
+
+fn wait_until_not_alive_result(pid: &str, timeout: Duration) -> bool {
     let deadline = Instant::now() + timeout;
     while Instant::now() < deadline {
-        let alive = Command::new("kill")
-            .args(["-0", pid])
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
-            .status()
-            .is_ok_and(|status| status.success());
-        if !alive {
-            return;
+        if !process_is_alive(pid) {
+            return true;
         }
         thread::sleep(Duration::from_millis(10));
     }
-    panic!("grandchild process {pid} survived cancellation");
+    false
+}
+
+fn process_is_alive(pid: &str) -> bool {
+    Command::new("kill")
+        .args(["-0", pid])
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status()
+        .is_ok_and(|status| status.success())
 }
 
 fn process_test_lock() -> &'static Mutex<()> {

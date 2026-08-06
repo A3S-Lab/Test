@@ -1,9 +1,16 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
+use std::ffi::{OsStr, OsString};
+use std::io;
 use std::path::{Path, PathBuf};
-use std::sync::{Mutex, OnceLock};
+use std::sync::{Arc, Mutex, OnceLock};
+
+use tokio::process::Child;
 
 use crate::path_security::is_link_like;
+use crate::process_tree::BrowserProcessTree;
 use crate::runtime::RuntimeDirectory;
+
+const RUNTIME_ENVIRONMENTS: [&str; 2] = ["A3S_USE_BROWSER_SOCKET_DIR", "AGENT_BROWSER_SOCKET_DIR"];
 
 #[derive(Clone)]
 struct ActiveSession {
@@ -11,10 +18,13 @@ struct ActiveSession {
     namespace: String,
     session: String,
     process_markers: Vec<String>,
+    process_tree: Arc<BrowserProcessTree>,
 }
 
 pub(crate) struct SessionRegistration {
     runtime_dir: PathBuf,
+    process_tree: Arc<BrowserProcessTree>,
+    armed: bool,
 }
 
 impl SessionRegistration {
@@ -23,27 +33,91 @@ impl SessionRegistration {
         namespace: String,
         session: String,
         process_markers: Vec<String>,
-    ) -> Self {
+    ) -> io::Result<Self> {
         let runtime_dir = runtime.path().to_path_buf();
+        let process_tree = Arc::new(BrowserProcessTree::new()?);
         let active = ActiveSession {
             runtime,
             namespace,
             session,
             process_markers,
+            process_tree: Arc::clone(&process_tree),
         };
-        if let Ok(mut sessions) = active_sessions().lock() {
-            sessions.insert(runtime_dir.clone(), active);
+        let mut sessions = active_sessions()
+            .lock()
+            .map_err(|_| io::Error::other("active browser session registry is unavailable"))?;
+        if sessions.contains_key(&runtime_dir) {
+            return Err(io::Error::new(
+                io::ErrorKind::AlreadyExists,
+                "browser runtime is already registered to this process",
+            ));
         }
-        Self { runtime_dir }
+        sessions.insert(runtime_dir.clone(), active);
+        drop(sessions);
+        Ok(Self {
+            runtime_dir,
+            process_tree,
+            armed: true,
+        })
+    }
+
+    pub(crate) fn terminate(mut self) -> io::Result<bool> {
+        let attached = self.has_attached_processes();
+        let result = self.process_tree.terminate_and_wait();
+        self.unregister();
+        self.armed = false;
+        result.map(|()| attached)
+    }
+
+    pub(crate) fn has_attached_processes(&self) -> bool {
+        self.process_tree.has_attached_processes()
+    }
+
+    fn unregister(&self) {
+        if let Ok(mut sessions) = active_sessions().lock() {
+            sessions.remove(&self.runtime_dir);
+        }
     }
 }
 
 impl Drop for SessionRegistration {
     fn drop(&mut self) {
-        if let Ok(mut sessions) = active_sessions().lock() {
-            sessions.remove(&self.runtime_dir);
+        if self.armed {
+            let _ = self.process_tree.terminate_and_wait();
+            self.unregister();
+            self.armed = false;
         }
     }
+}
+
+pub(crate) fn attach_command_to_session(
+    environment: &BTreeMap<OsString, OsString>,
+    child: &Child,
+) -> io::Result<Option<Arc<BrowserProcessTree>>> {
+    let Some(runtime_dir) = browser_runtime_from_environment(environment) else {
+        return Ok(None);
+    };
+    let process_tree = active_sessions()
+        .lock()
+        .map_err(|_| io::Error::other("active browser session registry is unavailable"))?
+        .get(&runtime_dir)
+        .map(|session| Arc::clone(&session.process_tree));
+    match process_tree {
+        Some(process_tree) => {
+            process_tree.attach(child)?;
+            Ok(Some(process_tree))
+        }
+        None => Ok(None),
+    }
+}
+
+fn browser_runtime_from_environment(environment: &BTreeMap<OsString, OsString>) -> Option<PathBuf> {
+    RUNTIME_ENVIRONMENTS.iter().find_map(|name| {
+        environment
+            .get(OsStr::new(name))
+            .filter(|value| !value.is_empty())
+            .map(PathBuf::from)
+    })
 }
 
 /// Immediately terminate command process groups still owned by this process.
@@ -131,6 +205,7 @@ fn terminate_active_sessions() {
         .map(|sessions| sessions.values().cloned().collect::<Vec<_>>())
         .unwrap_or_default();
     for active in sessions {
+        let _ = active.process_tree.terminate();
         terminate_owned_session(
             &active.runtime,
             &active.namespace,
@@ -177,11 +252,9 @@ pub(crate) fn terminate_process_group(process_id: u32) {
         let Some(taskkill) = windows_system_executable("taskkill.exe") else {
             return;
         };
-        let _ = hidden_windows_command(&taskkill)
-            .args(["/PID", &process_id.to_string(), "/T", "/F"])
-            .stdout(std::process::Stdio::null())
-            .stderr(std::process::Stdio::null())
-            .status();
+        let mut command = hidden_windows_command(&taskkill);
+        command.args(["/PID", &process_id.to_string(), "/T", "/F"]);
+        let _ = bounded_windows_output(command, std::time::Duration::from_secs(5));
     }
 }
 
@@ -240,10 +313,9 @@ fn terminate_process_tree(process_id: u32, process_markers: &[String]) -> bool {
         command: String,
     }
 
-    let Ok(output) = std::process::Command::new("ps")
-        .args(["-axo", "pid=,ppid=,pgid=,command="])
-        .output()
-    else {
+    let mut command = std::process::Command::new("ps");
+    command.args(["-axo", "pid=,ppid=,pgid=,command="]);
+    let Some(output) = bounded_unix_output(command, std::time::Duration::from_secs(5)) else {
         return false;
     };
     let mut processes = HashMap::new();
@@ -318,6 +390,67 @@ fn terminate_process_tree(process_id: u32, process_markers: &[String]) -> bool {
     true
 }
 
+#[cfg(unix)]
+fn bounded_unix_output(
+    mut command: std::process::Command,
+    timeout: std::time::Duration,
+) -> Option<std::process::Output> {
+    use std::io::{Read as _, Seek as _};
+    use std::os::unix::process::CommandExt as _;
+
+    const MAX_OUTPUT_BYTES: u64 = 8 * 1024 * 1024;
+
+    let mut stdout = tempfile::tempfile().ok()?;
+    command
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::from(stdout.try_clone().ok()?))
+        .stderr(std::process::Stdio::null())
+        .process_group(0);
+    let mut child = command.spawn().ok()?;
+    let process_group = child.id();
+    let deadline = std::time::Instant::now() + timeout;
+    let status = loop {
+        match child.try_wait() {
+            Ok(Some(status)) => break Some(status),
+            Ok(None) if std::time::Instant::now() < deadline => {
+                std::thread::sleep(std::time::Duration::from_millis(10));
+            }
+            Ok(None) | Err(_) => {
+                terminate_unix_group(process_group);
+                let _ = child.kill();
+                let _ = child.wait();
+                break None;
+            }
+        }
+    };
+    terminate_unix_group(process_group);
+    if stdout.metadata().ok()?.len() > MAX_OUTPUT_BYTES {
+        return None;
+    }
+    stdout.rewind().ok()?;
+    let mut bytes = Vec::new();
+    stdout.read_to_end(&mut bytes).ok()?;
+    status.map(|status| std::process::Output {
+        status,
+        stdout: bytes,
+        stderr: Vec::new(),
+    })
+}
+
+#[cfg(unix)]
+fn terminate_unix_group(process_group: u32) {
+    use nix::sys::signal::{killpg, Signal};
+    use nix::unistd::{getpgrp, Pid};
+
+    let Ok(process_group) = i32::try_from(process_group) else {
+        return;
+    };
+    if process_group <= 1 || process_group == getpgrp().as_raw() {
+        return;
+    }
+    let _ = killpg(Pid::from_raw(process_group), Signal::SIGKILL);
+}
+
 #[cfg(windows)]
 fn terminate_process_tree(process_id: u32, process_markers: &[String]) -> bool {
     if process_id <= 1 || process_id == std::process::id() {
@@ -332,12 +465,10 @@ fn terminate_process_tree(process_id: u32, process_markers: &[String]) -> bool {
     let Some(taskkill) = windows_system_executable("taskkill.exe") else {
         return false;
     };
-    hidden_windows_command(&taskkill)
-        .args(["/PID", &process_id.to_string(), "/T", "/F"])
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null())
-        .status()
-        .is_ok_and(|status| status.success())
+    let mut command = hidden_windows_command(&taskkill);
+    command.args(["/PID", &process_id.to_string(), "/T", "/F"]);
+    bounded_windows_output(command, std::time::Duration::from_secs(5))
+        .is_some_and(|output| output.status.success())
 }
 
 #[cfg(windows)]
@@ -398,14 +529,20 @@ fn bounded_windows_output(
     mut command: std::process::Command,
     timeout: std::time::Duration,
 ) -> Option<std::process::Output> {
+    use std::io::{Read as _, Seek as _};
+
+    const MAX_OUTPUT_BYTES: u64 = 8 * 1024 * 1024;
+
+    let mut stdout = tempfile::tempfile().ok()?;
     command
-        .stdout(std::process::Stdio::piped())
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::from(stdout.try_clone().ok()?))
         .stderr(std::process::Stdio::null());
     let mut child = command.spawn().ok()?;
     let deadline = std::time::Instant::now() + timeout;
-    loop {
+    let status = loop {
         match child.try_wait() {
-            Ok(Some(_)) => return child.wait_with_output().ok(),
+            Ok(Some(status)) => break status,
             Ok(None) if std::time::Instant::now() < deadline => {
                 std::thread::sleep(std::time::Duration::from_millis(10));
             }
@@ -415,7 +552,18 @@ fn bounded_windows_output(
                 return None;
             }
         }
+    };
+    if stdout.metadata().ok()?.len() > MAX_OUTPUT_BYTES {
+        return None;
     }
+    stdout.rewind().ok()?;
+    let mut bytes = Vec::new();
+    stdout.read_to_end(&mut bytes).ok()?;
+    Some(std::process::Output {
+        status,
+        stdout: bytes,
+        stderr: Vec::new(),
+    })
 }
 
 #[cfg(not(any(unix, windows)))]
@@ -453,6 +601,47 @@ mod tests {
                 error.kind(),
                 std::io::ErrorKind::PermissionDenied | std::io::ErrorKind::Unsupported
             )
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn unix_process_snapshot_command_is_killed_and_reaped_on_timeout() {
+        use nix::errno::Errno;
+        use nix::sys::signal::kill;
+        use nix::unistd::Pid;
+
+        let temp = tempfile::tempdir().expect("tempdir");
+        let descendant_pid = temp.path().join("descendant.pid");
+        let mut command = std::process::Command::new("/bin/sh");
+        command
+            .args([
+                "-c",
+                "sleep 30 & echo $! > \"$1\"; wait",
+                "snapshot-fixture",
+            ])
+            .arg(&descendant_pid);
+        let started = std::time::Instant::now();
+
+        let output = bounded_unix_output(command, std::time::Duration::from_millis(250));
+
+        assert!(output.is_none());
+        assert!(
+            started.elapsed() < std::time::Duration::from_secs(2),
+            "bounded cleanup helper exceeded its deadline"
+        );
+        let process_id = std::fs::read_to_string(descendant_pid)
+            .expect("snapshot helper descendant PID")
+            .trim()
+            .parse::<i32>()
+            .expect("numeric snapshot helper descendant PID");
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(2);
+        while std::time::Instant::now() < deadline {
+            if matches!(kill(Pid::from_raw(process_id), None), Err(Errno::ESRCH)) {
+                return;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+        panic!("snapshot helper descendant {process_id} survived timeout cleanup");
     }
 
     #[tokio::test]

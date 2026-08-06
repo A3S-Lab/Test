@@ -32,8 +32,9 @@
   values sent to the trusted provider or surface driver.
 - Added a loopback-only Web fixture server with dynamic ports, deterministic
   routes, a cross-origin request sentinel, owned worker cleanup, and a pinned
-  standalone `agent-browser` 0.26.0 macOS CI suite that retains screenshot
-  evidence and verifies removal of private browser runtime directories.
+  standalone `agent-browser` 0.26.0 macOS/Windows CI suite that retains
+  screenshot evidence and verifies removal of browser processes plus private
+  runtime directories even after test failure.
 - Added a typed, bounded browser domain policy for persistent agent sessions.
   Initial and navigation-approved hosts are admitted automatically, while
   `--allow-domain` permits additional network hostnames without adding them to
@@ -79,6 +80,32 @@
 
 ### Safety
 
+- CUA proxy commands on Windows are now created suspended and resume only after
+  private Job assignment, closing the launch-before-containment race. In-flight
+  request/notification/close cancellation immediately signals the proxy tree;
+  final transport Drop performs bounded direct-child reaping, and normal
+  cleanup waits for the Job or Unix process group to empty. Unix proxies also
+  carry an EOF watchdog that kills the group when an uncatchable host exit
+  prevents Drop from running.
+- Agent sessions now publish recovery metadata before their first browser
+  command. If initial navigation and exact cleanup both fail, the failed
+  session and runtime remain available for `agent abort` instead of deleting
+  the only PID/socket ownership evidence. Unix emergency process snapshots are
+  also bounded, isolate the `ps` helper in its own process group, avoid
+  back-pressured output pipes, and reap the helper tree on timeout.
+- Web browser commands now enter an owned process boundary before they can
+  execute. Unix retains dedicated process groups; Windows creates commands
+  suspended, assigns them to kill-on-close Job Objects, and then resumes them.
+  Deterministic sessions retain that boundary through close and Drop, while
+  one Unix EOF watchdog per active boundary kills all recorded groups after
+  abrupt host death, while empty groups are removed before PGID reuse can grant
+  stale cleanup authority. Successful persistent turns explicitly disarm their
+  temporary watchdog or Job; a nonzero command exit remains a failure and
+  cleans the boundary before returning. Timeout, cancellation, failed startup,
+  and abandoned futures terminate descendants, reap the direct child, and
+  release descendant sockets without touching an independent browser tree.
+  Windows PowerShell and `taskkill` fallbacks are bounded and use file-backed
+  output to avoid pipe deadlock.
 - Web runtime/socket directories are now canonicalized and identity-bound for
   the lifetime of each driver handle. Every command and emergency cleanup
   revalidates the binding, rejects link/reparse and same-path directory

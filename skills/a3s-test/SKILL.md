@@ -168,6 +168,10 @@ values, network mocks, console fixtures, or committed evidence.
 - Do not kill Chrome, A3S Browser, or agent-browser by process name.
 - Finish or abort every session. A3S Test closes only the exact session it
   owns and retains the report and evidence.
+- If `agent start` reports that cleanup evidence was preserved, run
+  `a3s-test agent abort --session <id> --json` with the same session ID. Do not
+  delete its runtime directory manually; it is the ownership proof used for
+  the retry.
 - Treat `application_binding_lost` and `window_binding_lost` as terminal turn
   safety failures. Do not reuse an old GUI ref or try to target a replacement
   process/window; finish or abort the session.
@@ -177,8 +181,11 @@ values, network mocks, console fixtures, or committed evidence.
   completes or becomes `cleanup_required`, then use the same session ID so the
   retained ownership handle can finish cleanup.
 - For deterministic runs, the first `Ctrl+C` requests bounded cleanup. A
-  second `Ctrl+C` terminates only browser command groups and CUA proxy trees
-  owned by that process.
+  second `Ctrl+C` terminates only browser command/session boundaries and CUA
+  proxy trees owned by that process. Windows browser and CUA commands are
+  assigned to Job Objects before they begin executing; Unix boundaries use an
+  EOF watchdog so an uncatchable host exit still terminates their process
+  groups.
 - Do not add arbitrary sleeps. Use typed observations, waits, and assertions.
 
 ## Diagnosis

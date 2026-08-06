@@ -153,7 +153,13 @@ impl SurfaceDriver for AgentBrowserDriver {
             namespace.clone(),
             session.clone(),
             self.config.command.process_markers(),
-        );
+        )
+        .map_err(|error| {
+            DriverError::new(
+                "test.driver.web.process_containment_failed",
+                format!("failed to create browser process containment: {error}"),
+            )
+        })?;
 
         Ok(Box::new(AgentBrowserSession {
             config: self.config.clone(),
@@ -402,12 +408,6 @@ impl DriverSession for AgentBrowserSession {
             return Ok(());
         }
 
-        if self.lifecycle.load(Ordering::Acquire) == SESSION_START_FAILED {
-            let _ = self.emergency_cleanup().await;
-            self.closed = true;
-            return Ok(());
-        }
-
         if self.active_video.is_some() {
             let _ = self
                 .execute_command(vec![OsString::from("record"), OsString::from("stop")])
@@ -415,19 +415,20 @@ impl DriverSession for AgentBrowserSession {
             self.active_video = None;
         }
 
-        match self.execute_command(vec![OsString::from("close")]).await {
+        let graceful = self.execute_command(vec![OsString::from("close")]).await;
+        let containment = self.terminate_registered_processes().await;
+        let emergency_terminated = self.emergency_cleanup().await;
+        let contained = containment?;
+        match graceful {
             Ok(_) => {
                 self.closed = true;
                 Ok(())
             }
-            Err(error) => {
-                if self.emergency_cleanup().await {
-                    self.closed = true;
-                    Ok(())
-                } else {
-                    Err(error)
-                }
+            Err(_) if contained || emergency_terminated => {
+                self.closed = true;
+                Ok(())
             }
+            Err(error) => Err(error),
         }
     }
 }
@@ -700,6 +701,26 @@ impl AgentBrowserSession {
         .unwrap_or(false)
     }
 
+    async fn terminate_registered_processes(&mut self) -> Result<bool, DriverError> {
+        let Some(registration) = self.registration.take() else {
+            return Ok(false);
+        };
+        tokio::task::spawn_blocking(move || registration.terminate())
+            .await
+            .map_err(|error| {
+                DriverError::new(
+                    "test.driver.web.process_cleanup_failed",
+                    format!("failed to join browser process cleanup: {error}"),
+                )
+            })?
+            .map_err(|error| {
+                DriverError::new(
+                    "test.driver.web.process_cleanup_failed",
+                    format!("failed to terminate browser process tree: {error}"),
+                )
+            })
+    }
+
     fn emergency_cleanup_sync(&self) -> bool {
         terminate_owned_session(
             &self.runtime,
@@ -725,12 +746,20 @@ impl Drop for AgentBrowserSession {
             return;
         }
 
+        let registration = self.registration.take();
+        let contained = registration
+            .as_ref()
+            .is_some_and(SessionRegistration::has_attached_processes);
+        if let Some(registration) = registration {
+            let _ = registration.terminate();
+        }
+
         if self.lifecycle.load(Ordering::Acquire) == SESSION_START_FAILED {
             let _ = self.emergency_cleanup_sync();
             return;
         }
 
-        if self.emergency_cleanup_sync() {
+        if self.emergency_cleanup_sync() || contained {
             return;
         }
 
@@ -747,11 +776,9 @@ impl Drop for AgentBrowserSession {
         );
         let executor = Arc::clone(&self.executor);
         let runtime_guard = self.runtime_guard.take();
-        let registration = self.registration.take();
         if let Ok(handle) = tokio::runtime::Handle::try_current() {
             handle.spawn(async move {
                 let _runtime_guard = runtime_guard;
-                let _registration = registration;
                 let _ = executor.run(invocation).await;
             });
         }
