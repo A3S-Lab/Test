@@ -44,6 +44,20 @@ impl BrowserCommand {
         )
     }
 
+    pub(crate) fn enforced_headless_environment(&self) -> (OsString, OsString) {
+        let (name, inherited) = match self {
+            Self::A3s { .. } => (
+                "A3S_USE_BROWSER_ARGS",
+                first_environment_value(&["A3S_USE_BROWSER_ARGS", "AGENT_BROWSER_ARGS"]),
+            ),
+            Self::Standalone { .. } => (
+                "AGENT_BROWSER_ARGS",
+                first_environment_value(&["AGENT_BROWSER_ARGS"]),
+            ),
+        };
+        (OsString::from(name), with_enforced_headless(inherited))
+    }
+
     pub(crate) fn runtime_environment(&self, runtime_dir: &Path) -> (OsString, OsString) {
         let name = match self {
             Self::A3s { .. } => "A3S_USE_BROWSER_SOCKET_DIR",
@@ -101,6 +115,23 @@ impl BrowserCommand {
         }
         markers
     }
+}
+
+fn first_environment_value(names: &[&str]) -> Option<String> {
+    names.iter().find_map(|name| {
+        std::env::var(name)
+            .ok()
+            .filter(|value| !value.trim().is_empty())
+    })
+}
+
+fn with_enforced_headless(inherited: Option<String>) -> OsString {
+    let mut arguments = inherited.unwrap_or_default();
+    if !arguments.is_empty() {
+        arguments.push(',');
+    }
+    arguments.push_str("--headless=new");
+    OsString::from(arguments)
 }
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
@@ -228,7 +259,16 @@ fn invalid_domain_pattern(value: &str) -> DriverError {
 
 #[cfg(test)]
 mod tests {
-    use super::BrowserNetworkPolicy;
+    use super::{with_enforced_headless, BrowserNetworkPolicy};
+
+    #[test]
+    fn enforced_headless_preserves_existing_browser_arguments() {
+        assert_eq!(
+            with_enforced_headless(Some("--no-sandbox,--disable-gpu".to_string())),
+            "--no-sandbox,--disable-gpu,--headless=new"
+        );
+        assert_eq!(with_enforced_headless(None), "--headless=new");
+    }
 
     #[test]
     fn domain_policy_normalizes_and_deduplicates_safe_patterns() {

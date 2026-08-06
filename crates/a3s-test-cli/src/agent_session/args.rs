@@ -90,7 +90,7 @@ pub(super) struct StartArgs {
     /// Override the browser driver executable.
     #[arg(long)]
     pub(super) browser_executable: Option<PathBuf>,
-    /// Show the browser window.
+    /// Show the browser window; omitted runs enforce headless execution.
     #[arg(long)]
     pub(super) headed: bool,
     /// Per-command browser deadline.

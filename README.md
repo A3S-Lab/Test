@@ -242,6 +242,13 @@ a3s-test agent schema
   retained so `agent abort` can retry instead of deleting the only PID/socket
   ownership evidence.
 
+Browser execution is non-interactive by default. Every browser turn explicitly
+selects headless mode and enforces Chrome's headless launch argument, so a user
+Browser environment or configuration cannot unexpectedly open a window.
+`--headed` is the explicit debugging opt-in. On Windows, Browser command shims
+and CUA proxies are also created with `CREATE_NO_WINDOW`, so they do not flash a
+CMD window while tests run.
+
 ## One engine, two primary workflows
 
 | Workflow | Planner | Best for | Interface |

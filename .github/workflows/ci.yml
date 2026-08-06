@@ -175,6 +175,8 @@ jobs:
       - name: Run the real browser suite
         if: runner.os != 'Windows'
         shell: bash
+        env:
+          AGENT_BROWSER_HEADED: "1"
         run: |
           export A3S_TEST_AGENT_BROWSER="$(command -v agent-browser)"
           bash .github/scripts/run-cargo-test.sh \
@@ -185,6 +187,8 @@ jobs:
       - name: Run the real browser suite on Windows
         if: runner.os == 'Windows'
         shell: pwsh
+        env:
+          AGENT_BROWSER_HEADED: "1"
         run: |
           $env:A3S_TEST_AGENT_BROWSER = (Get-Command agent-browser.cmd).Source
           cargo test -p a3s-test-cli --test web_e2e `

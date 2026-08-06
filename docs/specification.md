@@ -299,6 +299,15 @@ assignment succeeds. Close, timeout, cancellation, and Drop terminate the Job,
 wait for it to empty, and reap the direct command child. A persistent agent
 turn uses a temporary Job and clears kill-on-close only after the command exits
 successfully; failed, timed-out, or cancelled turns keep the Job armed.
+Browser visibility is explicit on every command. The default sends
+`--headed false` and enforces Chrome's `--headless=new` launch argument, so
+inherited Browser environment or configuration cannot make the run visible.
+The enforced argument is appended after existing Browser launch arguments so
+required host options such as `--no-sandbox` remain active. Only the A3S Test
+`--headed` option sends `--headed true` and removes the enforced headless
+launch argument. Windows Browser commands and CUA proxies also use
+`CREATE_NO_WINDOW`, including `.cmd` shims, so test execution does not create
+or flash a console window.
 Command stdout and stderr are written to private temporary regular files and
 read on a blocking worker after the direct launcher exits. Each stream is
 limited to 8 MiB. A persistent daemon may inherit those file handles without

@@ -251,6 +251,8 @@ async fn maps_typed_actions_and_scopes_browser_lifecycle() {
             "--session",
             "word",
             "--json",
+            "--headed",
+            "false",
             "open",
             "https://example.test",
         ])
@@ -263,6 +265,8 @@ async fn maps_typed_actions_and_scopes_browser_lifecycle() {
             "--session",
             "word",
             "--json",
+            "--headed",
+            "false",
             "find",
             "role",
             "button",
@@ -273,7 +277,16 @@ async fn maps_typed_actions_and_scopes_browser_lifecycle() {
     );
     assert_eq!(
         invocations[3].args,
-        os(&["use", "browser", "--session", "word", "--json", "close"])
+        os(&[
+            "use",
+            "browser",
+            "--session",
+            "word",
+            "--json",
+            "--headed",
+            "false",
+            "close",
+        ])
     );
     let runtime = invocations[1]
         .env
@@ -290,6 +303,10 @@ async fn maps_typed_actions_and_scopes_browser_lifecycle() {
             (
                 OsString::from("A3S_USE_BROWSER_IDLE_TIMEOUT_MS"),
                 OsString::from("30000")
+            ),
+            (
+                OsString::from("A3S_USE_BROWSER_ARGS"),
+                expected_headless_args(&["A3S_USE_BROWSER_ARGS", "AGENT_BROWSER_ARGS"])
             ),
             (
                 OsString::from("A3S_USE_BROWSER_SOCKET_DIR"),
@@ -349,6 +366,8 @@ async fn standalone_driver_uses_the_upstream_policy_contract_and_a_safe_idle_flo
             "--session",
             "home",
             "--json",
+            "--headed",
+            "false",
             "--allowed-domains",
             "127.0.0.1",
             "--engine",
@@ -359,7 +378,7 @@ async fn standalone_driver_uses_the_upstream_policy_contract_and_a_safe_idle_flo
     );
     assert_eq!(
         invocations[2].args,
-        os(&["--session", "home", "--json", "close",])
+        os(&["--session", "home", "--json", "--headed", "false", "close",])
     );
     let runtime = invocations[1]
         .env
@@ -376,6 +395,10 @@ async fn standalone_driver_uses_the_upstream_policy_contract_and_a_safe_idle_flo
             (
                 OsString::from("AGENT_BROWSER_IDLE_TIMEOUT_MS"),
                 OsString::from("5000")
+            ),
+            (
+                OsString::from("AGENT_BROWSER_ARGS"),
+                expected_headless_args(&["AGENT_BROWSER_ARGS"])
             ),
             (OsString::from("AGENT_BROWSER_SOCKET_DIR"), runtime.clone()),
             (
@@ -420,7 +443,14 @@ async fn exposes_a_full_browser_snapshot_as_the_agent_observation() {
     let invocations = executor.invocations.lock().unwrap();
     assert_eq!(
         invocations[1].args,
-        os(&["--session", "agent", "--json", "snapshot"])
+        os(&[
+            "--session",
+            "agent",
+            "--json",
+            "--headed",
+            "false",
+            "snapshot",
+        ])
     );
 }
 
@@ -901,7 +931,7 @@ async fn dropped_session_schedules_emergency_close() {
     let invocations = executor.invocations.lock().unwrap();
     assert_eq!(
         invocations[1].args,
-        os(&["--session", "home", "--json", "close"])
+        os(&["--session", "home", "--json", "--headed", "false", "close",])
     );
 }
 
@@ -1004,7 +1034,23 @@ fn os(values: &[&str]) -> Vec<OsString> {
 }
 
 fn strip_session_prefix(args: &[OsString]) -> Vec<OsString> {
-    args.iter().skip(3).cloned().collect()
+    args.iter().skip(5).cloned().collect()
+}
+
+fn expected_headless_args(names: &[&str]) -> OsString {
+    let mut arguments = names
+        .iter()
+        .find_map(|name| {
+            std::env::var(name)
+                .ok()
+                .filter(|value| !value.trim().is_empty())
+        })
+        .unwrap_or_default();
+    if !arguments.is_empty() {
+        arguments.push(',');
+    }
+    arguments.push_str("--headless=new");
+    OsString::from(arguments)
 }
 
 fn assert_short_runtime(runtime: &OsString) {

@@ -142,7 +142,11 @@ Protection is layered:
 1. Each Unix driver command runs in a new process group. Windows creates the
    command suspended, assigns it to a private kill-on-close Job Object, and
    resumes it only after assignment succeeds, so no descendant can win a
-   launch-before-containment race.
+   launch-before-containment race. Windows Browser commands and CUA proxies
+   also use `CREATE_NO_WINDOW`, including Browser `.cmd` shims. Every Browser
+   command carries an explicit headed value; the default additionally enforces
+   Chrome's `--headless=new` launch argument, while `--headed` is the sole
+   visible-debugging opt-in.
 2. Deterministic sessions retain every command boundary for the complete
    session. Timeout, cancellation, Drop, and cleanup terminate the boundary,
    wait for descendants to exit, and reap the direct command child. A single

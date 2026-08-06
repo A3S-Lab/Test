@@ -334,6 +334,11 @@ Useful run options:
 The default browser integration is `a3s use browser`. Use the standalone option
 only for an agent-browser-compatible executable.
 
+Browser runs are headless by default. A3S Test explicitly overrides inherited
+Browser visibility settings and enforces Chrome's headless launch argument;
+`--headed` is the sole opt-in to a visible debugging window. On Windows, the
+Browser command and any `.cmd` shim run without creating a CMD window.
+
 ## Result and exit contract
 
 JSON results include:

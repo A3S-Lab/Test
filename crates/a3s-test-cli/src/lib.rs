@@ -94,7 +94,7 @@ struct RunArgs {
     /// Override the browser driver executable.
     #[arg(long)]
     browser_executable: Option<PathBuf>,
-    /// Show the browser window.
+    /// Show the browser window; omitted runs enforce headless execution.
     #[arg(long)]
     headed: bool,
     /// Per-command browser deadline.

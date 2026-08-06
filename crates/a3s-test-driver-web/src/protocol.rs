@@ -20,10 +20,9 @@ pub(crate) fn invocation(
         OsString::from("--session"),
         OsString::from(session),
         OsString::from("--json"),
+        OsString::from("--headed"),
+        OsString::from(config.headed.to_string()),
     ]);
-    if config.headed {
-        args.push(OsString::from("--headed"));
-    }
     let closes_session = action_args.first().is_some_and(|action| action == "close");
     if !closes_session {
         args.extend(config.command.domain_policy_args(&config.network_policy));
@@ -42,6 +41,10 @@ pub(crate) fn invocation(
     env.insert(idle_name, idle_value);
     let (runtime_name, runtime_value) = config.command.runtime_environment(runtime_dir);
     env.insert(runtime_name, runtime_value);
+    if !config.headed {
+        let (headless_name, headless_value) = config.command.enforced_headless_environment();
+        env.insert(headless_name, headless_value);
+    }
     if let Some((policy_name, policy_value)) = config
         .command
         .allowed_domains_environment(&config.network_policy)
@@ -214,10 +217,59 @@ pub(crate) fn bounded(value: &str, max_chars: usize) -> String {
 #[cfg(test)]
 mod tests {
     use std::ffi::OsString;
+    use std::path::PathBuf;
+    use std::time::Duration;
 
     use a3s_test_core::{LoadState, WaitCondition};
 
-    use super::wait_args;
+    use super::{invocation, wait_args};
+    use crate::{AgentBrowserConfig, BrowserCommand, BrowserNetworkPolicy};
+
+    #[test]
+    fn invocation_always_overrides_browser_visibility_defaults() {
+        for (headed, expected) in [(false, "false"), (true, "true")] {
+            let config = AgentBrowserConfig {
+                command: BrowserCommand::Standalone {
+                    executable: PathBuf::from("agent-browser"),
+                },
+                namespace: "test".to_string(),
+                headed,
+                command_timeout: Duration::from_secs(5),
+                idle_timeout: Duration::from_secs(30),
+                network_policy: BrowserNetworkPolicy::default(),
+            };
+            let invocation = invocation(
+                &config,
+                "test",
+                "visibility",
+                std::path::Path::new("/tmp/a3s-test-browser"),
+                vec![
+                    OsString::from("open"),
+                    OsString::from("https://example.test"),
+                ],
+            );
+
+            assert!(
+                invocation.args.windows(2).any(|arguments| {
+                    arguments == [OsString::from("--headed"), OsString::from(expected)]
+                }),
+                "browser visibility was not explicit in {:?}",
+                invocation.args
+            );
+            let headless_environment = invocation
+                .env
+                .get(&OsString::from("AGENT_BROWSER_ARGS"))
+                .map(OsString::as_os_str);
+            if headed {
+                assert!(headless_environment.is_none());
+            } else {
+                assert!(headless_environment
+                    .expect("headless Browser arguments")
+                    .to_string_lossy()
+                    .ends_with("--headless=new"));
+            }
+        }
+    }
 
     #[test]
     fn dom_content_loaded_wait_checks_current_document_state() {

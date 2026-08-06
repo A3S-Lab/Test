@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+### Fixed
+
+- Browser commands now pass an explicit `--headed false` by default and
+  enforce Chrome's `--headless=new` launch argument, so inherited Browser
+  environment or configuration cannot unexpectedly open a window. Existing
+  launch arguments such as `--no-sandbox` are preserved. `--headed` remains
+  the explicit opt-in for visible debugging.
+- Added a Windows regression that executes the Browser adapter through a real
+  `.cmd` shim and verifies with `GetConsoleWindow` that neither the shim nor
+  its child receives a console window.
+
 ## 0.5.0 - 2026-08-06
 
 ### Added

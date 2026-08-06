@@ -47,6 +47,10 @@ a3s-test agent list --json
 ```
 
 `open` is an alias for `start`. `snapshot` is an alias for `observe`.
+Omit `--headed` for enforced headless execution even when the user Browser
+environment or configuration requests a visible window. `--headed` is the
+explicit debugging opt-in. On Windows, Browser command shims run without
+creating a CMD window.
 
 ## Compact actions
 

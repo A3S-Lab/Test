@@ -27,6 +27,10 @@ const DESCENDANT_OUTPUT_PID_ENV: &str = "A3S_TEST_BROWSER_OUTPUT_PID_FILE";
 const DESCENDANT_EXE_ENV: &str = "A3S_TEST_BROWSER_DESCENDANT_EXE";
 #[cfg(windows)]
 const DESCENDANT_TEST_ENV: &str = "A3S_TEST_BROWSER_DESCENDANT_TEST";
+#[cfg(windows)]
+const CONSOLE_PROBE_TEST: &str = "executor::tests::windows_browser_command_console_probe_fixture";
+#[cfg(windows)]
+const CONSOLE_PROBE_ENV: &str = "A3S_TEST_BROWSER_CONSOLE_PROBE";
 
 #[tokio::test]
 #[cfg(unix)]
@@ -173,6 +177,39 @@ async fn oversized_browser_command_output_is_rejected() {
         .expect_err("oversized browser output must fail");
     assert_eq!(error.kind(), CommandErrorKind::Output);
     assert!(error.to_string().contains("exceeded 8388608 bytes"));
+}
+
+#[cfg(windows)]
+#[tokio::test]
+async fn windows_browser_command_and_cmd_shim_run_without_a_console() {
+    let temp = tempfile::tempdir().expect("tempdir");
+    let executable = std::env::current_exe().expect("current test executable");
+    let cmd_shim = temp.path().join("agent-browser.cmd");
+    std::fs::write(&cmd_shim, "@echo off\r\n\"%~1\" %2 %3 %4 %5\r\n")
+        .expect("write browser cmd shim");
+    let invocation = CommandInvocation {
+        program: cmd_shim,
+        args: vec![
+            executable.into_os_string(),
+            OsString::from(CONSOLE_PROBE_TEST),
+            OsString::from("--ignored"),
+            OsString::from("--exact"),
+            OsString::from("--nocapture"),
+        ],
+        env: BTreeMap::from([(OsString::from(CONSOLE_PROBE_ENV), OsString::from("1"))]),
+        timeout: Duration::from_secs(5),
+    };
+
+    let output = TokioCommandExecutor
+        .run(invocation)
+        .await
+        .expect("hidden cmd browser shim");
+    assert_eq!(output.exit_code, 0, "{}", output.stderr);
+    assert!(
+        output.stdout.contains("console-window=none"),
+        "{}",
+        output.stdout
+    );
 }
 
 #[tokio::test]
@@ -622,6 +659,25 @@ async fn wait_until_socket_released(address: SocketAddr) -> bool {
         }
         tokio::time::sleep(Duration::from_millis(10)).await;
     }
+}
+
+#[cfg(windows)]
+#[test]
+#[ignore = "helper process for the hidden Windows browser-command test"]
+fn windows_browser_command_console_probe_fixture() {
+    use windows_sys::Win32::System::Console::GetConsoleWindow;
+
+    assert_eq!(
+        std::env::var(CONSOLE_PROBE_ENV).as_deref(),
+        Ok("1"),
+        "console probe must only run through its owning test"
+    );
+    let console_window = unsafe { GetConsoleWindow() };
+    assert!(
+        console_window.is_null(),
+        "browser command inherited or created a Windows console"
+    );
+    println!("console-window=none");
 }
 
 #[test]

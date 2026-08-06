@@ -346,5 +346,5 @@ fn os(values: &[&str]) -> Vec<OsString> {
 }
 
 fn strip_session_prefix(args: &[OsString]) -> Vec<OsString> {
-    args.iter().skip(3).cloned().collect()
+    args.iter().skip(5).cloned().collect()
 }
