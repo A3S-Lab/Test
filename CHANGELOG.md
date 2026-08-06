@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.5.1 - 2026-08-06
+
 ### Fixed
 
 - Browser commands now pass an explicit `--headed false` by default and
