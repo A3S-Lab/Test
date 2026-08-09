@@ -1,103 +1,82 @@
 <svg xmlns="http://www.w3.org/2000/svg"
      width="1200" height="650" viewBox="0 0 1200 650"
      role="img" aria-labelledby="title desc">
-  <title id="title">A3S Test cross-surface agentic architecture</title>
-  <desc id="desc">A3S Code, Codex, and Claude Code use a portable Skill or MCP to drive persistent observe-decide-act sessions through A3S Test. Developers and CI use the same engine for deterministic ACL suites. Both paths share typed actions, session orchestration, surface drivers, reports, and evidence.</desc>
+  <title id="title">A3S Test unified execution architecture</title>
+  <desc id="desc">Coding-agent exploration and deterministic ACL regressions enter one typed A3S Test core, dispatch through Web, GUI, or planned TUI drivers, and finish in the same evidence and owned-cleanup boundary.</desc>
 
-  <rect width="1200" height="650" rx="28" fill="#090B0F"/>
+  <rect width="1200" height="650" rx="24" fill="#080A0D"/>
 
-  <text x="56" y="70"
-        fill="#F7F9FC" font-size="42" font-weight="750"
-        font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">One typed agentic test boundary.</text>
-  <text x="56" y="104"
-        fill="#8D97A7" font-size="21"
-        font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">Coding agents plan each turn; A3S Test owns sessions, typed actions, evidence, and cleanup.</text>
+  <g id="diagram-title" transform="translate(56 46)"
+     font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+    <text x="0" y="40" fill="#F6F8F7" font-size="42" font-weight="760">Two planning paths. One execution boundary.</text>
+    <text x="0" y="75" fill="#9AA5B2" font-size="21">Exploration and regression share typed actions, surface ownership, evidence, and results.</text>
+  </g>
 
-  <g font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
-    <g transform="translate(56 140)">
-      <rect width="238" height="88" rx="15" fill="#11151C" stroke="#303846" stroke-width="1.5"/>
-      <text x="22" y="36" fill="#F7F9FC" font-size="22" font-weight="700">Developers + CI</text>
-      <text x="22" y="64" fill="#8D97A7" font-size="18">deterministic ACL runs</text>
+  <g id="planning-inputs" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+    <g id="agent-input" transform="translate(56 150)">
+      <rect width="500" height="112" rx="14" fill="#0D1714" stroke="#3A8B6C" stroke-width="1.5"/>
+      <text x="24" y="32" fill="#6EE7B7" font-size="18" font-weight="750" letter-spacing="1.6"
+            font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">EXPLORATION</text>
+      <text x="24" y="68" fill="#F6F8F7" font-size="25" font-weight="740">Coding agent + Skill / MCP</text>
+      <text x="24" y="96" fill="#9EDDBF" font-size="19">observe · decide · one typed action</text>
     </g>
 
-    <g transform="translate(356 140)">
-      <rect width="490" height="88" rx="15" fill="#11151C" stroke="#303846" stroke-width="1.5"/>
-      <text x="22" y="34" fill="#F7F9FC" font-size="22" font-weight="700">Coding agents</text>
-      <g transform="translate(156 17)"
-         font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace"
-         font-size="16" font-weight="650">
-        <rect width="92" height="34" rx="7" fill="#171D26" stroke="#364151"/>
-        <text x="14" y="23" fill="#D8DEE9">A3S CODE</text>
-        <rect x="104" width="80" height="34" rx="7" fill="#171D26" stroke="#364151"/>
-        <text x="118" y="23" fill="#D8DEE9">CODEX</text>
-        <rect x="196" width="122" height="34" rx="7" fill="#171D26" stroke="#364151"/>
-        <text x="210" y="23" fill="#D8DEE9">CLAUDE CODE</text>
-      </g>
-      <text x="22" y="68" fill="#71E6B1" font-size="18" font-weight="650">Skill / MCP · observe → decide → act</text>
+    <g id="acl-input" transform="translate(644 150)">
+      <rect width="500" height="112" rx="14" fill="#18140C" stroke="#80632F" stroke-width="1.5"/>
+      <text x="24" y="32" fill="#F7C873" font-size="18" font-weight="750" letter-spacing="1.6"
+            font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">REGRESSION</text>
+      <text x="24" y="68" fill="#F6F8F7" font-size="25" font-weight="740">Closed typed ACL suite</text>
+      <text x="24" y="96" fill="#D8BF8B" font-size="19">admit · execute · assert</text>
+    </g>
+  </g>
+
+  <g id="merge-path" fill="none" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M306 262V300H520" stroke="#3A8B6C" stroke-width="2.5"/>
+    <path d="M894 262V300H680" stroke="#80632F" stroke-width="2.5"/>
+    <path d="M511 294L521 300L511 306" stroke="#6EE7B7" stroke-width="2.5"/>
+    <path d="M689 294L679 300L689 306" stroke="#F7C873" stroke-width="2.5"/>
+  </g>
+
+  <g id="typed-core" transform="translate(240 300)">
+    <rect width="720" height="94" rx="16" fill="#11171D" stroke="#52606F" stroke-width="1.5"/>
+    <text x="360" y="38" text-anchor="middle" fill="#F6F8F7" font-size="27" font-weight="800"
+          font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">A3S TEST / TYPED CORE</text>
+    <text x="360" y="72" text-anchor="middle" fill="#B7C0CC" font-size="20"
+          font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">Action · Session · Runner · Policy · Lifecycle</text>
+  </g>
+
+  <g id="driver-paths" fill="none" stroke="#4B5664" stroke-width="2">
+    <path d="M600 394V430"/>
+    <path d="M216 430H984"/>
+    <path d="M216 430V454M600 430V454M984 430V454"/>
+  </g>
+
+  <g id="surface-drivers" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+    <g id="web-driver" transform="translate(56 454)">
+      <rect width="320" height="96" rx="14" fill="#0D1714" stroke="#3A8B6C" stroke-width="1.5"/>
+      <circle cx="26" cy="27" r="6" fill="#6EE7B7"/>
+      <text x="46" y="34" fill="#F6F8F7" font-size="23" font-weight="750">Web</text>
+      <text x="22" y="70" fill="#9EDDBF" font-size="19">Available · A3S Browser</text>
     </g>
 
-    <path d="M294 184H325V276H464" fill="none" stroke="#465264" stroke-width="2"/>
-    <path d="M846 184H876V276H736" fill="none" stroke="#465264" stroke-width="2"/>
-    <path d="M456 270L466 276L456 282" fill="none" stroke="#71E6B1" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
-    <path d="M744 270L734 276L744 282" fill="none" stroke="#71E6B1" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
-
-    <g transform="translate(464 246)">
-      <rect width="272" height="60" rx="14" fill="#71E6B1"/>
-      <text x="136" y="38" text-anchor="middle"
-            fill="#07110D" font-size="22" font-weight="800"
-            font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">a3s-test CLI / MCP</text>
+    <g id="gui-driver" transform="translate(440 454)">
+      <rect width="320" height="96" rx="14" fill="#10161A" stroke="#557063" stroke-width="1.5"/>
+      <circle cx="26" cy="27" r="6" fill="#93C9AD"/>
+      <text x="46" y="34" fill="#F6F8F7" font-size="23" font-weight="750">GUI</text>
+      <text x="22" y="70" fill="#B1C8BC" font-size="19">macOS · A3S CUA 0.10.0</text>
     </g>
 
-    <path d="M600 306V342" stroke="#71E6B1" stroke-width="2.5"/>
-    <path d="M594 334L600 344L606 334" fill="none" stroke="#71E6B1" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
-
-    <g transform="translate(56 344)">
-      <rect width="1088" height="82" rx="16" fill="#0E1218" stroke="#303846" stroke-width="1.5"/>
-      <g font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace"
-         font-size="19" font-weight="650">
-        <text x="28" y="49" fill="#F7F9FC">ACL ADMISSION</text>
-        <text x="298" y="49" fill="#F7F9FC">TYPED IR</text>
-        <text x="526" y="49" fill="#F7F9FC">RUNNER</text>
-        <text x="765" y="49" fill="#F7F9FC">SURFACE DRIVER</text>
-      </g>
-      <path d="M202 41H270" stroke="#465264" stroke-width="2"/>
-      <path d="M260 35L270 41L260 47" fill="none" stroke="#71E6B1" stroke-width="2"/>
-      <path d="M412 41H498" stroke="#465264" stroke-width="2"/>
-      <path d="M488 35L498 41L488 47" fill="none" stroke="#71E6B1" stroke-width="2"/>
-      <path d="M626 41H738" stroke="#465264" stroke-width="2"/>
-      <path d="M728 35L738 41L728 47" fill="none" stroke="#71E6B1" stroke-width="2"/>
+    <g id="tui-driver" transform="translate(824 454)">
+      <rect width="320" height="96" rx="14" fill="#0F1318" stroke="#303844" stroke-width="1.5"/>
+      <circle cx="26" cy="27" r="6" fill="#697584"/>
+      <text x="46" y="34" fill="#F6F8F7" font-size="23" font-weight="750">TUI</text>
+      <text x="22" y="70" fill="#929DAA" font-size="19">Planned · PTY model</text>
     </g>
+  </g>
 
-    <path d="M600 426V458" stroke="#465264" stroke-width="2"/>
-    <path d="M206 458H994" stroke="#465264" stroke-width="2"/>
-    <path d="M206 458V474M600 458V474M994 458V474" stroke="#465264" stroke-width="2"/>
-
-    <g transform="translate(56 474)">
-      <rect width="300" height="84" rx="15" fill="#102A21" stroke="#71E6B1" stroke-width="2"/>
-      <circle cx="26" cy="26" r="6" fill="#71E6B1"/>
-      <text x="46" y="34" fill="#F7F9FC" font-size="22" font-weight="750">Web driver</text>
-      <text x="22" y="64" fill="#9BF0C8" font-size="18">available · A3S Browser</text>
-    </g>
-
-    <g transform="translate(450 474)">
-      <rect width="300" height="84" rx="15" fill="#102A21" stroke="#71E6B1" stroke-width="2"/>
-      <circle cx="26" cy="26" r="6" fill="#71E6B1"/>
-      <text x="46" y="34" fill="#F7F9FC" font-size="22" font-weight="750">GUI driver</text>
-      <text x="22" y="64" fill="#9BF0C8" font-size="18">macOS · A3S CUA</text>
-    </g>
-
-    <g transform="translate(844 474)">
-      <rect width="300" height="84" rx="15" fill="#11151C" stroke="#303846" stroke-width="1.5"/>
-      <circle cx="26" cy="26" r="6" fill="#647083"/>
-      <text x="46" y="34" fill="#F7F9FC" font-size="22" font-weight="750">TUI driver</text>
-      <text x="22" y="64" fill="#8D97A7" font-size="18">planned · PTY model</text>
-    </g>
-
-    <g transform="translate(56 584)">
-      <rect width="1088" height="40" rx="10" fill="#171D26"/>
-      <text x="24" y="27"
-            fill="#D8DEE9" font-size="18"
-            font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">EVENT LOG  ·  JSON RESULT  ·  SCREENSHOT  ·  ACCESSIBILITY  ·  HAR  ·  TRACE  ·  VIDEO</text>
-    </g>
+  <g id="result-boundary" transform="translate(56 580)">
+    <rect width="1088" height="44" rx="10" fill="#151B22"/>
+    <text x="544" y="29" text-anchor="middle" fill="#DCE2E7" font-size="19" font-weight="700" letter-spacing="1.1"
+          font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">EVENTS · EVIDENCE · JSON RESULT · OWNED CLEANUP</text>
   </g>
 </svg>
