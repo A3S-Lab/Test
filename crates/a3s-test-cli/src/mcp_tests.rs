@@ -232,6 +232,10 @@ async fn projects_the_session_application_layer_over_mcp() {
         start_tool["inputSchema"]["properties"]["surface"]["enum"],
         json!(["gui"])
     );
+    assert_eq!(
+        start_tool["inputSchema"]["properties"]["auto_resolve_repairs"]["default"],
+        false
+    );
 
     let started = call(
         &mut client_writer,
@@ -242,11 +246,16 @@ async fn projects_the_session_application_layer_over_mcp() {
             "session": "editor",
             "surface": "gui",
             "goal": "Save",
-            "success_criteria": ["Saved"]
+            "success_criteria": ["Saved"],
+            "auto_resolve_repairs": true
         }),
     )
     .await;
     assert_eq!(started["result"]["structuredContent"]["surface"], "gui");
+    assert_eq!(
+        started["result"]["structuredContent"]["auto_resolve_repairs"],
+        true
+    );
 
     let observed = call(
         &mut client_writer,
@@ -673,9 +682,10 @@ async fn mcp_web_ingests_claims_and_completes_a_page_repair_durably() {
     let ledger = tokio::fs::read_to_string(temp.path().join("web-repair/repairs.jsonl"))
         .await
         .expect("durable repair ledger");
-    assert_eq!(ledger.lines().count(), 5, "{ledger}");
+    assert_eq!(ledger.lines().count(), 6, "{ledger}");
     assert!(ledger.contains("\"kind\":\"before_evidence\""));
     assert!(ledger.contains("\"status\":\"verifying\""));
+    assert!(ledger.contains("\"status\":\"needs_input\""));
 }
 
 fn browser_action(args: &[OsString]) -> &[OsString] {

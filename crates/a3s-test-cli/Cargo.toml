@@ -20,7 +20,6 @@ a3s-test-session = { path = "../a3s-test-session" }
 anyhow.workspace = true
 async-trait.workspace = true
 clap.workspace = true
-fs2 = "0.4"
 schemars.workspace = true
 serde.workspace = true
 serde_json.workspace = true

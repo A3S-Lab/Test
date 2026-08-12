@@ -112,6 +112,11 @@ session-scoped automatic resolution must be enabled explicitly. See the
 [Test Kit design and security contract](docs/testkit.md) and
 [roadmap](docs/roadmap.md).
 
+Human-marked repairs use the owning session's append-only ledger through MCP
+or the equivalent `agent repair-*` commands. One persistent mutation slot
+prevents concurrent sessions or processes from editing the workspace, while
+the connected coding agent remains the only planner and source editor.
+
 ## Install
 
 The release installers select the matching CLI archive, verify its SHA-256
@@ -236,11 +241,6 @@ actions are never replayed automatically.
 All three paths use the same typed `Action`, `SurfaceDriver`, evidence, result,
 and lifecycle contracts. The portable Skill is an instruction adapter around
 the CLI; it is not another runner.
-
-Human-marked Test Kit repairs use the same session boundary through MCP or the
-equivalent `agent repair-*` commands. The connected coding agent remains the
-only planner and source editor; repair state is an append-only ledger owned by
-that session.
 
 ## Why the boundary is trustworthy
 

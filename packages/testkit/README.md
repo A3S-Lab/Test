@@ -37,6 +37,12 @@ Submitted DOM context is explicitly marked as untrusted evidence. A same-origin
 `repairEndpoint` is optional; without one A3S Test can pick queued repairs up
 through its fixed browser bridge integration.
 
+A3S Test captures its own before/after context, screenshot, and browser-error
+evidence, serializes workspace mutation across sessions and processes, and
+proves an admitted regression candidate in a fresh browser before presenting a
+repair for review. Human acceptance is the default; automatic resolution must
+be enabled for the owning A3S Test session explicitly.
+
 See [`../../docs/testkit.md`](../../docs/testkit.md) for the complete protocol,
 security, repair, and verification design.
 
@@ -49,4 +55,5 @@ mount both from a client component and gate them with
 `process.env.NODE_ENV !== "production"`. The overlay supports element, text,
 click/drag multi-selection, rectangular and freehand findings, persistent
 markers, draft editing/hiding, animation pause, system/light/dark themes, and
-bounded structured copy.
+bounded structured copy. Submitted findings support human/agent replies,
+accept/reject/reopen review actions, and per-finding lifecycle projection.

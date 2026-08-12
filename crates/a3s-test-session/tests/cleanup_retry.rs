@@ -11,7 +11,10 @@ use a3s_test_session::{
     StartSessionRequest,
 };
 use async_trait::async_trait;
-use tokio::sync::Notify;
+use tokio::sync::{Mutex, Notify};
+
+mod support;
+use support::session_fixture::{FakeDriver, FakeState};
 
 struct CloseDriver {
     attempts: Arc<AtomicUsize>,
@@ -287,6 +290,44 @@ async fn close_all_waits_for_a_cleanup_that_outlived_its_caller_deadline() {
         .expect_err("background cleanup completed");
     assert_eq!(completed.code(), "test.session.not_found");
     assert_eq!(attempts.load(Ordering::SeqCst), 1);
+}
+
+#[tokio::test]
+async fn failed_finish_interruption_restores_the_active_session() {
+    let temp = tempfile::tempdir().expect("tempdir");
+    let state = Arc::new(Mutex::new(FakeState::default()));
+    let manager = AgentSessionManager::new(
+        vec![Arc::new(FakeDriver {
+            state: Arc::clone(&state),
+        })],
+        SessionManagerOptions {
+            artifacts_root: temp.path().to_path_buf(),
+            cleanup_timeout: Duration::from_secs(1),
+            max_sessions: 1,
+        },
+    )
+    .expect("manager");
+    start(&manager, "finish-restore").await;
+    let lock_path = temp.path().join("repair-workspace.lock");
+    tokio::fs::create_dir(&lock_path)
+        .await
+        .expect("invalid lock fixture");
+
+    let error = manager
+        .finish(finish_request("finish-restore"))
+        .await
+        .expect_err("invalid workspace lock must fail finish");
+    assert_eq!(error.code(), "test.session.repair_workspace_storage_failed");
+    manager
+        .observe("finish-restore")
+        .await
+        .expect("closing reservation restored the active session");
+
+    tokio::fs::remove_dir(&lock_path)
+        .await
+        .expect("remove invalid lock fixture");
+    manager.abort("finish-restore").await.expect("abort");
+    assert_eq!(state.lock().await.closed, 1);
 }
 
 fn manager(

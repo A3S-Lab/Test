@@ -144,9 +144,12 @@ snapshot. Pages without the SDK retain the existing Web behavior.
       and revision notifications instead of polling
 - [x] Isolate optional overlay styles and events from host-page CSS and avoid
       changing application behavior when review mode is disabled
-- [ ] Cover SSR/hydration, route changes, portals, transforms, zoom,
-      fixed/sticky content, nested scroll containers, open Shadow DOM,
-      virtualized lists, dialogs, and teardown in unit and real-browser tests
+- [x] Cover SSR/hydration, route changes, portals, transforms, fixed/sticky
+      content, nested scroll containers, open Shadow DOM, virtualized lists,
+      dialogs, and teardown in unit and real-browser tests
+- [ ] Add an explicit browser-zoom geometry regression; DPR-aware CSS-pixel
+      coordinate modeling is implemented, but zoom is not yet independently
+      proven by the Test Kit E2E suite
 
 ## M7: Page-context observation and targeting
 
@@ -191,19 +194,20 @@ snapshot. Pages without the SDK retain the existing Web behavior.
 - [x] Display per-finding queue, claim, edit, verification, clarification,
       failure, review-ready, resolved, dismissed, cancelled, and reopened
       states in real time
-- [ ] Complete bidirectional human/agent replies; agent clarification messages
-      are projected and rendered today, but page-authored replies do not yet
-      cross into the authoritative ledger
+- [x] Complete bidirectional human/agent replies through the page action queue,
+      authoritative append-only ledger, and projected overlay thread
 - [x] Treat DOM text and application-provided facts strictly as untrusted
       evidence; they must never become hidden agent instructions
-- [ ] Provide keyboard and screen-reader-complete review workflows and ensure
-      the overlay never appears in production unless explicitly enabled
+- [x] Provide keyboard element marking, Escape focus restoration, and explicit
+      fail-closed production enablement for both runtime and overlay
+- [ ] Complete and independently audit every review workflow with a screen
+      reader
 
 ## M9: Repair queue and coding-agent handoff
 
-- [ ] Define typed `RepairBatch` and `RepairAttempt` history; typed
-      `RepairFinding`, `RepairVerification`, and append-only repair event
-      contracts already exist
+- [x] Define typed `RepairBatch`, per-item batch results, `RepairAttempt`
+      history, `RepairFinding`, `RepairVerification`, replies, and append-only
+      repair event contracts
 - [x] Store repair state and evidence under the owning
       `.a3s-test/agent-sessions/<session>/` ledger rather than creating a
       second session or report system
@@ -218,11 +222,13 @@ snapshot. Pages without the SDK retain the existing Web behavior.
       A3S Test must not silently start a second model or treat a page request
       as authorization to edit, commit, push, publish, deploy, install
       dependencies, or run arbitrary commands
-- [ ] Process one workspace mutation at a time by default; after each hot
+- [x] Process one workspace mutation at a time by default; after each hot
       reload, observe again and re-resolve every remaining finding instead of
       reusing stale refs
-- [ ] Detect overlapping targets, source files, and contradictory requests and
-      move the affected findings to `needs_input` rather than guessing order
+- [x] Detect overlapping node/region targets and shared source hints and move
+      the affected findings to `needs_input` rather than guessing order
+- [ ] Add a typed, non-keyword mechanism for declaring semantically
+      contradictory requests across otherwise disjoint targets
 - [x] Record exactly which changed files and checks the coding agent reports in
       each stored verification; preserving unrelated dirty-worktree changes
       remains a coding-agent safety requirement
@@ -232,21 +238,20 @@ snapshot. Pages without the SDK retain the existing Web behavior.
 
 ## M10: Repair verification and regression promotion
 
-- [ ] Capture an A3S Test-owned before evidence bundle and error baseline before
-      a repair is claimable; context revision is captured today and after-state
-      verification already rejects non-new or non-ready revisions
+- [x] Capture an A3S Test-owned, hash-bound before context/screenshot bundle and
+      console/page-error baseline before a repair is claimable
 - [x] Re-observe the target, accept an explicit browser success-criteria result,
-      detect new console/page errors from a supplied baseline, and attach
+      detect new console/page errors from the owned baseline, and attach
       focused project-check results before a repair can become `review_ready`
-- [ ] Require human acceptance by default; allow session-scoped automatic
+- [x] Require human acceptance by default; allow session-scoped automatic
       resolution only when all declared verification gates pass
-- [ ] Let a human reject or reopen a repair while retaining every attempt,
+- [x] Let a human reject or reopen a repair while retaining every attempt,
       reply, evidence digest, and verification result
-- [ ] Continue independent findings after an isolated failure while preserving
+- [x] Continue independent findings after an isolated failure while preserving
       deterministic batch order and a per-item result
-- [ ] Prove and persist the smallest regression path; current verification can
-      generate a syntax-validated ACL candidate from one stable locator and an
-      explicit text criterion, but does not execute that candidate
+- [x] Generate and persist the smallest admitted ACL candidate from a stable
+      locator and explicit text criterion, then prove its single same-origin Web
+      scenario in a fresh browser before `review_ready`
 - [ ] Validate end-to-end flows for single repair, ordered batch repair,
       clarification, cancellation, agent disconnect, hot-reload ref expiry,
       verification failure, restart recovery, and promotion to ACL

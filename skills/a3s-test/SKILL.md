@@ -141,14 +141,19 @@ equivalent `a3s-test agent repair-*` CLI commands:
 6. Call `test_repair_complete` with the same attempt ID, then call
    `test_repair_verify` after hot reload with the changed-file list and focused
    check results.
-7. Verification stops at `review_ready`; report that state to the human.
-   Review and validate any returned ACL candidate before adding it to the
-   project.
+7. By default, verification stops at `review_ready` for human acceptance. A
+   session explicitly started with `--auto-resolve-repairs` resolves only after
+   A3S Test has persisted a passing review-ready verification. Review the
+   persisted fresh-browser ACL proof before adding its candidate to the project.
 
 Never omit or invent an attempt ID after claim. If a pre-edit lease expires,
 watch may safely return it to the queue. If editing may have begun, A3S Test
 moves it to `needs_input`; do not hand it to another worker or guess whether
 the workspace was mutated.
+
+Only one attempt may own the workspace mutation slot across A3S Test sessions
+and processes. Finish verification, safely recover the owning session, or ask
+the human to reconcile `needs_input` before claiming another finding.
 
 ## Deterministic regression workflow
 

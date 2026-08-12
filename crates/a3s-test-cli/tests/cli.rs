@@ -52,6 +52,19 @@ fn agent_schema_exposes_values_for_semantic_targets() {
     assert_eq!(value["planner"], "external_coding_agent");
     assert_eq!(value["protocol_revision"], 5);
     assert!(value["page_context_protocol"].is_null());
+    assert_eq!(value["repair_resolution"]["default"], "human_review");
+    assert_eq!(
+        value["repair_resolution"]["session_option"],
+        "--auto-resolve-repairs"
+    );
+    assert_eq!(
+        value["repair_resolution"]["verified_transition_order"],
+        serde_json::json!(["review_ready", "resolved"])
+    );
+    assert_eq!(
+        value["invariants"]["automatic_repair_resolution_requires_all_gates"],
+        true
+    );
     let action_types = value["action_schema"]["oneOf"]
         .as_array()
         .expect("action variants");
@@ -177,6 +190,7 @@ esac
             "Complete the checkout smoke test",
             "--success",
             "The Continue action succeeds",
+            "--auto-resolve-repairs",
             "--allow-domain",
             "cdn.example.test",
             "--browser-driver",
@@ -193,6 +207,7 @@ esac
     let start_json: serde_json::Value = serde_json::from_slice(&start.stdout).expect("start JSON");
     assert_eq!(start_json["session"], "checkout");
     assert_eq!(start_json["status"], "active");
+    assert_eq!(start_json["auto_resolve_repairs"], true);
     assert_eq!(
         start_json["browser_allowed_domains"],
         serde_json::json!(["cdn.example.test", "example.test"])
@@ -281,6 +296,11 @@ esac
     let state: serde_json::Value =
         serde_json::from_slice(&fs::read(session_root.join("session.json")).expect("state"))
             .expect("state JSON");
+    assert_eq!(state["auto_resolve_repairs"], true);
+    let report: serde_json::Value =
+        serde_json::from_slice(&fs::read(session_root.join("report.json")).expect("report"))
+            .expect("report JSON");
+    assert_eq!(report["auto_resolve_repairs"], true);
     let runtime = PathBuf::from(state["runtime_dir"].as_str().expect("runtime path"));
     assert!(!runtime.exists(), "runtime directory survived finish");
 

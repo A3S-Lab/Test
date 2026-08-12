@@ -11,6 +11,7 @@ use anyhow::{Context, Result};
 use serde_json::json;
 
 use super::args::{RepairTransitionArgs, RepairVerifyArgs, RepairWatchArgs};
+use super::store::{AgentSessionState, AgentSessionStore};
 use super::{
     canonical_workspace, connect, emit, load_active, load_store, unix_ms, validate_timeout,
     BrowserConnectionPurpose,
@@ -25,14 +26,21 @@ pub(super) async fn watch(args: RepairWatchArgs) -> Result<ExitCode> {
     }
     let workspace = canonical_workspace().await?;
     let store = load_store(&workspace, &args.session)?;
-    let _repair_lock = store.acquire_repair_lock().await?;
+    let repair_workspace = store.repair_workspace();
     let state = load_active(&store, &workspace, &args.session).await?;
     let repairs_path = store.root().join("repairs.jsonl");
     let mut ledger = RepairLedger::load(repairs_path.clone()).await?;
     let mut browser = connect(&state, BrowserConnectionPurpose::Turn).await?;
-    let recovered = ledger
-        .recover_expired_leases(&state.session, unix_ms())
-        .await?;
+    let recovered = {
+        let mut repair_lock = repair_workspace
+            .acquire()
+            .await
+            .map_err(anyhow::Error::new)?;
+        ledger.reload().await.map_err(anyhow::Error::new)?;
+        ledger
+            .recover_expired_leases_in_workspace(&state.session, unix_ms(), &mut repair_lock)
+            .await?
+    };
     let recovered_ids = recovered
         .iter()
         .map(|(_, event)| event.finding_id.as_str())
@@ -46,23 +54,58 @@ pub(super) async fn watch(args: RepairWatchArgs) -> Result<ExitCode> {
         browser.project_repair_event(&event).await?;
     }
     for action in browser.take_human_repair_actions(args.limit).await? {
-        for (_, event) in ledger
-            .apply_human_action(&state.session, action, unix_ms())
-            .await?
-        {
+        let transitions = {
+            let mut repair_lock = repair_workspace
+                .acquire()
+                .await
+                .map_err(anyhow::Error::new)?;
+            ledger
+                .apply_human_action_in_workspace(
+                    &state.session,
+                    action,
+                    unix_ms(),
+                    &mut repair_lock,
+                )
+                .await?
+        };
+        for (_, event) in transitions {
             browser.project_repair_event(&event).await?;
         }
     }
-    for (_, event) in ledger.resolve_conflicts(&state.session, unix_ms()).await? {
+    let conflicts = {
+        let mut repair_lock = repair_workspace
+            .acquire()
+            .await
+            .map_err(anyhow::Error::new)?;
+        ledger
+            .resolve_conflicts_in_workspace(&state.session, unix_ms(), &mut repair_lock)
+            .await?
+    };
+    for (_, event) in conflicts {
         browser.project_repair_event(&event).await?;
     }
-    capture_missing_before_evidence(&state.session, &mut ledger, &mut browser, args.limit).await?;
+    capture_missing_before_evidence(
+        &state.session,
+        &repair_workspace,
+        &mut ledger,
+        &mut browser,
+        args.limit,
+    )
+    .await?;
     let mut queued = ledger.queued(args.limit);
     if queued.is_empty() {
         let findings = browser
             .wait_for_repair_batch(args.limit, args.timeout_ms, args.batch_window_ms)
             .await?;
-        let created = ledger.ingest(&state.session, findings, unix_ms()).await?;
+        let created = {
+            let mut repair_lock = repair_workspace
+                .acquire()
+                .await
+                .map_err(anyhow::Error::new)?;
+            ledger
+                .ingest_in_workspace(&state.session, findings, unix_ms(), &mut repair_lock)
+                .await?
+        };
         for record in created {
             let evidence = browser
                 .capture_owned_repair_evidence(&RepairEvidenceRequest {
@@ -71,15 +114,39 @@ pub(super) async fn watch(args: RepairWatchArgs) -> Result<ExitCode> {
                     phase: RepairEvidencePhase::Before,
                 })
                 .await?;
+            let mut repair_lock = repair_workspace
+                .acquire()
+                .await
+                .map_err(anyhow::Error::new)?;
             ledger
-                .attach_before_evidence(&state.session, &record.finding.id, evidence)
+                .attach_before_evidence_in_workspace(
+                    &state.session,
+                    &record.finding.id,
+                    evidence,
+                    &mut repair_lock,
+                )
                 .await?;
         }
-        for (_, event) in ledger.resolve_conflicts(&state.session, unix_ms()).await? {
+        let conflicts = {
+            let mut repair_lock = repair_workspace
+                .acquire()
+                .await
+                .map_err(anyhow::Error::new)?;
+            ledger
+                .resolve_conflicts_in_workspace(&state.session, unix_ms(), &mut repair_lock)
+                .await?
+        };
+        for (_, event) in conflicts {
             browser.project_repair_event(&event).await?;
         }
-        capture_missing_before_evidence(&state.session, &mut ledger, &mut browser, args.limit)
-            .await?;
+        capture_missing_before_evidence(
+            &state.session,
+            &repair_workspace,
+            &mut ledger,
+            &mut browser,
+            args.limit,
+        )
+        .await?;
         queued = ledger.queued(args.limit);
     }
     emit(
@@ -98,6 +165,7 @@ pub(super) async fn watch(args: RepairWatchArgs) -> Result<ExitCode> {
 
 async fn capture_missing_before_evidence(
     session: &str,
+    repair_workspace: &a3s_test_session::RepairWorkspace,
     ledger: &mut RepairLedger,
     browser: &mut a3s_test_driver_web::AgentBrowserSession,
     limit: usize,
@@ -115,8 +183,17 @@ async fn capture_missing_before_evidence(
                 phase: RepairEvidencePhase::Before,
             })
             .await?;
+        let mut repair_lock = repair_workspace
+            .acquire()
+            .await
+            .map_err(anyhow::Error::new)?;
         ledger
-            .attach_before_evidence(session, &record.finding.id, evidence)
+            .attach_before_evidence_in_workspace(
+                session,
+                &record.finding.id,
+                evidence,
+                &mut repair_lock,
+            )
             .await?;
     }
     Ok(())
@@ -128,7 +205,11 @@ pub(super) async fn transition(
 ) -> Result<ExitCode> {
     let workspace = canonical_workspace().await?;
     let store = load_store(&workspace, &args.session)?;
-    let _repair_lock = store.acquire_repair_lock().await?;
+    let repair_workspace = store.repair_workspace();
+    let mut repair_lock = repair_workspace
+        .acquire()
+        .await
+        .map_err(anyhow::Error::new)?;
     let state = load_active(&store, &workspace, &args.session).await?;
     let mut ledger = RepairLedger::load(store.root().join("repairs.jsonl")).await?;
     if args.lease_expires_at_ms.is_some() && args.lease_ms != 300_000 {
@@ -166,7 +247,11 @@ pub(super) async fn transition(
         message: args.message,
         verification: None,
     };
-    let (repair, event) = ledger.transition(request, now_ms).await?;
+    let (repair, event) = ledger
+        .transition_in_workspace(request, now_ms, &mut repair_lock)
+        .await
+        .map_err(anyhow::Error::new)?;
+    drop(repair_lock);
     let mut browser = connect(&state, BrowserConnectionPurpose::Turn).await?;
     browser.project_repair_event(&event).await?;
     emit(
@@ -203,19 +288,37 @@ pub(super) async fn verify(args: RepairVerifyArgs) -> Result<ExitCode> {
     validate_repair_verification_request(&request).map_err(anyhow::Error::new)?;
     let workspace = canonical_workspace().await?;
     let store = load_store(&workspace, &request.session)?;
-    let _repair_lock = store.acquire_repair_lock().await?;
+    let repair_workspace = store.repair_workspace();
     let state = load_active(&store, &workspace, &request.session).await?;
-    let mut ledger = RepairLedger::load(store.root().join("repairs.jsonl")).await?;
-    let current = ledger
-        .get(&request.finding_id)
-        .context("repair finding does not exist")?;
-    if current.status != RepairStatus::Verifying {
-        anyhow::bail!("repair verification requires the verifying state");
-    }
-    let attempt_id = current
-        .attempt_id
-        .clone()
-        .context("repair verification is missing its active attempt")?;
+    let repairs_path = store.root().join("repairs.jsonl");
+    let (mut ledger, current, attempt_id) = {
+        let repair_lock = repair_workspace
+            .acquire()
+            .await
+            .map_err(anyhow::Error::new)?;
+        let ledger = RepairLedger::load(repairs_path.clone()).await?;
+        let current = ledger
+            .get(&request.finding_id)
+            .context("repair finding does not exist")?;
+        if current.status != RepairStatus::Verifying {
+            anyhow::bail!("repair verification requires the verifying state");
+        }
+        let attempt_id = current
+            .attempt_id
+            .clone()
+            .context("repair verification is missing its active attempt")?;
+        repair_lock
+            .validate_attempt_owner(
+                &request.session,
+                &request.finding_id,
+                &attempt_id,
+                RepairStatus::Verifying,
+                unix_ms(),
+            )
+            .await
+            .map_err(anyhow::Error::new)?;
+        (ledger, current, attempt_id)
+    };
     let before_evidence = current
         .before_evidence
         .clone()
@@ -231,9 +334,6 @@ pub(super) async fn verify(args: RepairVerifyArgs) -> Result<ExitCode> {
     let mut verification = build_repair_verification(
         &current.finding,
         &attempt_id,
-        &after_evidence.context,
-        after_evidence.console_errors,
-        after_evidence.page_errors,
         &before_evidence,
         &after_evidence,
         &request,
@@ -264,7 +364,25 @@ pub(super) async fn verify(args: RepairVerifyArgs) -> Result<ExitCode> {
     }
     let passed = verification.passed;
     let verification_request_id = request.request_id.clone();
-    let request = RepairTransition {
+    let mut repair_lock = repair_workspace
+        .acquire()
+        .await
+        .map_err(anyhow::Error::new)?;
+    ledger.reload().await.map_err(anyhow::Error::new)?;
+    ledger
+        .require_attempt_state(&request.finding_id, RepairStatus::Verifying, &attempt_id)
+        .map_err(anyhow::Error::new)?;
+    repair_lock
+        .validate_attempt_owner(
+            &request.session,
+            &request.finding_id,
+            &attempt_id,
+            RepairStatus::Verifying,
+            unix_ms(),
+        )
+        .await
+        .map_err(anyhow::Error::new)?;
+    let transition = RepairTransition {
         session: state.session.clone(),
         finding_id: current.finding.id.clone(),
         request_id: request.request_id,
@@ -280,10 +398,22 @@ pub(super) async fn verify(args: RepairVerifyArgs) -> Result<ExitCode> {
         message: None,
         verification: Some(verification),
     };
-    let (mut repair, event) = ledger.transition(request, unix_ms()).await?;
+    let (mut repair, event) = ledger
+        .transition_in_workspace(transition, unix_ms(), &mut repair_lock)
+        .await
+        .map_err(anyhow::Error::new)?;
+    drop(repair_lock);
     browser.project_repair_event(&event).await?;
     if passed && state.auto_resolve_repairs {
-        let request = RepairTransition {
+        let mut repair_lock = repair_workspace
+            .acquire()
+            .await
+            .map_err(anyhow::Error::new)?;
+        ledger.reload().await.map_err(anyhow::Error::new)?;
+        ledger
+            .require_attempt_state(&current.finding.id, RepairStatus::ReviewReady, &attempt_id)
+            .map_err(anyhow::Error::new)?;
+        let transition = RepairTransition {
             session: state.session.clone(),
             finding_id: current.finding.id.clone(),
             request_id: auto_resolution_request_id(&verification_request_id),
@@ -295,7 +425,11 @@ pub(super) async fn verify(args: RepairVerifyArgs) -> Result<ExitCode> {
             message: None,
             verification: None,
         };
-        let (resolved, event) = ledger.transition(request, unix_ms()).await?;
+        let (resolved, event) = ledger
+            .transition_in_workspace(transition, unix_ms(), &mut repair_lock)
+            .await
+            .map_err(anyhow::Error::new)?;
+        drop(repair_lock);
         browser.project_repair_event(&event).await?;
         repair = resolved;
     }
@@ -315,6 +449,27 @@ pub(super) async fn verify(args: RepairVerifyArgs) -> Result<ExitCode> {
         format!("Repair '{}' verification completed", repair.finding.id),
     )?;
     Ok(ExitCode::SUCCESS)
+}
+
+pub(super) async fn interrupt_for_session_close(
+    store: &AgentSessionStore,
+    state: &AgentSessionState,
+) -> Result<()> {
+    let repairs_path = store.root().join("repairs.jsonl");
+    if !repairs_path.is_file() {
+        return Ok(());
+    }
+    let repair_workspace = store.repair_workspace();
+    let mut repair_lock = repair_workspace
+        .acquire()
+        .await
+        .map_err(anyhow::Error::new)?;
+    let mut ledger = RepairLedger::load(repairs_path).await?;
+    ledger
+        .interrupt_active_mutation_in_workspace(&state.session, unix_ms(), &mut repair_lock)
+        .await
+        .map_err(anyhow::Error::new)?;
+    Ok(())
 }
 
 fn derived_attempt_id(request_id: &str) -> String {

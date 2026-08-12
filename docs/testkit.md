@@ -245,8 +245,9 @@ node IDs, component/source hints, semantic locator candidates, geometry,
 nearby context, route, viewport, and declared facts. A3S Test maps those IDs to
 observation-bound refs when it observes or inspects the page. DOM content and
 facts are marked untrusted evidence and are never concatenated into hidden
-instructions. An A3S Test-owned screenshot/error baseline before claim remains
-roadmap work.
+instructions. Before a finding becomes claimable, A3S Test captures and hashes
+its own bounded page context and screenshot and records the current console and
+page-error counts as the verification baseline.
 
 ## Repair state machine
 
@@ -265,10 +266,12 @@ Every transition is append-only and has a monotonic sequence, actor, timestamp,
 and active attempt identifier where required. Invalid transitions fail without
 changing state. Terminal operations are idempotent for the same request ID.
 
-The overlay renders each finding independently. A batch has stable order but
-is not a filesystem transaction. Until workspace-mutation scheduling is
-implemented, the connected coding agent must claim and edit one finding at a
-time, then re-observe after hot reload before using any remaining target.
+The overlay renders each finding independently. A batch has stable order and a
+typed per-item result, but is not a filesystem transaction. A workspace-local
+mutation slot serializes `claimed`, `repairing`, and `verifying` attempts across
+sessions and processes. Overlapping node/region targets and shared source hints
+are moved to `needs_input`; after hot reload, the coding agent re-observes and
+resolves each remaining target instead of reusing stale refs.
 
 ## Coding-agent handoff
 
@@ -293,11 +296,12 @@ a3s-test mcp \
 
 The coding agent starts a Web session, calls `test_repair_watch`, claims one
 finding, reports `progress` before editing, reports `complete` when editing is
-done, and calls `test_repair_verify` with its focused check results. Claims default to a derived
-attempt ID and a five-minute lease. The returned attempt ID must be repeated
-on progress, reply, complete, and fail transitions. A watch call is bounded by
-both its requested timeout and the browser command deadline, and uses a short
-batch window to keep findings submitted together in stable order.
+done, and calls `test_repair_verify` with its focused check results. Claims
+default to a derived attempt ID and a five-minute lease. The returned attempt
+ID must be repeated on progress, reply, complete, and fail transitions. A watch
+call is bounded by both its requested timeout and the browser command deadline,
+and uses a short batch window to keep findings submitted together in stable
+order.
 
 For direct CLI sessions, equivalent commands are available under
 `a3s-test agent repair-*`. The `next` field emitted after claim and progress
@@ -339,21 +343,26 @@ unbounded sleep:
 1. wait for the Test Kit to report a newer ready revision;
 2. observe again and resolve the target or its declared replacement;
 3. evaluate explicit browser-verifiable success criteria;
-4. compare console and page errors against the caller-supplied before baseline;
-5. retain bounded after context in the typed verification result;
+4. compare console and page errors against the A3S Test-owned before baseline;
+5. capture and hash an A3S Test-owned after screenshot and bounded context;
 6. attach the coding agent's changed-file and focused-check report.
 
-The current protocol stops at `review_ready`. Human acceptance/rejection,
-automatic resolution policy, and retained reopen flows remain roadmap work.
+Human acceptance is the default. The overlay can accept, reject, reply to, or
+reopen a finding, and the append-only ledger retains every attempt, reply,
+evidence bundle, and verification result. A session started with
+`--auto-resolve-repairs` may have A3S Test append `resolved`, but only after a
+passing `review_ready` event has first been persisted and projected. Failed
+verification never auto-resolves.
 
 `test_repair_verify` requires a newer ready context revision, re-inspects the
-target through its semantic locators, compares caller-supplied before counts
-with bounded current console and page-error counts, and records relative
-changed-file paths plus focused check results. It
-stores a typed verification result in the append-only ledger. When a stable
-locator and explicit text criterion exist, it also returns a syntax-validated
-ACL regression candidate for review. The candidate is not executed, committed,
-or treated as proven coverage.
+target through its semantic locators, compares current console and page-error
+counts with the owned baseline, and records relative changed-file paths plus
+focused check results. It stores a typed verification result in the append-only
+ledger. When a stable locator and explicit text criterion exist, A3S Test also
+persists a syntax-validated ACL regression candidate and executes its admitted
+single Web scenario in a fresh browser session using the owning network policy.
+Only a passing proof can reach `review_ready`; the candidate is not committed
+to the application repository automatically.
 
 ## CI and compatibility
 
@@ -379,10 +388,21 @@ authoritative only in the owning A3S Test agent-session directory:
 ├── session.json
 ├── events.jsonl
 ├── report.json
-└── repairs.jsonl
+├── repairs.jsonl
+└── artifacts/repairs/<finding>/<attempt>/
+
+.a3s-test/
+├── repair-workspace.lock
+└── repair-workspace.json
 ```
 
-No separate hidden test session, database, or model loop owns repair state.
+The OS file lock protects short atomic state updates rather than the duration
+of an edit. `repair-workspace.json` persists the active session, finding,
+attempt, phase, and lease so separate A3S Test processes obey the same mutation
+slot. Browser evidence capture and fresh-browser ACL proof run without holding
+the OS lock; verification reacquires it, reloads the ledger, and confirms the
+same `verifying` attempt before committing its result. No separate hidden test
+session, database, or model loop owns repair state.
 
 ## License boundary
 

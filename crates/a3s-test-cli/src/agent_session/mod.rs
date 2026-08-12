@@ -4,6 +4,7 @@ mod inspect;
 mod policy;
 mod repair;
 mod runtime;
+mod schema;
 mod store;
 mod validation;
 
@@ -26,8 +27,7 @@ use url::Url;
 
 pub(crate) use self::args::AgentArgs;
 use self::args::{
-    ActArgs, AgentCommand, FinishArgs, FinishStatus, ListArgs, ObserveArgs, SchemaArgs,
-    SessionArgs, StartArgs,
+    ActArgs, AgentCommand, FinishArgs, FinishStatus, ListArgs, ObserveArgs, SessionArgs, StartArgs,
 };
 use self::events::{append_success_event, append_terminal_event, record_failure};
 use self::policy::{
@@ -240,7 +240,7 @@ pub(crate) async fn execute(args: AgentArgs) -> Result<ExitCode> {
         AgentCommand::Abort(args) => abort(args).await,
         AgentCommand::Show(args) => show(args).await,
         AgentCommand::List(args) => list(args).await,
-        AgentCommand::Schema(args) => schema(args),
+        AgentCommand::Schema(args) => schema::execute(args),
     }
 }
 
@@ -585,6 +585,7 @@ async fn finish(args: FinishArgs) -> Result<ExitCode> {
     let workspace = canonical_workspace().await?;
     let store = load_store(&workspace, &args.session)?;
     let mut state = load_active(&store, &workspace, &args.session).await?;
+    repair::interrupt_for_session_close(&store, &state).await?;
     let mut browser = connect(&state, BrowserConnectionPurpose::Cleanup).await?;
     let cleanup_error = close_and_remove_runtime(&mut browser, &state).await;
     state.active_video_path = None;
@@ -611,6 +612,7 @@ async fn finish(args: FinishArgs) -> Result<ExitCode> {
         status: state.status,
         goal: state.goal.clone(),
         success_criteria: state.success_criteria.clone(),
+        auto_resolve_repairs: state.auto_resolve_repairs,
         allowed_origins: state.allowed_origins.clone(),
         browser_allowed_domains: state.browser_allowed_domains.clone().unwrap_or_default(),
         event_count: state.next_sequence.saturating_sub(1),
@@ -651,6 +653,7 @@ async fn abort(args: SessionArgs) -> Result<ExitCode> {
     let workspace = canonical_workspace().await?;
     let store = load_store(&workspace, &args.session)?;
     let mut state = load_session_state(&store, &workspace, &args.session).await?;
+    repair::interrupt_for_session_close(&store, &state).await?;
     let cleanup_error = if state.runtime_dir.exists() {
         let mut browser = connect(&state, BrowserConnectionPurpose::Cleanup).await?;
         close_and_remove_runtime(&mut browser, &state).await
@@ -743,35 +746,6 @@ async fn list(args: ListArgs) -> Result<ExitCode> {
             .join("\n")
     };
     emit(args.json, serde_json::to_value(&sessions)?, human)?;
-    Ok(ExitCode::SUCCESS)
-}
-
-fn schema(args: SchemaArgs) -> Result<ExitCode> {
-    let schema = json!({
-        "protocol_revision": ACTION_PROTOCOL_REVISION,
-        "planner": "external_coding_agent",
-        "turns": [
-            "start",
-            "observe",
-            "act",
-            "observe",
-            "finish"
-        ],
-        "invariants": {
-            "typed_actions": true,
-            "ref_targets_require_latest_observation": true,
-            "explicit_navigation_is_origin_scoped": true,
-            "browser_network_is_domain_scoped": true,
-            "sessions_are_workspace_local": true,
-            "evidence_is_session_scoped": true
-        },
-        "action_schema": schemars::schema_for!(Action),
-    });
-    if args.compact {
-        println!("{}", serde_json::to_string(&schema)?);
-    } else {
-        println!("{}", serde_json::to_string_pretty(&schema)?);
-    }
     Ok(ExitCode::SUCCESS)
 }
 

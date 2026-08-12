@@ -53,14 +53,14 @@ pub fn validate_repair_verification_request(
 pub fn build_repair_verification(
     finding: &RepairFinding,
     attempt_id: &str,
-    snapshot: &PageContextSnapshot,
-    console_errors: u32,
-    page_errors: u32,
     before_evidence: &RepairEvidenceBundle,
     after_evidence: &RepairEvidenceBundle,
     request: &RepairVerifyRequest,
 ) -> Result<RepairVerification, SessionError> {
     validate_repair_verification_request(request)?;
+    let snapshot = &after_evidence.context;
+    let console_errors = after_evidence.console_errors;
+    let page_errors = after_evidence.page_errors;
     let before_revision = before_evidence.context_revision;
     let after_revision = snapshot.revision.unwrap_or_default();
     if after_revision <= before_revision || !snapshot.page.as_ref().is_some_and(|page| page.ready) {
@@ -366,11 +366,11 @@ mod tests {
         let unknown = build_repair_verification(
             &finding(),
             "attempt-1",
-            &snapshot,
-            0,
-            0,
             &evidence(1),
-            &evidence(2),
+            &RepairEvidenceBundle {
+                context: snapshot.clone(),
+                ..evidence(2)
+            },
             &request(None),
         )
         .expect("verification");
@@ -379,11 +379,11 @@ mod tests {
         let passed = build_repair_verification(
             &finding(),
             "attempt-1",
-            &snapshot,
-            0,
-            0,
             &evidence(1),
-            &evidence(2),
+            &RepairEvidenceBundle {
+                context: snapshot,
+                ..evidence(2)
+            },
             &request(Some(true)),
         )
         .expect("verification");
@@ -408,11 +408,11 @@ mod tests {
         let error = build_repair_verification(
             &finding(),
             "attempt-1",
-            &missing_page,
-            0,
-            0,
             &evidence(1),
-            &evidence(2),
+            &RepairEvidenceBundle {
+                context: missing_page,
+                ..evidence(2)
+            },
             &request(Some(true)),
         )
         .expect_err("missing page readiness must fail closed");

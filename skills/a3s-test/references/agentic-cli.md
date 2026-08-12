@@ -26,6 +26,7 @@ a3s-test agent start <url> \
   --goal <instruction> \
   --success <criterion> \
   [--success <criterion>] \
+  [--auto-resolve-repairs] \
   [--allow-origin <origin>] \
   [--headed] \
   --json
@@ -174,7 +175,21 @@ Each workspace stores:
 Submitted Test Kit findings are stored in `repairs.jsonl`. Claim output
 includes a derived or explicit `attempt_id`; repeat it on progress, reply,
 complete, and fail commands. `repair-watch` performs lease recovery before
-waiting. `repair-complete` starts verification and does not resolve a finding.
+waiting and captures A3S Test-owned before context, screenshot, and error
+counts before a finding can be claimed. `repair-complete` starts verification
+and does not resolve a finding. `repair-verify` captures owned after evidence,
+checks the new ready revision and error delta, and proves the generated or
+supplied ACL candidate in a fresh browser. Human acceptance is the default;
+`--auto-resolve-repairs` is session-scoped and resolves only after all gates
+pass and `review_ready` has been persisted.
+
+Workspace mutation ownership is shared across sessions and processes through
+`.a3s-test/repair-workspace.lock` and `.a3s-test/repair-workspace.json`. An
+expired pre-edit claim can return to the queue. An attempt that may have edited
+the workspace becomes `needs_input` and must be reconciled before another
+attempt can take the slot. Verification releases the short OS lock while it
+captures browser evidence and proves the ACL candidate, then reloads and
+revalidates the same attempt before recording the result.
 
 ## Safety invariants
 

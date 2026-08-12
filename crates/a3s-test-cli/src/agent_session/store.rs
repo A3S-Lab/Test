@@ -1,9 +1,8 @@
 use std::path::{Path, PathBuf};
 
 use a3s_test_core::{Action, StepOutput, Surface};
-use a3s_test_session::PageContextBindings;
+use a3s_test_session::{PageContextBindings, RepairWorkspace};
 use anyhow::{Context, Result};
-use fs2::FileExt;
 use serde::{Deserialize, Serialize};
 use tokio::io::AsyncWriteExt;
 
@@ -89,6 +88,8 @@ pub(crate) struct AgentSessionReport {
     pub(crate) status: AgentSessionStatus,
     pub(crate) goal: String,
     pub(crate) success_criteria: Vec<String>,
+    #[serde(default)]
+    pub(crate) auto_resolve_repairs: bool,
     pub(crate) allowed_origins: Vec<String>,
     #[serde(default)]
     pub(crate) browser_allowed_domains: Vec<String>,
@@ -106,16 +107,6 @@ pub(crate) struct AgentSessionStore {
     events_path: PathBuf,
     report_path: PathBuf,
     artifacts_dir: PathBuf,
-}
-
-pub(crate) struct RepairLock {
-    file: std::fs::File,
-}
-
-impl Drop for RepairLock {
-    fn drop(&mut self) {
-        let _ = self.file.unlock();
-    }
 }
 
 impl AgentSessionStore {
@@ -168,27 +159,14 @@ impl AgentSessionStore {
             })
     }
 
-    pub(crate) async fn acquire_repair_lock(&self) -> Result<RepairLock> {
-        let path = self
+    pub(crate) fn repair_workspace(&self) -> RepairWorkspace {
+        let state_dir = self
             .root
             .parent()
             .and_then(Path::parent)
             .expect("agent session store always has a workspace-local A3S root")
-            .join("repair-workspace.lock");
-        let file = tokio::task::spawn_blocking(move || -> Result<std::fs::File> {
-            let file = std::fs::OpenOptions::new()
-                .create(true)
-                .read(true)
-                .write(true)
-                .open(&path)
-                .with_context(|| format!("failed to open repair lock {}", path.display()))?;
-            file.lock_exclusive()
-                .with_context(|| format!("failed to lock repair session {}", path.display()))?;
-            Ok(file)
-        })
-        .await
-        .context("repair lock task failed")??;
-        Ok(RepairLock { file })
+            .to_path_buf();
+        RepairWorkspace::from_state_dir(state_dir)
     }
 
     pub(crate) async fn load(&self) -> Result<AgentSessionState> {
@@ -275,5 +253,156 @@ impl AgentSessionStore {
                     self.report_path.display()
                 )
             })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::process::{Child, Command, Stdio};
+    use std::time::{Duration, Instant};
+
+    use super::*;
+
+    const HELPER_MODE: &str = "A3S_TEST_REPAIR_LOCK_HELPER_MODE";
+    const HELPER_WORKSPACE: &str = "A3S_TEST_REPAIR_LOCK_HELPER_WORKSPACE";
+    const HELPER_SESSION: &str = "A3S_TEST_REPAIR_LOCK_HELPER_SESSION";
+    const HELPER_READY: &str = "A3S_TEST_REPAIR_LOCK_HELPER_READY";
+    const HELPER_RELEASE: &str = "A3S_TEST_REPAIR_LOCK_HELPER_RELEASE";
+    const HELPER_ACQUIRED: &str = "A3S_TEST_REPAIR_LOCK_HELPER_ACQUIRED";
+
+    #[tokio::test]
+    async fn repair_workspace_lock_process_helper() {
+        let Ok(mode) = std::env::var(HELPER_MODE) else {
+            return;
+        };
+        let workspace = PathBuf::from(std::env::var_os(HELPER_WORKSPACE).expect("workspace"));
+        let session = std::env::var(HELPER_SESSION).expect("session");
+        let ready = PathBuf::from(std::env::var_os(HELPER_READY).expect("ready marker"));
+        let release = PathBuf::from(std::env::var_os(HELPER_RELEASE).expect("release marker"));
+        let acquired = PathBuf::from(std::env::var_os(HELPER_ACQUIRED).expect("acquired marker"));
+        let store = AgentSessionStore::for_workspace(&workspace, &session);
+        tokio::fs::create_dir_all(store.root())
+            .await
+            .expect("session store");
+        tokio::fs::write(&ready, b"ready")
+            .await
+            .expect("ready marker");
+        let repair_workspace = store.repair_workspace();
+        let _lock = repair_workspace.acquire().await.expect("repair lock");
+        tokio::fs::write(&acquired, b"acquired")
+            .await
+            .expect("acquired marker");
+        if mode == "holder" {
+            wait_for_path_async(&release, Duration::from_secs(10))
+                .await
+                .expect("release marker");
+        }
+    }
+
+    #[test]
+    fn repair_workspace_lock_blocks_another_process_and_session() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let holder_ready = temp.path().join("holder-ready");
+        let holder_release = temp.path().join("holder-release");
+        let holder_acquired = temp.path().join("holder-acquired");
+        let waiter_ready = temp.path().join("waiter-ready");
+        let waiter_release = temp.path().join("waiter-release");
+        let waiter_acquired = temp.path().join("waiter-acquired");
+
+        let holder = spawn_lock_helper(
+            "holder",
+            temp.path(),
+            "session-one",
+            &holder_ready,
+            &holder_release,
+            &holder_acquired,
+        );
+        wait_for_path(&holder_acquired, Duration::from_secs(10)).expect("holder acquired lock");
+
+        let mut waiter = spawn_lock_helper(
+            "waiter",
+            temp.path(),
+            "session-two",
+            &waiter_ready,
+            &waiter_release,
+            &waiter_acquired,
+        );
+        wait_for_path(&waiter_ready, Duration::from_secs(10)).expect("waiter started");
+        assert_path_stays_absent(&waiter_acquired, Duration::from_millis(200));
+        assert!(waiter.try_wait().expect("waiter status").is_none());
+
+        std::fs::write(&holder_release, b"release").expect("release holder");
+        wait_for_path(&waiter_acquired, Duration::from_secs(10)).expect("waiter acquired lock");
+        assert_child_success(holder, "holder");
+        assert_child_success(waiter, "waiter");
+    }
+
+    fn spawn_lock_helper(
+        mode: &str,
+        workspace: &Path,
+        session: &str,
+        ready: &Path,
+        release: &Path,
+        acquired: &Path,
+    ) -> Child {
+        Command::new(std::env::current_exe().expect("test executable"))
+            .args([
+                "--exact",
+                "agent_session::store::tests::repair_workspace_lock_process_helper",
+                "--nocapture",
+            ])
+            .env(HELPER_MODE, mode)
+            .env(HELPER_WORKSPACE, workspace)
+            .env(HELPER_SESSION, session)
+            .env(HELPER_READY, ready)
+            .env(HELPER_RELEASE, release)
+            .env(HELPER_ACQUIRED, acquired)
+            .stdin(Stdio::null())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .expect("spawn repair lock helper")
+    }
+
+    fn wait_for_path(path: &Path, timeout: Duration) -> Result<()> {
+        let deadline = Instant::now() + timeout;
+        while Instant::now() < deadline {
+            if path.is_file() {
+                return Ok(());
+            }
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        anyhow::bail!("timed out waiting for {}", path.display())
+    }
+
+    async fn wait_for_path_async(path: &Path, timeout: Duration) -> Result<()> {
+        let deadline = tokio::time::Instant::now() + timeout;
+        loop {
+            if path.is_file() {
+                return Ok(());
+            }
+            if tokio::time::Instant::now() >= deadline {
+                anyhow::bail!("timed out waiting for {}", path.display());
+            }
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+    }
+
+    fn assert_path_stays_absent(path: &Path, duration: Duration) {
+        let deadline = Instant::now() + duration;
+        while Instant::now() < deadline {
+            assert!(!path.exists(), "{} appeared before release", path.display());
+            std::thread::sleep(Duration::from_millis(10));
+        }
+    }
+
+    fn assert_child_success(child: Child, name: &str) {
+        let output = child.wait_with_output().expect("child output");
+        assert!(
+            output.status.success(),
+            "{name} failed\nstdout:\n{}\nstderr:\n{}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
     }
 }

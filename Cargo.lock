@@ -40,7 +40,6 @@ dependencies = [
  "anyhow",
  "async-trait",
  "clap",
- "fs2",
  "schemars",
  "serde",
  "serde_json",
@@ -116,6 +115,7 @@ version = "0.5.1"
 dependencies = [
  "a3s-test-core",
  "async-trait",
+ "fs2",
  "futures",
  "serde",
  "serde_json",

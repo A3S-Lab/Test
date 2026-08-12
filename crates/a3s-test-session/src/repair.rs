@@ -9,6 +9,7 @@ use a3s_test_core::{
 use serde::{Deserialize, Serialize};
 use tokio::io::AsyncWriteExt;
 
+use crate::RepairWorkspaceLock;
 use crate::SessionError;
 
 const MAX_CLAIM_LEASE_MS: u64 = 15 * 60 * 1_000;
@@ -90,6 +91,35 @@ impl RepairLedger {
         Ok(ledger)
     }
 
+    pub async fn reload(&mut self) -> Result<(), SessionError> {
+        *self = Self::load(self.path.clone()).await?;
+        Ok(())
+    }
+
+    pub fn require_attempt_state(
+        &self,
+        finding_id: &str,
+        expected_status: RepairStatus,
+        expected_attempt_id: &str,
+    ) -> Result<RepairRecord, SessionError> {
+        let record = self
+            .records
+            .get(finding_id)
+            .ok_or_else(|| not_found(finding_id))?;
+        if record.status != expected_status
+            || record.attempt_id.as_deref() != Some(expected_attempt_id)
+        {
+            return Err(SessionError::new(
+                "test.session.repair_state_changed",
+                format!(
+                    "repair '{finding_id}' changed while work was in progress; discard the stale result and observe the current repair state"
+                ),
+            )
+            .with_retryable(true));
+        }
+        Ok(record.clone())
+    }
+
     pub async fn ingest(
         &mut self,
         session: &str,
@@ -136,6 +166,17 @@ impl RepairLedger {
             created.push(record);
         }
         Ok(created)
+    }
+
+    pub async fn ingest_in_workspace(
+        &mut self,
+        session: &str,
+        findings: Vec<RepairFinding>,
+        now_ms: u64,
+        _workspace: &mut RepairWorkspaceLock,
+    ) -> Result<Vec<RepairRecord>, SessionError> {
+        self.reload().await?;
+        self.ingest(session, findings, now_ms).await
     }
 
     pub fn queued(&self, limit: usize) -> Vec<RepairRecord> {
@@ -218,6 +259,18 @@ impl RepairLedger {
             .expect("validated repair remains present");
         record.before_evidence = Some(evidence);
         Ok(record.clone())
+    }
+
+    pub async fn attach_before_evidence_in_workspace(
+        &mut self,
+        session: &str,
+        finding_id: &str,
+        evidence: RepairEvidenceBundle,
+        _workspace: &mut RepairWorkspaceLock,
+    ) -> Result<RepairRecord, SessionError> {
+        self.reload().await?;
+        self.attach_before_evidence(session, finding_id, evidence)
+            .await
     }
 
     #[must_use]
@@ -312,7 +365,7 @@ impl RepairLedger {
             verification: request.verification.clone(),
         };
         self.append(&StoredLedgerEvent::Transition {
-            event: event.clone(),
+            event: Box::new(event.clone()),
         })
         .await?;
         self.request_events
@@ -324,6 +377,48 @@ impl RepairLedger {
         apply_event(record, &event);
         let record = record.clone();
         Ok((record, status_event(&event)))
+    }
+
+    pub async fn transition_in_workspace(
+        &mut self,
+        request: RepairTransition,
+        now_ms: u64,
+        workspace: &mut RepairWorkspaceLock,
+    ) -> Result<(RepairRecord, RepairStatusEvent), SessionError> {
+        self.reload().await?;
+        if self.request_events.contains_key(&request.request_id) {
+            let result = self.transition(request.clone(), now_ms).await?;
+            workspace
+                .reconcile_record(&request.session, &result.0, now_ms)
+                .await?;
+            return Ok(result);
+        }
+        let current = self
+            .records
+            .get(&request.finding_id)
+            .cloned()
+            .ok_or_else(|| not_found(&request.finding_id))?;
+        let previous_owner = workspace
+            .prepare_transition(&current, &request, now_ms)
+            .await?;
+        let previous_status = current.status;
+        match self.transition(request.clone(), now_ms).await {
+            Ok(result) => {
+                workspace
+                    .finish_transition(previous_status, &result.0, &request.session, now_ms)
+                    .await?;
+                Ok(result)
+            }
+            Err(error) => {
+                if matches!(
+                    request.status,
+                    RepairStatus::Claimed | RepairStatus::Repairing | RepairStatus::Verifying
+                ) {
+                    workspace.rollback(previous_owner).await?;
+                }
+                Err(error)
+            }
+        }
     }
 
     pub async fn recover_expired_leases(
@@ -339,7 +434,7 @@ impl RepairLedger {
             .filter(|record| {
                 matches!(
                     record.status,
-                    RepairStatus::Claimed | RepairStatus::Repairing
+                    RepairStatus::Claimed | RepairStatus::Repairing | RepairStatus::Verifying
                 ) && record
                     .lease_expires_at_ms
                     .is_some_and(|expires_at| expires_at <= now_ms)
@@ -387,7 +482,7 @@ impl RepairLedger {
                 verification: None,
             };
             self.append(&StoredLedgerEvent::Transition {
-                event: event.clone(),
+                event: Box::new(event.clone()),
             })
             .await?;
             self.request_events
@@ -400,6 +495,79 @@ impl RepairLedger {
             recovered.push((record.clone(), status_event(&event)));
         }
         Ok(recovered)
+    }
+
+    pub async fn recover_expired_leases_in_workspace(
+        &mut self,
+        session: &str,
+        now_ms: u64,
+        workspace: &mut RepairWorkspaceLock,
+    ) -> Result<Vec<(RepairRecord, RepairStatusEvent)>, SessionError> {
+        self.reload().await?;
+        let recovered = self.recover_expired_leases(session, now_ms).await?;
+        for (record, _) in &recovered {
+            workspace.reconcile_record(session, record, now_ms).await?;
+        }
+        Ok(recovered)
+    }
+
+    pub async fn interrupt_active_mutation_in_workspace(
+        &mut self,
+        session: &str,
+        now_ms: u64,
+        workspace: &mut RepairWorkspaceLock,
+    ) -> Result<Vec<(RepairRecord, RepairStatusEvent)>, SessionError> {
+        self.admit_session(session)?;
+        let recovered = self
+            .recover_expired_leases_in_workspace(session, now_ms, workspace)
+            .await?;
+        if !recovered.is_empty() {
+            return Ok(recovered);
+        }
+        let active = self
+            .order
+            .iter()
+            .filter_map(|id| self.records.get(id))
+            .find(|record| {
+                matches!(
+                    record.status,
+                    RepairStatus::Claimed | RepairStatus::Repairing | RepairStatus::Verifying
+                )
+            })
+            .cloned();
+        let Some(active) = active else {
+            return Ok(Vec::new());
+        };
+        let pre_edit = active.status == RepairStatus::Claimed;
+        let status = if pre_edit {
+            RepairStatus::Queued
+        } else {
+            RepairStatus::NeedsInput
+        };
+        let request_id =
+            interruption_request_id(&active.finding.id, active.sequence.saturating_add(1));
+        let transition = RepairTransition {
+            session: session.to_string(),
+            finding_id: active.finding.id.clone(),
+            request_id,
+            status,
+            actor: RepairActor::A3sTest,
+            attempt_id: active.attempt_id.clone(),
+            lease_expires_at_ms: None,
+            summary: Some(if pre_edit {
+                "Session closed before workspace editing began".to_string()
+            } else {
+                "Session closed after workspace editing may have occurred".to_string()
+            }),
+            message: (!pre_edit).then(|| {
+                "Review the possibly mutated workspace before assigning another attempt".to_string()
+            }),
+            verification: None,
+        };
+        let result = self
+            .transition_in_workspace(transition, now_ms, workspace)
+            .await?;
+        Ok(vec![result])
     }
 
     pub async fn resolve_conflicts(
@@ -459,6 +627,16 @@ impl RepairLedger {
             );
         }
         Ok(resolved)
+    }
+
+    pub async fn resolve_conflicts_in_workspace(
+        &mut self,
+        session: &str,
+        now_ms: u64,
+        _workspace: &mut RepairWorkspaceLock,
+    ) -> Result<Vec<(RepairRecord, RepairStatusEvent)>, SessionError> {
+        self.reload().await?;
+        self.resolve_conflicts(session, now_ms).await
     }
 
     pub async fn apply_human_action(
@@ -629,6 +807,17 @@ impl RepairLedger {
         Ok(results)
     }
 
+    pub async fn apply_human_action_in_workspace(
+        &mut self,
+        session: &str,
+        action: RepairHumanAction,
+        now_ms: u64,
+        _workspace: &mut RepairWorkspaceLock,
+    ) -> Result<Vec<(RepairRecord, RepairStatusEvent)>, SessionError> {
+        self.reload().await?;
+        self.apply_human_action(session, action, now_ms).await
+    }
+
     async fn append(&self, event: &StoredLedgerEvent) -> Result<(), SessionError> {
         if let Some(parent) = self.path.parent() {
             tokio::fs::create_dir_all(parent)
@@ -695,6 +884,7 @@ impl RepairLedger {
                 );
             }
             StoredLedgerEvent::Transition { event } => {
+                let event = *event;
                 self.admit_session(&event.session)?;
                 if self.request_events.contains_key(&event.request_id) {
                     return Err(SessionError::new(
@@ -787,7 +977,7 @@ enum StoredLedgerEvent {
         timestamp_ms: u64,
     },
     Transition {
-        event: RepairEventRecord,
+        event: Box<RepairEventRecord>,
     },
     BeforeEvidence {
         session: String,
@@ -796,1059 +986,10 @@ enum StoredLedgerEvent {
     },
 }
 
-fn apply_event(record: &mut RepairRecord, event: &RepairEventRecord) {
-    record.status = event.status;
-    record.sequence = event.sequence;
-    if event.attempt_id.is_some() {
-        record.attempt_id.clone_from(&event.attempt_id);
-    }
-    if event.lease_expires_at_ms.is_some() {
-        record.lease_expires_at_ms = event.lease_expires_at_ms;
-    } else if !matches!(
-        event.status,
-        RepairStatus::Claimed | RepairStatus::Repairing
-    ) {
-        record.lease_expires_at_ms = None;
-    }
-    if event.status == RepairStatus::Queued {
-        record.attempt_id = None;
-        record.lease_expires_at_ms = None;
-        record.before_evidence = None;
-    }
-    record.updated_at_ms = event.timestamp_ms;
-    record.summary.clone_from(&event.summary);
-    record.message.clone_from(&event.message);
-    if event.verification.is_some() {
-        record.verification.clone_from(&event.verification);
-    }
-    update_attempts(record, event);
-}
-
-fn update_attempts(record: &mut RepairRecord, event: &RepairEventRecord) {
-    let Some(attempt_id) = event.attempt_id.as_deref() else {
-        return;
-    };
-    if !record
-        .attempts
-        .iter()
-        .any(|attempt| attempt.id == attempt_id)
-    {
-        record.attempts.push(RepairAttempt {
-            id: attempt_id.to_string(),
-            started_at_ms: event.timestamp_ms,
-            finished_at_ms: None,
-            status: event.status,
-            replies: Vec::new(),
-            verification: None,
-            before_evidence: record.before_evidence.clone(),
-        });
-    }
-    let Some(attempt) = record
-        .attempts
-        .iter_mut()
-        .find(|attempt| attempt.id == attempt_id)
-    else {
-        return;
-    };
-    let finished = attempt.finished_at_ms.is_some();
-    if !finished {
-        attempt.status = event.status;
-    }
-    if let Some(message) = event
-        .message
-        .as_ref()
-        .filter(|message| !message.trim().is_empty())
-    {
-        if !attempt
-            .replies
-            .iter()
-            .any(|reply| reply.request_id == event.request_id)
-        {
-            attempt.replies.push(RepairThreadMessage {
-                request_id: event.request_id.clone(),
-                actor: event.actor,
-                timestamp_ms: event.timestamp_ms,
-                message: message.clone(),
-            });
-        }
-    }
-    if event.verification.is_some() {
-        attempt.verification.clone_from(&event.verification);
-    }
-    if !finished
-        && matches!(
-            event.status,
-            RepairStatus::NeedsInput
-                | RepairStatus::ReviewReady
-                | RepairStatus::VerificationFailed
-                | RepairStatus::Resolved
-                | RepairStatus::Dismissed
-                | RepairStatus::Cancelled
-                | RepairStatus::Failed
-        )
-    {
-        attempt.finished_at_ms = Some(event.timestamp_ms);
-    }
-}
-
-fn repair_batch(id: String, records: &[&RepairRecord]) -> RepairBatch {
-    let statuses = records
-        .iter()
-        .map(|record| record.status)
-        .collect::<Vec<_>>();
-    let status = if statuses
-        .iter()
-        .all(|status| *status == RepairStatus::Resolved)
-    {
-        RepairBatchStatus::Resolved
-    } else if statuses.iter().any(|status| {
-        matches!(
-            status,
-            RepairStatus::Failed | RepairStatus::VerificationFailed
-        )
-    }) && statuses.iter().all(|status| {
-        matches!(
-            status,
-            RepairStatus::Resolved
-                | RepairStatus::Dismissed
-                | RepairStatus::Cancelled
-                | RepairStatus::Failed
-                | RepairStatus::VerificationFailed
-                | RepairStatus::ReviewReady
-        )
-    }) {
-        RepairBatchStatus::CompletedWithFailures
-    } else if statuses
-        .iter()
-        .any(|status| *status == RepairStatus::NeedsInput)
-    {
-        RepairBatchStatus::NeedsInput
-    } else if statuses
-        .iter()
-        .all(|status| *status == RepairStatus::ReviewReady)
-    {
-        RepairBatchStatus::ReviewReady
-    } else if statuses
-        .iter()
-        .any(|status| *status != RepairStatus::Queued)
-    {
-        RepairBatchStatus::InProgress
-    } else {
-        RepairBatchStatus::Queued
-    };
-    RepairBatch {
-        id,
-        finding_ids: records
-            .iter()
-            .map(|record| record.finding.id.clone())
-            .collect(),
-        status,
-        results: records
-            .iter()
-            .map(|record| RepairBatchItemResult {
-                finding_id: record.finding.id.clone(),
-                status: record.status,
-            })
-            .collect(),
-    }
-}
-
-fn status_event(event: &RepairEventRecord) -> RepairStatusEvent {
-    RepairStatusEvent {
-        request_id: event.request_id.clone(),
-        finding_id: event.finding_id.clone(),
-        sequence: event.sequence,
-        status: event.status,
-        actor: event.actor,
-        timestamp: event.timestamp_ms.to_string(),
-        summary: event.summary.clone(),
-        message: event.message.clone(),
-    }
-}
-
-fn validate_idempotent_retry(
-    event: &RepairEventRecord,
-    request: &RepairTransition,
-) -> Result<(), SessionError> {
-    if event.session == request.session
-        && event.finding_id == request.finding_id
-        && event.status == request.status
-        && event.actor == request.actor
-        && event.attempt_id == request.attempt_id
-        && event.lease_expires_at_ms == request.lease_expires_at_ms
-        && event.summary == request.summary
-        && event.message == request.message
-        && event.verification == request.verification
-    {
-        return Ok(());
-    }
-    Err(SessionError::new(
-        "test.session.repair_idempotency_conflict",
-        format!(
-            "repair request id '{}' was already used for a different transition",
-            request.request_id
-        ),
-    ))
-}
-
-fn validate_idempotent_human_action(
-    event: &RepairEventRecord,
-    session: &str,
-    action: &RepairHumanAction,
-    message: Option<&str>,
-) -> Result<(), SessionError> {
-    let expected = match action.action {
-        RepairHumanActionKind::Reply => {
-            event.status == RepairStatus::Queued
-                && event.summary.as_deref() == Some("Human clarification received")
-        }
-        RepairHumanActionKind::Accept => {
-            event.status == RepairStatus::Resolved
-                && event.summary.as_deref() == Some("Human accepted the verified repair")
-        }
-        RepairHumanActionKind::Dismiss => {
-            event.status == RepairStatus::Dismissed
-                && event.summary.as_deref() == Some("Human rejected the verified repair")
-        }
-        RepairHumanActionKind::Reopen => {
-            (event.status == RepairStatus::Queued
-                && event.summary.as_deref() == Some("Human retried the failed verification"))
-                || (event.status == RepairStatus::Reopened
-                    && event.summary.as_deref() == Some("Human reopened the repair"))
-        }
-    };
-    if event.session == session
-        && event.finding_id == action.finding_id
-        && event.actor == RepairActor::Human
-        && event.message.as_deref() == message
-        && expected
-    {
-        return Ok(());
-    }
-    Err(SessionError::new(
-        "test.session.repair_idempotency_conflict",
-        format!(
-            "human repair request id '{}' was already used for a different action",
-            action.request_id
-        ),
-    ))
-}
-
-fn valid_transition(from: RepairStatus, to: RepairStatus) -> bool {
-    use RepairStatus::*;
-    matches!(
-        (from, to),
-        (Queued, Claimed | NeedsInput | Cancelled | Failed)
-            | (
-                Claimed,
-                Queued | Repairing | Cancelled | NeedsInput | Failed
-            )
-            | (Repairing, Verifying | NeedsInput | Failed)
-            | (
-                Verifying,
-                ReviewReady | VerificationFailed | NeedsInput | Failed
-            )
-            | (
-                NeedsInput | VerificationFailed | Reopened,
-                Queued | Cancelled | Failed
-            )
-            | (ReviewReady, Resolved | Reopened | Dismissed)
-            | (Resolved | Dismissed | Cancelled | Failed, Reopened)
-    )
-}
-
-fn finding_conflict(left: &RepairFinding, right: &RepairFinding) -> bool {
-    if left.batch_id != right.batch_id || left.id == right.id {
-        return false;
-    }
-    let shared_node = left
-        .target
-        .node_ids
-        .iter()
-        .any(|node_id| right.target.node_ids.contains(node_id));
-    let overlapping_region = left
-        .target
-        .region
-        .as_ref()
-        .zip(right.target.region.as_ref())
-        .is_some_and(|(left, right)| {
-            left.x < right.x + right.width
-                && left.x + left.width > right.x
-                && left.y < right.y + right.height
-                && left.y + left.height > right.y
-        });
-    let shared_source = source_hint(left)
-        .zip(source_hint(right))
-        .is_some_and(|(left, right)| left == right);
-    shared_node || overlapping_region || shared_source
-}
-
-fn source_hint(finding: &RepairFinding) -> Option<&str> {
-    finding
-        .context
-        .get("component")?
-        .get("source")?
-        .get("file")?
-        .as_str()
-}
-
-fn validate_transition_request(
-    record: &RepairRecord,
-    request: &RepairTransition,
-    now_ms: u64,
-) -> Result<(), SessionError> {
-    if let Some(attempt_id) = request.attempt_id.as_deref() {
-        validate_component(attempt_id, "attempt id")?;
-    }
-    if request.status == RepairStatus::Claimed {
-        if request.actor != RepairActor::Agent {
-            return Err(SessionError::new(
-                "test.session.repair_claim_invalid",
-                "repair claims must be owned by the connected coding agent",
-            ));
-        }
-        let attempt_id = request.attempt_id.as_deref().ok_or_else(|| {
-            SessionError::new(
-                "test.session.repair_claim_invalid",
-                "repair claim requires an attempt id",
-            )
-        })?;
-        validate_component(attempt_id, "attempt id")?;
-        let expires_at = request.lease_expires_at_ms.ok_or_else(|| {
-            SessionError::new(
-                "test.session.repair_claim_invalid",
-                "repair claim requires a lease expiry",
-            )
-        })?;
-        if expires_at <= now_ms || expires_at.saturating_sub(now_ms) > MAX_CLAIM_LEASE_MS {
-            return Err(SessionError::new(
-                "test.session.repair_claim_invalid",
-                "repair claim lease must expire within the next 15 minutes",
-            ));
-        }
-        return Ok(());
-    }
-    if record.status == RepairStatus::Claimed
-        && request.status == RepairStatus::Queued
-        && request.actor != RepairActor::A3sTest
-    {
-        return Err(SessionError::new(
-            "test.session.repair_transition_invalid",
-            "only A3S Test lease recovery can return a claimed repair to the queue",
-        ));
-    }
-
-    if matches!(
-        record.status,
-        RepairStatus::Claimed | RepairStatus::Repairing
-    ) {
-        if record
-            .lease_expires_at_ms
-            .is_some_and(|expires_at| expires_at <= now_ms)
-        {
-            return Err(SessionError::new(
-                "test.session.repair_lease_expired",
-                "repair lease expired; watch the queue to recover it before continuing",
-            ));
-        }
-        if request.actor == RepairActor::Agent {
-            let attempt_id = request.attempt_id.as_deref().ok_or_else(|| {
-                SessionError::new(
-                    "test.session.repair_attempt_invalid",
-                    "agent repair transition requires the claimed attempt id",
-                )
-            })?;
-            if record.attempt_id.as_deref() != Some(attempt_id) {
-                return Err(SessionError::new(
-                    "test.session.repair_attempt_invalid",
-                    "repair transition does not belong to the active attempt",
-                ));
-            }
-        }
-    }
-    if let Some(expires_at) = request.lease_expires_at_ms {
-        if expires_at <= now_ms || expires_at.saturating_sub(now_ms) > MAX_CLAIM_LEASE_MS {
-            return Err(SessionError::new(
-                "test.session.repair_lease_invalid",
-                "repair lease extension must expire within the next 15 minutes",
-            ));
-        }
-    }
-    Ok(())
-}
-
-fn recovery_request_id(finding_id: &str, sequence: u64) -> String {
-    let available = 128usize.saturating_sub(24 + sequence.to_string().len());
-    let prefix = finding_id.chars().take(available).collect::<String>();
-    format!("lease-recovery-{prefix}-{sequence}")
-}
-
-fn conflict_request_id(finding_id: &str, sequence: u64) -> String {
-    let available = 128usize.saturating_sub(18 + sequence.to_string().len());
-    let prefix = finding_id.chars().take(available).collect::<String>();
-    format!("conflict-{prefix}-{sequence}")
-}
-
-fn followup_request_id(request_id: &str, suffix: &str) -> String {
-    let available = 128usize.saturating_sub(suffix.len() + 1);
-    let prefix = request_id.chars().take(available).collect::<String>();
-    format!("{prefix}-{suffix}")
-}
-
-fn validate_finding(finding: &RepairFinding) -> Result<(), SessionError> {
-    validate_component(&finding.id, "finding id")?;
-    validate_component(&finding.batch_id, "batch id")?;
-    if finding.instruction.trim().is_empty() || finding.instruction.len() > 8_192 {
-        return Err(SessionError::new(
-            "test.session.repair_invalid",
-            "repair instruction must contain 1-8192 bytes",
-        ));
-    }
-    if finding.status != RepairStatus::Queued {
-        return Err(SessionError::new(
-            "test.session.repair_invalid",
-            "submitted repair must be queued",
-        ));
-    }
-    Ok(())
-}
-
-fn validate_evidence(
-    finding: &RepairFinding,
-    evidence: &RepairEvidenceBundle,
-) -> Result<(), SessionError> {
-    if evidence.context_revision < finding.context_revision
-        || evidence.context.revision != Some(evidence.context_revision)
-        || !evidence
-            .context
-            .page
-            .as_ref()
-            .is_some_and(|page| page.ready)
-        || evidence.context_sha256.len() != 64
-        || !evidence
-            .context_sha256
-            .chars()
-            .all(|character| character.is_ascii_hexdigit())
-        || evidence.screenshot_sha256.len() != 64
-        || !evidence
-            .screenshot_sha256
-            .chars()
-            .all(|character| character.is_ascii_hexdigit())
-        || evidence.screenshot.path.is_empty()
-        || evidence.screenshot.path.len() > 1_024
-    {
-        return Err(SessionError::new(
-            "test.session.repair_evidence_invalid",
-            "repair evidence must contain a ready context no older than submission, SHA-256 digests, and a bounded screenshot",
-        ));
-    }
-    Ok(())
-}
-
-fn validate_component(value: &str, field: &str) -> Result<(), SessionError> {
-    if value.is_empty()
-        || value.len() > 128
-        || !value.chars().all(|character| {
-            character.is_ascii_alphanumeric() || matches!(character, '-' | '_' | '.')
-        })
-    {
-        return Err(SessionError::new(
-            "test.session.repair_invalid",
-            format!("{field} contains unsupported characters"),
-        ));
-    }
-    Ok(())
-}
-
-fn not_found(finding_id: &str) -> SessionError {
-    SessionError::new(
-        "test.session.repair_not_found",
-        format!("repair finding '{finding_id}' does not exist"),
-    )
-}
-
-fn storage_error(path: &Path, error: std::io::Error) -> SessionError {
-    SessionError::new(
-        "test.session.repair_storage_failed",
-        format!("failed to access {}: {error}", path.display()),
-    )
-}
+#[path = "repair_state.rs"]
+mod state;
+use state::*;
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use a3s_test_core::{
-        Evidence, PageContextSnapshot, RepairIntent, RepairSeverity, RepairTarget, RepairTargetKind,
-    };
-    use serde_json::json;
-
-    fn finding(id: &str) -> RepairFinding {
-        RepairFinding {
-            id: id.to_string(),
-            batch_id: "batch-1".to_string(),
-            instruction: format!("Fix {id}"),
-            success_criteria: Some("The issue is visibly gone".to_string()),
-            intent: RepairIntent::Fix,
-            severity: RepairSeverity::Important,
-            target: RepairTarget {
-                kind: RepairTargetKind::Node,
-                node_ids: vec!["n1".to_string()],
-                selected_text: None,
-                region: None,
-                drawing: None,
-            },
-            created_at: "2026-08-12T00:00:00Z".to_string(),
-            page_id: "checkout".to_string(),
-            url: "http://127.0.0.1/checkout".to_string(),
-            context_revision: 3,
-            context: json!({ "untrusted": true }),
-            status: RepairStatus::Queued,
-            submitted_at: "2026-08-12T00:00:01Z".to_string(),
-        }
-    }
-
-    fn transition(status: RepairStatus, request_id: &str) -> RepairTransition {
-        RepairTransition {
-            session: "repair-session".to_string(),
-            finding_id: "finding-1".to_string(),
-            request_id: request_id.to_string(),
-            status,
-            actor: RepairActor::Agent,
-            attempt_id: Some("attempt-1".to_string()),
-            lease_expires_at_ms: Some(10_000),
-            summary: Some("working".to_string()),
-            message: None,
-            verification: None,
-        }
-    }
-
-    fn evidence(revision: u64) -> RepairEvidenceBundle {
-        RepairEvidenceBundle {
-            captured_at_ms: 1,
-            context_revision: revision,
-            context_sha256: "a".repeat(64),
-            context: ready_page_context(revision),
-            console_errors: 0,
-            page_errors: 0,
-            screenshot: Evidence {
-                name: "before".to_string(),
-                path: "repairs/finding-1/submitted/before.png".to_string(),
-                media_type: "image/png".to_string(),
-            },
-            screenshot_sha256: "b".repeat(64),
-        }
-    }
-
-    fn ready_page_context(revision: u64) -> PageContextSnapshot {
-        use a3s_test_core::{
-            PageContextPage, PageContextPoint, PageContextSize, PageContextTheme,
-            PageContextViewport,
-        };
-        PageContextSnapshot {
-            protocol: Some("a3s.test.page-context/1".to_string()),
-            sdk_version: Some("0.1.0".to_string()),
-            revision: Some(revision),
-            page: Some(PageContextPage {
-                id: "repair-page".to_string(),
-                url: "http://127.0.0.1/checkout".to_string(),
-                route: "/checkout".to_string(),
-                title: "Checkout".to_string(),
-                ready: true,
-                viewport: PageContextViewport {
-                    width: 1280.0,
-                    height: 720.0,
-                    dpr: 1.0,
-                },
-                document: PageContextSize {
-                    width: 1280.0,
-                    height: 720.0,
-                },
-                scroll: PageContextPoint { x: 0.0, y: 0.0 },
-                language: "en".to_string(),
-                theme: PageContextTheme::Light,
-            }),
-            components: Vec::new(),
-            nodes: Vec::new(),
-            facts: Default::default(),
-            removed_node_ids: Vec::new(),
-            truncated: false,
-            next_cursor: None,
-        }
-    }
-
-    async fn attach_all_evidence(ledger: &mut RepairLedger) {
-        let records = ledger.queued(50);
-        for record in records {
-            ledger
-                .attach_before_evidence(
-                    "repair-session",
-                    &record.finding.id,
-                    evidence(record.finding.context_revision),
-                )
-                .await
-                .expect("attach before evidence");
-        }
-    }
-
-    #[tokio::test]
-    async fn persists_order_and_idempotent_state_transitions() {
-        let temp = tempfile::tempdir().expect("tempdir");
-        let path = temp.path().join("repairs.jsonl");
-        let mut ledger = RepairLedger::load(path.clone()).await.expect("load");
-        ledger
-            .ingest(
-                "repair-session",
-                vec![finding("finding-1"), finding("finding-2")],
-                1,
-            )
-            .await
-            .expect("ingest");
-        attach_all_evidence(&mut ledger).await;
-        assert_eq!(
-            ledger
-                .queued(10)
-                .iter()
-                .map(|record| record.finding.id.as_str())
-                .collect::<Vec<_>>(),
-            ["finding-1", "finding-2"]
-        );
-        assert_eq!(
-            ledger
-                .transition(transition(RepairStatus::Claimed, "request-1"), 2)
-                .await
-                .expect("claim")
-                .0
-                .sequence,
-            1
-        );
-        assert_eq!(
-            ledger
-                .transition(transition(RepairStatus::Claimed, "request-1"), 3)
-                .await
-                .expect("idempotent")
-                .0
-                .sequence,
-            1
-        );
-        assert!(ledger
-            .transition(transition(RepairStatus::Resolved, "request-2"), 4)
-            .await
-            .is_err());
-        let replayed = RepairLedger::load(path).await.expect("replay");
-        assert_eq!(
-            replayed
-                .queued(10)
-                .iter()
-                .map(|record| record.finding.id.as_str())
-                .collect::<Vec<_>>(),
-            ["finding-2"]
-        );
-    }
-
-    #[tokio::test]
-    async fn rejects_request_id_reuse_for_a_different_transition() {
-        let temp = tempfile::tempdir().expect("tempdir");
-        let mut ledger = RepairLedger::load(temp.path().join("repairs.jsonl"))
-            .await
-            .expect("load");
-        ledger
-            .ingest("repair-session", vec![finding("finding-1")], 1)
-            .await
-            .expect("ingest");
-        attach_all_evidence(&mut ledger).await;
-        let (claimed, event) = ledger
-            .transition(transition(RepairStatus::Claimed, "request-1"), 2)
-            .await
-            .expect("claim");
-        let (retried, retried_event) = ledger
-            .transition(transition(RepairStatus::Claimed, "request-1"), 99)
-            .await
-            .expect("same request retry");
-        assert_eq!(retried, claimed);
-        assert_eq!(retried_event, event);
-
-        let conflict = ledger
-            .transition(transition(RepairStatus::Repairing, "request-1"), 3)
-            .await
-            .expect_err("conflicting idempotency key");
-        assert_eq!(conflict.code(), "test.session.repair_idempotency_conflict");
-    }
-
-    #[tokio::test]
-    async fn rejects_corrupt_or_cross_session_replay_without_mutating_state() {
-        let temp = tempfile::tempdir().expect("tempdir");
-        let path = temp.path().join("repairs.jsonl");
-        let mut ledger = RepairLedger::load(path.clone()).await.expect("load");
-        ledger
-            .ingest("repair-session", vec![finding("finding-1")], 1)
-            .await
-            .expect("ingest");
-        let mismatch = ledger
-            .ingest("another-session", vec![finding("finding-2")], 2)
-            .await
-            .expect_err("session mismatch");
-        assert_eq!(mismatch.code(), "test.session.repair_session_mismatch");
-
-        tokio::fs::write(&path, "{not-json}\n")
-            .await
-            .expect("corrupt ledger");
-        let invalid = match RepairLedger::load(path).await {
-            Ok(_) => panic!("corrupt replay was accepted"),
-            Err(error) => error,
-        };
-        assert_eq!(invalid.code(), "test.session.repair_ledger_invalid");
-    }
-
-    #[tokio::test]
-    async fn recovers_pre_edit_and_possibly_mutated_expired_leases_differently() {
-        let temp = tempfile::tempdir().expect("tempdir");
-        let path = temp.path().join("repairs.jsonl");
-        let mut ledger = RepairLedger::load(path.clone()).await.expect("load");
-        ledger
-            .ingest(
-                "repair-session",
-                vec![finding("finding-1"), finding("finding-2")],
-                1,
-            )
-            .await
-            .expect("ingest");
-        attach_all_evidence(&mut ledger).await;
-        ledger
-            .transition(transition(RepairStatus::Claimed, "claim-1"), 2)
-            .await
-            .expect("first claim");
-        let pre_edit_recovery = ledger
-            .recover_expired_leases("repair-session", 10_000)
-            .await
-            .expect("recover pre-edit claim");
-        assert_eq!(pre_edit_recovery[0].0.status, RepairStatus::Queued);
-        attach_all_evidence(&mut ledger).await;
-        let mut second_claim = transition(RepairStatus::Claimed, "claim-2");
-        second_claim.finding_id = "finding-2".to_string();
-        second_claim.attempt_id = Some("attempt-2".to_string());
-        second_claim.lease_expires_at_ms = Some(20_000);
-        ledger
-            .transition(second_claim, 10_001)
-            .await
-            .expect("second claim");
-        let mut editing = transition(RepairStatus::Repairing, "editing-2");
-        editing.finding_id = "finding-2".to_string();
-        editing.attempt_id = Some("attempt-2".to_string());
-        editing.lease_expires_at_ms = None;
-        ledger.transition(editing, 10_002).await.expect("editing");
-
-        let recovered = ledger
-            .recover_expired_leases("repair-session", 20_000)
-            .await
-            .expect("recover leases");
-        assert_eq!(
-            recovered
-                .iter()
-                .map(|(record, _)| (record.finding.id.as_str(), record.status))
-                .collect::<Vec<_>>(),
-            [("finding-2", RepairStatus::NeedsInput)]
-        );
-        assert_eq!(ledger.queued(10)[0].finding.id, "finding-1");
-        assert_eq!(ledger.current_events().len(), 2);
-
-        let replayed = RepairLedger::load(path).await.expect("replay");
-        assert_eq!(replayed.queued(10)[0].finding.id, "finding-1");
-        assert_eq!(
-            replayed.records["finding-2"].status,
-            RepairStatus::NeedsInput
-        );
-    }
-
-    #[tokio::test]
-    async fn requires_the_active_attempt_and_recovers_an_expired_claim() {
-        let temp = tempfile::tempdir().expect("tempdir");
-        let mut ledger = RepairLedger::load(temp.path().join("repairs.jsonl"))
-            .await
-            .expect("load");
-        ledger
-            .ingest("repair-session", vec![finding("finding-1")], 1)
-            .await
-            .expect("ingest");
-        attach_all_evidence(&mut ledger).await;
-
-        let mut claim = transition(RepairStatus::Claimed, "claim-1");
-        claim.lease_expires_at_ms = Some(100);
-        ledger.transition(claim, 10).await.expect("claim");
-
-        let mut missing_attempt = transition(RepairStatus::Repairing, "progress-missing");
-        missing_attempt.attempt_id = None;
-        missing_attempt.lease_expires_at_ms = None;
-        let error = ledger
-            .transition(missing_attempt, 20)
-            .await
-            .expect_err("missing attempt must fail");
-        assert_eq!(error.code(), "test.session.repair_attempt_invalid");
-
-        let mut wrong_attempt = transition(RepairStatus::Repairing, "progress-wrong");
-        wrong_attempt.attempt_id = Some("attempt-wrong".to_string());
-        wrong_attempt.lease_expires_at_ms = None;
-        let error = ledger
-            .transition(wrong_attempt, 30)
-            .await
-            .expect_err("wrong attempt must fail");
-        assert_eq!(error.code(), "test.session.repair_attempt_invalid");
-
-        let mut expired_attempt = transition(RepairStatus::Repairing, "progress-expired");
-        expired_attempt.lease_expires_at_ms = None;
-        let error = ledger
-            .transition(expired_attempt, 100)
-            .await
-            .expect_err("expired lease must fail");
-        assert_eq!(error.code(), "test.session.repair_lease_expired");
-
-        let recovered = ledger
-            .recover_expired_leases("repair-session", 100)
-            .await
-            .expect("recover expired claim");
-        assert_eq!(recovered.len(), 1);
-        assert_eq!(recovered[0].0.status, RepairStatus::Queued);
-        assert!(recovered[0].0.attempt_id.is_none());
-        assert!(recovered[0].0.lease_expires_at_ms.is_none());
-    }
-
-    #[tokio::test]
-    async fn persists_human_reply_review_and_attempt_history() {
-        let temp = tempfile::tempdir().expect("tempdir");
-        let path = temp.path().join("repairs.jsonl");
-        let mut ledger = RepairLedger::load(path.clone()).await.expect("load");
-        ledger
-            .ingest("repair-session", vec![finding("finding-1")], 1)
-            .await
-            .expect("ingest");
-        attach_all_evidence(&mut ledger).await;
-        ledger
-            .transition(transition(RepairStatus::Claimed, "claim-1"), 2)
-            .await
-            .expect("claim");
-        let mut question = transition(RepairStatus::NeedsInput, "question-1");
-        question.message = Some("Which state?".to_string());
-        question.lease_expires_at_ms = None;
-        ledger.transition(question, 3).await.expect("question");
-
-        let replied = ledger
-            .apply_human_action(
-                "repair-session",
-                RepairHumanAction {
-                    request_id: "human-reply-1".to_string(),
-                    finding_id: "finding-1".to_string(),
-                    action: RepairHumanActionKind::Reply,
-                    timestamp: "2026-08-13T00:00:00Z".to_string(),
-                    message: Some("Use the enabled state".to_string()),
-                },
-                4,
-            )
-            .await
-            .expect("reply");
-        assert_eq!(replied[0].0.status, RepairStatus::Queued);
-        assert_eq!(replied[0].0.attempts.len(), 1);
-        assert_eq!(replied[0].0.attempts[0].replies.len(), 2);
-        attach_all_evidence(&mut ledger).await;
-
-        let mut second_claim = transition(RepairStatus::Claimed, "claim-2");
-        second_claim.attempt_id = Some("attempt-2".to_string());
-        ledger
-            .transition(second_claim, 5)
-            .await
-            .expect("second claim");
-        let mut progress = transition(RepairStatus::Repairing, "progress-2");
-        progress.attempt_id = Some("attempt-2".to_string());
-        progress.lease_expires_at_ms = None;
-        ledger.transition(progress, 6).await.expect("progress");
-        let mut complete = transition(RepairStatus::Verifying, "complete-2");
-        complete.attempt_id = Some("attempt-2".to_string());
-        complete.lease_expires_at_ms = None;
-        ledger.transition(complete, 7).await.expect("complete");
-        let mut verified = transition(RepairStatus::ReviewReady, "verified-2");
-        verified.actor = RepairActor::A3sTest;
-        verified.attempt_id = Some("attempt-2".to_string());
-        verified.lease_expires_at_ms = None;
-        ledger.transition(verified, 8).await.expect("verified");
-        let accepted = ledger
-            .apply_human_action(
-                "repair-session",
-                RepairHumanAction {
-                    request_id: "human-accept-1".to_string(),
-                    finding_id: "finding-1".to_string(),
-                    action: RepairHumanActionKind::Accept,
-                    timestamp: "2026-08-13T00:00:01Z".to_string(),
-                    message: None,
-                },
-                9,
-            )
-            .await
-            .expect("accept");
-        assert_eq!(accepted[0].0.status, RepairStatus::Resolved);
-        assert_eq!(accepted[0].0.attempts.len(), 2);
-
-        let replayed = RepairLedger::load(path).await.expect("replay");
-        let record = replayed.get("finding-1").expect("record");
-        assert_eq!(record.status, RepairStatus::Resolved);
-        assert_eq!(record.attempts.len(), 2);
-        assert_eq!(record.attempts[0].replies.len(), 2);
-        assert_eq!(replayed.batches()[0].status, RepairBatchStatus::Resolved);
-    }
-
-    #[tokio::test]
-    async fn replays_page_human_actions_idempotently_after_the_page_reload() {
-        let temp = tempfile::tempdir().expect("tempdir");
-        let path = temp.path().join("repairs.jsonl");
-        let mut ledger = RepairLedger::load(path.clone()).await.expect("load");
-        ledger
-            .ingest("repair-session", vec![finding("finding-1")], 1)
-            .await
-            .expect("ingest");
-        attach_all_evidence(&mut ledger).await;
-        ledger
-            .transition(transition(RepairStatus::Claimed, "claim-1"), 2)
-            .await
-            .expect("claim");
-        let mut question = transition(RepairStatus::NeedsInput, "question-1");
-        question.message = Some("Which state?".to_string());
-        question.lease_expires_at_ms = None;
-        ledger.transition(question, 3).await.expect("question");
-        let action = RepairHumanAction {
-            request_id: "human-reply-replayed".to_string(),
-            finding_id: "finding-1".to_string(),
-            action: RepairHumanActionKind::Reply,
-            timestamp: "2026-08-13T00:00:00Z".to_string(),
-            message: Some("Use the enabled state".to_string()),
-        };
-        ledger
-            .apply_human_action("repair-session", action.clone(), 4)
-            .await
-            .expect("first reply");
-        let replayed = ledger
-            .apply_human_action("repair-session", action.clone(), 99)
-            .await
-            .expect("same live action is idempotent");
-        assert_eq!(replayed.len(), 1);
-        assert_eq!(replayed[0].0.sequence, 3);
-
-        let mut reloaded = RepairLedger::load(path).await.expect("reload");
-        let replayed = reloaded
-            .apply_human_action("repair-session", action, 100)
-            .await
-            .expect("page reload action is idempotent");
-        assert_eq!(replayed[0].0.status, RepairStatus::Queued);
-        assert_eq!(replayed[0].0.attempts[0].status, RepairStatus::NeedsInput);
-        assert_eq!(replayed[0].0.attempts[0].finished_at_ms, Some(3));
-    }
-
-    #[tokio::test]
-    async fn admits_a_newer_ready_before_evidence_baseline() {
-        let temp = tempfile::tempdir().expect("tempdir");
-        let mut ledger = RepairLedger::load(temp.path().join("repairs.jsonl"))
-            .await
-            .expect("load");
-        ledger
-            .ingest("repair-session", vec![finding("finding-1")], 1)
-            .await
-            .expect("ingest");
-        let attached = ledger
-            .attach_before_evidence("repair-session", "finding-1", evidence(5))
-            .await
-            .expect("newer evidence");
-        assert_eq!(attached.before_evidence.unwrap().context_revision, 5);
-
-        let mut stale = evidence(2);
-        stale.context.page.as_mut().expect("page").ready = true;
-        let temp = tempfile::tempdir().expect("tempdir");
-        let mut ledger = RepairLedger::load(temp.path().join("repairs.jsonl"))
-            .await
-            .expect("load");
-        ledger
-            .ingest("repair-session", vec![finding("finding-1")], 1)
-            .await
-            .expect("ingest");
-        assert_eq!(
-            ledger
-                .attach_before_evidence("repair-session", "finding-1", stale)
-                .await
-                .expect_err("stale evidence")
-                .code(),
-            "test.session.repair_evidence_invalid"
-        );
-    }
-
-    #[tokio::test]
-    async fn independent_batch_failures_retain_order_and_per_item_results() {
-        let temp = tempfile::tempdir().expect("tempdir");
-        let mut ledger = RepairLedger::load(temp.path().join("repairs.jsonl"))
-            .await
-            .expect("load");
-        ledger
-            .ingest(
-                "repair-session",
-                vec![finding("finding-1"), finding("finding-2")],
-                1,
-            )
-            .await
-            .expect("ingest");
-        let mut failed = transition(RepairStatus::Failed, "failed-1");
-        failed.actor = RepairActor::A3sTest;
-        failed.attempt_id = None;
-        failed.lease_expires_at_ms = None;
-        ledger.transition(failed, 2).await.expect("fail first");
-        assert_eq!(ledger.queued(10)[0].finding.id, "finding-2");
-        let batch = &ledger.batches()[0];
-        assert_eq!(batch.finding_ids, ["finding-1", "finding-2"]);
-        assert_eq!(batch.results[0].status, RepairStatus::Failed);
-        assert_eq!(batch.results[1].status, RepairStatus::Queued);
-        assert_eq!(batch.status, RepairBatchStatus::InProgress);
-    }
-
-    #[tokio::test]
-    async fn serializes_workspace_mutations_and_moves_overlaps_to_needs_input() {
-        let temp = tempfile::tempdir().expect("tempdir");
-        let mut ledger = RepairLedger::load(temp.path().join("repairs.jsonl"))
-            .await
-            .expect("load");
-        let mut first = finding("finding-1");
-        first.target.node_ids = vec!["shared-node".to_string()];
-        let mut second = finding("finding-2");
-        second.target.node_ids = vec!["shared-node".to_string()];
-        ledger
-            .ingest("repair-session", vec![first, second], 1)
-            .await
-            .expect("ingest");
-        let conflicts = ledger
-            .resolve_conflicts("repair-session", 2)
-            .await
-            .expect("resolve conflicts");
-        assert_eq!(conflicts.len(), 2);
-        assert!(conflicts
-            .iter()
-            .all(|(record, _)| record.status == RepairStatus::NeedsInput));
-
-        let temp = tempfile::tempdir().expect("tempdir");
-        let mut ledger = RepairLedger::load(temp.path().join("repairs.jsonl"))
-            .await
-            .expect("load");
-        let first = finding("finding-1");
-        let mut second = finding("finding-2");
-        second.target.node_ids = vec!["n2".to_string()];
-        ledger
-            .ingest("repair-session", vec![first, second], 1)
-            .await
-            .expect("ingest");
-        attach_all_evidence(&mut ledger).await;
-        ledger
-            .transition(transition(RepairStatus::Claimed, "claim-1"), 2)
-            .await
-            .expect("first claim");
-        let mut second_claim = transition(RepairStatus::Claimed, "claim-2");
-        second_claim.finding_id = "finding-2".to_string();
-        second_claim.attempt_id = Some("attempt-2".to_string());
-        let error = ledger
-            .transition(second_claim, 3)
-            .await
-            .expect_err("concurrent workspace claim");
-        assert_eq!(error.code(), "test.session.repair_workspace_busy");
-        assert!(error.retryable());
-    }
-}
+#[path = "repair_tests.rs"]
+mod tests;
