@@ -1,5 +1,5 @@
 use super::*;
-use a3s_test_core::StepOutput;
+use a3s_test_core::{StepOutput, Target};
 
 #[test]
 fn ref_actions_require_the_latest_observation() {
@@ -202,6 +202,7 @@ fn test_state(latest_observation: Option<u64>) -> AgentSessionState {
         status: AgentSessionStatus::Active,
         goal: "Test".to_string(),
         success_criteria: vec!["Pass".to_string()],
+        auto_resolve_repairs: false,
         allowed_origins: vec!["https://example.test".to_string()],
         browser_allowed_domains: Some(vec!["example.test".to_string()]),
         browser: StoredBrowserConfig {
@@ -221,6 +222,7 @@ fn test_state(latest_observation: Option<u64>) -> AgentSessionState {
             .and_then(|value| value.checked_add(1))
             .unwrap_or(1),
         latest_observation,
+        page_context_bindings: None,
         started_at_ms: 0,
         updated_at_ms: 0,
         summary: None,

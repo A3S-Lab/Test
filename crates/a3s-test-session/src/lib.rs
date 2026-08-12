@@ -4,6 +4,11 @@
 //! observation-bound refs, serialization of turns, and bounded cleanup while
 //! delegating all surface behavior to `SurfaceDriver` objects.
 
+mod page_context;
+mod protocol;
+mod repair;
+mod verification;
+
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -11,14 +16,27 @@ use std::sync::{Arc, Mutex as StdMutex, MutexGuard};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use a3s_test_core::{
-    Action, DriverError, DriverSession, Expectation, ScenarioContext, StepOutput, Surface,
-    SurfaceDriver, SurfaceObservation, Target, TestStep,
+    DriverError, DriverSession, PageContextInspectRequest, RepairActor, RepairBatch,
+    RepairEvidencePhase, RepairEvidenceRequest, RepairFinding, RepairStatus, RepairStatusEvent,
+    ScenarioContext, Surface, SurfaceDriver, SurfaceObservation, TestStep,
 };
-use serde::{Deserialize, Serialize};
 use tokio::sync::{Mutex as AsyncMutex, Notify};
 use tokio::task::JoinHandle;
 
 static MANAGER_SEQUENCE: AtomicU64 = AtomicU64::new(1);
+
+pub use page_context::{
+    action_uses_observation_target, action_uses_page_context_ref, bind_page_context_refs,
+    preferred_page_context_target, resolve_page_context_refs, PageContextBindings,
+};
+use protocol::{validate_session_id, validate_start};
+pub use protocol::{
+    ActSessionRequest, ActionResult, FinishSessionRequest, ObservationResult, RepairVerifyRequest,
+    SessionError, SessionFailure, SessionFinishStatus, SessionFinished, SessionStarted,
+    StartSessionRequest,
+};
+pub use repair::{RepairEventRecord, RepairLedger, RepairRecord, RepairTransition};
+pub use verification::{build_repair_verification, validate_repair_verification_request};
 
 #[derive(Clone, Debug)]
 pub struct SessionManagerOptions {
@@ -77,10 +95,13 @@ struct ManagedSession {
     surface: Surface,
     goal: String,
     success_criteria: Vec<String>,
+    auto_resolve_repairs: bool,
     driver: Box<dyn DriverSession>,
     next_turn: u64,
     next_observation: u64,
     latest_observation: Option<u64>,
+    page_context_targets: PageContextBindings,
+    repair_ledger: RepairLedger,
     started_at_ms: u64,
     lifecycle: ManagedSessionLifecycle,
 }
@@ -165,8 +186,10 @@ impl AgentSessionManager {
             surface: request.surface,
             goal: request.goal.clone(),
             success_criteria: request.success_criteria.clone(),
+            auto_resolve_repairs: request.auto_resolve_repairs,
             started_at_ms,
         };
+        let repair_ledger = RepairLedger::load(context.artifacts_dir.join("repairs.jsonl")).await?;
         let mut registry = self.lock_registry();
         reservation.release(&mut registry);
         registry.sessions.insert(
@@ -176,10 +199,13 @@ impl AgentSessionManager {
                 surface: request.surface,
                 goal: request.goal,
                 success_criteria: request.success_criteria,
+                auto_resolve_repairs: request.auto_resolve_repairs,
                 driver,
                 next_turn: 1,
                 next_observation: 1,
                 latest_observation: None,
+                page_context_targets: PageContextBindings::default(),
+                repair_ledger,
                 started_at_ms,
                 lifecycle: ManagedSessionLifecycle::Active,
             })),
@@ -200,7 +226,8 @@ impl AgentSessionManager {
         let mut managed = managed.lock().await;
         ensure_active(&managed)?;
         managed.latest_observation = None;
-        let observation = managed
+        managed.page_context_targets = PageContextBindings::default();
+        let mut observation = managed
             .driver
             .observe()
             .await
@@ -212,6 +239,7 @@ impl AgentSessionManager {
                 "session observation sequence overflowed",
             )
         })?;
+        managed.page_context_targets = bind_page_context_refs(&mut observation);
         managed.latest_observation = Some(observation_id);
         managed.next_turn = managed.next_turn.saturating_add(1);
         Ok(ObservationResult {
@@ -239,10 +267,29 @@ impl AgentSessionManager {
                 ));
             }
         }
+        let expected_revision = if action_uses_page_context_ref(&request.action) {
+            Some(managed.page_context_targets.revision.ok_or_else(|| {
+                SessionError::new(
+                    "test.session.context_revision_missing",
+                    "page context ref is missing its observation revision",
+                )
+            })?)
+        } else {
+            None
+        };
         managed.latest_observation = None;
+        let bindings = std::mem::take(&mut managed.page_context_targets);
+        if let Some(revision) = expected_revision {
+            managed
+                .driver
+                .validate_page_context_revision(revision)
+                .await
+                .map_err(SessionError::from_driver)?;
+        }
+        let action = resolve_page_context_refs(request.action, &bindings)?;
         let step = TestStep {
             id: format!("agent-turn-{}", managed.next_turn),
-            action: request.action,
+            action,
         };
         managed.next_turn = managed.next_turn.saturating_add(1);
         let output = managed
@@ -254,6 +301,444 @@ impl AgentSessionManager {
             session: managed.id.clone(),
             output,
         })
+    }
+
+    pub async fn inspect_page_context(
+        &self,
+        session: &str,
+        request: PageContextInspectRequest,
+    ) -> Result<ObservationResult, SessionError> {
+        let managed = self.get(session).await?;
+        let mut managed = managed.lock().await;
+        ensure_active(&managed)?;
+        managed.latest_observation = None;
+        managed.page_context_targets = PageContextBindings::default();
+        let page_context = managed
+            .driver
+            .inspect_page_context(&request)
+            .await
+            .map_err(SessionError::from_driver)?;
+        let mut observation = SurfaceObservation::new("scoped page context inspected")
+            .with_page_context(page_context);
+        let observation_id = managed.next_observation;
+        managed.next_observation = managed.next_observation.checked_add(1).ok_or_else(|| {
+            SessionError::new(
+                "test.session.observation_limit_reached",
+                "session observation sequence overflowed",
+            )
+        })?;
+        managed.page_context_targets = bind_page_context_refs(&mut observation);
+        managed.latest_observation = Some(observation_id);
+        managed.next_turn = managed.next_turn.saturating_add(1);
+        Ok(ObservationResult {
+            session: managed.id.clone(),
+            observation_id,
+            observation,
+        })
+    }
+
+    pub async fn take_repairs(
+        &self,
+        session: &str,
+        limit: usize,
+    ) -> Result<Vec<RepairFinding>, SessionError> {
+        let managed = self.get(session).await?;
+        let mut managed = managed.lock().await;
+        ensure_active(&managed)?;
+        managed
+            .driver
+            .take_repairs(limit.clamp(1, 50))
+            .await
+            .map_err(SessionError::from_driver)
+    }
+
+    pub async fn apply_repair_event(
+        &self,
+        session: &str,
+        event: &RepairStatusEvent,
+    ) -> Result<(), SessionError> {
+        let managed = self.get(session).await?;
+        let mut managed = managed.lock().await;
+        ensure_active(&managed)?;
+        managed
+            .driver
+            .apply_repair_event(event)
+            .await
+            .map_err(SessionError::from_driver)
+    }
+
+    pub async fn ingest_repairs(
+        &self,
+        session: &str,
+        limit: usize,
+    ) -> Result<Vec<RepairRecord>, SessionError> {
+        let managed = self.get(session).await?;
+        let mut managed = managed.lock().await;
+        ensure_active(&managed)?;
+        let findings = managed
+            .driver
+            .take_repairs(limit.clamp(1, 50))
+            .await
+            .map_err(SessionError::from_driver)?;
+        let session_id = managed.id.clone();
+        let created = managed
+            .repair_ledger
+            .ingest(&session_id, findings, unix_ms())
+            .await?;
+        for record in &created {
+            let evidence = managed
+                .driver
+                .capture_repair_evidence(&RepairEvidenceRequest {
+                    finding_id: record.finding.id.clone(),
+                    attempt_id: None,
+                    phase: RepairEvidencePhase::Before,
+                })
+                .await
+                .map_err(SessionError::from_driver)?;
+            managed
+                .repair_ledger
+                .attach_before_evidence(&session_id, &record.finding.id, evidence)
+                .await?;
+        }
+        for (_, event) in managed
+            .repair_ledger
+            .resolve_conflicts(&session_id, unix_ms())
+            .await?
+        {
+            managed
+                .driver
+                .apply_repair_event(&event)
+                .await
+                .map_err(SessionError::from_driver)?;
+        }
+        Ok(created
+            .into_iter()
+            .filter_map(|record| managed.repair_ledger.get(&record.finding.id))
+            .collect())
+    }
+
+    pub async fn watch_repairs(
+        &self,
+        session: &str,
+        limit: usize,
+        timeout_ms: u64,
+        batch_window_ms: u64,
+    ) -> Result<Vec<RepairRecord>, SessionError> {
+        let managed = self.get(session).await?;
+        let mut managed = managed.lock().await;
+        ensure_active(&managed)?;
+        let recovered = managed
+            .repair_ledger
+            .recover_expired_leases(session, unix_ms())
+            .await?;
+        let recovered_ids = recovered
+            .iter()
+            .map(|(_, event)| event.finding_id.as_str())
+            .collect::<HashSet<_>>();
+        for event in managed.repair_ledger.current_events() {
+            if recovered_ids.contains(event.finding_id.as_str()) {
+                continue;
+            }
+            managed
+                .driver
+                .apply_repair_event(&event)
+                .await
+                .map_err(|error| {
+                    SessionError::new(
+                        "test.session.repair_projection_failed",
+                        format!(
+                            "durable repair state could not be replayed to the page: {}",
+                            error.message()
+                        ),
+                    )
+                    .with_retryable(true)
+                })?;
+        }
+        for (_, event) in recovered {
+            managed
+                .driver
+                .apply_repair_event(&event)
+                .await
+                .map_err(|error| {
+                    SessionError::new(
+                        "test.session.repair_projection_failed",
+                        format!(
+                            "expired repair lease was durably recovered but page projection failed: {}",
+                            error.message()
+                        ),
+                    )
+                    .with_retryable(true)
+                })?;
+        }
+        let human_actions = managed
+            .driver
+            .take_repair_actions(limit.clamp(1, 50))
+            .await
+            .map_err(SessionError::from_driver)?;
+        let session_id = managed.id.clone();
+        for action in human_actions {
+            let transitions = managed
+                .repair_ledger
+                .apply_human_action(&session_id, action, unix_ms())
+                .await?;
+            for (_, event) in transitions {
+                managed
+                    .driver
+                    .apply_repair_event(&event)
+                    .await
+                    .map_err(|error| {
+                        SessionError::new(
+                            "test.session.repair_projection_failed",
+                            format!(
+                                "human repair action was durably recorded but page projection failed: {}",
+                                error.message()
+                            ),
+                        )
+                        .with_retryable(true)
+                    })?;
+            }
+        }
+        for (_, event) in managed
+            .repair_ledger
+            .resolve_conflicts(&session_id, unix_ms())
+            .await?
+        {
+            managed
+                .driver
+                .apply_repair_event(&event)
+                .await
+                .map_err(SessionError::from_driver)?;
+        }
+        capture_missing_before_evidence(&mut managed, limit.clamp(1, 50)).await?;
+        let queued = managed.repair_ledger.queued(limit);
+        if !queued.is_empty() {
+            return Ok(queued);
+        }
+        let findings = managed
+            .driver
+            .wait_for_repairs(
+                limit.clamp(1, 50),
+                timeout_ms.min(300_000),
+                batch_window_ms.min(5_000),
+            )
+            .await
+            .map_err(SessionError::from_driver)?;
+        let session_id = managed.id.clone();
+        managed
+            .repair_ledger
+            .ingest(&session_id, findings, unix_ms())
+            .await?;
+        capture_missing_before_evidence(&mut managed, limit.clamp(1, 50)).await?;
+        for (_, event) in managed
+            .repair_ledger
+            .resolve_conflicts(&session_id, unix_ms())
+            .await?
+        {
+            managed
+                .driver
+                .apply_repair_event(&event)
+                .await
+                .map_err(SessionError::from_driver)?;
+        }
+        Ok(managed.repair_ledger.queued(limit))
+    }
+
+    pub async fn queued_repairs(
+        &self,
+        session: &str,
+        limit: usize,
+    ) -> Result<Vec<RepairRecord>, SessionError> {
+        let managed = self.get(session).await?;
+        let managed = managed.lock().await;
+        ensure_active(&managed)?;
+        Ok(managed.repair_ledger.queued(limit))
+    }
+
+    pub async fn repair_batches(&self, session: &str) -> Result<Vec<RepairBatch>, SessionError> {
+        let managed = self.get(session).await?;
+        let managed = managed.lock().await;
+        ensure_active(&managed)?;
+        Ok(managed.repair_ledger.batches())
+    }
+
+    pub async fn repair(
+        &self,
+        session: &str,
+        finding_id: &str,
+    ) -> Result<RepairRecord, SessionError> {
+        let managed = self.get(session).await?;
+        let managed = managed.lock().await;
+        ensure_active(&managed)?;
+        managed.repair_ledger.get(finding_id).ok_or_else(|| {
+            SessionError::new(
+                "test.session.repair_not_found",
+                format!("repair finding '{finding_id}' does not exist"),
+            )
+        })
+    }
+
+    pub async fn transition_repair(
+        &self,
+        transition: RepairTransition,
+    ) -> Result<RepairRecord, SessionError> {
+        let managed = self.get(&transition.session).await?;
+        let mut managed = managed.lock().await;
+        ensure_active(&managed)?;
+        let (record, event) = managed
+            .repair_ledger
+            .transition(transition, unix_ms())
+            .await?;
+        managed
+            .driver
+            .apply_repair_event(&event)
+            .await
+            .map_err(|error| {
+                SessionError::new(
+                    "test.session.repair_projection_failed",
+                    format!(
+                        "repair transition was durably recorded but page projection failed; retry the same request id: {}",
+                        error.message()
+                    ),
+                )
+                .with_retryable(true)
+            })?;
+        Ok(record)
+    }
+
+    pub async fn verify_repair(
+        &self,
+        request: RepairVerifyRequest,
+    ) -> Result<RepairRecord, SessionError> {
+        validate_repair_verification_request(&request)?;
+        let managed = self.get(&request.session).await?;
+        let mut managed = managed.lock().await;
+        ensure_active(&managed)?;
+        let current = managed
+            .repair_ledger
+            .get(&request.finding_id)
+            .ok_or_else(|| {
+                SessionError::new(
+                    "test.session.repair_not_found",
+                    format!("repair finding '{}' does not exist", request.finding_id),
+                )
+            })?;
+        if current.status != RepairStatus::Verifying {
+            return Err(SessionError::new(
+                "test.session.repair_verify_invalid",
+                "repair verification requires the verifying state",
+            ));
+        }
+        let attempt_id = current.attempt_id.clone().ok_or_else(|| {
+            SessionError::new(
+                "test.session.repair_attempt_invalid",
+                "repair verification is missing its active attempt",
+            )
+        })?;
+        let before_evidence = current.before_evidence.clone().ok_or_else(|| {
+            SessionError::new(
+                "test.session.repair_evidence_missing",
+                "repair verification is missing A3S-owned before evidence",
+            )
+        })?;
+        let after_evidence = managed
+            .driver
+            .capture_repair_evidence(&RepairEvidenceRequest {
+                finding_id: current.finding.id.clone(),
+                attempt_id: Some(attempt_id.clone()),
+                phase: RepairEvidencePhase::After,
+            })
+            .await
+            .map_err(SessionError::from_driver)?;
+        let mut verification = build_repair_verification(
+            &current.finding,
+            &attempt_id,
+            &after_evidence.context,
+            after_evidence.console_errors,
+            after_evidence.page_errors,
+            &before_evidence,
+            &after_evidence,
+            &request,
+        )?;
+        if verification.passed {
+            match verification.acl_candidate.as_deref() {
+                Some(candidate) => {
+                    let proof = managed
+                        .driver
+                        .prove_repair_acl(
+                            &current.finding.id,
+                            &attempt_id,
+                            &current.finding.url,
+                            candidate,
+                        )
+                        .await
+                        .map_err(SessionError::from_driver)?;
+                    verification.passed = proof.passed;
+                    verification.acl_proof = Some(proof);
+                }
+                None => {
+                    verification.passed = false;
+                    verification.summary = format!(
+                        "{}; no stable regression ACL could be generated or supplied",
+                        verification.summary
+                    );
+                }
+            }
+        }
+        let passed = verification.passed;
+        let auto_resolve_repairs = managed.auto_resolve_repairs;
+        let verification_request_id = request.request_id.clone();
+        let transition = RepairTransition {
+            session: request.session.clone(),
+            finding_id: request.finding_id.clone(),
+            request_id: request.request_id,
+            status: if passed {
+                RepairStatus::ReviewReady
+            } else {
+                RepairStatus::VerificationFailed
+            },
+            actor: RepairActor::A3sTest,
+            attempt_id: Some(attempt_id.clone()),
+            lease_expires_at_ms: None,
+            summary: Some(request.summary),
+            message: None,
+            verification: Some(verification),
+        };
+        let (mut record, event) = managed
+            .repair_ledger
+            .transition(transition, unix_ms())
+            .await?;
+        managed
+            .driver
+            .apply_repair_event(&event)
+            .await
+            .map_err(SessionError::from_driver)?;
+        if passed && auto_resolve_repairs {
+            let transition = RepairTransition {
+                session: request.session,
+                finding_id: request.finding_id,
+                request_id: auto_resolution_request_id(&verification_request_id),
+                status: RepairStatus::Resolved,
+                actor: RepairActor::A3sTest,
+                attempt_id: Some(attempt_id),
+                lease_expires_at_ms: None,
+                summary: Some(
+                    "A3S Test automatically accepted the fully verified repair".to_string(),
+                ),
+                message: None,
+                verification: None,
+            };
+            let (resolved, event) = managed
+                .repair_ledger
+                .transition(transition, unix_ms())
+                .await?;
+            managed
+                .driver
+                .apply_repair_event(&event)
+                .await
+                .map_err(SessionError::from_driver)?;
+            record = resolved;
+        }
+        Ok(record)
     }
 
     pub async fn finish(
@@ -559,34 +1044,41 @@ impl Drop for OpeningReservation<'_> {
     }
 }
 
-fn validate_start(request: &StartSessionRequest) -> Result<(), SessionError> {
-    validate_session_id(&request.session)?;
-    if request.goal.trim().is_empty() {
-        return Err(SessionError::new(
-            "test.session.goal_invalid",
-            "session goal must not be empty",
-        ));
-    }
-    if request.success_criteria.is_empty()
-        || request
-            .success_criteria
-            .iter()
-            .any(|criterion| criterion.trim().is_empty())
-    {
-        return Err(SessionError::new(
-            "test.session.criteria_invalid",
-            "at least one non-empty success criterion is required",
-        ));
-    }
-    Ok(())
-}
-
 fn ensure_active(session: &ManagedSession) -> Result<(), SessionError> {
     if session.lifecycle == ManagedSessionLifecycle::CleanupRequired {
         return Err(SessionError::new(
             "test.session.cleanup_required",
             "session cleanup must be retried with finish or abort before another turn",
         ));
+    }
+    Ok(())
+}
+
+async fn capture_missing_before_evidence(
+    managed: &mut ManagedSession,
+    limit: usize,
+) -> Result<(), SessionError> {
+    let missing = managed
+        .repair_ledger
+        .queued(limit)
+        .into_iter()
+        .filter(|record| record.before_evidence.is_none())
+        .collect::<Vec<_>>();
+    let session_id = managed.id.clone();
+    for record in missing {
+        let evidence = managed
+            .driver
+            .capture_repair_evidence(&RepairEvidenceRequest {
+                finding_id: record.finding.id.clone(),
+                attempt_id: None,
+                phase: RepairEvidencePhase::Before,
+            })
+            .await
+            .map_err(SessionError::from_driver)?;
+        managed
+            .repair_ledger
+            .attach_before_evidence(&session_id, &record.finding.id, evidence)
+            .await?;
     }
     Ok(())
 }
@@ -599,51 +1091,6 @@ fn cleanup_in_progress(session: &str) -> SessionError {
     .with_retryable(true)
 }
 
-fn validate_session_id(session: &str) -> Result<(), SessionError> {
-    if session.is_empty()
-        || session.len() > 48
-        || !session
-            .chars()
-            .all(|character| character.is_ascii_alphanumeric() || matches!(character, '-' | '_'))
-    {
-        return Err(SessionError::new(
-            "test.session.id_invalid",
-            "session id must be 1-48 ASCII letters, digits, '-' or '_'",
-        ));
-    }
-    Ok(())
-}
-
-fn action_uses_observation_target(action: &Action) -> bool {
-    match action {
-        Action::Click { target }
-        | Action::Hover { target }
-        | Action::Focus { target }
-        | Action::DoubleClick { target }
-        | Action::ContextClick { target }
-        | Action::Fill { target, .. }
-        | Action::Type { target, .. }
-        | Action::Check { target }
-        | Action::Uncheck { target }
-        | Action::Select { target, .. }
-        | Action::Upload { target, .. }
-        | Action::Download { target, .. } => target_uses_ref(target),
-        Action::Drag { source, target } => target_uses_ref(source) || target_uses_ref(target),
-        Action::Wheel {
-            target: Some(target),
-            ..
-        } => target_uses_ref(target),
-        Action::Assert {
-            expectation: Expectation::Visible(target),
-        } => target_uses_ref(target),
-        _ => false,
-    }
-}
-
-fn target_uses_ref(target: &Target) -> bool {
-    matches!(target, Target::Ref { .. } | Target::VisualPoint { .. })
-}
-
 fn unix_ms() -> u64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -651,139 +1098,10 @@ fn unix_ms() -> u64 {
         .unwrap_or_default()
 }
 
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub struct StartSessionRequest {
-    pub session: String,
-    pub surface: Surface,
-    pub goal: String,
-    pub success_criteria: Vec<String>,
+fn auto_resolution_request_id(verification_request_id: &str) -> String {
+    let prefix = verification_request_id
+        .chars()
+        .take(115)
+        .collect::<String>();
+    format!("auto-resolve-{prefix}")
 }
-
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub struct SessionStarted {
-    pub session: String,
-    pub surface: Surface,
-    pub goal: String,
-    pub success_criteria: Vec<String>,
-    pub started_at_ms: u64,
-}
-
-#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
-pub struct ObservationResult {
-    pub session: String,
-    pub observation_id: u64,
-    pub observation: SurfaceObservation,
-}
-
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub struct ActSessionRequest {
-    pub session: String,
-    pub observation_id: Option<u64>,
-    pub action: Action,
-}
-
-#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
-pub struct ActionResult {
-    pub session: String,
-    pub output: StepOutput,
-}
-
-#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[serde(rename_all = "snake_case")]
-pub enum SessionFinishStatus {
-    Passed,
-    Failed,
-    Aborted,
-}
-
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub struct FinishSessionRequest {
-    pub session: String,
-    pub status: SessionFinishStatus,
-    pub summary: String,
-}
-
-#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
-pub struct SessionFinished {
-    pub session: String,
-    pub surface: Surface,
-    pub goal: String,
-    pub success_criteria: Vec<String>,
-    pub status: SessionFinishStatus,
-    pub summary: String,
-    pub turns: u64,
-    pub started_at_ms: u64,
-    pub finished_at_ms: u64,
-    pub cleanup_error: Option<SessionFailure>,
-}
-
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub struct SessionFailure {
-    pub code: String,
-    pub message: String,
-    pub retryable: bool,
-}
-
-impl SessionFailure {
-    fn from_driver(error: DriverError) -> Self {
-        Self {
-            code: error.code().to_string(),
-            message: error.message().to_string(),
-            retryable: error.retryable(),
-        }
-    }
-}
-
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct SessionError {
-    code: String,
-    message: String,
-    retryable: bool,
-}
-
-impl SessionError {
-    #[must_use]
-    pub fn new(code: impl Into<String>, message: impl Into<String>) -> Self {
-        Self {
-            code: code.into(),
-            message: message.into(),
-            retryable: false,
-        }
-    }
-
-    fn with_retryable(mut self, retryable: bool) -> Self {
-        self.retryable = retryable;
-        self
-    }
-
-    fn from_driver(error: DriverError) -> Self {
-        Self {
-            code: error.code().to_string(),
-            message: error.message().to_string(),
-            retryable: error.retryable(),
-        }
-    }
-
-    #[must_use]
-    pub fn code(&self) -> &str {
-        &self.code
-    }
-
-    #[must_use]
-    pub fn message(&self) -> &str {
-        &self.message
-    }
-
-    #[must_use]
-    pub fn retryable(&self) -> bool {
-        self.retryable
-    }
-}
-
-impl std::fmt::Display for SessionError {
-    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(formatter, "{}: {}", self.code, self.message)
-    }
-}
-
-impl std::error::Error for SessionError {}

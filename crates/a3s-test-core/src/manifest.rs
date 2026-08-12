@@ -1,6 +1,7 @@
 use std::collections::HashSet;
 
 use a3s_acl::{Block, Value};
+use url::Url;
 
 use crate::{
     Action, CaptureOperation, DialogOperation, Expectation, FrameTarget, LoadState, ModifierKey,
@@ -30,6 +31,101 @@ impl TestSuite {
 
         parse_suite(&document.blocks[0])
     }
+
+    /// Parses the bounded, read-only Web subset admitted for repair proof.
+    ///
+    /// A repair proof owns one fresh browser session and therefore must contain
+    /// exactly one Web scenario. Every navigation remains on the exact origin
+    /// of the finding, and steps that can mutate application or network state
+    /// are rejected before the proof browser is opened.
+    pub fn from_repair_acl(source: &str, finding_url: &str) -> Result<Self, SpecError> {
+        let suite = Self::from_acl(source)?;
+        admit_repair_suite(&suite, finding_url)?;
+        Ok(suite)
+    }
+}
+
+fn admit_repair_suite(suite: &TestSuite, finding_url: &str) -> Result<(), SpecError> {
+    if suite.scenarios.len() != 1 {
+        return Err(SpecError::new(
+            "test.spec.repair_scenario_count",
+            "suite.scenarios",
+            "a repair ACL must contain exactly one scenario",
+        ));
+    }
+    let finding_url = Url::parse(finding_url).map_err(|error| {
+        SpecError::new(
+            "test.spec.repair_origin_invalid",
+            "finding.url",
+            format!("the repair finding URL is invalid: {error}"),
+        )
+    })?;
+    if !matches!(finding_url.scheme(), "http" | "https") {
+        return Err(SpecError::new(
+            "test.spec.repair_origin_invalid",
+            "finding.url",
+            "repair ACL proof requires an HTTP or HTTPS finding URL",
+        ));
+    }
+    let scenario = &suite.scenarios[0];
+    if scenario.surface != Surface::Web {
+        return Err(SpecError::new(
+            "test.spec.repair_surface",
+            format!("suite.{}.scenario.{}.surface", suite.name, scenario.id),
+            "a repair ACL scenario must use the Web surface",
+        ));
+    }
+
+    let finding_origin = finding_url.origin();
+    let mut navigation_count = 0_usize;
+    for step in &scenario.steps {
+        let path = format!(
+            "suite.{}.scenario.{}.step.{}",
+            suite.name, scenario.id, step.id
+        );
+        match &step.action {
+            Action::Navigate { url } => {
+                navigation_count += 1;
+                let url = Url::parse(url).map_err(|error| {
+                    SpecError::new(
+                        "test.spec.repair_origin_invalid",
+                        &path,
+                        format!("repair navigation URL is invalid: {error}"),
+                    )
+                })?;
+                if url.origin() != finding_origin {
+                    return Err(SpecError::new(
+                        "test.spec.repair_origin_denied",
+                        path,
+                        "repair navigation must remain on the finding's exact origin",
+                    ));
+                }
+            }
+            Action::Snapshot { .. }
+            | Action::Wait { .. }
+            | Action::Assert { .. }
+            | Action::Screenshot { .. }
+            | Action::Viewport { .. }
+            | Action::Accessibility { .. }
+            | Action::Console { .. }
+            | Action::PageErrors { .. } => {}
+            _ => {
+                return Err(SpecError::new(
+                    "test.spec.repair_action_denied",
+                    path,
+                    "repair ACL proof only admits navigation, observation, assertion, viewport, and evidence steps",
+                ));
+            }
+        }
+    }
+    if navigation_count != 1 {
+        return Err(SpecError::new(
+            "test.spec.repair_navigation_count",
+            format!("suite.{}.scenario.{}.steps", suite.name, scenario.id),
+            "a repair ACL must contain exactly one navigation step",
+        ));
+    }
+    Ok(())
 }
 
 fn parse_suite(block: &Block) -> Result<TestSuite, SpecError> {

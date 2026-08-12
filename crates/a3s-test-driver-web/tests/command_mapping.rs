@@ -28,11 +28,32 @@ struct FailingActionExecutor {
     cleanup_error: Option<CommandError>,
 }
 
+struct PageContextExecutor {
+    invocations: Mutex<Vec<CommandInvocation>>,
+    revisions: Mutex<Vec<u64>>,
+}
+
 impl RecordingExecutor {
     fn with_version(version: impl Into<String>) -> Self {
         Self {
             invocations: Mutex::new(Vec::new()),
             version: Mutex::new(Some(version.into())),
+        }
+    }
+}
+
+impl PageContextExecutor {
+    fn stable(revision: u64) -> Self {
+        Self {
+            invocations: Mutex::new(Vec::new()),
+            revisions: Mutex::new(vec![revision, revision]),
+        }
+    }
+
+    fn changing() -> Self {
+        Self {
+            invocations: Mutex::new(Vec::new()),
+            revisions: Mutex::new(vec![1, 2, 3, 4]),
         }
     }
 }
@@ -90,6 +111,11 @@ impl CommandExecutor for RecordingExecutor {
         if !version_probe {
             materialize_external_artifact(&invocation);
         }
+        let is_eval = invocation.args.iter().any(|argument| argument == "eval");
+        let is_repair_watch = invocation
+            .args
+            .iter()
+            .any(|argument| argument.to_string_lossy().contains("batchWindowMs"));
         self.invocations.lock().unwrap().push(invocation);
         Ok(CommandOutput {
             exit_code: 0,
@@ -99,6 +125,10 @@ impl CommandExecutor for RecordingExecutor {
                     .unwrap()
                     .clone()
                     .unwrap_or_else(|| default_version.to_string())
+            } else if is_repair_watch {
+                r#"{"success":true,"data":{"result":[]}}"#.to_string()
+            } else if is_eval {
+                r#"{"success":true,"data":{"result":{"present":false}}}"#.to_string()
             } else {
                 r#"{"success":true}"#.to_string()
             },
@@ -127,6 +157,31 @@ impl CommandExecutor for FailingActionExecutor {
         Ok(CommandOutput {
             exit_code: 0,
             stdout: r#"{"success":true}"#.to_string(),
+            stderr: String::new(),
+        })
+    }
+}
+
+#[async_trait]
+impl CommandExecutor for PageContextExecutor {
+    async fn run(&self, invocation: CommandInvocation) -> Result<CommandOutput, CommandError> {
+        let version_probe = invocation
+            .args
+            .last()
+            .is_some_and(|argument| argument == "--version");
+        let is_eval = invocation.args.iter().any(|argument| argument == "eval");
+        self.invocations.lock().unwrap().push(invocation);
+        let stdout = if version_probe {
+            "agent-browser 0.26.0".to_string()
+        } else if is_eval {
+            let revision = self.revisions.lock().unwrap().remove(0);
+            page_context_response(revision)
+        } else {
+            r#"{"success":true,"data":{"snapshot":"accessibility"}}"#.to_string()
+        };
+        Ok(CommandOutput {
+            exit_code: 0,
+            stdout,
             stderr: String::new(),
         })
     }
@@ -438,11 +493,15 @@ async fn exposes_a_full_browser_snapshot_as_the_agent_observation() {
     let observation = session.observe().await.expect("observation");
     assert_eq!(observation.summary, "browser accessibility snapshot");
     assert_eq!(observation.data["success"], true);
+    assert_eq!(
+        observation.page_context.as_ref().map(|value| value.present),
+        Some(false)
+    );
     session.close().await.expect("close");
 
     let invocations = executor.invocations.lock().unwrap();
     assert_eq!(
-        invocations[1].args,
+        invocations[2].args,
         os(&[
             "--session",
             "agent",
@@ -452,6 +511,88 @@ async fn exposes_a_full_browser_snapshot_as_the_agent_observation() {
             "snapshot",
         ])
     );
+    assert_eq!(strip_session_prefix(&invocations[1].args)[0], "eval");
+    assert_eq!(strip_session_prefix(&invocations[3].args)[0], "eval");
+}
+
+#[tokio::test]
+async fn captures_a_typed_testkit_context_at_the_same_stable_revision() {
+    let temp = tempfile::tempdir().expect("tempdir");
+    let executor = Arc::new(PageContextExecutor::stable(7));
+    let driver = AgentBrowserDriver::with_executor(standalone_config("page-context"), executor);
+    let mut session = driver
+        .open(&ScenarioContext {
+            run_id: "run".to_string(),
+            scenario_id: "context".to_string(),
+            artifacts_dir: temp.path().join("artifacts"),
+        })
+        .await
+        .expect("session");
+
+    let observation = session.observe().await.expect("observation");
+    let page_context = observation.page_context.expect("page context");
+    assert!(page_context.present);
+    assert_eq!(page_context.revision, Some(7));
+    let snapshot = page_context.snapshot.expect("typed snapshot");
+    assert_eq!(snapshot.page.expect("page").route, "/checkout");
+    assert_eq!(snapshot.nodes[0].role.as_deref(), Some("button"));
+    assert_eq!(
+        snapshot.nodes[0].locators[0],
+        a3s_test_core::PageContextLocator::TestId {
+            value: "pay".to_string()
+        }
+    );
+}
+
+#[tokio::test]
+async fn bounds_repair_watch_below_the_browser_command_deadline() {
+    let temp = tempfile::tempdir().expect("tempdir");
+    let executor = Arc::new(RecordingExecutor::with_version("agent-browser 0.26.0"));
+    let mut config = standalone_config("repair-watch");
+    config.command_timeout = Duration::from_millis(1_000);
+    let driver = AgentBrowserDriver::with_executor(config, executor.clone());
+    let mut session = driver
+        .open(&ScenarioContext {
+            run_id: "run".to_string(),
+            scenario_id: "watch".to_string(),
+            artifacts_dir: temp.path().join("artifacts"),
+        })
+        .await
+        .expect("session");
+
+    let repairs = session
+        .wait_for_repairs(7, 30_000, 250)
+        .await
+        .expect("watch");
+    assert!(repairs.is_empty());
+    session.close().await.expect("close");
+
+    let invocations = executor.invocations.lock().unwrap();
+    let script = strip_session_prefix(&invocations[1].args)[1]
+        .to_string_lossy()
+        .into_owned();
+    assert!(script.contains("limit: 7"), "{script}");
+    assert!(script.contains("timeoutMs: 900"), "{script}");
+    assert!(script.contains("batchWindowMs: 250"), "{script}");
+}
+
+#[tokio::test]
+async fn rejects_context_that_keeps_changing_during_observation() {
+    let temp = tempfile::tempdir().expect("tempdir");
+    let executor = Arc::new(PageContextExecutor::changing());
+    let driver =
+        AgentBrowserDriver::with_executor(standalone_config("page-context-race"), executor);
+    let mut session = driver
+        .open(&ScenarioContext {
+            run_id: "run".to_string(),
+            scenario_id: "changing".to_string(),
+            artifacts_dir: temp.path().join("artifacts"),
+        })
+        .await
+        .expect("session");
+
+    let error = session.observe().await.expect_err("unstable context");
+    assert_eq!(error.code(), "test.driver.web.page_context_changed");
 }
 
 #[tokio::test]
@@ -475,6 +616,7 @@ async fn discovers_and_admits_the_typed_browser_protocol() {
     assert_eq!(capabilities.integration, BrowserIntegration::Standalone);
     assert_eq!(capabilities.version, "0.26.0");
     assert_eq!(capabilities.protocol_revision, 5);
+    assert_eq!(capabilities.page_context_protocol, None);
     assert!(capabilities.features.contains(&WebCapability::Tabs));
     assert!(capabilities.features.contains(&WebCapability::Har));
     assert!(capabilities.features.contains(&WebCapability::Video));
@@ -986,12 +1128,14 @@ async fn persistent_connection_survives_handle_drop_until_explicit_close() {
     second.close_surface().await.expect("close");
 
     let invocations = executor.invocations.lock().unwrap();
-    assert_eq!(invocations.len(), 4);
+    assert_eq!(invocations.len(), 6);
     assert_eq!(
-        strip_session_prefix(&invocations[2].args),
+        strip_session_prefix(&invocations[3].args),
         os(&["snapshot"])
     );
-    assert_eq!(strip_session_prefix(&invocations[3].args), os(&["close"]));
+    assert_eq!(strip_session_prefix(&invocations[2].args)[0], "eval");
+    assert_eq!(strip_session_prefix(&invocations[4].args)[0], "eval");
+    assert_eq!(strip_session_prefix(&invocations[5].args), os(&["close"]));
 }
 
 #[cfg(unix)]
@@ -1031,6 +1175,70 @@ async fn failed_close_kills_the_exact_daemon_from_its_private_pid_file() {
 
 fn os(values: &[&str]) -> Vec<OsString> {
     values.iter().map(OsString::from).collect()
+}
+
+fn standalone_config(namespace: &str) -> AgentBrowserConfig {
+    AgentBrowserConfig {
+        command: BrowserCommand::Standalone {
+            executable: PathBuf::from("/opt/agent-browser"),
+        },
+        namespace: namespace.to_string(),
+        headed: false,
+        command_timeout: Duration::from_secs(5),
+        idle_timeout: Duration::from_secs(30),
+        network_policy: Default::default(),
+    }
+}
+
+fn page_context_response(revision: u64) -> String {
+    serde_json::json!({
+        "success": true,
+        "data": {
+            "result": {
+                "present": true,
+                "protocol": "a3s.test.page-context/1",
+                "sdkVersion": "0.1.0",
+                "revision": revision,
+                "page": {
+                    "id": "checkout",
+                    "url": "http://127.0.0.1/checkout",
+                    "route": "/checkout",
+                    "title": "Checkout",
+                    "ready": true,
+                    "viewport": { "width": 1280.0, "height": 720.0, "dpr": 2.0 },
+                    "document": { "width": 1280.0, "height": 900.0 },
+                    "scroll": { "x": 0.0, "y": 0.0 },
+                    "language": "en",
+                    "theme": "light"
+                },
+                "components": [],
+                "nodes": [{
+                    "id": "n1",
+                    "tag": "button",
+                    "role": "button",
+                    "name": "Pay",
+                    "text": "Pay",
+                    "testId": "pay",
+                    "geometry": {
+                        "viewport": { "x": 10.0, "y": 20.0, "width": 100.0, "height": 40.0 },
+                        "document": { "x": 10.0, "y": 20.0, "width": 100.0, "height": 40.0 },
+                        "normalized": { "x": 0.01, "y": 0.03, "width": 0.08, "height": 0.06 },
+                        "visibleRatio": 1.0,
+                        "occluded": false,
+                        "position": "static",
+                        "transformed": false
+                    },
+                    "state": { "visible": true, "focused": false },
+                    "locators": [{ "type": "test_id", "value": "pay" }]
+                }],
+                "facts": {},
+                "removedNodeIds": [],
+                "truncated": false,
+                "nextCursor": null
+            }
+        }
+    })
+    .to_string()
 }
 
 fn strip_session_prefix(args: &[OsString]) -> Vec<OsString> {

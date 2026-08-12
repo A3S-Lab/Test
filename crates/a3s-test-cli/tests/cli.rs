@@ -51,6 +51,7 @@ fn agent_schema_exposes_values_for_semantic_targets() {
     let value: serde_json::Value = serde_json::from_slice(&output.stdout).expect("JSON output");
     assert_eq!(value["planner"], "external_coding_agent");
     assert_eq!(value["protocol_revision"], 5);
+    assert!(value["page_context_protocol"].is_null());
     let action_types = value["action_schema"]["oneOf"]
         .as_array()
         .expect("action variants");
@@ -286,7 +287,10 @@ esac
     let driver_log = fs::read_to_string(log).expect("driver log");
     let driver_arguments = driver_log
         .lines()
-        .filter_map(|line| line.split('|').nth(2))
+        .filter_map(|line| {
+            let arguments = line.split('|').nth(2)?;
+            arguments.starts_with("--session ").then_some(arguments)
+        })
         .collect::<Vec<_>>();
     assert!(
         driver_arguments
@@ -316,8 +320,8 @@ esac
         driver_arguments
             .iter()
             .filter(|arguments| !arguments.ends_with(" close"))
-            .all(|arguments| arguments
-                .contains("--allowed-domains cdn.example.test,example.test --engine chrome")),
+            .all(|arguments| arguments.lines().next().is_some_and(|line| line
+                .contains("--allowed-domains cdn.example.test,example.test --engine chrome"))),
         "restricted standalone turns did not force the explicit policy launch path: {driver_log}"
     );
     assert!(
@@ -341,7 +345,14 @@ esac
     assert_eq!(sessions, HashSet::from(["agent-checkout"]));
     let domain_policies = driver_log
         .lines()
-        .filter_map(|line| line.split('|').nth(3))
+        .filter_map(|line| {
+            let mut fields = line.split('|');
+            fields.next()?;
+            fields.next()?;
+            let arguments = fields.next()?;
+            let policy = fields.next()?;
+            arguments.starts_with("--session ").then_some(policy)
+        })
         .collect::<HashSet<_>>();
     assert_eq!(
         domain_policies,
@@ -635,6 +646,160 @@ esac
 
     let abort = Command::new(binary())
         .args(["agent", "abort", "--session", "failed-action", "--json"])
+        .current_dir(temp.path())
+        .env("A3S_TEST_LOG", &log)
+        .output()
+        .expect("abort");
+    assert!(abort.status.success(), "{abort:?}");
+}
+
+#[cfg(unix)]
+#[test]
+fn page_context_refs_resolve_semantically_and_reject_stale_revisions() {
+    use std::os::unix::fs::PermissionsExt;
+
+    let _test_guard = process_test_guard();
+    let temp = tempfile::tempdir().expect("tempdir");
+    let driver = temp.path().join("fake-agent-browser");
+    let log = temp.path().join("driver.log");
+    fs::write(
+        &driver,
+        r#"#!/bin/sh
+case " $* " in
+  *" --version "*)
+    printf 'agent-browser 0.26.0\n'
+    exit 0
+    ;;
+esac
+printf '%s\n' "$*" >> "$A3S_TEST_LOG"
+case " $* " in
+  *" eval "*)
+    revision="${A3S_CONTEXT_REVISION:-7}"
+    printf '{"success":true,"data":{"result":{"present":true,"protocol":"a3s.test.page-context/1","sdkVersion":"0.1.0","revision":%s,"components":[],"nodes":[{"id":"private-n1","tag":"button","role":"button","name":"Pay","testId":"pay","state":{"visible":true},"locators":[{"type":"test_id","value":"pay"}]}],"facts":{},"removedNodeIds":[],"truncated":false,"nextCursor":null}}}\n' "$revision"
+    ;;
+  *" snapshot "*)
+    printf '{"success":true,"data":{"origin":"https://example.test/","snapshot":"@e1 [button] Pay"}}\n'
+    ;;
+  *)
+    printf '{"success":true}\n'
+    ;;
+esac
+"#,
+    )
+    .expect("driver");
+    fs::set_permissions(&driver, fs::Permissions::from_mode(0o755)).expect("permissions");
+
+    let start = start_agent_session(temp.path(), &driver, &log, "context-ref");
+    assert!(start.status.success(), "{start:?}");
+
+    let observe = Command::new(binary())
+        .args([
+            "agent",
+            "observe",
+            "--session",
+            "context-ref",
+            "--interactive",
+            "--json",
+        ])
+        .current_dir(temp.path())
+        .env("A3S_TEST_LOG", &log)
+        .env("A3S_CONTEXT_REVISION", "7")
+        .output()
+        .expect("observe page context");
+    assert!(observe.status.success(), "{observe:?}");
+    let observed: serde_json::Value =
+        serde_json::from_slice(&observe.stdout).expect("observation JSON");
+    assert_eq!(
+        observed["output"]["page_context"]["snapshot"]["nodes"][0]["ref"],
+        "@c1"
+    );
+    assert_eq!(
+        observed["output"]["page_context"]["snapshot"]["nodes"][0]["id"],
+        ""
+    );
+
+    let state_path = temp
+        .path()
+        .join(".a3s-test/agent-sessions/context-ref/session.json");
+    let stored = fs::read_to_string(&state_path).expect("stored session");
+    assert!(
+        !stored.contains("private-n1"),
+        "private node id leaked: {stored}"
+    );
+
+    let click = Command::new(binary())
+        .args([
+            "agent",
+            "click",
+            "@c1",
+            "--session",
+            "context-ref",
+            "--observation",
+            "1",
+            "--json",
+        ])
+        .current_dir(temp.path())
+        .env("A3S_TEST_LOG", &log)
+        .env("A3S_CONTEXT_REVISION", "7")
+        .output()
+        .expect("click context ref");
+    assert!(click.status.success(), "{click:?}");
+
+    let second_observe = Command::new(binary())
+        .args([
+            "agent",
+            "observe",
+            "--session",
+            "context-ref",
+            "--interactive",
+            "--json",
+        ])
+        .current_dir(temp.path())
+        .env("A3S_TEST_LOG", &log)
+        .env("A3S_CONTEXT_REVISION", "7")
+        .output()
+        .expect("observe before stale action");
+    assert!(second_observe.status.success(), "{second_observe:?}");
+
+    let stale_click = Command::new(binary())
+        .args([
+            "agent",
+            "click",
+            "@c1",
+            "--session",
+            "context-ref",
+            "--observation",
+            "2",
+            "--json",
+        ])
+        .current_dir(temp.path())
+        .env("A3S_TEST_LOG", &log)
+        .env("A3S_CONTEXT_REVISION", "8")
+        .output()
+        .expect("reject stale context ref");
+    assert_eq!(stale_click.status.code(), Some(1), "{stale_click:?}");
+    let stale: serde_json::Value =
+        serde_json::from_slice(&stale_click.stdout).expect("stale error JSON");
+    assert_eq!(stale["error"]["code"], "test.driver.web.page_context_stale");
+
+    let driver_log = fs::read_to_string(&log).expect("driver log");
+    assert_eq!(
+        driver_log
+            .lines()
+            .filter(|line| line.ends_with(" find testid pay click"))
+            .count(),
+        1,
+        "{driver_log}"
+    );
+    assert!(!driver_log.lines().any(|line| line.ends_with(" click @c1")));
+
+    let state: serde_json::Value =
+        serde_json::from_slice(&fs::read(&state_path).expect("state")).expect("state JSON");
+    assert!(state["latest_observation"].is_null());
+    assert!(state["page_context_bindings"].is_null());
+
+    let abort = Command::new(binary())
+        .args(["agent", "abort", "--session", "context-ref", "--json"])
         .current_dir(temp.path())
         .env("A3S_TEST_LOG", &log)
         .output()

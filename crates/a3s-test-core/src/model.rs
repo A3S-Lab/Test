@@ -3,6 +3,8 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 pub const ACTION_PROTOCOL_REVISION: u32 = 5;
+pub const PAGE_CONTEXT_PROTOCOL: &str = "a3s.test.page-context/1";
+pub const REPAIR_PROTOCOL: &str = "a3s.test.repair/1";
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, Hash, JsonSchema, PartialEq, Serialize)]
 #[serde(rename_all = "lowercase")]
@@ -283,6 +285,8 @@ pub struct StepOutput {
     pub summary: String,
     pub data: Value,
     pub evidence: Vec<Evidence>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub page_context: Option<PageContextObservation>,
 }
 
 impl StepOutput {
@@ -292,6 +296,7 @@ impl StepOutput {
             summary: summary.into(),
             data: Value::Null,
             evidence: Vec::new(),
+            page_context: None,
         }
     }
 
@@ -304,6 +309,12 @@ impl StepOutput {
     #[must_use]
     pub fn with_evidence(mut self, evidence: Evidence) -> Self {
         self.evidence.push(evidence);
+        self
+    }
+
+    #[must_use]
+    pub fn with_page_context(mut self, page_context: PageContextObservation) -> Self {
+        self.page_context = Some(page_context);
         self
     }
 }
@@ -313,6 +324,479 @@ pub struct SurfaceObservation {
     pub summary: String,
     pub data: Value,
     pub evidence: Vec<Evidence>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub page_context: Option<PageContextObservation>,
+}
+
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct PageContextObservation {
+    pub present: bool,
+    pub protocol: Option<String>,
+    pub sdk_version: Option<String>,
+    pub revision: Option<u64>,
+    pub snapshot: Option<PageContextSnapshot>,
+}
+
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct PageContextSnapshot {
+    pub protocol: Option<String>,
+    #[serde(rename = "sdkVersion")]
+    pub sdk_version: Option<String>,
+    pub revision: Option<u64>,
+    pub page: Option<PageContextPage>,
+    pub components: Vec<PageContextComponent>,
+    pub nodes: Vec<PageContextNode>,
+    pub facts: serde_json::Map<String, Value>,
+    #[serde(rename = "removedNodeIds")]
+    pub removed_node_ids: Vec<String>,
+    pub truncated: bool,
+    #[serde(rename = "nextCursor")]
+    pub next_cursor: Option<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct PageContextPage {
+    pub id: String,
+    pub url: String,
+    pub route: String,
+    pub title: String,
+    pub ready: bool,
+    pub viewport: PageContextViewport,
+    pub document: PageContextSize,
+    pub scroll: PageContextPoint,
+    pub language: String,
+    pub theme: PageContextTheme,
+}
+
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct PageContextViewport {
+    pub width: f64,
+    pub height: f64,
+    pub dpr: f64,
+}
+
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct PageContextSize {
+    pub width: f64,
+    pub height: f64,
+}
+
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct PageContextPoint {
+    pub x: f64,
+    pub y: f64,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum PageContextTheme {
+    Light,
+    Dark,
+    Unknown,
+}
+
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct PageContextComponent {
+    pub id: String,
+    pub name: String,
+    #[serde(rename = "parentId")]
+    pub parent_id: Option<String>,
+    pub source: Option<PageContextSource>,
+    pub ready: bool,
+    pub facts: serde_json::Map<String, Value>,
+    pub boxes: Vec<PageContextRect>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct PageContextSource {
+    pub file: String,
+    pub line: Option<u32>,
+    pub column: Option<u32>,
+}
+
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct PageContextNode {
+    pub id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub r#ref: Option<String>,
+    #[serde(rename = "parentId")]
+    pub parent_id: Option<String>,
+    #[serde(rename = "componentId")]
+    pub component_id: Option<String>,
+    pub tag: String,
+    pub role: Option<String>,
+    pub name: Option<String>,
+    pub text: Option<String>,
+    pub description: Option<String>,
+    #[serde(rename = "testId")]
+    pub test_id: Option<String>,
+    pub geometry: Option<PageContextGeometry>,
+    pub state: PageContextNodeState,
+    pub locators: Vec<PageContextLocator>,
+    pub classes: Option<Vec<String>>,
+    pub attributes: Option<serde_json::Map<String, Value>>,
+    #[serde(rename = "computedStyles")]
+    pub computed_styles: Option<serde_json::Map<String, Value>>,
+}
+
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct PageContextGeometry {
+    pub viewport: PageContextRect,
+    pub document: PageContextRect,
+    pub normalized: PageContextRect,
+    #[serde(rename = "visibleRatio")]
+    pub visible_ratio: f64,
+    pub occluded: bool,
+    pub position: PageContextPosition,
+    pub transformed: bool,
+    #[serde(rename = "scrollContainerNodeId")]
+    pub scroll_container_node_id: Option<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct PageContextRect {
+    pub x: f64,
+    pub y: f64,
+    pub width: f64,
+    pub height: f64,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum PageContextPosition {
+    Static,
+    Relative,
+    Absolute,
+    Fixed,
+    Sticky,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct PageContextNodeState {
+    pub visible: bool,
+    pub disabled: Option<bool>,
+    pub checked: Option<bool>,
+    pub selected: Option<bool>,
+    pub expanded: Option<bool>,
+    pub focused: Option<bool>,
+    pub readonly: Option<bool>,
+    pub required: Option<bool>,
+    pub invalid: Option<bool>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(tag = "type", rename_all = "snake_case", deny_unknown_fields)]
+pub enum PageContextLocator {
+    Role { role: String, name: String },
+    Label { value: String },
+    TestId { value: String },
+    Placeholder { value: String },
+    Text { value: String, exact: bool },
+    Css { value: String },
+}
+
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+pub struct RepairFinding {
+    pub id: String,
+    #[serde(rename = "batchId")]
+    pub batch_id: String,
+    pub instruction: String,
+    #[serde(rename = "successCriteria")]
+    pub success_criteria: Option<String>,
+    pub intent: RepairIntent,
+    pub severity: RepairSeverity,
+    pub target: RepairTarget,
+    #[serde(rename = "createdAt")]
+    pub created_at: String,
+    #[serde(rename = "pageId")]
+    pub page_id: String,
+    pub url: String,
+    #[serde(rename = "contextRevision")]
+    pub context_revision: u64,
+    pub context: Value,
+    pub status: RepairStatus,
+    #[serde(rename = "submittedAt")]
+    pub submitted_at: String,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum RepairIntent {
+    Fix,
+    Change,
+    Question,
+    Approve,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum RepairSeverity {
+    Blocking,
+    Important,
+    Suggestion,
+}
+
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+pub struct RepairTarget {
+    pub kind: RepairTargetKind,
+    #[serde(rename = "nodeIds")]
+    pub node_ids: Vec<String>,
+    #[serde(rename = "selectedText")]
+    pub selected_text: Option<String>,
+    pub region: Option<PageContextRect>,
+    pub drawing: Option<Vec<PageContextPoint>>,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum RepairTargetKind {
+    Node,
+    Text,
+    Region,
+    Drawing,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, Hash, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum RepairStatus {
+    Draft,
+    Queued,
+    Claimed,
+    Repairing,
+    Verifying,
+    NeedsInput,
+    VerificationFailed,
+    ReviewReady,
+    Resolved,
+    Dismissed,
+    Cancelled,
+    Failed,
+    Reopened,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum RepairActor {
+    Human,
+    Agent,
+    #[serde(rename = "a3s-test", alias = "a3s_test")]
+    A3sTest,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RepairStatusEvent {
+    #[serde(rename = "requestId")]
+    pub request_id: String,
+    #[serde(rename = "findingId")]
+    pub finding_id: String,
+    pub sequence: u64,
+    pub status: RepairStatus,
+    pub actor: RepairActor,
+    pub timestamp: String,
+    pub summary: Option<String>,
+    pub message: Option<String>,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum RepairHumanActionKind {
+    Reply,
+    Accept,
+    Dismiss,
+    Reopen,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct RepairHumanAction {
+    #[serde(rename = "requestId")]
+    pub request_id: String,
+    #[serde(rename = "findingId")]
+    pub finding_id: String,
+    pub action: RepairHumanActionKind,
+    pub timestamp: String,
+    pub message: Option<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RepairCheckResult {
+    pub command: String,
+    pub status: RepairCheckStatus,
+    pub summary: String,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum RepairEvidencePhase {
+    Before,
+    After,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RepairEvidenceRequest {
+    #[serde(rename = "findingId")]
+    pub finding_id: String,
+    #[serde(rename = "attemptId")]
+    pub attempt_id: Option<String>,
+    pub phase: RepairEvidencePhase,
+}
+
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+pub struct RepairEvidenceBundle {
+    #[serde(rename = "capturedAtMs")]
+    pub captured_at_ms: u64,
+    #[serde(rename = "contextRevision")]
+    pub context_revision: u64,
+    #[serde(rename = "contextSha256")]
+    pub context_sha256: String,
+    pub context: PageContextSnapshot,
+    #[serde(rename = "consoleErrors")]
+    pub console_errors: u32,
+    #[serde(rename = "pageErrors")]
+    pub page_errors: u32,
+    pub screenshot: Evidence,
+    #[serde(rename = "screenshotSha256")]
+    pub screenshot_sha256: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RepairAclProof {
+    pub path: String,
+    pub passed: bool,
+    pub summary: String,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum RepairCheckStatus {
+    Passed,
+    Failed,
+    Skipped,
+}
+
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+pub struct RepairVerification {
+    #[serde(rename = "findingId")]
+    pub finding_id: String,
+    #[serde(rename = "attemptId")]
+    pub attempt_id: String,
+    #[serde(rename = "beforeRevision")]
+    pub before_revision: u64,
+    #[serde(rename = "afterRevision")]
+    pub after_revision: u64,
+    #[serde(rename = "targetFound")]
+    pub target_found: bool,
+    #[serde(rename = "successCriteriaPassed")]
+    #[serde(default)]
+    pub success_criteria_passed: Option<bool>,
+    #[serde(rename = "newConsoleErrors")]
+    pub new_console_errors: u32,
+    #[serde(rename = "newPageErrors")]
+    pub new_page_errors: u32,
+    #[serde(rename = "changedFiles")]
+    pub changed_files: Vec<String>,
+    pub checks: Vec<RepairCheckResult>,
+    #[serde(rename = "aclCandidate")]
+    #[serde(default)]
+    pub acl_candidate: Option<String>,
+    #[serde(rename = "aclProof")]
+    #[serde(default)]
+    pub acl_proof: Option<RepairAclProof>,
+    #[serde(rename = "beforeEvidence")]
+    #[serde(default)]
+    pub before_evidence: Option<RepairEvidenceBundle>,
+    #[serde(rename = "afterEvidence")]
+    #[serde(default)]
+    pub after_evidence: Option<RepairEvidenceBundle>,
+    pub passed: bool,
+    pub summary: String,
+}
+
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+pub struct RepairAttempt {
+    pub id: String,
+    #[serde(rename = "startedAtMs")]
+    pub started_at_ms: u64,
+    #[serde(rename = "finishedAtMs")]
+    pub finished_at_ms: Option<u64>,
+    pub status: RepairStatus,
+    pub replies: Vec<RepairThreadMessage>,
+    pub verification: Option<RepairVerification>,
+    #[serde(rename = "beforeEvidence")]
+    pub before_evidence: Option<RepairEvidenceBundle>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RepairThreadMessage {
+    #[serde(rename = "requestId")]
+    pub request_id: String,
+    pub actor: RepairActor,
+    #[serde(rename = "timestampMs")]
+    pub timestamp_ms: u64,
+    pub message: String,
+}
+
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+pub struct RepairBatch {
+    pub id: String,
+    #[serde(rename = "findingIds")]
+    pub finding_ids: Vec<String>,
+    pub status: RepairBatchStatus,
+    pub results: Vec<RepairBatchItemResult>,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum RepairBatchStatus {
+    Queued,
+    InProgress,
+    NeedsInput,
+    ReviewReady,
+    Resolved,
+    CompletedWithFailures,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RepairBatchItemResult {
+    #[serde(rename = "findingId")]
+    pub finding_id: String,
+    pub status: RepairStatus,
+}
+
+impl PageContextObservation {
+    #[must_use]
+    pub fn absent() -> Self {
+        Self {
+            present: false,
+            protocol: None,
+            sdk_version: None,
+            revision: None,
+            snapshot: None,
+        }
+    }
+
+    #[must_use]
+    pub fn from_snapshot(snapshot: PageContextSnapshot) -> Self {
+        Self {
+            present: true,
+            protocol: snapshot.protocol.clone(),
+            sdk_version: snapshot.sdk_version.clone(),
+            revision: snapshot.revision,
+            snapshot: Some(snapshot),
+        }
+    }
 }
 
 impl SurfaceObservation {
@@ -322,6 +806,7 @@ impl SurfaceObservation {
             summary: summary.into(),
             data: Value::Null,
             evidence: Vec::new(),
+            page_context: None,
         }
     }
 
@@ -334,6 +819,12 @@ impl SurfaceObservation {
     #[must_use]
     pub fn with_evidence(mut self, evidence: Evidence) -> Self {
         self.evidence.push(evidence);
+        self
+    }
+
+    #[must_use]
+    pub fn with_page_context(mut self, page_context: PageContextObservation) -> Self {
+        self.page_context = Some(page_context);
         self
     }
 }

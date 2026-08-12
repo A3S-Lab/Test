@@ -1,4 +1,4 @@
-use a3s_test_core::{Action, ModifierKey, Target};
+use a3s_test_core::{Action, ModifierKey, RepairActor, Target};
 
 #[test]
 fn semantic_target_values_round_trip_through_agent_action_json() {
@@ -117,4 +117,20 @@ fn visual_point_round_trips_with_its_grounding_snapshot() {
 
     assert_eq!(decoded, action);
     assert!(encoded.contains("@v7"));
+}
+
+#[test]
+fn a3s_test_actor_uses_the_public_hyphenated_wire_name() {
+    assert_eq!(
+        serde_json::to_string(&RepairActor::A3sTest).expect("serialize repair actor"),
+        "\"a3s-test\""
+    );
+    assert_eq!(
+        serde_json::from_str::<RepairActor>("\"a3s-test\"").expect("public repair actor"),
+        RepairActor::A3sTest
+    );
+    assert_eq!(
+        serde_json::from_str::<RepairActor>("\"a3s_test\"").expect("legacy repair actor"),
+        RepairActor::A3sTest
+    );
 }

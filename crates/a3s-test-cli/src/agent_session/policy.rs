@@ -1,18 +1,17 @@
-use a3s_test_core::{
-    Action, DriverError, Expectation, StepOutput, TabOperation, Target, VideoOperation,
-};
+use a3s_test_core::{Action, DriverError, StepOutput, TabOperation, VideoOperation};
+use a3s_test_driver_web::BrowserNetworkPolicy;
+use a3s_test_session::action_uses_observation_target;
 use anyhow::{Context, Result};
 use url::Url;
 
 use super::store::AgentSessionState;
-use super::web_origin;
 
 pub(super) fn validate_action(
     state: &AgentSessionState,
     action: &Action,
     observation: Option<u64>,
 ) -> Result<()> {
-    if action_uses_ref(action) {
+    if action_uses_observation_target(action) {
         let latest = state.latest_observation.ok_or_else(|| {
             anyhow::anyhow!("ref targets require a fresh `a3s-test agent observe` result")
         })?;
@@ -36,6 +35,34 @@ pub(super) fn validate_action(
         }
     }
     Ok(())
+}
+
+pub(super) fn web_origin(url: &Url) -> Result<String> {
+    if !matches!(url.scheme(), "http" | "https") {
+        anyhow::bail!("agent Web sessions allow only http and https URLs");
+    }
+    Ok(url.origin().ascii_serialization())
+}
+
+pub(super) fn web_domain(url: &Url) -> Result<String> {
+    web_origin(url)?;
+    url.host_str()
+        .map(str::to_string)
+        .context("agent Web session URL does not contain a hostname")
+}
+
+pub(super) fn browser_network_policy(
+    allowed_origins: &[String],
+    additional_domains: &[String],
+) -> Result<BrowserNetworkPolicy> {
+    let mut domains = std::collections::BTreeSet::new();
+    for origin in allowed_origins {
+        let parsed = Url::parse(origin)
+            .with_context(|| format!("stored allowed origin '{origin}' is invalid"))?;
+        domains.insert(web_domain(&parsed)?);
+    }
+    domains.extend(additional_domains.iter().cloned());
+    BrowserNetworkPolicy::restricted_to_domains(domains).map_err(anyhow::Error::new)
 }
 
 pub(super) fn validate_observation_origin(
@@ -88,36 +115,6 @@ fn observed_url(value: &serde_json::Value) -> Option<&str> {
     ]
     .into_iter()
     .find_map(|pointer| value.pointer(pointer).and_then(serde_json::Value::as_str))
-}
-
-fn action_uses_ref(action: &Action) -> bool {
-    match action {
-        Action::Click { target }
-        | Action::Hover { target }
-        | Action::Focus { target }
-        | Action::DoubleClick { target }
-        | Action::ContextClick { target }
-        | Action::Fill { target, .. }
-        | Action::Type { target, .. }
-        | Action::Check { target }
-        | Action::Uncheck { target }
-        | Action::Select { target, .. }
-        | Action::Upload { target, .. }
-        | Action::Download { target, .. } => target_uses_ref(target),
-        Action::Drag { source, target } => target_uses_ref(source) || target_uses_ref(target),
-        Action::Wheel {
-            target: Some(target),
-            ..
-        } => target_uses_ref(target),
-        Action::Assert {
-            expectation: Expectation::Visible(target),
-        } => target_uses_ref(target),
-        _ => false,
-    }
-}
-
-fn target_uses_ref(target: &Target) -> bool {
-    matches!(target, Target::Ref { .. })
 }
 
 fn action_navigation_urls(action: &Action) -> Vec<&str> {

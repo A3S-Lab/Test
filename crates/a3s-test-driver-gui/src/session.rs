@@ -216,6 +216,7 @@ impl DriverSession for GuiSession {
                     summary: observation.summary,
                     data: observation.data,
                     evidence: observation.evidence,
+                    page_context: observation.page_context,
                 })
             }
             Action::Snapshot { interactive: false } => Err(DriverError::new(
@@ -471,7 +472,7 @@ impl GuiSession {
                 ));
             }
         };
-        let amount = ((magnitude + 99) / 100).clamp(1, 50);
+        let amount = magnitude.div_ceil(100).clamp(1, 50);
         let mut arguments = Map::new();
         arguments.insert(
             "session".to_string(),

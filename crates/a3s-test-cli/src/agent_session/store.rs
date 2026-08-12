@@ -1,7 +1,9 @@
 use std::path::{Path, PathBuf};
 
 use a3s_test_core::{Action, StepOutput, Surface};
+use a3s_test_session::PageContextBindings;
 use anyhow::{Context, Result};
+use fs2::FileExt;
 use serde::{Deserialize, Serialize};
 use tokio::io::AsyncWriteExt;
 
@@ -41,6 +43,8 @@ pub(crate) struct AgentSessionState {
     pub(crate) status: AgentSessionStatus,
     pub(crate) goal: String,
     pub(crate) success_criteria: Vec<String>,
+    #[serde(default)]
+    pub(crate) auto_resolve_repairs: bool,
     pub(crate) allowed_origins: Vec<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(crate) browser_allowed_domains: Option<Vec<String>>,
@@ -53,6 +57,8 @@ pub(crate) struct AgentSessionState {
     pub(crate) next_sequence: u64,
     pub(crate) next_observation_id: u64,
     pub(crate) latest_observation: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) page_context_bindings: Option<PageContextBindings>,
     pub(crate) started_at_ms: u64,
     pub(crate) updated_at_ms: u64,
     pub(crate) summary: Option<String>,
@@ -100,6 +106,16 @@ pub(crate) struct AgentSessionStore {
     events_path: PathBuf,
     report_path: PathBuf,
     artifacts_dir: PathBuf,
+}
+
+pub(crate) struct RepairLock {
+    file: std::fs::File,
+}
+
+impl Drop for RepairLock {
+    fn drop(&mut self) {
+        let _ = self.file.unlock();
+    }
 }
 
 impl AgentSessionStore {
@@ -150,6 +166,29 @@ impl AgentSessionStore {
                     self.artifacts_dir.display()
                 )
             })
+    }
+
+    pub(crate) async fn acquire_repair_lock(&self) -> Result<RepairLock> {
+        let path = self
+            .root
+            .parent()
+            .and_then(Path::parent)
+            .expect("agent session store always has a workspace-local A3S root")
+            .join("repair-workspace.lock");
+        let file = tokio::task::spawn_blocking(move || -> Result<std::fs::File> {
+            let file = std::fs::OpenOptions::new()
+                .create(true)
+                .read(true)
+                .write(true)
+                .open(&path)
+                .with_context(|| format!("failed to open repair lock {}", path.display()))?;
+            file.lock_exclusive()
+                .with_context(|| format!("failed to lock repair session {}", path.display()))?;
+            Ok(file)
+        })
+        .await
+        .context("repair lock task failed")??;
+        Ok(RepairLock { file })
     }
 
     pub(crate) async fn load(&self) -> Result<AgentSessionState> {

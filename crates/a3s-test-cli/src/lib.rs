@@ -21,6 +21,7 @@ use tokio_util::sync::CancellationToken;
 mod agent_session;
 mod gui_certification;
 mod mcp;
+mod mcp_web;
 
 #[derive(Debug, Parser)]
 #[command(
@@ -126,13 +127,31 @@ struct RunArgs {
 struct McpArgs {
     #[command(flatten)]
     gui: GuiRunArgs,
-    /// Per-command CUA deadline.
+    /// Initial Web URL fixed by the MCP host. Omit to disable Web sessions.
+    #[arg(long)]
+    web_url: Option<String>,
+    /// Browser driver integration used by Web MCP sessions.
+    #[arg(long, value_enum, default_value_t = BrowserDriverKind::A3s)]
+    browser_driver: BrowserDriverKind,
+    /// Override the browser driver executable used by Web MCP sessions.
+    #[arg(long)]
+    browser_executable: Option<PathBuf>,
+    /// Show Web MCP browser windows.
+    #[arg(long)]
+    headed: bool,
+    /// Additional hostname admitted by the Web MCP browser network filter.
+    #[arg(long = "web-allow-domain")]
+    web_allowed_domains: Vec<String>,
+    /// Browser daemon inactivity deadline between MCP turns.
+    #[arg(long, default_value_t = 300_000)]
+    idle_timeout_ms: u64,
+    /// Per-command Web or CUA deadline.
     #[arg(long, default_value_t = 30_000)]
     command_timeout_ms: u64,
     /// Bounded cleanup deadline for each MCP session.
     #[arg(long, default_value_t = 10_000)]
     cleanup_timeout_ms: u64,
-    /// Maximum GUI sessions held by this MCP server.
+    /// Maximum surface sessions held by this MCP server.
     #[arg(long, default_value_t = 4)]
     max_sessions: usize,
     /// Artifact root for MCP sessions.
@@ -298,11 +317,51 @@ async fn run(args: RunArgs) -> Result<ExitCode> {
 
 async fn serve_mcp(args: McpArgs) -> Result<ExitCode> {
     validate_timeout(args.command_timeout_ms, "command timeout")?;
+    validate_timeout(args.idle_timeout_ms, "idle timeout")?;
     validate_timeout(args.cleanup_timeout_ms, "cleanup timeout")?;
     if !(1..=64).contains(&args.max_sessions) {
         anyhow::bail!("maximum MCP sessions must be between 1 and 64");
     }
-    let driver = gui_driver(&args.gui, Duration::from_millis(args.command_timeout_ms)).await?;
+    let mut drivers: Vec<Arc<dyn SurfaceDriver>> = Vec::new();
+    if let Some(initial_url) = args.web_url.as_ref() {
+        let parsed = url::Url::parse(initial_url).context("MCP Web URL is invalid")?;
+        if !matches!(parsed.scheme(), "http" | "https") {
+            anyhow::bail!("MCP Web URL must use http or https");
+        }
+        let host = parsed
+            .host_str()
+            .context("MCP Web URL must contain a hostname")?;
+        let mut domains = vec![host.to_string()];
+        domains.extend(args.web_allowed_domains.iter().cloned());
+        let network_policy =
+            a3s_test_driver_web::BrowserNetworkPolicy::restricted_to_domains(domains)
+                .map_err(anyhow::Error::new)?;
+        let browser = AgentBrowserDriver::new(AgentBrowserConfig {
+            command: browser_command(args.browser_driver, args.browser_executable.clone()),
+            namespace: String::new(),
+            headed: args.headed,
+            command_timeout: Duration::from_millis(args.command_timeout_ms),
+            idle_timeout: Duration::from_millis(args.idle_timeout_ms),
+            network_policy,
+        });
+        drivers.push(Arc::new(mcp_web::McpWebDriver::new(
+            browser,
+            initial_url.clone(),
+        )));
+    } else if args.browser_executable.is_some()
+        || args.headed
+        || !args.web_allowed_domains.is_empty()
+    {
+        anyhow::bail!("Web MCP browser options require --web-url");
+    }
+    if args.gui.requested() {
+        drivers.push(Arc::new(
+            gui_driver(&args.gui, Duration::from_millis(args.command_timeout_ms)).await?,
+        ));
+    }
+    if drivers.is_empty() {
+        anyhow::bail!("MCP requires --web-url, reviewed GUI host options, or both");
+    }
     let artifacts_root = if args.artifacts_root.is_absolute() {
         args.artifacts_root
     } else {
@@ -311,7 +370,7 @@ async fn serve_mcp(args: McpArgs) -> Result<ExitCode> {
             .join(args.artifacts_root)
     };
     let manager = a3s_test_session::AgentSessionManager::new(
-        vec![Arc::new(driver)],
+        drivers,
         a3s_test_session::SessionManagerOptions {
             artifacts_root,
             cleanup_timeout: Duration::from_millis(args.cleanup_timeout_ms),

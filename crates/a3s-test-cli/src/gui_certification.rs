@@ -96,6 +96,7 @@ pub(super) async fn certify(args: GuiCertifyArgs) -> Result<ExitCode> {
                 "A semantic window observation is returned".to_string(),
                 "The exact owned session is closed within the cleanup deadline".to_string(),
             ],
+            auto_resolve_repairs: false,
         })
         .await;
     if let Err(error) = started {

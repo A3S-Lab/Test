@@ -5,10 +5,22 @@ mod error;
 mod manifest;
 mod model;
 
-pub use driver::{DriverSession, ScenarioContext, SurfaceDriver};
+pub use driver::{
+    DriverSession, PageContextInspectRequest, PageContextInspectScope, ScenarioContext,
+    SurfaceDriver,
+};
 pub use error::{DriverError, SpecError};
 pub use model::{
     Action, CaptureOperation, DialogOperation, Evidence, Expectation, FrameTarget, LoadState,
-    ModifierKey, NetworkRoute, StepOutput, Surface, SurfaceObservation, TabOperation, Target,
+    ModifierKey, NetworkRoute, PageContextComponent, PageContextGeometry, PageContextLocator,
+    PageContextNode, PageContextNodeState, PageContextObservation, PageContextPage,
+    PageContextPoint, PageContextPosition, PageContextRect, PageContextSize, PageContextSnapshot,
+    PageContextSource, PageContextTheme, PageContextViewport, RepairAclProof, RepairActor,
+    RepairAttempt, RepairBatch, RepairBatchItemResult, RepairBatchStatus, RepairCheckResult,
+    RepairCheckStatus, RepairEvidenceBundle, RepairEvidencePhase, RepairEvidenceRequest,
+    RepairFinding, RepairHumanAction, RepairHumanActionKind, RepairIntent, RepairSeverity,
+    RepairStatus, RepairStatusEvent, RepairTarget, RepairTargetKind, RepairThreadMessage,
+    RepairVerification, StepOutput, Surface, SurfaceObservation, TabOperation, Target,
     TestScenario, TestStep, TestSuite, VideoOperation, WaitCondition, ACTION_PROTOCOL_REVISION,
+    PAGE_CONTEXT_PROTOCOL, REPAIR_PROTOCOL,
 };

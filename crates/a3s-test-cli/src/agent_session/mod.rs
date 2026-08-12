@@ -1,15 +1,20 @@
 mod args;
 mod events;
+mod inspect;
 mod policy;
+mod repair;
 mod runtime;
 mod store;
+mod validation;
 
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-use a3s_test_core::{Action, DriverError, Surface, Target, ACTION_PROTOCOL_REVISION};
+use a3s_test_core::{
+    Action, DriverError, RepairStatus, StepOutput, Surface, ACTION_PROTOCOL_REVISION,
+};
 use a3s_test_driver_web::{
     AgentBrowserConfig, AgentBrowserConnectionConfig, AgentBrowserDriver, AgentBrowserSession,
     BrowserCommand, BrowserNetworkPolicy,
@@ -25,7 +30,9 @@ use self::args::{
     SessionArgs, StartArgs,
 };
 use self::events::{append_success_event, append_terminal_event, record_failure};
-use self::policy::{validate_action, validate_observation_origin};
+use self::policy::{
+    browser_network_policy, validate_action, validate_observation_origin, web_origin,
+};
 use self::runtime::{
     create_runtime_directory, driver_session_id, remove_runtime_directory, session_namespace,
     validate_runtime_directory,
@@ -34,12 +41,17 @@ use self::store::{
     AgentSessionError, AgentSessionReport, AgentSessionState, AgentSessionStatus,
     AgentSessionStore, StoredBrowserConfig, StoredBrowserDriver, SESSION_SCHEMA_VERSION,
 };
+use self::validation::{compact_target, validate_session_id};
 use super::{validate_timeout, BrowserDriverKind};
+use a3s_test_session::{
+    action_uses_page_context_ref, bind_page_context_refs, resolve_page_context_refs,
+};
 
 pub(crate) async fn execute(args: AgentArgs) -> Result<ExitCode> {
     match args.command {
         AgentCommand::Start(args) => start(args).await,
         AgentCommand::Observe(args) => observe(args).await,
+        AgentCommand::Inspect(args) => inspect::execute(args).await,
         AgentCommand::Act(args) => act(args).await,
         AgentCommand::Click(args) => {
             perform_action(
@@ -212,6 +224,18 @@ pub(crate) async fn execute(args: AgentArgs) -> Result<ExitCode> {
             )
             .await
         }
+        AgentCommand::RepairWatch(args) => repair::watch(args).await,
+        AgentCommand::RepairClaim(args) => repair::transition(args, RepairStatus::Claimed).await,
+        AgentCommand::RepairProgress(args) => {
+            repair::transition(args, RepairStatus::Repairing).await
+        }
+        AgentCommand::RepairReply(args) => repair::transition(args, RepairStatus::NeedsInput).await,
+        AgentCommand::RepairComplete(args) => {
+            repair::transition(args, RepairStatus::Verifying).await
+        }
+        AgentCommand::RepairVerify(args) => repair::verify(args).await,
+        AgentCommand::RepairFail(args) => repair::transition(args, RepairStatus::Failed).await,
+        AgentCommand::RepairCancel(args) => repair::transition(args, RepairStatus::Cancelled).await,
         AgentCommand::Finish(args) => finish(args).await,
         AgentCommand::Abort(args) => abort(args).await,
         AgentCommand::Show(args) => show(args).await,
@@ -273,6 +297,7 @@ async fn start(args: StartArgs) -> Result<ExitCode> {
         status: AgentSessionStatus::Active,
         goal: args.goal,
         success_criteria: args.success_criteria,
+        auto_resolve_repairs: args.auto_resolve_repairs,
         allowed_origins,
         browser_allowed_domains: Some(browser_network_policy.allowed_domains().to_vec()),
         browser: StoredBrowserConfig {
@@ -293,6 +318,7 @@ async fn start(args: StartArgs) -> Result<ExitCode> {
         next_sequence: 1,
         next_observation_id: 1,
         latest_observation: None,
+        page_context_bindings: None,
         started_at_ms: now,
         updated_at_ms: now,
         summary: None,
@@ -374,6 +400,7 @@ async fn start(args: StartArgs) -> Result<ExitCode> {
             "status": state.status,
             "goal": state.goal,
             "success_criteria": state.success_criteria,
+            "auto_resolve_repairs": state.auto_resolve_repairs,
             "allowed_origins": state.allowed_origins,
             "browser_allowed_domains": state.browser_allowed_domains,
             "output": output,
@@ -397,19 +424,22 @@ async fn observe(args: ObserveArgs) -> Result<ExitCode> {
     };
     if let Err(error) = validate_turn_browser_network_policy(&state) {
         state.latest_observation = None;
+        state.page_context_bindings = None;
         record_failure(&store, &mut state, "observe", Some(action), &error).await?;
         return emit_driver_error_with_next(args.json, &state, error, abort_next_command(&state));
     }
+    state.latest_observation = None;
+    state.page_context_bindings = None;
+    store.save(&state).await?;
     let mut browser = connect(&state, BrowserConnectionPurpose::Turn).await?;
-    match browser
-        .execute_action(
-            format!("agent-observe-{}", state.next_sequence),
-            action.clone(),
-        )
-        .await
-    {
-        Ok(output) => {
+    match browser.observe_surface_interactive(args.interactive).await {
+        Ok(mut observation) => {
+            let mut output =
+                StepOutput::new("page snapshot captured").with_data(observation.data.clone());
+            output.evidence.clone_from(&observation.evidence);
             if let Err(error) = validate_observation_origin(&state, &output) {
+                state.latest_observation = None;
+                state.page_context_bindings = None;
                 state.active_video_path = browser.active_video_path().map(str::to_string);
                 record_failure(&store, &mut state, "observe", Some(action), &error).await?;
                 return emit_driver_error(args.json, &state, error);
@@ -420,6 +450,9 @@ async fn observe(args: ObserveArgs) -> Result<ExitCode> {
                 .checked_add(1)
                 .context("agent observation sequence exhausted")?;
             state.latest_observation = Some(observation_id);
+            let bindings = bind_page_context_refs(&mut observation);
+            state.page_context_bindings = (!bindings.is_empty()).then_some(bindings);
+            output.page_context = observation.page_context;
             state.active_video_path = browser.active_video_path().map(str::to_string);
             append_success_event(
                 &store,
@@ -452,6 +485,8 @@ async fn observe(args: ObserveArgs) -> Result<ExitCode> {
             Ok(ExitCode::SUCCESS)
         }
         Err(error) => {
+            state.latest_observation = None;
+            state.page_context_bindings = None;
             state.active_video_path = browser.active_video_path().map(str::to_string);
             record_failure(&store, &mut state, "observe", Some(action), &error).await?;
             emit_driver_error(args.json, &state, error)
@@ -479,18 +514,41 @@ async fn perform_action(
     let mut state = load_active(&store, &workspace, &session).await?;
     if let Err(error) = validate_turn_browser_network_policy(&state) {
         state.latest_observation = None;
+        state.page_context_bindings = None;
         record_failure(&store, &mut state, "act", Some(action), &error).await?;
         return emit_driver_error_with_next(json_output, &state, error, abort_next_command(&state));
     }
     validate_action(&state, &action, observation)?;
 
     let mut browser = connect(&state, BrowserConnectionPurpose::Turn).await?;
+    let expected_revision = if action_uses_page_context_ref(&action) {
+        Some(
+            state
+                .page_context_bindings
+                .as_ref()
+                .and_then(|bindings| bindings.revision)
+                .context("page context ref is missing its latest observation revision")?,
+        )
+    } else {
+        None
+    };
+    state.latest_observation = None;
+    let bindings = state.page_context_bindings.take().unwrap_or_default();
+    store.save(&state).await?;
+    if let Some(revision) = expected_revision {
+        if let Err(error) = browser.validate_context_revision(revision).await {
+            record_failure(&store, &mut state, "act", Some(action), &error).await?;
+            return emit_driver_error(json_output, &state, error);
+        }
+    }
+    let action = resolve_page_context_refs(action, &bindings)?;
     match browser
         .execute_action(format!("agent-act-{}", state.next_sequence), action.clone())
         .await
     {
         Ok(output) => {
             state.latest_observation = None;
+            state.page_context_bindings = None;
             state.active_video_path = browser.active_video_path().map(str::to_string);
             append_success_event(&store, &mut state, "act", None, action, output.clone()).await?;
             store.save(&state).await?;
@@ -512,29 +570,11 @@ async fn perform_action(
         }
         Err(error) => {
             state.latest_observation = None;
+            state.page_context_bindings = None;
             state.active_video_path = browser.active_video_path().map(str::to_string);
             record_failure(&store, &mut state, "act", Some(action), &error).await?;
             emit_driver_error(json_output, &state, error)
         }
-    }
-}
-
-fn compact_target(raw_target: &str) -> Result<Target> {
-    if raw_target.trim().is_empty() {
-        anyhow::bail!("target must not be empty");
-    }
-    if raw_target.starts_with("@e")
-        && raw_target.strip_prefix("@e").is_some_and(|suffix| {
-            !suffix.is_empty() && suffix.chars().all(|character| character.is_ascii_digit())
-        })
-    {
-        Ok(Target::Ref {
-            value: raw_target.to_string(),
-        })
-    } else {
-        Ok(Target::Css {
-            selector: raw_target.to_string(),
-        })
     }
 }
 
@@ -554,6 +594,7 @@ async fn finish(args: FinishArgs) -> Result<ExitCode> {
     };
     state.summary = Some(args.summary.clone());
     state.latest_observation = None;
+    state.page_context_bindings = None;
     state.updated_at_ms = unix_ms();
 
     if let Some(error) = &cleanup_error {
@@ -624,6 +665,7 @@ async fn abort(args: SessionArgs) -> Result<ExitCode> {
         }
         state.active_video_path = None;
         state.latest_observation = None;
+        state.page_context_bindings = None;
         store.save(&state).await?;
     } else if let Some(error) = &cleanup_error {
         state.summary = Some("Agent session abort cleanup failed".to_string());
@@ -883,46 +925,6 @@ async fn load_active(
     Ok(state)
 }
 
-fn validate_session_id(session: &str) -> Result<()> {
-    if session.is_empty()
-        || session.len() > 48
-        || !session
-            .chars()
-            .all(|character| character.is_ascii_alphanumeric() || matches!(character, '-' | '_'))
-    {
-        anyhow::bail!("session id must be 1-48 ASCII letters, digits, '-' or '_'");
-    }
-    Ok(())
-}
-
-fn web_origin(url: &Url) -> Result<String> {
-    if !matches!(url.scheme(), "http" | "https") {
-        anyhow::bail!("agent Web sessions allow only http and https URLs");
-    }
-    Ok(url.origin().ascii_serialization())
-}
-
-fn web_domain(url: &Url) -> Result<String> {
-    web_origin(url)?;
-    url.host_str()
-        .map(str::to_string)
-        .context("agent Web session URL does not contain a hostname")
-}
-
-fn browser_network_policy(
-    allowed_origins: &[String],
-    additional_domains: &[String],
-) -> Result<BrowserNetworkPolicy> {
-    let mut domains = BTreeSet::new();
-    for origin in allowed_origins {
-        let parsed = Url::parse(origin)
-            .with_context(|| format!("stored allowed origin '{origin}' is invalid"))?;
-        domains.insert(web_domain(&parsed)?);
-    }
-    domains.extend(additional_domains.iter().cloned());
-    BrowserNetworkPolicy::restricted_to_domains(domains).map_err(anyhow::Error::new)
-}
-
 fn validate_turn_browser_network_policy(state: &AgentSessionState) -> Result<(), DriverError> {
     stored_browser_network_policy(state, BrowserConnectionPurpose::Turn).map(drop)
 }
@@ -967,6 +969,7 @@ async fn preserve_failed_start(
 ) -> Result<()> {
     state.status = AgentSessionStatus::Failed;
     state.latest_observation = None;
+    state.page_context_bindings = None;
     state.summary = Some(format!(
         "Agent session start failed and browser cleanup must be retried: {}",
         cleanup_error.message()

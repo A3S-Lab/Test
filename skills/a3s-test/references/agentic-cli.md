@@ -35,6 +35,15 @@ a3s-test agent observe \
   [--interactive] \
   --json
 
+a3s-test agent inspect \
+  --session <id> \
+  [--component <component-id> | --node <private-node-id> | \
+   --region viewport,0,0,800,600] \
+  [--detail summary|scoped|diff|forensic] \
+  [--cursor <opaque-cursor>] \
+  [--limit 100] \
+  --json
+
 a3s-test agent finish \
   --session <id> \
   --status passed|failed \
@@ -87,7 +96,7 @@ a3s-test agent screenshot screenshots/final.png \
   --session <id> --json
 ```
 
-A target matching `@e` followed by digits is a ref. Every other compact target
+A target matching `@e` or `@c` followed by digits is a ref. Every other compact target
 is an explicit CSS selector. A ref requires the observation identifier that
 returned it. Basic click, hover, fill, and check actions accept semantic
 targets through `agent act`. Focus, double-click, context-click, type, uncheck,
@@ -161,6 +170,11 @@ Each workspace stores:
 
 `session.json` is updated after each successful or failed turn.
 `events.jsonl` is append-only. `report.json` is written by `finish`.
+
+Submitted Test Kit findings are stored in `repairs.jsonl`. Claim output
+includes a derived or explicit `attempt_id`; repeat it on progress, reply,
+complete, and fail commands. `repair-watch` performs lease recovery before
+waiting. `repair-complete` starts verification and does not resolve a finding.
 
 ## Safety invariants
 

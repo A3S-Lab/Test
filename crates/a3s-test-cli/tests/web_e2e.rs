@@ -6,7 +6,7 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::time::Duration;
 
-use support::web_fixture::{get, WebFixture};
+use support::web_fixture::{get, start_testkit_fixture, WebFixture};
 
 fn binary() -> PathBuf {
     PathBuf::from(env!("CARGO_BIN_EXE_a3s-test"))
@@ -188,6 +188,574 @@ fn real_agent_browser_runs_the_hermetic_web_suite() {
     );
 }
 
+#[test]
+#[ignore = "requires Node esbuild and the exact standalone agent-browser 0.26.x runtime"]
+fn real_agent_browser_runs_the_embedded_testkit_suite() {
+    let Some(browser) = std::env::var_os("A3S_TEST_AGENT_BROWSER").map(PathBuf::from) else {
+        eprintln!("A3S_TEST_AGENT_BROWSER is not set; skipping TestKit browser E2E");
+        return;
+    };
+    assert!(
+        browser.is_file(),
+        "browser executable does not exist: {browser:?}"
+    );
+    let crate_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .and_then(Path::parent)
+        .expect("crate workspace root")
+        .to_path_buf();
+    let esbuild = crate_root.join("packages/testkit/node_modules/.bin/esbuild");
+    assert!(
+        esbuild.is_file(),
+        "run `npm install` in packages/testkit before this E2E"
+    );
+    let temp = tempfile::tempdir().expect("temporary TestKit browser fixture");
+    let bundle_path = temp.path().join("testkit.js");
+    let bundle = Command::new(&esbuild)
+        .args([
+            crate_root
+                .join("packages/testkit/src/browser-fixture.tsx")
+                .to_str()
+                .expect("UTF-8 entry"),
+            "--bundle",
+            "--format=esm",
+            "--platform=browser",
+            "--target=es2022",
+            &format!("--outfile={}", bundle_path.display()),
+        ])
+        .output()
+        .expect("bundle TestKit fixture");
+    assert!(
+        bundle.status.success(),
+        "TestKit fixture bundle failed: {}",
+        String::from_utf8_lossy(&bundle.stderr)
+    );
+    let fixture = start_testkit_fixture(std::fs::read(&bundle_path).expect("read TestKit bundle"))
+        .expect("start TestKit fixture");
+    let session = format!("a3s-testkit-e2e-{}", std::process::id());
+    let mut cleanup = StandaloneBrowserSessionCleanup::new(&browser, &session);
+    let command = |arguments: &[&str]| {
+        Command::new(&browser)
+            .arg("--session")
+            .arg(&session)
+            .args(arguments)
+            .output()
+            .expect("run standalone browser command")
+    };
+    let opened = command(&["open", &fixture.origin()]);
+    cleanup.arm();
+    assert_process_success("open TestKit fixture", &opened);
+    let context = command(&[
+        "eval",
+        "JSON.stringify(window[Symbol.for('a3s.test.page-context')].snapshot({detail:'forensic'}))",
+    ]);
+    assert_process_success("capture TestKit context", &context);
+    let stdout = String::from_utf8_lossy(&context.stdout);
+    assert!(
+        stdout.contains("app-shell"),
+        "component context missing: {stdout}"
+    );
+    assert!(
+        stdout.contains("repair-target"),
+        "semantic locator missing: {stdout}"
+    );
+    assert!(
+        stdout.contains("Shadow action"),
+        "open Shadow DOM missing: {stdout}"
+    );
+    assert!(
+        stdout.contains("Confirm dialog"),
+        "dialog context missing: {stdout}"
+    );
+    assert!(
+        stdout.contains("sticky"),
+        "sticky geometry missing: {stdout}"
+    );
+
+    let select_keyboard_marking = command(&[
+        "eval",
+        "(()=>{const host=document.querySelector('[data-a3s-testkit-overlay]'); [...host.shadowRoot.querySelectorAll('button')].find(button=>button.textContent==='Element').click(); return true})()",
+    ]);
+    assert_process_success(
+        "select TestKit keyboard marking mode",
+        &select_keyboard_marking,
+    );
+    let marking_ready = command(&[
+        "wait",
+        "--fn",
+        "Boolean(document.querySelector('[data-a3s-testkit-overlay]')?.shadowRoot?.querySelector('.a3s-hint'))",
+    ]);
+    assert_process_success("wait for TestKit keyboard marking mode", &marking_ready);
+    let keyboard_mark = command(&[
+        "eval",
+        "(()=>{const target=document.querySelector('#sticky'); target.focus(); target.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',bubbles:true})); return true})()",
+    ]);
+    assert_process_success("mark TestKit target by keyboard", &keyboard_mark);
+    let editor_ready = command(&[
+        "wait",
+        "--fn",
+        "Boolean(document.querySelector('[data-a3s-testkit-overlay]')?.shadowRoot?.querySelector('.a3s-editor'))",
+    ]);
+    assert_process_success("wait for TestKit finding editor", &editor_ready);
+    let fill_instruction = command(&[
+        "eval",
+        "(()=>{const host=document.querySelector('[data-a3s-testkit-overlay]'); const textarea=host.shadowRoot.querySelector('.a3s-editor textarea'); const setter=Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,'value').set; setter.call(textarea,'Repair the broken action'); textarea.dispatchEvent(new Event('input',{bubbles:true,composed:true})); return true})()",
+    ]);
+    assert_process_success("fill TestKit repair instruction", &fill_instruction);
+    let submission_ready = command(&[
+        "wait",
+        "--fn",
+        "[...document.querySelector('[data-a3s-testkit-overlay]').shadowRoot.querySelectorAll('button')].some(button=>button.textContent==='Send and auto-fix'&&!button.disabled)",
+    ]);
+    assert_process_success("wait for TestKit finding submission", &submission_ready);
+    let submit = command(&[
+        "eval",
+        "(()=>{const host=document.querySelector('[data-a3s-testkit-overlay]'); [...host.shadowRoot.querySelectorAll('button')].find(button=>button.textContent==='Send and auto-fix'&&!button.disabled).click(); return true})()",
+    ]);
+    assert_process_success("submit TestKit keyboard finding", &submit);
+    let submitted = command(&[
+        "wait",
+        "--fn",
+        "window[Symbol.for('a3s.test.page-context')].listRepairs().length===1",
+    ]);
+    assert_process_success("wait for TestKit keyboard finding", &submitted);
+
+    let changed = command(&[
+        "eval",
+        "window.testkitFixture.route(); window.testkitFixture.virtualize(); true",
+    ]);
+    assert_process_success("mutate TestKit fixture", &changed);
+    let virtualized = command(&[
+        "wait",
+        "--fn",
+        "document.querySelector('#virtual-row')?.textContent==='Virtual row 50'",
+    ]);
+    assert_process_success("wait for TestKit virtual window update", &virtualized);
+    let changed = command(&[
+        "eval",
+        "JSON.stringify(window[Symbol.for('a3s.test.page-context')].snapshot({detail:'forensic'}))",
+    ]);
+    assert_process_success("capture mutated TestKit context", &changed);
+    let changed = String::from_utf8_lossy(&changed.stdout);
+    assert!(
+        changed.contains("/routed?view=2"),
+        "route context missing: {changed}"
+    );
+    assert!(
+        changed.contains("Virtual row 50"),
+        "virtual window update missing: {changed}"
+    );
+
+    let teardown = command(&[
+        "eval",
+        "window.testkitFixture.teardown(); window[Symbol.for('a3s.test.page-context')] === undefined",
+    ]);
+    assert_process_success("teardown TestKit fixture", &teardown);
+    assert!(String::from_utf8_lossy(&teardown.stdout).contains("true"));
+    let closed = cleanup.close();
+    assert_process_success("close TestKit browser session", &closed);
+}
+
+#[test]
+#[ignore = "requires Node esbuild and the exact standalone agent-browser 0.26.x runtime"]
+fn real_cli_drives_the_overlay_repair_lifecycle_end_to_end() {
+    let Some(browser) = std::env::var_os("A3S_TEST_AGENT_BROWSER").map(PathBuf::from) else {
+        eprintln!("A3S_TEST_AGENT_BROWSER is not set; skipping repair lifecycle E2E");
+        return;
+    };
+    assert!(
+        browser.is_file(),
+        "browser executable does not exist: {browser:?}"
+    );
+    let crate_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .and_then(Path::parent)
+        .expect("crate workspace root")
+        .to_path_buf();
+    let esbuild = crate_root.join("packages/testkit/node_modules/.bin/esbuild");
+    assert!(
+        esbuild.is_file(),
+        "run `npm install` in packages/testkit before this E2E"
+    );
+    let bundle_workspace = tempfile::tempdir().expect("temporary TestKit bundle workspace");
+    let bundle_path = bundle_workspace.path().join("testkit.js");
+    let bundle = Command::new(&esbuild)
+        .args([
+            crate_root
+                .join("packages/testkit/src/browser-fixture.tsx")
+                .to_str()
+                .expect("UTF-8 entry"),
+            "--bundle",
+            "--format=esm",
+            "--platform=browser",
+            "--target=es2022",
+            &format!("--outfile={}", bundle_path.display()),
+        ])
+        .output()
+        .expect("bundle repair lifecycle fixture");
+    assert_process_success("bundle repair lifecycle fixture", &bundle);
+    let fixture = start_testkit_fixture(std::fs::read(&bundle_path).expect("read TestKit bundle"))
+        .expect("start repair lifecycle fixture");
+    let workspace = tempfile::tempdir().expect("temporary repair lifecycle workspace");
+    const SESSION: &str = "testkit-repair-loop";
+    let mut cleanup = AgentSessionCleanup::new(workspace.path(), SESSION);
+    let agent = |arguments: &[&str]| {
+        Command::new(binary())
+            .arg("agent")
+            .args(arguments)
+            .current_dir(workspace.path())
+            .output()
+            .expect("run repair lifecycle CLI command")
+    };
+
+    let start = agent(&[
+        "start",
+        &fixture.origin(),
+        "--session",
+        SESSION,
+        "--goal",
+        "Repair the page finding submitted from the embedded review overlay",
+        "--success",
+        "The repair is proved in a fresh browser and accepted by the reviewer",
+        "--browser-driver",
+        "standalone",
+        "--browser-executable",
+        browser.to_str().expect("UTF-8 browser path"),
+        "--command-timeout-ms",
+        "60000",
+        "--idle-timeout-ms",
+        "60000",
+        "--json",
+    ]);
+    if start.status.success() {
+        cleanup.arm();
+    }
+    assert_process_success("start repair lifecycle session", &start);
+
+    let state_path = workspace
+        .path()
+        .join(".a3s-test/agent-sessions")
+        .join(SESSION)
+        .join("session.json");
+    let state: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(&state_path).expect("read session state"))
+            .expect("session state JSON");
+    let namespace = state["namespace"].as_str().expect("browser namespace");
+    let driver_session = state["driver_session"]
+        .as_str()
+        .expect("browser session id");
+    let runtime_dir = state["runtime_dir"]
+        .as_str()
+        .expect("browser runtime directory");
+    let allowed_domains = state["browser_allowed_domains"]
+        .as_array()
+        .expect("browser allowed domains")
+        .iter()
+        .map(|domain| domain.as_str().expect("allowed domain"))
+        .collect::<Vec<_>>()
+        .join(",");
+    let browser_command = |arguments: &[&str]| {
+        Command::new(&browser)
+            .env("AGENT_BROWSER_NAMESPACE", namespace)
+            .env("AGENT_BROWSER_SOCKET_DIR", runtime_dir)
+            .env("AGENT_BROWSER_IDLE_TIMEOUT_MS", "60000")
+            .env("AGENT_BROWSER_ALLOWED_DOMAINS", &allowed_domains)
+            .env("AGENT_BROWSER_ARGS", "--headless=new")
+            .args([
+                "--session",
+                driver_session,
+                "--json",
+                "--headed",
+                "false",
+                "--allowed-domains",
+                &allowed_domains,
+                "--engine",
+                "chrome",
+            ])
+            .args(arguments)
+            .output()
+            .expect("run command against the owned repair browser")
+    };
+
+    let select = browser_command(&[
+        "eval",
+        "(()=>{const host=document.querySelector('[data-a3s-testkit-overlay]'); [...host.shadowRoot.querySelectorAll('button')].find(button=>button.textContent==='Element').click(); return true})()",
+    ]);
+    assert_process_success("select overlay element marking", &select);
+    assert_process_success(
+        "wait for overlay marking",
+        &browser_command(&[
+            "wait",
+            "--fn",
+            "Boolean(document.querySelector('[data-a3s-testkit-overlay]')?.shadowRoot?.querySelector('.a3s-hint'))",
+        ]),
+    );
+    assert_process_success(
+        "mark the repair target",
+        &browser_command(&[
+            "eval",
+            "(()=>{const target=document.querySelector('#sticky'); target.focus(); target.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',bubbles:true})); return true})()",
+        ]),
+    );
+    assert_process_success(
+        "wait for repair editor",
+        &browser_command(&[
+            "wait",
+            "--fn",
+            "Boolean(document.querySelector('[data-a3s-testkit-overlay]')?.shadowRoot?.querySelector('.a3s-editor'))",
+        ]),
+    );
+    assert_process_success(
+        "fill repair request and success criteria",
+        &browser_command(&[
+            "eval",
+            "(()=>{const host=document.querySelector('[data-a3s-testkit-overlay]'); const fields=host.shadowRoot.querySelectorAll('.a3s-editor textarea'); const setter=Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,'value').set; setter.call(fields[0],'Repair the broken action'); fields[0].dispatchEvent(new Event('input',{bubbles:true,composed:true})); setter.call(fields[1],'Repaired action'); fields[1].dispatchEvent(new Event('input',{bubbles:true,composed:true})); return true})()",
+        ]),
+    );
+    assert_process_success(
+        "wait for repair submission",
+        &browser_command(&[
+            "wait",
+            "--fn",
+            "[...document.querySelector('[data-a3s-testkit-overlay]').shadowRoot.querySelectorAll('button')].some(button=>button.textContent==='Send and auto-fix'&&!button.disabled)",
+        ]),
+    );
+    assert_process_success(
+        "submit repair from overlay",
+        &browser_command(&[
+            "eval",
+            "(()=>{const host=document.querySelector('[data-a3s-testkit-overlay]'); [...host.shadowRoot.querySelectorAll('button')].find(button=>button.textContent==='Send and auto-fix'&&!button.disabled).click(); return true})()",
+        ]),
+    );
+    assert_process_success(
+        "wait for page-local repair submission",
+        &browser_command(&[
+            "wait",
+            "--fn",
+            "window[Symbol.for('a3s.test.page-context')].listRepairs().length===1",
+        ]),
+    );
+
+    let watch = agent(&[
+        "repair-watch",
+        "--session",
+        SESSION,
+        "--timeout-ms",
+        "1000",
+        "--batch-window-ms",
+        "50",
+        "--json",
+    ]);
+    assert_process_success("watch overlay repair", &watch);
+    let watch: serde_json::Value =
+        serde_json::from_slice(&watch.stdout).expect("repair watch JSON");
+    let repair = &watch["repairs"][0];
+    let finding_id = repair["finding"]["id"].as_str().expect("repair finding id");
+    let before_revision = repair["before_evidence"]["contextRevision"]
+        .as_u64()
+        .expect("A3S-owned before revision");
+    assert_eq!(repair["status"], "queued");
+    assert_eq!(repair["finding"]["instruction"], "Repair the broken action");
+    assert_eq!(repair["finding"]["successCriteria"], "Repaired action");
+
+    let attempt_id = "attempt-real-cli-1";
+    for (command, request_id, status, summary) in [
+        (
+            "repair-claim",
+            "claim-real-cli-1",
+            "claimed",
+            "Claimed repair",
+        ),
+        (
+            "repair-progress",
+            "progress-real-cli-1",
+            "repairing",
+            "Editing fixture",
+        ),
+        (
+            "repair-complete",
+            "complete-real-cli-1",
+            "verifying",
+            "Fixture edit complete",
+        ),
+    ] {
+        let output = agent(&[
+            command,
+            finding_id,
+            "--session",
+            SESSION,
+            "--request-id",
+            request_id,
+            "--attempt-id",
+            attempt_id,
+            "--summary",
+            summary,
+            "--json",
+        ]);
+        assert_process_success(command, &output);
+        let output: serde_json::Value =
+            serde_json::from_slice(&output.stdout).expect("repair transition JSON");
+        assert_eq!(output["repair"]["status"], status);
+        assert_eq!(output["repair"]["attempt_id"], attempt_id);
+    }
+
+    fixture.set_repaired(true);
+    assert_process_success(
+        "apply the fixture hot repair",
+        &browser_command(&["eval", "window.testkitFixture.repair(); true"]),
+    );
+    assert_process_success(
+        "wait for a newer repaired page revision",
+        &browser_command(&[
+            "wait",
+            "--fn",
+            &format!(
+                "document.querySelector('#sticky')?.textContent==='Repaired action'&&window[Symbol.for('a3s.test.page-context')].snapshot().revision>{before_revision}"
+            ),
+        ]),
+    );
+
+    let verify = agent(&[
+        "repair-verify",
+        finding_id,
+        "--session",
+        SESSION,
+        "--request-id",
+        "verify-real-cli-1",
+        "--success-criteria-passed",
+        "true",
+        "--changed-file",
+        "src/Fixture.tsx",
+        "--checks-json",
+        r#"[{"command":"npm test","status":"passed","summary":"Focused TestKit checks passed"}]"#,
+        "--summary",
+        "A3S Test verified the repaired target",
+        "--json",
+    ]);
+    assert_process_success("verify repair with a fresh ACL browser", &verify);
+    let verify: serde_json::Value =
+        serde_json::from_slice(&verify.stdout).expect("repair verification JSON");
+    let verification_diagnostics = serde_json::json!({
+        "targetFound": verify["repair"]["verification"]["targetFound"],
+        "successCriteriaPassed": verify["repair"]["verification"]["successCriteriaPassed"],
+        "newConsoleErrors": verify["repair"]["verification"]["newConsoleErrors"],
+        "newPageErrors": verify["repair"]["verification"]["newPageErrors"],
+        "checks": verify["repair"]["verification"]["checks"],
+        "aclProof": verify["repair"]["verification"]["aclProof"],
+        "aclCandidate": verify["repair"]["verification"]["aclCandidate"],
+        "beforeRevision": verify["repair"]["verification"]["beforeRevision"],
+        "afterRevision": verify["repair"]["verification"]["afterRevision"],
+    });
+    assert_eq!(
+        verify["repair"]["status"], "review_ready",
+        "repair verification did not pass: {verification_diagnostics:#}"
+    );
+    let verification = &verify["repair"]["verification"];
+    assert_eq!(verification["passed"], true);
+    assert!(
+        verification["afterRevision"]
+            .as_u64()
+            .expect("after revision")
+            > before_revision
+    );
+    assert_eq!(verification["aclProof"]["passed"], true);
+    assert!(verification["aclCandidate"]
+        .as_str()
+        .is_some_and(|candidate| candidate.contains("testid(\"repair-target\")")));
+    let acl_path = state["artifacts_dir"]
+        .as_str()
+        .map(PathBuf::from)
+        .expect("artifact directory")
+        .join(
+            verification["aclProof"]["path"]
+                .as_str()
+                .expect("ACL proof path"),
+        );
+    assert!(
+        acl_path.is_file(),
+        "persisted ACL proof is missing: {acl_path:?}"
+    );
+
+    assert_process_success(
+        "submit human acceptance",
+        &browser_command(&[
+            "eval",
+            &format!(
+                "Boolean(window[Symbol.for('a3s.test.page-context')].submitRepairAction({{findingId:{},action:'accept'}}))",
+                serde_json::to_string(finding_id).expect("finding id JSON")
+            ),
+        ]),
+    );
+    assert_process_success("reload the repaired page", &browser_command(&["reload"]));
+    assert_process_success(
+        "wait for TestKit recovery after reload",
+        &browser_command(&[
+            "wait",
+            "--fn",
+            "window[Symbol.for('a3s.test.page-context')]?.probe?.().protocol==='a3s.test.page-context/1'&&window[Symbol.for('a3s.test.page-context')].snapshot().page.ready",
+        ]),
+    );
+
+    let accepted = agent(&[
+        "repair-watch",
+        "--session",
+        SESSION,
+        "--timeout-ms",
+        "1",
+        "--batch-window-ms",
+        "0",
+        "--json",
+    ]);
+    assert_process_success("ingest human acceptance after reload", &accepted);
+    let accepted: serde_json::Value =
+        serde_json::from_slice(&accepted.stdout).expect("accepted repair JSON");
+    assert_eq!(accepted["batches"][0]["status"], "resolved");
+    assert_eq!(accepted["batches"][0]["results"][0]["status"], "resolved");
+    assert_process_success(
+        "wait for resolved overlay projection",
+        &browser_command(&[
+            "wait",
+            "--fn",
+            "window[Symbol.for('a3s.test.page-context')].listRepairs()[0]?.status==='resolved'",
+        ]),
+    );
+
+    let ledger_path = workspace
+        .path()
+        .join(".a3s-test/agent-sessions")
+        .join(SESSION)
+        .join("repairs.jsonl");
+    let events_after_acceptance = std::fs::read_to_string(&ledger_path)
+        .expect("repair ledger")
+        .lines()
+        .count();
+    let replay = agent(&[
+        "repair-watch",
+        "--session",
+        SESSION,
+        "--timeout-ms",
+        "1",
+        "--batch-window-ms",
+        "0",
+        "--json",
+    ]);
+    assert_process_success("replay resolved repair in a new CLI process", &replay);
+    assert_eq!(
+        std::fs::read_to_string(&ledger_path)
+            .expect("replayed repair ledger")
+            .lines()
+            .count(),
+        events_after_acceptance,
+        "reload/restart replay must not duplicate authoritative events"
+    );
+
+    let abort = cleanup.abort();
+    assert_process_success("abort repair lifecycle session", &abort);
+    let abort: serde_json::Value =
+        serde_json::from_slice(&abort.stdout).expect("repair abort JSON");
+    assert!(abort["cleanup_error"].is_null());
+}
+
 fn run_agent_domain_containment(browser: &Path, fixture: &WebFixture, workspace: &Path) {
     let mut cleanup = AgentSessionCleanup::new(workspace, "domain-containment");
     let fixture_url = format!("{}/origin-policy.html", fixture.origin());
@@ -305,6 +873,49 @@ struct AgentSessionCleanup {
     workspace: PathBuf,
     session: &'static str,
     armed: bool,
+}
+
+struct StandaloneBrowserSessionCleanup {
+    browser: PathBuf,
+    session: String,
+    armed: bool,
+}
+
+impl StandaloneBrowserSessionCleanup {
+    fn new(browser: &Path, session: &str) -> Self {
+        Self {
+            browser: browser.to_path_buf(),
+            session: session.to_string(),
+            armed: false,
+        }
+    }
+
+    fn arm(&mut self) {
+        self.armed = true;
+    }
+
+    fn close(&mut self) -> std::process::Output {
+        let output = close_standalone_browser_session(&self.browser, &self.session);
+        if output.status.success() {
+            self.armed = false;
+        }
+        output
+    }
+}
+
+impl Drop for StandaloneBrowserSessionCleanup {
+    fn drop(&mut self) {
+        if self.armed {
+            let _ = close_standalone_browser_session(&self.browser, &self.session);
+        }
+    }
+}
+
+fn close_standalone_browser_session(browser: &Path, session: &str) -> std::process::Output {
+    Command::new(browser)
+        .args(["--session", session, "close"])
+        .output()
+        .expect("close standalone browser session")
 }
 
 impl AgentSessionCleanup {

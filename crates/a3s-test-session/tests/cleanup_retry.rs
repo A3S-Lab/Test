@@ -318,6 +318,7 @@ fn start_request(session: &str) -> StartSessionRequest {
         surface: Surface::Gui,
         goal: "Close the owned GUI safely".to_string(),
         success_criteria: vec!["No owned resource survives cleanup".to_string()],
+        auto_resolve_repairs: false,
     }
 }
 

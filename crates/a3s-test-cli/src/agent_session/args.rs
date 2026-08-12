@@ -19,6 +19,8 @@ pub(super) enum AgentCommand {
     /// Capture the next semantic observation from an active session.
     #[command(alias = "snapshot")]
     Observe(ObserveArgs),
+    /// Inspect one bounded Test Kit page, component, node, or region scope.
+    Inspect(InspectArgs),
     /// Execute one schema-validated action in an active session.
     Act(ActArgs),
     /// Click a ref or CSS target in an active session.
@@ -53,6 +55,22 @@ pub(super) enum AgentCommand {
     Viewport(ViewportArgs),
     /// Capture a screenshot inside the session artifact directory.
     Screenshot(ScreenshotArgs),
+    /// Pick up queued Test Kit findings and persist them in this session.
+    RepairWatch(RepairWatchArgs),
+    /// Claim one queued repair finding.
+    RepairClaim(RepairTransitionArgs),
+    /// Report that workspace editing has started.
+    RepairProgress(RepairTransitionArgs),
+    /// Request human clarification.
+    RepairReply(RepairTransitionArgs),
+    /// Report editing complete and begin A3S Test verification.
+    RepairComplete(RepairTransitionArgs),
+    /// Verify a completed repair against a newer ready page revision.
+    RepairVerify(RepairVerifyArgs),
+    /// Record a failed repair attempt.
+    RepairFail(RepairTransitionArgs),
+    /// Cancel a queued or claimed repair.
+    RepairCancel(RepairTransitionArgs),
     /// Finish the session, close its surface, and write a report.
     Finish(FinishArgs),
     /// Abort an active session and close only its owned surface.
@@ -78,6 +96,9 @@ pub(super) struct StartArgs {
     /// Observable success criterion. Repeat for multiple criteria.
     #[arg(long = "success", required = true)]
     pub(super) success_criteria: Vec<String>,
+    /// Automatically resolve repairs only after every verification gate passes.
+    #[arg(long)]
+    pub(super) auto_resolve_repairs: bool,
     /// Additional navigation origin allowed during this session.
     #[arg(long = "allow-origin")]
     pub(super) allowed_origins: Vec<String>,
@@ -94,7 +115,7 @@ pub(super) struct StartArgs {
     #[arg(long)]
     pub(super) headed: bool,
     /// Per-command browser deadline.
-    #[arg(long, default_value_t = 30_000)]
+    #[arg(long, default_value_t = 25_000)]
     pub(super) command_timeout_ms: u64,
     /// Browser daemon inactivity deadline between agent turns.
     #[arg(long, default_value_t = 300_000)]
@@ -118,6 +139,34 @@ pub(super) struct ObserveArgs {
 }
 
 #[derive(Debug, Args)]
+pub(super) struct InspectArgs {
+    /// Active session identifier.
+    #[arg(long)]
+    pub(super) session: String,
+    /// Context detail profile.
+    #[arg(long, default_value = "scoped", value_parser = ["summary", "scoped", "diff", "forensic"])]
+    pub(super) detail: String,
+    /// Current private Test Kit node ID. Prefer component or region scopes for persisted workflows.
+    #[arg(long, conflicts_with_all = ["component", "region"])]
+    pub(super) node: Option<String>,
+    /// Registered Test Kit component ID.
+    #[arg(long, conflicts_with_all = ["node", "region"])]
+    pub(super) component: Option<String>,
+    /// Region as `space,x,y,width,height`, where space is viewport or document.
+    #[arg(long, conflicts_with_all = ["node", "component"])]
+    pub(super) region: Option<String>,
+    /// Opaque pagination cursor returned by a previous inspection.
+    #[arg(long)]
+    pub(super) cursor: Option<String>,
+    /// Maximum returned nodes.
+    #[arg(long, default_value_t = 100)]
+    pub(super) limit: usize,
+    /// Emit machine-readable JSON.
+    #[arg(long)]
+    pub(super) json: bool,
+}
+
+#[derive(Debug, Args)]
 pub(super) struct ActArgs {
     /// Active session identifier.
     #[arg(long)]
@@ -135,7 +184,7 @@ pub(super) struct ActArgs {
 
 #[derive(Debug, Args)]
 pub(super) struct TargetArgs {
-    /// Ref such as @e3, or an explicit CSS selector.
+    /// Observation ref such as @e3 or @c2, or an explicit CSS selector.
     pub(super) target: String,
     /// Active session identifier.
     #[arg(long)]
@@ -150,7 +199,7 @@ pub(super) struct TargetArgs {
 
 #[derive(Debug, Args)]
 pub(super) struct TargetValueArgs {
-    /// Ref such as @e3, or an explicit CSS selector.
+    /// Observation ref such as @e3 or @c2, or an explicit CSS selector.
     pub(super) target: String,
     /// Text value.
     pub(super) value: String,
@@ -281,6 +330,66 @@ pub(super) struct ScreenshotArgs {
     #[arg(long)]
     pub(super) session: String,
     /// Emit machine-readable JSON.
+    #[arg(long)]
+    pub(super) json: bool,
+}
+
+#[derive(Debug, Args)]
+pub(super) struct RepairWatchArgs {
+    #[arg(long)]
+    pub(super) session: String,
+    #[arg(long, default_value_t = 20)]
+    pub(super) limit: usize,
+    /// Maximum time to wait for a page submission.
+    #[arg(long, default_value_t = 30_000)]
+    pub(super) timeout_ms: u64,
+    /// Short window used to collect findings submitted together.
+    #[arg(long, default_value_t = 250)]
+    pub(super) batch_window_ms: u64,
+    #[arg(long)]
+    pub(super) json: bool,
+}
+
+#[derive(Debug, Args)]
+pub(super) struct RepairTransitionArgs {
+    pub(super) finding_id: String,
+    #[arg(long)]
+    pub(super) session: String,
+    #[arg(long)]
+    pub(super) request_id: String,
+    #[arg(long)]
+    pub(super) attempt_id: Option<String>,
+    #[arg(long)]
+    pub(super) lease_expires_at_ms: Option<u64>,
+    /// Lease duration from now. Used by claim when no absolute expiry is supplied.
+    #[arg(long, default_value_t = 300_000)]
+    pub(super) lease_ms: u64,
+    #[arg(long)]
+    pub(super) summary: Option<String>,
+    #[arg(long)]
+    pub(super) message: Option<String>,
+    #[arg(long)]
+    pub(super) json: bool,
+}
+
+#[derive(Debug, Args)]
+pub(super) struct RepairVerifyArgs {
+    pub(super) finding_id: String,
+    #[arg(long)]
+    pub(super) session: String,
+    #[arg(long)]
+    pub(super) request_id: String,
+    #[arg(long)]
+    pub(super) success_criteria_passed: Option<bool>,
+    #[arg(long = "changed-file")]
+    pub(super) changed_files: Vec<String>,
+    /// JSON array of `{command,status,summary}` focused check results.
+    #[arg(long, default_value = "[]")]
+    pub(super) checks_json: String,
+    #[arg(long)]
+    pub(super) acl_candidate: Option<String>,
+    #[arg(long)]
+    pub(super) summary: String,
     #[arg(long)]
     pub(super) json: bool,
 }

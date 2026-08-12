@@ -585,6 +585,7 @@ suite "invalid" {
         }
     }
 }
+
 "#,
             "test.spec.modifier_duplicate",
         ),
@@ -606,4 +607,81 @@ suite "invalid" {
         let error = TestSuite::from_acl(source).expect_err("invalid advanced action must fail");
         assert_eq!(error.code(), code);
     }
+}
+
+fn repair_acl(scenarios: &str) -> String {
+    format!(
+        r#"suite "repair" {{
+    version = 1
+{scenarios}
+}}
+"#
+    )
+}
+
+const READ_ONLY_REPAIR_SCENARIO: &str = r#"
+    scenario "regression" {
+        surface = "web"
+        navigate "open" {
+            url = "https://example.test:8443/checkout?state=repaired"
+        }
+        wait "ready" {
+            load = "domcontentloaded"
+        }
+        expect "fixed" {
+            text = "Checkout repaired"
+        }
+        screenshot "proof" {
+            path = "proof.png"
+        }
+    }
+"#;
+
+#[test]
+fn admits_one_read_only_repair_scenario_on_the_exact_finding_origin() {
+    let source = repair_acl(READ_ONLY_REPAIR_SCENARIO);
+    let suite =
+        TestSuite::from_repair_acl(&source, "https://example.test:8443/checkout?state=broken")
+            .expect("bounded repair ACL");
+    assert_eq!(suite.scenarios.len(), 1);
+}
+
+#[test]
+fn rejects_repair_acl_with_unproved_scenarios() {
+    let source = repair_acl(&format!(
+        "{READ_ONLY_REPAIR_SCENARIO}{}",
+        READ_ONLY_REPAIR_SCENARIO.replace("regression", "unproved")
+    ));
+    let error = TestSuite::from_repair_acl(&source, "https://example.test:8443/checkout")
+        .expect_err("every repair candidate must contain exactly one proved scenario");
+    assert_eq!(error.code(), "test.spec.repair_scenario_count");
+}
+
+#[test]
+fn rejects_repair_acl_navigation_outside_the_exact_origin() {
+    for url in [
+        "https://other.test:8443/checkout",
+        "http://example.test:8443/checkout",
+        "https://example.test:9443/checkout",
+    ] {
+        let source = repair_acl(
+            &READ_ONLY_REPAIR_SCENARIO
+                .replace("https://example.test:8443/checkout?state=repaired", url),
+        );
+        let error =
+            TestSuite::from_repair_acl(&source, "https://example.test:8443/checkout?state=broken")
+                .expect_err("scheme, hostname, and port must remain exact");
+        assert_eq!(error.code(), "test.spec.repair_origin_denied");
+    }
+}
+
+#[test]
+fn rejects_state_changing_repair_acl_steps() {
+    let source = repair_acl(&READ_ONLY_REPAIR_SCENARIO.replace(
+        "        wait \"ready\" {\n            load = \"domcontentloaded\"\n        }",
+        "        click \"mutate\" {\n            target = css(\"#submit\")\n        }",
+    ));
+    let error = TestSuite::from_repair_acl(&source, "https://example.test:8443/checkout")
+        .expect_err("repair proof must not mutate application state");
+    assert_eq!(error.code(), "test.spec.repair_action_denied");
 }

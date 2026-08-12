@@ -113,3 +113,142 @@
 - [ ] Artifact retention and report indexing
 - [ ] Sharding, quarantine, flake accounting, and historical comparison
 - [ ] GUI worker pools with explicit host permissions
+
+## M6: Embedded Web Test Kit
+
+The Test Kit is a development-only frontend SDK embedded by the application
+under test. It enriches, but never replaces, the browser accessibility
+snapshot. Pages without the SDK retain the existing Web behavior.
+
+- [x] Publish a framework-neutral `@a3s-lab/testkit` runtime and a React 18+
+      adapter from this repository
+- [x] Expose the versioned `a3s.test.page-context/1` bridge with page-runtime
+      capability probing, bounded snapshots, scoped inspection, revision
+      waits, and explicit teardown
+- [x] Automatically describe page identity, route, readiness, viewport,
+      document geometry, scroll position, language, theme, and declared
+      application facts
+- [x] Discover visible and interactive DOM elements across the light DOM and
+      open Shadow DOM, including accessibility identity, form state, text
+      summaries, stable locator candidates, viewport/document/normalized
+      geometry, visible ratio, fixed/sticky state, scroll containers, and
+      occlusion
+- [x] Add `A3STestBoundary` for explicit component identity, source hints,
+      readiness, facts, and multi-root ownership without requiring every DOM
+      element to be manually annotated
+- [x] Provide bounded `summary`, `scoped`, `diff`, and `forensic` detail
+      profiles with pagination and hard node/string/encoded-byte limits
+- [x] Redact passwords, tokens, cookies, hidden fields, configured selectors,
+      and undeclared framework props/state before data crosses the bridge
+- [x] Keep the headless runtime idle when the page is unchanged; use observers
+      and revision notifications instead of polling
+- [x] Isolate optional overlay styles and events from host-page CSS and avoid
+      changing application behavior when review mode is disabled
+- [ ] Cover SSR/hydration, route changes, portals, transforms, zoom,
+      fixed/sticky content, nested scroll containers, open Shadow DOM,
+      virtualized lists, dialogs, and teardown in unit and real-browser tests
+
+## M7: Page-context observation and targeting
+
+- [x] Add typed page-context models to `a3s-test-core`; do not expose bridge
+      payloads as unbounded arbitrary JSON
+- [x] Make A3S Browser capability discovery report Page Context Bridge support
+      independently of browser executable and action protocol revisions
+- [x] Capture the browser accessibility snapshot and Test Kit context inside
+      one browser-side task or fail closed when an atomic capture cannot be
+      guaranteed
+- [x] Return Test Kit presence, protocol revision, page revision, component
+      index, bounded elements, locator candidates, and truncation cursors from
+      `agent observe` and `test_observe`
+- [x] Add scoped `agent inspect` and `test_inspect` operations that retrieve
+      detail for one current context ref, component, or region
+- [x] Bind `@cN` context refs to the latest A3S observation and page revision;
+      navigation, revision changes, failed actions, and state-changing actions
+      must expire them before input dispatch
+- [x] Resolve context refs in the browser adapter without exposing arbitrary
+      JavaScript evaluation as a public A3S Test action
+- [x] Prefer role, label, test ID, and placeholder locators when a stable
+      semantic locator exists; geometry remains evidence and a bounded
+      fallback rather than the default targeting mechanism
+- [x] Preserve current observation output and action behavior when the page
+      does not embed a compatible Test Kit
+- [x] Update the CLI schema, MCP tools, Coding Agent Skill, reports, and
+      compatibility tests for the page-context contract
+
+## M8: Human review overlay
+
+- [x] Add an optional `A3SReviewOverlay` that supports element click, selected
+      text, explicit multi-select, rectangular area selection, and freehand
+      drawing while keeping normal application interaction blocking explicit
+- [x] Let reviewers create, edit, delete, hide, and reopen local draft findings
+      with instruction, optional success criteria, severity, and intent
+- [x] Support single `Send and auto-fix`, `Send selected (N)`, and `Send all`
+      actions; manual confirmation is the default and auto-send is a visible,
+      non-persistent overlay opt-in
+- [x] Enrich every submitted finding with a fresh context revision, component
+      and source hints, semantic locator candidates, geometry, nearby context,
+      and bounded page context
+- [x] Display per-finding queue, claim, edit, verification, clarification,
+      failure, review-ready, resolved, dismissed, cancelled, and reopened
+      states in real time
+- [ ] Complete bidirectional human/agent replies; agent clarification messages
+      are projected and rendered today, but page-authored replies do not yet
+      cross into the authoritative ledger
+- [x] Treat DOM text and application-provided facts strictly as untrusted
+      evidence; they must never become hidden agent instructions
+- [ ] Provide keyboard and screen-reader-complete review workflows and ensure
+      the overlay never appears in production unless explicitly enabled
+
+## M9: Repair queue and coding-agent handoff
+
+- [ ] Define typed `RepairBatch` and `RepairAttempt` history; typed
+      `RepairFinding`, `RepairVerification`, and append-only repair event
+      contracts already exist
+- [x] Store repair state and evidence under the owning
+      `.a3s-test/agent-sessions/<session>/` ledger rather than creating a
+      second session or report system
+- [x] Add single and batch submission, bounded queueing, cancellation, explicit
+      claim leases, idempotent terminal transitions, reconnect replay, and
+      crash recovery
+- [x] Add `test_repair_watch`, `test_repair_claim`, `test_repair_progress`,
+      `test_repair_reply`, `test_repair_complete`, `test_repair_fail`, and
+      `test_repair_cancel` MCP tools plus equivalent machine-readable CLI
+      operations
+- [x] Keep the current authorized coding agent as the planner and code editor;
+      A3S Test must not silently start a second model or treat a page request
+      as authorization to edit, commit, push, publish, deploy, install
+      dependencies, or run arbitrary commands
+- [ ] Process one workspace mutation at a time by default; after each hot
+      reload, observe again and re-resolve every remaining finding instead of
+      reusing stale refs
+- [ ] Detect overlapping targets, source files, and contradictory requests and
+      move the affected findings to `needs_input` rather than guessing order
+- [x] Record exactly which changed files and checks the coding agent reports in
+      each stored verification; preserving unrelated dirty-worktree changes
+      remains a coding-agent safety requirement
+- [x] Never automatically hand an ambiguously dispatched repair attempt to a
+      second worker; lease recovery must distinguish unclaimed, pre-edit, and
+      possibly-mutated work
+
+## M10: Repair verification and regression promotion
+
+- [ ] Capture an A3S Test-owned before evidence bundle and error baseline before
+      a repair is claimable; context revision is captured today and after-state
+      verification already rejects non-new or non-ready revisions
+- [x] Re-observe the target, accept an explicit browser success-criteria result,
+      detect new console/page errors from a supplied baseline, and attach
+      focused project-check results before a repair can become `review_ready`
+- [ ] Require human acceptance by default; allow session-scoped automatic
+      resolution only when all declared verification gates pass
+- [ ] Let a human reject or reopen a repair while retaining every attempt,
+      reply, evidence digest, and verification result
+- [ ] Continue independent findings after an isolated failure while preserving
+      deterministic batch order and a per-item result
+- [ ] Prove and persist the smallest regression path; current verification can
+      generate a syntax-validated ACL candidate from one stable locator and an
+      explicit text criterion, but does not execute that candidate
+- [ ] Validate end-to-end flows for single repair, ordered batch repair,
+      clarification, cancellation, agent disconnect, hot-reload ref expiry,
+      verification failure, restart recovery, and promotion to ACL
+- [x] Document integration for React/Vite/Next.js, security and redaction,
+      coding-agent watch mode, CI behavior, and migration/compatibility rules

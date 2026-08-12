@@ -45,6 +45,9 @@ pub struct BrowserCapabilities {
     pub version: String,
     pub protocol_revision: u32,
     pub features: BTreeSet<WebCapability>,
+    /// Runtime page capability discovered independently after navigation.
+    /// `None` means no page was probed by this executable-only command.
+    pub page_context_protocol: Option<String>,
 }
 
 pub(crate) async fn discover(
@@ -116,6 +119,7 @@ pub(crate) async fn discover(
         ]
         .into_iter()
         .collect(),
+        page_context_protocol: None,
     })
 }
 

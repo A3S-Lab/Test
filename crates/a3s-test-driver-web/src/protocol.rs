@@ -145,6 +145,100 @@ pub(crate) fn direct_selector(target: &Target) -> Result<&str, DriverError> {
     }
 }
 
+pub(crate) fn visibility_args(target: &Target) -> Result<Vec<OsString>, DriverError> {
+    match target {
+        Target::Ref { value } => Ok(vec!["is".into(), "visible".into(), OsString::from(value)]),
+        Target::Css { selector } => Ok(vec![
+            "is".into(),
+            "visible".into(),
+            OsString::from(selector),
+        ]),
+        Target::Role { .. }
+        | Target::Text { .. }
+        | Target::TestId { .. }
+        | Target::Label { .. }
+        | Target::Placeholder { .. } => Ok(vec![
+            "eval".into(),
+            OsString::from(semantic_visibility_expression(target)?),
+        ]),
+        Target::AutomationId { .. } | Target::VisualPoint { .. } => Err(DriverError::new(
+            "test.driver.web.target_unsupported",
+            "automation_id and visual_point targets are only available on GUI surfaces",
+        )),
+    }
+}
+
+fn semantic_visibility_expression(target: &Target) -> Result<String, DriverError> {
+    let target = serde_json::to_string(target).map_err(|error| {
+        DriverError::new(
+            "test.driver.web.target_invalid",
+            format!("failed to encode semantic visibility target: {error}"),
+        )
+    })?;
+    Ok(format!(
+        r#"(() => {{
+  const target = {target};
+  const elements = [];
+  const visit = (root) => {{
+    for (const element of root.children ?? []) {{
+      elements.push(element);
+      visit(element);
+      if (element.shadowRoot) visit(element.shadowRoot);
+    }}
+  }};
+  visit(document);
+  const text = (element) => (element.innerText || element.textContent || "").replace(/\s+/g, " ").trim();
+  const labelledText = (element) => {{
+    const aria = element.getAttribute("aria-label")?.trim();
+    if (aria) return aria;
+    const labelledBy = element.getAttribute("aria-labelledby")?.trim();
+    if (labelledBy) {{
+      const labels = labelledBy.split(/\s+/).map((id) => {{
+        const root = element.getRootNode();
+        return (typeof root.getElementById === "function" ? root.getElementById(id) : null)
+          || element.ownerDocument.getElementById(id);
+      }}).filter(Boolean).map(text).filter(Boolean);
+      if (labels.length) return labels.join(" ");
+    }}
+    const labels = Array.from(element.labels ?? []).map(text).filter(Boolean);
+    if (labels.length) return labels.join(" ");
+    if (element instanceof HTMLImageElement && element.alt.trim()) return element.alt.trim();
+    return text(element) || element.getAttribute("placeholder")?.trim() || "";
+  }};
+  const role = (element) => {{
+    const explicit = element.getAttribute("role")?.trim().split(/\s+/)[0];
+    if (explicit) return explicit;
+    const tag = element.tagName.toLowerCase();
+    if (tag === "input") {{
+      if (["button", "submit", "reset"].includes(element.type)) return "button";
+      if (element.type === "checkbox") return "checkbox";
+      if (element.type === "radio") return "radio";
+      if (element.type === "range") return "slider";
+      return "textbox";
+    }}
+    return ({{ a:"link", button:"button", h1:"heading", h2:"heading", h3:"heading", h4:"heading", h5:"heading", h6:"heading", img:"img", nav:"navigation", main:"main", form:"form", table:"table", textarea:"textbox", select:"combobox" }})[tag] || "";
+  }};
+  const matches = (element) => {{
+    if (target.type === "test_id") return element.getAttribute("data-testid") === target.value || element.getAttribute("data-test-id") === target.value;
+    if (target.type === "placeholder") return element.getAttribute("placeholder") === target.value;
+    if (target.type === "label") return Array.from(element.labels ?? []).map(text).some((value) => value === target.value);
+    if (target.type === "role") return role(element) === target.role && labelledText(element) === target.name;
+    if (target.type === "text") return target.exact ? text(element) === target.value : text(element).includes(target.value);
+    return false;
+  }};
+  const visible = (element) => {{
+    if (!(element instanceof HTMLElement || element instanceof SVGElement)) return false;
+    const style = getComputedStyle(element);
+    if (style.display === "none" || style.visibility === "hidden" || style.visibility === "collapse" || Number(style.opacity) === 0) return false;
+    if (element.closest("[hidden], [aria-hidden='true']")) return false;
+    const rect = element.getBoundingClientRect();
+    return element.getClientRects().length > 0 && rect.width > 0 && rect.height > 0;
+  }};
+  return elements.some((element) => matches(element) && visible(element));
+}})()"#
+    ))
+}
+
 pub(crate) fn wait_args(condition: &WaitCondition) -> Result<Vec<OsString>, DriverError> {
     Ok(match condition {
         WaitCondition::Load(LoadState::NetworkIdle) => {
@@ -161,9 +255,26 @@ pub(crate) fn wait_args(condition: &WaitCondition) -> Result<Vec<OsString>, Driv
         ],
         WaitCondition::Text(text) => vec!["wait".into(), "--text".into(), text.into()],
         WaitCondition::Url(url) => vec!["wait".into(), "--url".into(), url.into()],
-        WaitCondition::Visible(target) => {
-            vec!["wait".into(), OsString::from(direct_selector(target)?)]
-        }
+        WaitCondition::Visible(target) => match target {
+            Target::Ref { value } => vec!["wait".into(), OsString::from(value)],
+            Target::Css { selector } => vec!["wait".into(), OsString::from(selector)],
+            Target::Role { .. }
+            | Target::Text { .. }
+            | Target::TestId { .. }
+            | Target::Label { .. }
+            | Target::Placeholder { .. } => {
+                let mut args = visibility_args(target)?;
+                args[0] = "wait".into();
+                args.insert(1, "--fn".into());
+                args
+            }
+            Target::AutomationId { .. } | Target::VisualPoint { .. } => {
+                return Err(DriverError::new(
+                    "test.driver.web.target_unsupported",
+                    "automation_id and visual_point targets are only available on GUI surfaces",
+                ));
+            }
+        },
     })
 }
 
@@ -220,9 +331,9 @@ mod tests {
     use std::path::PathBuf;
     use std::time::Duration;
 
-    use a3s_test_core::{LoadState, WaitCondition};
+    use a3s_test_core::{LoadState, Target, WaitCondition};
 
-    use super::{invocation, wait_args};
+    use super::{invocation, visibility_args, wait_args};
     use crate::{AgentBrowserConfig, BrowserCommand, BrowserNetworkPolicy};
 
     #[test]
@@ -294,5 +405,24 @@ mod tests {
                 OsString::from("networkidle"),
             ]
         );
+    }
+
+    #[test]
+    fn semantic_visibility_uses_a_read_only_shadow_dom_expression() {
+        let target = Target::TestId {
+            value: "repair-target".to_string(),
+        };
+        let args = visibility_args(&target).expect("semantic visibility arguments");
+        assert_eq!(args[0], "eval");
+        let expression = args[1].to_string_lossy();
+        assert!(expression.contains(r#""type":"test_id""#));
+        assert!(expression.contains("element.shadowRoot"));
+        assert!(!expression.contains(".click("));
+        assert!(!expression.contains(".focus("));
+
+        let wait = wait_args(&WaitCondition::Visible(target)).expect("semantic visibility wait");
+        assert_eq!(wait[0], "wait");
+        assert_eq!(wait[1], "--fn");
+        assert_eq!(wait[2], args[1]);
     }
 }

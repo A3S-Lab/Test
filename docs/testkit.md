@@ -1,0 +1,392 @@
+# Embedded Web Test Kit
+
+## Purpose
+
+`@a3s-lab/testkit` is a development-only frontend SDK for applications that
+want to expose precise, bounded page context to A3S Test. It complements the
+browser accessibility snapshot with component ownership, source hints,
+geometry, application-declared facts, and a human review surface.
+
+The SDK is not a browser driver, test runner, coding agent, or source-code
+editor. A3S Test remains the owner of surface sessions, typed actions,
+evidence, reports, and cleanup. An already authorized coding agent remains the
+planner and workspace editor.
+
+## Product layers
+
+```text
+application
+├── Context Runtime                    always headless
+├── framework adapter                  optional explicit boundaries
+└── Review Overlay                     optional human interaction
+        │
+        │ a3s.test.page-context/1
+        v
+A3S Browser adapter
+        │
+        v
+A3S Test session, repair ledger, evidence, and MCP
+        │
+        v
+authorized coding agent
+```
+
+The Context Runtime must work without the Review Overlay. CI should normally
+enable context and disable the overlay.
+
+## Page Context Bridge v1
+
+The page exposes one non-enumerable, symbol-addressed bridge with protocol
+identifier `a3s.test.page-context/1`. The bridge is read only to application
+code except for explicit SDK registration APIs. Its browser-facing operations
+are:
+
+- `probe()` returns protocol and SDK versions plus supported capabilities.
+- `snapshot(request)` returns a bounded page or scoped context snapshot.
+- `resolve(nodeId)` returns the live DOM node for a current snapshot node.
+- `waitForChange(revision, timeoutMs)` completes when the semantic revision
+  advances or the bounded timeout expires.
+- `subscribe(listener)` publishes revision and review events and returns an
+  unsubscribe function.
+- `submitRepair(request)` accepts a human-confirmed single finding or batch
+  through the browser-bound repair channel.
+- `applyRepairEvent(event)` projects queue and agent state back into the
+  overlay.
+- `dispose()` removes SDK observers, portals, listeners, and private state.
+
+The bridge does not expose `eval`, filesystem access, cookies, arbitrary
+network requests, or shell execution.
+
+### Snapshot request
+
+```json
+{
+  "detail": "summary",
+  "scope": { "kind": "page" },
+  "sinceRevision": null,
+  "cursor": null,
+  "limits": {
+    "nodes": 500,
+    "stringBytes": 4096,
+    "encodedBytes": 1048576
+  }
+}
+```
+
+`detail` is `summary`, `scoped`, `diff`, or `forensic`. A scope selects the
+page, a current context node, a registered component, or a viewport/document
+rectangle. The SDK may lower caller limits to its configured ceiling but must
+never raise them. Truncated results carry an opaque cursor bound to the page
+revision and scope.
+
+### Snapshot response
+
+```json
+{
+  "protocol": "a3s.test.page-context/1",
+  "sdkVersion": "0.1.0",
+  "revision": 42,
+  "page": {
+    "id": "checkout",
+    "url": "http://127.0.0.1:3000/checkout",
+    "route": "/checkout",
+    "title": "Checkout",
+    "ready": true,
+    "viewport": { "width": 1440, "height": 900, "dpr": 2 },
+    "document": { "width": 1440, "height": 2210 },
+    "scroll": { "x": 0, "y": 800 },
+    "language": "en",
+    "theme": "light"
+  },
+  "components": [],
+  "nodes": [],
+  "facts": {},
+  "removedNodeIds": [],
+  "truncated": false,
+  "nextCursor": null
+}
+```
+
+Node IDs are SDK-private handles. A3S Browser maps current node IDs to A3S
+observation-bound `@cN` refs. Callers never persist or act on a raw node ID.
+
+### Geometry
+
+Every returned node contains geometry in three coordinate spaces when it has a
+rendered box:
+
+- viewport CSS pixels from `getBoundingClientRect()`;
+- document CSS pixels after current scroll offsets;
+- viewport-normalized values in `[0, 1]` where possible.
+
+Geometry also records visible ratio, topmost-point occlusion, fixed/sticky
+positioning, transform presence, and the nearest scroll container. Device
+pixels are not mixed with CSS pixels. Multi-root components expose `boxes`
+instead of inventing one inaccurate rectangle.
+
+Geometry is evidence and a last-resort target. Semantic role, label, test ID,
+placeholder, and stable text locators remain preferred.
+
+## Framework-neutral runtime
+
+The base package discovers semantic DOM nodes, open Shadow DOM, form state,
+accessibility identity, stable locator candidates, and geometry. It uses
+`MutationObserver`, `ResizeObserver`, intersection observation, scroll and
+history/navigation signals to invalidate a cached snapshot. It must not poll
+an unchanged page. Direct `installTestKit` calls require `enabled: true` just
+like the React provider; missing or false-like enablement returns a disabled
+bridge and never installs the global protocol.
+
+The runtime never serializes:
+
+- password or hidden input values;
+- cookies, local/session storage, request headers, or tokens;
+- arbitrary React/Vue/Svelte props, state, fiber internals, or closures;
+- text under configured redact selectors;
+- cross-origin frame contents;
+- full computed styles in summary mode.
+
+Application facts are an explicit callback result and pass through the same
+depth, key, string, and encoded-size bounds.
+
+## React adapter
+
+The React adapter exposes:
+
+```tsx
+<A3STestKit
+  enabled={import.meta.env.DEV}
+  page={{ id: "checkout" }}
+  ready={() => !isBooting}
+  facts={() => ({ checkoutStep, cartItemCount: cart.items.length })}
+  redact={["[data-private]", "[data-payment-field]"]}
+  repairEndpoint="/__a3s-test/repairs"
+>
+  <Application />
+  <A3SReviewOverlay enabled={import.meta.env.DEV} />
+</A3STestKit>
+```
+
+`repairEndpoint` is an optional same-origin application adapter. It accepts a
+bounded `a3s.test.repair/1` POST and forwards it to the owning A3S Test session.
+If it is omitted, an active A3S Test browser session can drain the same
+page-local queue through the fixed bridge operation. The endpoint is not an
+A3S Test control API and receives no workspace or agent credentials.
+
+`A3STestBoundary` registers explicit component identity, optional source hints,
+facts, readiness, and all rendered roots beneath the boundary. Automatic DOM
+context continues to work when no boundary is present.
+
+### Vite
+
+Mount the provider at the application root and gate it with
+`import.meta.env.DEV`:
+
+```tsx
+root.render(
+  <A3STestKit enabled={import.meta.env.DEV} page={{ id: "app" }}>
+    <App />
+    <A3SReviewOverlay enabled={import.meta.env.DEV} />
+  </A3STestKit>,
+);
+```
+
+Keep `repairStorage="memory"` for disposable fixtures or use the default
+session storage while reviewing a live development page.
+
+### Next.js
+
+Put the Test Kit in a client-only provider and enable it only outside
+production:
+
+```tsx
+"use client";
+
+export function TestProvider({ children }: { children: React.ReactNode }) {
+  return (
+    <A3STestKit
+      enabled={process.env.NODE_ENV !== "production"}
+      page={{ id: "web" }}
+    >
+      {children}
+      <A3SReviewOverlay
+        enabled={process.env.NODE_ENV !== "production"}
+      />
+    </A3STestKit>
+  );
+}
+```
+
+The headless runtime tolerates SSR markup and hydration. Both components
+require an explicit `enabled` value; the overlay additionally refuses to
+mount without a compatible live bridge. It is created only in the browser and
+remains isolated in its own Shadow DOM.
+
+## Human review and repair submission
+
+The optional overlay creates local draft findings from element click, selected
+text, explicit multi-select, a rectangular region, or freehand drawing. A
+draft includes a human instruction and may include success criteria, intent,
+and severity.
+
+Submission is always explicit by default:
+
+- `Send and auto-fix` submits one draft.
+- `Send selected (N)` submits the checked drafts in visible order.
+- `Send all` submits every draft in visible order.
+
+Auto-send can be enabled only for the current browser session through the
+visible overlay toggle (or the initial `autoSend` prop). It does not persist
+across restart.
+
+At submission time, the Test Kit enriches a repair with a fresh context
+revision and bounded page context. A submitted target contains current private
+node IDs, component/source hints, semantic locator candidates, geometry,
+nearby context, route, viewport, and declared facts. A3S Test maps those IDs to
+observation-bound refs when it observes or inspects the page. DOM content and
+facts are marked untrusted evidence and are never concatenated into hidden
+instructions. An A3S Test-owned screenshot/error baseline before claim remains
+roadmap work.
+
+## Repair state machine
+
+```text
+draft -> queued -> claimed -> repairing -> verifying -> review_ready -> resolved
+                    |             |           |
+                    v             v           v
+                cancelled     needs_input  verification_failed
+                                  |           |
+                                  +-----> failed
+
+review_ready/resolved/dismissed -> reopened -> queued
+```
+
+Every transition is append-only and has a monotonic sequence, actor, timestamp,
+and active attempt identifier where required. Invalid transitions fail without
+changing state. Terminal operations are idempotent for the same request ID.
+
+The overlay renders each finding independently. A batch has stable order but
+is not a filesystem transaction. Until workspace-mutation scheduling is
+implemented, the connected coding agent must claim and edit one finding at a
+time, then re-observe after hot reload before using any remaining target.
+
+## Coding-agent handoff
+
+The MCP repair surface is:
+
+- `test_repair_watch`
+- `test_repair_claim`
+- `test_repair_progress`
+- `test_repair_reply`
+- `test_repair_complete`
+- `test_repair_fail`
+- `test_repair_cancel`
+- `test_repair_verify`
+
+Start the MCP host with a host-fixed URL and browser policy:
+
+```bash
+a3s-test mcp \
+  --web-url http://127.0.0.1:3000 \
+  --web-allow-domain cdn.example.test
+```
+
+The coding agent starts a Web session, calls `test_repair_watch`, claims one
+finding, reports `progress` before editing, reports `complete` when editing is
+done, and calls `test_repair_verify` with its focused check results. Claims default to a derived
+attempt ID and a five-minute lease. The returned attempt ID must be repeated
+on progress, reply, complete, and fail transitions. A watch call is bounded by
+both its requested timeout and the browser command deadline, and uses a short
+batch window to keep findings submitted together in stable order.
+
+For direct CLI sessions, equivalent commands are available under
+`a3s-test agent repair-*`. The `next` field emitted after claim and progress
+contains the active `--attempt-id` so a coding agent can continue safely.
+
+Use bounded scoped inspection when the normal observation is too broad:
+
+```bash
+a3s-test agent inspect \
+  --session checkout \
+  --component checkout-form \
+  --detail forensic \
+  --limit 100 \
+  --json
+```
+
+MCP exposes the same operation as `test_inspect`, with mutually exclusive
+page, node, component, and region scopes. Each inspection replaces the latest
+observation and emits fresh `@cN` refs.
+
+`watch` first drains already queued work, then waits with bounded timeout and
+batch window. A claim uses a lease and attempt ID. If a worker disappears
+before reporting that editing began, the lease can safely return to the queue.
+Once editing may have occurred, A3S Test records `needs_input` instead of
+silently handing the same attempt to another worker.
+
+Submitting a repair authorizes the connected coding agent to address only the
+listed findings inside its already authorized workspace. It does not authorize
+commit, push, package installation, publication, deployment, destructive
+reversion, or arbitrary commands supplied by the page.
+
+## Verification
+
+After the coding agent reports completion, A3S Test performs browser-owned
+verification before `review_ready`. The caller retries the bounded verify
+operation until a newer ready revision is available; A3S Test does not add an
+unbounded sleep:
+
+1. wait for the Test Kit to report a newer ready revision;
+2. observe again and resolve the target or its declared replacement;
+3. evaluate explicit browser-verifiable success criteria;
+4. compare console and page errors against the caller-supplied before baseline;
+5. retain bounded after context in the typed verification result;
+6. attach the coding agent's changed-file and focused-check report.
+
+The current protocol stops at `review_ready`. Human acceptance/rejection,
+automatic resolution policy, and retained reopen flows remain roadmap work.
+
+`test_repair_verify` requires a newer ready context revision, re-inspects the
+target through its semantic locators, compares caller-supplied before counts
+with bounded current console and page-error counts, and records relative
+changed-file paths plus focused check results. It
+stores a typed verification result in the append-only ledger. When a stable
+locator and explicit text criterion exist, it also returns a syntax-validated
+ACL regression candidate for review. The candidate is not executed, committed,
+or treated as proven coverage.
+
+## CI and compatibility
+
+CI should enable `A3STestKit` but omit `A3SReviewOverlay`. Pages without the
+SDK continue to use the legacy accessibility observation and action protocol.
+Executable-only capability discovery reports the Page Context field as
+unknown; bridge presence and protocol are discovered independently from the
+loaded page. Unsupported or malformed bridges fail closed for scoped context
+operations without exposing arbitrary browser evaluation to the agent.
+
+Treat `a3s.test.page-context/1` and `a3s.test.repair/1` as versioned contracts.
+Additive SDK releases may add optional fields or capabilities but must retain
+the hard payload bounds, private node-ID handling, redaction behavior, and
+latest-observation ref expiry.
+
+## Storage and recovery
+
+Page drafts may use browser-local ephemeral storage. Submitted repair state is
+authoritative only in the owning A3S Test agent-session directory:
+
+```text
+.a3s-test/agent-sessions/<session>/
+├── session.json
+├── events.jsonl
+├── report.json
+└── repairs.jsonl
+```
+
+No separate hidden test session, database, or model loop owns repair state.
+
+## License boundary
+
+The feature set is independently implemented from public behavior and this
+specification. Agentation source code, styles, icons, templates, generated
+markup, and output wording are not copied into the MIT-licensed A3S Test
+implementation.

@@ -2,13 +2,19 @@ use std::ffi::OsString;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU8, Ordering};
 use std::sync::Arc;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use a3s_test_core::{
-    Action, CaptureOperation, DriverError, DriverSession, Evidence, Expectation, ScenarioContext,
-    StepOutput, Surface, SurfaceDriver, SurfaceObservation, Target, TestStep, VideoOperation,
+    Action, CaptureOperation, DriverError, DriverSession, Evidence, Expectation,
+    PageContextInspectRequest, PageContextInspectScope, PageContextObservation,
+    PageContextSnapshot, RepairAclProof, RepairEvidenceBundle, RepairEvidencePhase,
+    RepairEvidenceRequest, RepairFinding, RepairHumanAction, RepairStatusEvent, ScenarioContext,
+    StepOutput, Surface, SurfaceDriver, SurfaceObservation, Target, TestStep, TestSuite,
+    VideoOperation, PAGE_CONTEXT_PROTOCOL,
 };
 use async_trait::async_trait;
 use serde_json::Value;
+use sha2::{Digest, Sha256};
 use tokio::sync::OnceCell;
 
 use crate::actions::{
@@ -22,7 +28,7 @@ use crate::capabilities;
 use crate::process::{create_runtime_directory, terminate_owned_session, SessionRegistration};
 use crate::protocol::{
     bounded, compact_component, direct_selector, invocation, scalar_bool, scalar_string,
-    target_action, validate_component, wait_args,
+    target_action, validate_component, visibility_args, wait_args,
 };
 use crate::runtime::RuntimeDirectory;
 use crate::{AgentBrowserConfig, BrowserCapabilities, CommandExecutor, TokioCommandExecutor};
@@ -32,6 +38,57 @@ mod advanced;
 const SESSION_FRESH: u8 = 0;
 const SESSION_ACTIVE: u8 = 1;
 const SESSION_START_FAILED: u8 = 2;
+const PAGE_CONTEXT_SCRIPT: &str = r#"(() => {
+  const bridge = window[Symbol.for("a3s.test.page-context")];
+  if (!bridge || typeof bridge.probe !== "function" || typeof bridge.snapshot !== "function") {
+    return { present: false };
+  }
+  const probe = bridge.probe();
+  if (probe?.protocol !== "a3s.test.page-context/1") {
+    return { present: false };
+  }
+  const snapshot = bridge.snapshot({ detail: "summary" });
+  return { present: true, ...snapshot };
+})()"#;
+const TAKE_REPAIRS_SCRIPT: &str = r#"((limit) => {
+  const bridge = window[Symbol.for("a3s.test.page-context")];
+  if (!bridge || typeof bridge.takeRepairBatch !== "function") return [];
+  return bridge.takeRepairBatch(limit);
+})(50)"#;
+const TAKE_REPAIR_ACTIONS_SCRIPT: &str = r#"((limit) => {
+  const bridge = window[Symbol.for("a3s.test.page-context")];
+  if (!bridge || typeof bridge.takeRepairActions !== "function") return [];
+  return bridge.takeRepairActions(limit);
+})(50)"#;
+const WAIT_REPAIRS_SCRIPT: &str = r#"(async ({ limit, timeoutMs, batchWindowMs }) => {
+  const bridge = window[Symbol.for("a3s.test.page-context")];
+  if (!bridge || typeof bridge.takeRepairBatch !== "function") return [];
+  const peek = () => typeof bridge.peekRepairBatch === "function"
+    ? bridge.peekRepairBatch(limit)
+    : bridge.listRepairs?.().filter((repair) => repair.status === "queued").slice(0, limit) ?? [];
+  if (peek().length > 0) return bridge.takeRepairBatch(limit);
+  if (typeof bridge.subscribe !== "function" || timeoutMs <= 0) return [];
+  await new Promise((resolve) => {
+    let settled = false;
+    let batchTimer;
+    const finish = () => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timeoutTimer);
+      if (batchTimer) clearTimeout(batchTimer);
+      unsubscribe();
+      resolve();
+    };
+    const timeoutTimer = setTimeout(finish, timeoutMs);
+    const unsubscribe = bridge.subscribe((event) => {
+      if (event?.type !== "repair.submitted") return;
+      if (batchWindowMs === 0) finish();
+      else if (!batchTimer) batchTimer = setTimeout(finish, batchWindowMs);
+    });
+    if (peek().length > 0) finish();
+  });
+  return bridge.takeRepairBatch(limit);
+})({ limit: 50, timeoutMs: 0, batchWindowMs: 0 })"#;
 
 #[derive(Clone, Debug)]
 pub struct AgentBrowserConnectionConfig {
@@ -200,7 +257,14 @@ struct ActiveVideo {
 
 impl AgentBrowserSession {
     pub async fn observe_surface(&mut self) -> Result<SurfaceObservation, DriverError> {
-        <Self as DriverSession>::observe(self).await
+        self.capture_observation(false).await
+    }
+
+    pub async fn observe_surface_interactive(
+        &mut self,
+        interactive: bool,
+    ) -> Result<SurfaceObservation, DriverError> {
+        self.capture_observation(interactive).await
     }
 
     pub async fn execute_action(
@@ -222,6 +286,82 @@ impl AgentBrowserSession {
         <Self as DriverSession>::close(self).await
     }
 
+    pub async fn take_repair_batch(
+        &mut self,
+        limit: usize,
+    ) -> Result<Vec<RepairFinding>, DriverError> {
+        <Self as DriverSession>::take_repairs(self, limit).await
+    }
+
+    pub async fn wait_for_repair_batch(
+        &mut self,
+        limit: usize,
+        timeout_ms: u64,
+        batch_window_ms: u64,
+    ) -> Result<Vec<RepairFinding>, DriverError> {
+        <Self as DriverSession>::wait_for_repairs(self, limit, timeout_ms, batch_window_ms).await
+    }
+
+    pub async fn project_repair_event(
+        &mut self,
+        event: &RepairStatusEvent,
+    ) -> Result<(), DriverError> {
+        <Self as DriverSession>::apply_repair_event(self, event).await
+    }
+
+    pub async fn take_human_repair_actions(
+        &mut self,
+        limit: usize,
+    ) -> Result<Vec<RepairHumanAction>, DriverError> {
+        <Self as DriverSession>::take_repair_actions(self, limit).await
+    }
+
+    pub async fn capture_owned_repair_evidence(
+        &mut self,
+        request: &RepairEvidenceRequest,
+    ) -> Result<RepairEvidenceBundle, DriverError> {
+        <Self as DriverSession>::capture_repair_evidence(self, request).await
+    }
+
+    pub async fn prove_repair_acl_candidate(
+        &mut self,
+        finding_id: &str,
+        attempt_id: &str,
+        finding_url: &str,
+        candidate: &str,
+    ) -> Result<RepairAclProof, DriverError> {
+        <Self as DriverSession>::prove_repair_acl(
+            self,
+            finding_id,
+            attempt_id,
+            finding_url,
+            candidate,
+        )
+        .await
+    }
+
+    pub async fn validate_context_revision(
+        &mut self,
+        expected_revision: u64,
+    ) -> Result<(), DriverError> {
+        <Self as DriverSession>::validate_page_context_revision(self, expected_revision).await
+    }
+
+    pub async fn inspect_context(
+        &mut self,
+        request: &PageContextInspectRequest,
+    ) -> Result<PageContextObservation, DriverError> {
+        <Self as DriverSession>::inspect_page_context(self, request).await
+    }
+
+    pub async fn console_error_count(&mut self) -> Result<u32, DriverError> {
+        <Self as DriverSession>::page_console_error_count(self).await
+    }
+
+    pub async fn page_error_count(&mut self) -> Result<u32, DriverError> {
+        <Self as DriverSession>::page_error_count(self).await
+    }
+
     #[must_use]
     pub fn active_video_path(&self) -> Option<&str> {
         self.active_video
@@ -233,11 +373,7 @@ impl AgentBrowserSession {
 #[async_trait]
 impl DriverSession for AgentBrowserSession {
     async fn observe(&mut self) -> Result<SurfaceObservation, DriverError> {
-        self.ensure_open()?;
-        let data = self
-            .execute_command(vec![OsString::from("snapshot")])
-            .await?;
-        Ok(SurfaceObservation::new("browser accessibility snapshot").with_data(data))
+        self.capture_observation(false).await
     }
 
     async fn execute(&mut self, step: &TestStep) -> Result<StepOutput, DriverError> {
@@ -249,13 +385,14 @@ impl DriverSession for AgentBrowserSession {
                 .await
                 .map(|data| StepOutput::new("page opened").with_data(data)),
             Action::Snapshot { interactive } => {
-                let mut args = vec![OsString::from("snapshot")];
-                if *interactive {
-                    args.push(OsString::from("-i"));
-                }
-                self.execute_command(args)
+                self.capture_observation(*interactive)
                     .await
-                    .map(|data| StepOutput::new("page snapshot captured").with_data(data))
+                    .map(|observation| StepOutput {
+                        summary: "page snapshot captured".to_string(),
+                        data: observation.data,
+                        evidence: observation.evidence,
+                        page_context: observation.page_context,
+                    })
             }
             Action::Click { target } => {
                 let args = target_action(target, "click", None)?;
@@ -403,6 +540,303 @@ impl DriverSession for AgentBrowserSession {
         }
     }
 
+    async fn take_repairs(&mut self, limit: usize) -> Result<Vec<RepairFinding>, DriverError> {
+        self.ensure_open()?;
+        let bounded = limit.clamp(1, 50);
+        let script = TAKE_REPAIRS_SCRIPT.replace("(50)", &format!("({bounded})"));
+        let value = self
+            .execute_command(vec!["eval".into(), script.into()])
+            .await?;
+        serde_json::from_value(browser_result(value)).map_err(|error| {
+            DriverError::new(
+                "test.driver.web.repair_queue_invalid",
+                format!("Test Kit repair queue returned invalid findings: {error}"),
+            )
+        })
+    }
+
+    async fn wait_for_repairs(
+        &mut self,
+        limit: usize,
+        timeout_ms: u64,
+        batch_window_ms: u64,
+    ) -> Result<Vec<RepairFinding>, DriverError> {
+        self.ensure_open()?;
+        let bounded_limit = limit.clamp(1, 50);
+        let command_budget_ms = u64::try_from(self.config.command_timeout.as_millis())
+            .unwrap_or(u64::MAX)
+            .saturating_sub(100)
+            .max(1);
+        let bounded_timeout = timeout_ms.min(300_000).min(command_budget_ms);
+        let bounded_window = batch_window_ms.min(5_000).min(bounded_timeout);
+        let script = WAIT_REPAIRS_SCRIPT
+            .replace("limit: 50", &format!("limit: {bounded_limit}"))
+            .replace("timeoutMs: 0", &format!("timeoutMs: {bounded_timeout}"))
+            .replace(
+                "batchWindowMs: 0",
+                &format!("batchWindowMs: {bounded_window}"),
+            );
+        let value = self
+            .execute_command(vec!["eval".into(), script.into()])
+            .await?;
+        serde_json::from_value(browser_result(value)).map_err(|error| {
+            DriverError::new(
+                "test.driver.web.repair_queue_invalid",
+                format!("Test Kit repair watch returned invalid findings: {error}"),
+            )
+        })
+    }
+
+    async fn apply_repair_event(&mut self, event: &RepairStatusEvent) -> Result<(), DriverError> {
+        self.ensure_open()?;
+        let event = serde_json::to_string(event).map_err(|error| {
+            DriverError::new(
+                "test.driver.web.repair_event_invalid",
+                format!("failed to encode repair status event: {error}"),
+            )
+        })?;
+        let script = format!(
+            "(() => {{ const bridge = window[Symbol.for(\"a3s.test.page-context\")]; return bridge?.applyRepairEvent?.({event}) ?? null; }})()"
+        );
+        self.execute_command(vec!["eval".into(), script.into()])
+            .await
+            .map(drop)
+    }
+
+    async fn take_repair_actions(
+        &mut self,
+        limit: usize,
+    ) -> Result<Vec<RepairHumanAction>, DriverError> {
+        self.ensure_open()?;
+        let bounded = limit.clamp(1, 50);
+        let script = TAKE_REPAIR_ACTIONS_SCRIPT.replace("(50)", &format!("({bounded})"));
+        let value = self
+            .execute_command(vec!["eval".into(), script.into()])
+            .await?;
+        serde_json::from_value(browser_result(value)).map_err(|error| {
+            DriverError::new(
+                "test.driver.web.repair_action_invalid",
+                format!("Test Kit returned invalid human repair actions: {error}"),
+            )
+        })
+    }
+
+    async fn capture_repair_evidence(
+        &mut self,
+        request: &RepairEvidenceRequest,
+    ) -> Result<RepairEvidenceBundle, DriverError> {
+        self.ensure_open()?;
+        let context = self.capture_page_context().await?;
+        let snapshot = context.snapshot.ok_or_else(|| {
+            DriverError::new(
+                "test.driver.web.repair_evidence_context_missing",
+                "repair evidence requires a compatible Test Kit context",
+            )
+        })?;
+        let context_revision = snapshot.revision.ok_or_else(|| {
+            DriverError::new(
+                "test.driver.web.repair_evidence_context_invalid",
+                "repair evidence context is missing its revision",
+            )
+        })?;
+        let context_bytes = serde_json::to_vec(&snapshot).map_err(|error| {
+            DriverError::new(
+                "test.driver.web.repair_evidence_invalid",
+                format!("failed to encode repair page context: {error}"),
+            )
+        })?;
+        let phase = match request.phase {
+            RepairEvidencePhase::Before => "before",
+            RepairEvidencePhase::After => "after",
+        };
+        let attempt = request.attempt_id.as_deref().unwrap_or("submitted");
+        validate_component(&request.finding_id, "finding id")?;
+        validate_component(attempt, "attempt id")?;
+        let requested = format!("repairs/{}/{attempt}/{phase}.png", request.finding_id);
+        let screenshot_output = self.screenshot(&requested).await?;
+        let screenshot = screenshot_output
+            .evidence
+            .into_iter()
+            .next()
+            .ok_or_else(|| {
+                DriverError::new(
+                    "test.driver.web.repair_evidence_invalid",
+                    "repair screenshot did not produce evidence metadata",
+                )
+            })?;
+        let screenshot_path = PathBuf::from(&screenshot.path);
+        let screenshot_bytes = tokio::fs::read(&screenshot_path).await.map_err(|error| {
+            DriverError::new(
+                "test.driver.web.repair_evidence_invalid",
+                format!("failed to read repair screenshot: {error}"),
+            )
+        })?;
+        Ok(RepairEvidenceBundle {
+            captured_at_ms: unix_ms(),
+            context_revision,
+            context_sha256: format!("{:x}", Sha256::digest(context_bytes)),
+            context: snapshot,
+            console_errors: self.page_console_error_count().await?,
+            page_errors: self.page_error_count().await?,
+            screenshot,
+            screenshot_sha256: format!("{:x}", Sha256::digest(screenshot_bytes)),
+        })
+    }
+
+    async fn prove_repair_acl(
+        &mut self,
+        finding_id: &str,
+        attempt_id: &str,
+        finding_url: &str,
+        candidate: &str,
+    ) -> Result<RepairAclProof, DriverError> {
+        self.ensure_open()?;
+        validate_component(finding_id, "finding id")?;
+        validate_component(attempt_id, "attempt id")?;
+        let suite = TestSuite::from_repair_acl(candidate, finding_url).map_err(|error| {
+            DriverError::new(
+                "test.driver.repair_acl_invalid",
+                format!("repair ACL candidate is invalid: {}", error.message()),
+            )
+        })?;
+        let requested = format!("repairs/{finding_id}/{attempt_id}/regression.acl");
+        let path = prepare_artifact_path(&self.artifacts_dir, &requested).await?;
+        tokio::fs::write(&path, candidate).await.map_err(|error| {
+            DriverError::new(
+                "test.driver.repair_acl_write_failed",
+                format!("failed to persist repair ACL candidate: {error}"),
+            )
+        })?;
+        validate_artifact_file(&self.artifacts_dir, &path).await?;
+
+        let proof_context = ScenarioContext {
+            run_id: format!("repair-proof-{}", compact_component(attempt_id, 24)),
+            scenario_id: format!("proof-{}", compact_component(finding_id, 24)),
+            artifacts_dir: self
+                .artifacts_dir
+                .join("repairs")
+                .join(finding_id)
+                .join(attempt_id)
+                .join("proof"),
+        };
+        let driver =
+            AgentBrowserDriver::with_executor(self.config.clone(), Arc::clone(&self.executor));
+        let mut proof_session = driver.open(&proof_context).await?;
+        let scenario = suite.scenarios.first().ok_or_else(|| {
+            DriverError::new(
+                "test.driver.repair_acl_invalid",
+                "repair ACL candidate has no scenario",
+            )
+        })?;
+        let mut failure = None;
+        for step in &scenario.steps {
+            if let Err(error) = proof_session.execute(step).await {
+                failure = Some(format!(
+                    "step '{}' failed with {}: {}",
+                    step.id,
+                    error.code(),
+                    error.message()
+                ));
+                break;
+            }
+        }
+        if let Err(error) = proof_session.close().await {
+            let cleanup = format!("fresh proof browser cleanup failed: {}", error.message());
+            failure =
+                Some(failure.map_or(cleanup.clone(), |existing| format!("{existing}; {cleanup}")));
+        }
+        let passed = failure.is_none();
+        Ok(RepairAclProof {
+            path: requested,
+            passed,
+            summary: failure.unwrap_or_else(|| {
+                "ACL candidate passed in a fresh browser session with the owning network policy"
+                    .to_string()
+            }),
+        })
+    }
+
+    async fn validate_page_context_revision(
+        &mut self,
+        expected_revision: u64,
+    ) -> Result<(), DriverError> {
+        self.ensure_open()?;
+        let current = self.capture_page_context().await?;
+        if !current.present {
+            return Err(DriverError::new(
+                "test.driver.web.page_context_lost",
+                "the Test Kit page context bridge is no longer present",
+            ));
+        }
+        if current.revision != Some(expected_revision) {
+            return Err(DriverError::new(
+                "test.driver.web.page_context_stale",
+                format!(
+                    "page context revision changed from {expected_revision} to {}",
+                    current
+                        .revision
+                        .map_or_else(|| "unknown".to_string(), |value| value.to_string())
+                ),
+            ));
+        }
+        Ok(())
+    }
+
+    async fn inspect_page_context(
+        &mut self,
+        request: &PageContextInspectRequest,
+    ) -> Result<PageContextObservation, DriverError> {
+        self.ensure_open()?;
+        let scope = match &request.scope {
+            PageContextInspectScope::Page => serde_json::json!({ "kind": "page" }),
+            PageContextInspectScope::Node(node_id) => {
+                serde_json::json!({ "kind": "node", "nodeId": node_id })
+            }
+            PageContextInspectScope::Component(component_id) => {
+                serde_json::json!({ "kind": "component", "componentId": component_id })
+            }
+            PageContextInspectScope::Region {
+                space,
+                x,
+                y,
+                width,
+                height,
+            } => serde_json::json!({
+                "kind": "region",
+                "space": space,
+                "x": x,
+                "y": y,
+                "width": width,
+                "height": height,
+            }),
+        };
+        let request = serde_json::json!({
+            "detail": request.detail,
+            "scope": scope,
+            "cursor": request.cursor,
+            "limits": { "nodes": request.limit.clamp(1, 500) },
+        });
+        let script = format!(
+            "(() => {{ const bridge = window[Symbol.for(\"a3s.test.page-context\")]; if (!bridge || typeof bridge.probe !== \"function\" || typeof bridge.snapshot !== \"function\") return {{ present: false }}; const probe = bridge.probe(); if (probe?.protocol !== \"a3s.test.page-context/1\") return {{ present: false }}; return {{ present: true, ...bridge.snapshot({request}) }}; }})()"
+        );
+        let value = self
+            .execute_command(vec!["eval".into(), script.into()])
+            .await?;
+        parse_page_context_value(browser_result(value))
+    }
+
+    async fn page_console_error_count(&mut self) -> Result<u32, DriverError> {
+        self.ensure_open()?;
+        let value = self.execute_command(vec!["console".into()]).await?;
+        Ok(count_error_entries(&browser_result(value)))
+    }
+
+    async fn page_error_count(&mut self) -> Result<u32, DriverError> {
+        self.ensure_open()?;
+        let value = self.execute_command(vec!["errors".into()]).await?;
+        Ok(count_collection_entries(&browser_result(value)))
+    }
+
     async fn close(&mut self) -> Result<(), DriverError> {
         if self.closed {
             return Ok(());
@@ -434,6 +868,41 @@ impl DriverSession for AgentBrowserSession {
 }
 
 impl AgentBrowserSession {
+    async fn capture_observation(
+        &mut self,
+        interactive: bool,
+    ) -> Result<SurfaceObservation, DriverError> {
+        self.ensure_open()?;
+        for attempt in 0..2 {
+            let before = self.capture_page_context().await?;
+            let mut args = vec![OsString::from("snapshot")];
+            if interactive {
+                args.push(OsString::from("-i"));
+            }
+            let data = self.execute_command(args).await?;
+            let after = self.capture_page_context().await?;
+            if stable_page_context(&before, &after) {
+                return Ok(SurfaceObservation::new("browser accessibility snapshot")
+                    .with_data(data)
+                    .with_page_context(after));
+            }
+            if attempt == 1 {
+                return Err(DriverError::new(
+                    "test.driver.web.page_context_changed",
+                    "page context changed while the accessibility snapshot was captured",
+                ));
+            }
+        }
+        unreachable!("bounded page context capture loop always returns")
+    }
+
+    async fn capture_page_context(&self) -> Result<PageContextObservation, DriverError> {
+        let value = self
+            .execute_command(vec!["eval".into(), PAGE_CONTEXT_SCRIPT.into()])
+            .await?;
+        parse_page_context_value(browser_result(value))
+    }
+
     fn ensure_open(&self) -> Result<(), DriverError> {
         if self.closed {
             return Err(DriverError::new(
@@ -471,21 +940,18 @@ impl AgentBrowserSession {
                 Ok(StepOutput::new("URL matched").with_data(data))
             }
             Expectation::Visible(target) => {
-                let selector = direct_selector(target)?;
-                let data = self
-                    .execute_command(vec![
-                        "is".into(),
-                        "visible".into(),
-                        OsString::from(selector),
-                    ])
-                    .await?;
-                if scalar_bool(&data) == Some(false) {
-                    return Err(DriverError::new(
+                let data = self.execute_command(visibility_args(target)?).await?;
+                match scalar_bool(&browser_result(data.clone())).or_else(|| scalar_bool(&data)) {
+                    Some(true) => Ok(StepOutput::new("target is visible").with_data(data)),
+                    Some(false) => Err(DriverError::new(
                         "test.assert.visible",
                         "target is not visible",
-                    ));
+                    )),
+                    None => Err(DriverError::new(
+                        "test.driver.web.output_invalid",
+                        "browser visibility response did not contain a boolean",
+                    )),
                 }
-                Ok(StepOutput::new("target is visible").with_data(data))
             }
         }
     }
@@ -738,6 +1204,81 @@ impl AgentBrowserSession {
             Ordering::Acquire,
         );
     }
+}
+
+fn browser_result(value: Value) -> Value {
+    value
+        .pointer("/data/result")
+        .cloned()
+        .or_else(|| value.get("result").cloned())
+        .unwrap_or(value)
+}
+
+fn parse_page_context_value(mut value: Value) -> Result<PageContextObservation, DriverError> {
+    if value.get("present").and_then(Value::as_bool) != Some(true) {
+        return Ok(PageContextObservation::absent());
+    }
+    if let Some(object) = value.as_object_mut() {
+        object.remove("present");
+    }
+    let parsed: PageContextSnapshot = serde_json::from_value(value).map_err(|error| {
+        DriverError::new(
+            "test.driver.web.page_context_invalid",
+            format!("page context bridge returned an invalid bounded snapshot: {error}"),
+        )
+    })?;
+    if parsed.protocol.as_deref() != Some(PAGE_CONTEXT_PROTOCOL) {
+        return Err(DriverError::new(
+            "test.driver.web.page_context_protocol_unsupported",
+            "page context bridge protocol is unsupported",
+        ));
+    }
+    Ok(PageContextObservation::from_snapshot(parsed))
+}
+
+fn count_collection_entries(value: &Value) -> u32 {
+    let count = value
+        .as_array()
+        .map(Vec::len)
+        .or_else(|| value.get("entries").and_then(Value::as_array).map(Vec::len))
+        .or_else(|| value.get("errors").and_then(Value::as_array).map(Vec::len))
+        .unwrap_or(0);
+    u32::try_from(count).unwrap_or(u32::MAX)
+}
+
+fn count_error_entries(value: &Value) -> u32 {
+    let entries = value
+        .as_array()
+        .or_else(|| value.get("entries").and_then(Value::as_array));
+    let count = entries.map_or(0, |entries| {
+        entries
+            .iter()
+            .filter(|entry| {
+                entry
+                    .get("type")
+                    .or_else(|| entry.get("level"))
+                    .and_then(Value::as_str)
+                    .is_some_and(|level| level.eq_ignore_ascii_case("error"))
+            })
+            .count()
+    });
+    u32::try_from(count).unwrap_or(u32::MAX)
+}
+
+fn stable_page_context(before: &PageContextObservation, after: &PageContextObservation) -> bool {
+    match (before.present, after.present) {
+        (false, false) => true,
+        (true, true) => before.protocol == after.protocol && before.revision == after.revision,
+        _ => false,
+    }
+}
+
+fn unix_ms() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .ok()
+        .and_then(|duration| u64::try_from(duration.as_millis()).ok())
+        .unwrap_or_default()
 }
 
 impl Drop for AgentBrowserSession {

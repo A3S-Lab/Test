@@ -212,13 +212,15 @@ impl Runner {
                 .await;
 
             let step_result = match execution {
-                StepExecution::Completed(Ok(output)) => {
-                    StepResult::passed(&step.id, step_started.elapsed(), attempts, output)
-                }
-                StepExecution::Completed(Err(error)) => {
-                    status = RunStatus::Failed;
-                    StepResult::failed(&step.id, step_started.elapsed(), attempts, error)
-                }
+                StepExecution::Completed(result) => match *result {
+                    Ok(output) => {
+                        StepResult::passed(&step.id, step_started.elapsed(), attempts, output)
+                    }
+                    Err(error) => {
+                        status = RunStatus::Failed;
+                        StepResult::failed(&step.id, step_started.elapsed(), attempts, error)
+                    }
+                },
                 StepExecution::TimedOut => {
                     status = RunStatus::TimedOut;
                     StepResult::terminal(
@@ -289,14 +291,15 @@ impl Runner {
                 () = cancellation.cancelled() => StepExecution::Cancelled,
                 result = tokio::time::timeout_at(deadline.into(), session.execute(step)) => {
                     match result {
-                        Ok(result) => StepExecution::Completed(result),
+                        Ok(result) => StepExecution::Completed(Box::new(result)),
                         Err(_) => StepExecution::TimedOut,
                     }
                 }
             };
             let retryable = matches!(
                 &execution,
-                StepExecution::Completed(Err(error)) if error.retryable()
+                StepExecution::Completed(result)
+                    if matches!(result.as_ref(), Err(error) if error.retryable())
             );
             if !retryable || attempts > self.options.retry_policy.max_retries {
                 return (execution, attempts);
@@ -336,7 +339,7 @@ async fn wait_for_retry(
 }
 
 enum StepExecution {
-    Completed(Result<StepOutput, DriverError>),
+    Completed(Box<Result<StepOutput, DriverError>>),
     TimedOut,
     Cancelled,
 }

@@ -1,8 +1,12 @@
 use std::sync::Arc;
 
-use a3s_test_core::{Action, ACTION_PROTOCOL_REVISION};
+use a3s_test_core::{
+    Action, PageContextInspectRequest, PageContextInspectScope, RepairActor, RepairStatus,
+    ACTION_PROTOCOL_REVISION,
+};
 use a3s_test_session::{
-    ActSessionRequest, AgentSessionManager, FinishSessionRequest, SessionError, StartSessionRequest,
+    ActSessionRequest, AgentSessionManager, FinishSessionRequest, RepairTransition,
+    RepairVerifyRequest, SessionError, StartSessionRequest,
 };
 use anyhow::{Context, Result};
 use serde::de::DeserializeOwned;
@@ -191,6 +195,14 @@ async fn call_tool(
                 .await
                 .map(|value| tool_success("surface observed", value))
         }
+        "test_inspect" => {
+            let request = parse_value::<InspectArgument>(arguments, "inspect arguments")?;
+            let (session, request) = request.into_parts();
+            manager
+                .inspect_page_context(&session, request)
+                .await
+                .map(|value| tool_success("scoped page context inspected", value))
+        }
         "test_act" => {
             let request = parse_value::<ActSessionRequest>(arguments, "act arguments")?;
             manager
@@ -212,6 +224,76 @@ async fn call_tool(
                 .await
                 .map(|value| tool_success("test session aborted", value))
         }
+        "test_repair_watch" => {
+            let request = parse_value::<RepairWatchArgument>(arguments, "repair watch arguments")?;
+            let limit = request.limit();
+            match manager
+                .watch_repairs(
+                    &request.session,
+                    limit,
+                    request.timeout_ms(),
+                    request.batch_window_ms(),
+                )
+                .await
+            {
+                Ok(queued) => manager.repair_batches(&request.session).await.map(|batches| {
+                    tool_success(
+                        "queued repairs",
+                        json!({ "session": request.session, "repairs": queued, "batches": batches }),
+                    )
+                }),
+                Err(error) => Err(error),
+            }
+        }
+        "test_repair_claim" => {
+            repair_transition(manager, arguments, RepairStatus::Claimed, "repair claimed").await
+        }
+        "test_repair_progress" => {
+            repair_transition(
+                manager,
+                arguments,
+                RepairStatus::Repairing,
+                "repair progress recorded",
+            )
+            .await
+        }
+        "test_repair_reply" => {
+            repair_transition(
+                manager,
+                arguments,
+                RepairStatus::NeedsInput,
+                "repair reply requested",
+            )
+            .await
+        }
+        "test_repair_complete" => {
+            repair_transition(
+                manager,
+                arguments,
+                RepairStatus::Verifying,
+                "repair queued for verification",
+            )
+            .await
+        }
+        "test_repair_verify" => {
+            let request = parse_value::<RepairVerifyRequest>(arguments, "repair verify arguments")?;
+            manager
+                .verify_repair(request)
+                .await
+                .map(|value| tool_success("repair verification completed", value))
+        }
+        "test_repair_fail" => {
+            repair_transition(manager, arguments, RepairStatus::Failed, "repair failed").await
+        }
+        "test_repair_cancel" => {
+            repair_transition(
+                manager,
+                arguments,
+                RepairStatus::Cancelled,
+                "repair cancelled",
+            )
+            .await
+        }
         "test_schema" => Ok(tool_success(
             "typed action schema",
             json!({
@@ -228,6 +310,61 @@ async fn call_tool(
         }
     };
     Ok(result.unwrap_or_else(tool_failure))
+}
+
+async fn repair_transition(
+    manager: &AgentSessionManager,
+    arguments: Value,
+    status: RepairStatus,
+    summary: &str,
+) -> Result<Value, SessionError> {
+    let request: RepairTransitionArgument = serde_json::from_value(arguments).map_err(|error| {
+        SessionError::new(
+            "test.session.repair_invalid",
+            format!("invalid repair transition arguments: {error}"),
+        )
+    })?;
+    let now_ms = unix_ms();
+    let attempt_id = if status == RepairStatus::Claimed {
+        Some(
+            request
+                .attempt_id
+                .unwrap_or_else(|| derived_attempt_id(&request.request_id)),
+        )
+    } else {
+        request.attempt_id
+    };
+    let lease_expires_at_ms = if status == RepairStatus::Claimed {
+        let lease_ms = request.lease_ms.unwrap_or(300_000);
+        if lease_ms == 0 || lease_ms > 15 * 60 * 1_000 {
+            return Err(SessionError::new(
+                "test.session.repair_lease_invalid",
+                "repair claim lease must be between 1ms and 15 minutes",
+            ));
+        }
+        Some(
+            request
+                .lease_expires_at_ms
+                .unwrap_or_else(|| now_ms.saturating_add(lease_ms)),
+        )
+    } else {
+        request.lease_expires_at_ms
+    };
+    manager
+        .transition_repair(RepairTransition {
+            session: request.session,
+            finding_id: request.finding_id,
+            request_id: request.request_id,
+            status,
+            actor: RepairActor::Agent,
+            attempt_id,
+            lease_expires_at_ms,
+            summary: request.summary,
+            message: request.message,
+            verification: None,
+        })
+        .await
+        .map(|value| tool_success(summary, value))
 }
 
 fn tool_success(summary: &str, value: impl serde::Serialize) -> Value {
@@ -276,6 +413,11 @@ fn tool_definitions(surfaces: &[a3s_test_core::Surface]) -> Vec<Value> {
                         "type": "array",
                         "minItems": 1,
                         "items": { "type": "string", "minLength": 1 }
+                    },
+                    "auto_resolve_repairs": {
+                        "type": "boolean",
+                        "default": false,
+                        "description": "Resolve only after every A3S-owned verification gate passes; human review remains the default."
                     }
                 },
                 "additionalProperties": false
@@ -287,6 +429,13 @@ fn tool_definitions(surfaces: &[a3s_test_core::Surface]) -> Vec<Value> {
             "test_observe",
             "Capture the next semantic observation and bind its refs to a new observation id.",
             session_schema(),
+            true,
+            false,
+        ),
+        tool_definition(
+            "test_inspect",
+            "Inspect one bounded current Test Kit node, component, region, or page scope and bind fresh @cN refs.",
+            inspect_schema(),
             true,
             false,
         ),
@@ -336,7 +485,106 @@ fn tool_definitions(surfaces: &[a3s_test_core::Surface]) -> Vec<Value> {
             true,
             false,
         ),
+        tool_definition("test_repair_watch", "Drain already queued Test Kit findings, then perform one bounded page pickup.", repair_watch_schema(), true, false),
+        tool_definition("test_repair_claim", "Claim one queued repair with an explicit attempt and lease.", repair_transition_schema(), false, false),
+        tool_definition("test_repair_progress", "Report that workspace editing has begun for the claimed attempt.", repair_transition_schema(), false, false),
+        tool_definition("test_repair_reply", "Request bounded human clarification for a claimed or repairing finding.", repair_transition_schema(), false, false),
+        tool_definition("test_repair_complete", "Report editing complete and move the finding to A3S Test-owned verification, not resolved.", repair_transition_schema(), false, false),
+        tool_definition("test_repair_verify", "Run A3S Test-owned browser verification against a newer ready page revision and produce a validated ACL candidate when possible.", repair_verify_schema(), false, false),
+        tool_definition("test_repair_fail", "Record a failed repair attempt without discarding its history.", repair_transition_schema(), false, false),
+        tool_definition("test_repair_cancel", "Cancel a queued or claimed repair finding.", repair_transition_schema(), false, true),
     ]
+}
+
+fn repair_watch_schema() -> Value {
+    json!({
+        "type": "object",
+        "required": ["session"],
+        "properties": {
+            "session": { "type": "string" },
+            "limit": { "type": "integer", "minimum": 1, "maximum": 50 },
+            "timeout_ms": { "type": "integer", "minimum": 1, "maximum": 300000, "default": 25000 },
+            "batch_window_ms": { "type": "integer", "minimum": 0, "maximum": 5000 }
+        },
+        "additionalProperties": false
+    })
+}
+
+fn inspect_schema() -> Value {
+    json!({
+        "type": "object",
+        "required": ["session"],
+        "properties": {
+            "session": { "type": "string" },
+            "detail": { "type": "string", "enum": ["summary", "scoped", "diff", "forensic"], "default": "scoped" },
+            "node_id": { "type": ["string", "null"] },
+            "component_id": { "type": ["string", "null"] },
+            "region": {
+                "type": ["object", "null"],
+                "required": ["space", "x", "y", "width", "height"],
+                "properties": {
+                    "space": { "type": "string", "enum": ["viewport", "document"] },
+                    "x": { "type": "integer" },
+                    "y": { "type": "integer" },
+                    "width": { "type": "integer", "minimum": 0 },
+                    "height": { "type": "integer", "minimum": 0 }
+                },
+                "additionalProperties": false
+            },
+            "cursor": { "type": ["string", "null"] },
+            "limit": { "type": "integer", "minimum": 1, "maximum": 500, "default": 100 }
+        },
+        "additionalProperties": false
+    })
+}
+
+fn repair_transition_schema() -> Value {
+    json!({
+        "type": "object",
+        "required": ["session", "finding_id", "request_id"],
+        "properties": {
+            "session": { "type": "string" },
+            "finding_id": { "type": "string" },
+            "request_id": { "type": "string" },
+            "attempt_id": { "type": ["string", "null"] },
+            "lease_expires_at_ms": { "type": ["integer", "null"], "minimum": 1 },
+            "lease_ms": { "type": ["integer", "null"], "minimum": 1, "maximum": 900000 },
+            "summary": { "type": ["string", "null"], "maxLength": 8192 },
+            "message": { "type": ["string", "null"], "maxLength": 8192 }
+        },
+        "additionalProperties": false
+    })
+}
+
+fn repair_verify_schema() -> Value {
+    json!({
+        "type": "object",
+        "required": ["session", "finding_id", "request_id", "changed_files", "checks", "summary"],
+        "properties": {
+            "session": { "type": "string" },
+            "finding_id": { "type": "string" },
+            "request_id": { "type": "string" },
+            "success_criteria_passed": { "type": ["boolean", "null"] },
+            "changed_files": { "type": "array", "maxItems": 200, "items": { "type": "string" } },
+            "checks": {
+                "type": "array",
+                "maxItems": 50,
+                "items": {
+                    "type": "object",
+                    "required": ["command", "status", "summary"],
+                    "properties": {
+                        "command": { "type": "string" },
+                        "status": { "type": "string", "enum": ["passed", "failed", "skipped"] },
+                        "summary": { "type": "string" }
+                    },
+                    "additionalProperties": false
+                }
+            },
+            "acl_candidate": { "type": ["string", "null"] },
+            "summary": { "type": "string", "minLength": 1, "maxLength": 8192 }
+        },
+        "additionalProperties": false
+    })
 }
 
 fn tool_definition(
@@ -469,6 +717,104 @@ struct ToolCall {
 #[derive(Deserialize)]
 struct SessionArgument {
     session: String,
+}
+
+#[derive(Deserialize)]
+struct InspectArgument {
+    session: String,
+    detail: Option<String>,
+    node_id: Option<String>,
+    component_id: Option<String>,
+    region: Option<InspectRegion>,
+    cursor: Option<String>,
+    limit: Option<usize>,
+}
+
+#[derive(Deserialize)]
+struct InspectRegion {
+    space: String,
+    x: i64,
+    y: i64,
+    width: u64,
+    height: u64,
+}
+
+impl InspectArgument {
+    fn into_parts(self) -> (String, PageContextInspectRequest) {
+        let scope = if let Some(node_id) = self.node_id {
+            PageContextInspectScope::Node(node_id)
+        } else if let Some(component_id) = self.component_id {
+            PageContextInspectScope::Component(component_id)
+        } else if let Some(region) = self.region {
+            PageContextInspectScope::Region {
+                space: region.space,
+                x: region.x,
+                y: region.y,
+                width: region.width,
+                height: region.height,
+            }
+        } else {
+            PageContextInspectScope::Page
+        };
+        (
+            self.session,
+            PageContextInspectRequest {
+                detail: self.detail.unwrap_or_else(|| "scoped".to_string()),
+                scope,
+                cursor: self.cursor,
+                limit: self.limit.unwrap_or(100).clamp(1, 500),
+            },
+        )
+    }
+}
+
+#[derive(Deserialize)]
+struct RepairWatchArgument {
+    session: String,
+    limit: Option<usize>,
+    timeout_ms: Option<u64>,
+    batch_window_ms: Option<u64>,
+}
+
+impl RepairWatchArgument {
+    fn limit(&self) -> usize {
+        self.limit.unwrap_or(20).clamp(1, 50)
+    }
+
+    fn timeout_ms(&self) -> u64 {
+        self.timeout_ms.unwrap_or(25_000).clamp(1, 300_000)
+    }
+
+    fn batch_window_ms(&self) -> u64 {
+        self.batch_window_ms
+            .unwrap_or(250)
+            .min(5_000)
+            .min(self.timeout_ms())
+    }
+}
+
+#[derive(Deserialize)]
+struct RepairTransitionArgument {
+    session: String,
+    finding_id: String,
+    request_id: String,
+    attempt_id: Option<String>,
+    lease_expires_at_ms: Option<u64>,
+    lease_ms: Option<u64>,
+    summary: Option<String>,
+    message: Option<String>,
+}
+
+fn unix_ms() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|duration| u64::try_from(duration.as_millis()).unwrap_or(u64::MAX))
+        .unwrap_or_default()
+}
+
+fn derived_attempt_id(request_id: &str) -> String {
+    let prefix = request_id.chars().take(120).collect::<String>();
+    format!("attempt-{prefix}")
 }
 
 struct RpcFault {

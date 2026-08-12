@@ -65,6 +65,30 @@ impl WebFixture {
     }
 }
 
+pub fn start_testkit_fixture(bundle: Vec<u8>) -> io::Result<TestKitFixture> {
+    let repaired = Arc::new(AtomicBool::new(false));
+    FixtureServer::start(Site::TestKit {
+        bundle,
+        repaired: Arc::clone(&repaired),
+    })
+    .map(|server| TestKitFixture { server, repaired })
+}
+
+pub struct TestKitFixture {
+    server: FixtureServer,
+    repaired: Arc<AtomicBool>,
+}
+
+impl TestKitFixture {
+    pub fn origin(&self) -> String {
+        self.server.origin()
+    }
+
+    pub fn set_repaired(&self, repaired: bool) {
+        self.repaired.store(repaired, Ordering::Release);
+    }
+}
+
 pub fn get(origin: &str, path: &str) -> io::Result<TestHttpResponse> {
     let address = origin
         .strip_prefix("http://")
@@ -149,8 +173,14 @@ impl Drop for FixtureServer {
 
 #[derive(Clone)]
 enum Site {
-    Primary { blocked_origin: String },
+    Primary {
+        blocked_origin: String,
+    },
     Blocked,
+    TestKit {
+        bundle: Vec<u8>,
+        repaired: Arc<AtomicBool>,
+    },
 }
 
 fn serve(
@@ -251,8 +281,56 @@ fn route(site: &Site, request: &RecordedRequest) -> Response {
     match site {
         Site::Primary { blocked_origin } => route_primary(&request.path, blocked_origin),
         Site::Blocked => route_blocked(&request.path),
+        Site::TestKit { bundle, repaired } => {
+            route_testkit(&request.path, bundle, repaired.load(Ordering::Acquire))
+        }
     }
 }
+
+fn route_testkit(path: &str, bundle: &[u8], repaired: bool) -> Response {
+    match path {
+        "/" | "/testkit.html" => Response::html(
+            TESTKIT_HTML
+                .replace(
+                    "__INITIAL_REPAIRED__",
+                    if repaired { "true" } else { "false" },
+                )
+                .replace(
+                    "__ACTION_LABEL__",
+                    if repaired {
+                        "Repaired action"
+                    } else {
+                        "Broken action"
+                    },
+                ),
+        ),
+        "/testkit.js" => Response::javascript_bytes(bundle.to_vec()),
+        "/health" => Response::text("200 OK", "ready"),
+        _ => Response::text("404 Not Found", "not found"),
+    }
+}
+
+const TESTKIT_HTML: &str = r#"<!doctype html>
+<html lang="en" data-hydrated="false">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>A3S TestKit browser fixture</title>
+    <style>
+      body { font: 16px/1.5 system-ui, sans-serif; margin: 24px; min-height: 1400px; }
+      #nested { width: 420px; height: 140px; overflow: auto; border: 1px solid #999; }
+      .virtual-space { height: 400px; }
+      #sticky { position: sticky; top: 0; transform: scale(1); }
+      #portal { position: fixed; right: 24px; top: 24px; }
+    </style>
+  </head>
+  <body>
+    <div id="root"><main><h1>Embedded TestKit E2E</h1><button id="sticky" data-testid="repair-target">__ACTION_LABEL__</button><div id="nested"><div class="virtual-space"><button id="virtual-row">Virtual row 1</button></div></div><div id="shadow-host"></div></main></div>
+    <div id="portal"></div>
+    <script>window.testkitInitialRepaired = __INITIAL_REPAIRED__;</script>
+    <script type="module" src="/testkit.js"></script>
+  </body>
+</html>"#;
 
 fn route_primary(path: &str, blocked_origin: &str) -> Response {
     match path {
@@ -333,6 +411,15 @@ impl Response {
             content_type: "text/javascript; charset=utf-8",
             headers: Vec::new(),
             body: body.into_bytes(),
+        }
+    }
+
+    fn javascript_bytes(body: Vec<u8>) -> Self {
+        Self {
+            status: "200 OK",
+            content_type: "text/javascript; charset=utf-8",
+            headers: Vec::new(),
+            body,
         }
     }
 

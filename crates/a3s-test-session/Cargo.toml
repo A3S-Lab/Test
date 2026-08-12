@@ -11,8 +11,9 @@ description = "Surface-neutral long-lived agent session application layer for A3
 a3s-test-core = { path = "../a3s-test-core" }
 futures.workspace = true
 serde.workspace = true
+serde_json.workspace = true
 tokio.workspace = true
 
 [dev-dependencies]
 async-trait.workspace = true
-serde_json.workspace = true
+tempfile = "3"

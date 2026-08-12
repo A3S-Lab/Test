@@ -1,2 +1,4 @@
 /target
 /.a3s-test
+**/node_modules/
+**/dist/
