@@ -209,6 +209,7 @@ class Runtime implements TestKitRuntime, NodeIdentity {
           ...(finding.successCriteria ? { successCriteria: finding.successCriteria } : {}),
           intent: finding.intent,
           severity: finding.severity,
+          ...(finding.relations?.length ? { relations: structuredClone(finding.relations) } : {}),
           target: structuredClone(finding.target),
           context: captured.context,
         };
@@ -631,6 +632,9 @@ function structuredRepairMarkdown(exported: StructuredRepairExport): string {
     );
     if (finding.successCriteria) {
       lines.push(`- Success criteria: ${markdownText(finding.successCriteria)}`);
+    }
+    for (const relation of finding.relations ?? []) {
+      lines.push(`- Conflicts with: \`${markdownCode(relation.findingId)}\``);
     }
     if (component) {
       lines.push(

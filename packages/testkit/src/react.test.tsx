@@ -65,6 +65,10 @@ describe("React adapter and review overlay", () => {
       target.dispatchEvent(pointerEventWithPath(target, 20, 15));
       await waitFor(() => expect(shadowQuery("textarea")).toBeTruthy());
       fireEvent.change(shadowQuery("textarea"), { target: { value: instruction } });
+      if (selector === "#two") {
+        const conflict = shadowQuery(".a3s-conflicts input");
+        fireEvent.click(conflict);
+      }
       const addDraft = Array.from(document.querySelector<HTMLElement>("[data-a3s-testkit-overlay]")!.shadowRoot!.querySelectorAll("button")).find((button) => button.textContent === "Add draft")!;
       fireEvent.click(addDraft);
       await waitFor(() => expect(shadowQuery(".a3s-list").textContent).toContain(instruction));
@@ -74,6 +78,9 @@ describe("React adapter and review overlay", () => {
     await waitFor(() => expect(onSubmitted).toHaveBeenCalledTimes(1));
     expect(onSubmitted.mock.calls[0]![0].map((repair: { instruction: string }) => repair.instruction)).toEqual(["Fix one", "Fix two"]);
     expect(new Set(onSubmitted.mock.calls[0]![0].map((repair: { batchId: string }) => repair.batchId)).size).toBe(1);
+    expect(onSubmitted.mock.calls[0]![0][1].relations).toEqual([
+      { kind: "conflicts_with", findingId: onSubmitted.mock.calls[0]![0][0].id },
+    ]);
   });
 
   it("supports drag multi-select, persistent markers, draft editing, hide, and reopen", async () => {

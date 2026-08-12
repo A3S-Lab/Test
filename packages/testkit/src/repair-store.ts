@@ -62,8 +62,28 @@ function validDraft(value: RepairDraft): boolean {
       value.instruction.trim().length > 0 &&
       value.instruction.length <= 8_192 &&
       value.target &&
-      Array.isArray(value.target.nodeIds),
+      Array.isArray(value.target.nodeIds) &&
+      validRelations(value),
   );
+}
+
+function validRelations(value: RepairDraft): boolean {
+  if (value.relations === undefined) return true;
+  if (!Array.isArray(value.relations) || value.relations.length > 100) return false;
+  const ids = new Set<string>();
+  return value.relations.every((relation) => {
+    if (
+      !relation ||
+      relation.kind !== "conflicts_with" ||
+      typeof relation.findingId !== "string" ||
+      relation.findingId.length === 0 ||
+      relation.findingId.length > 128 ||
+      relation.findingId === value.id ||
+      ids.has(relation.findingId)
+    ) return false;
+    ids.add(relation.findingId);
+    return true;
+  });
 }
 
 export class RepairStore {

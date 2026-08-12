@@ -273,6 +273,23 @@ sessions and processes. Overlapping node/region targets and shared source hints
 are moved to `needs_input`; after hot reload, the coding agent re-observes and
 resolves each remaining target instead of reusing stale refs.
 
+Reviewers can also declare that two otherwise disjoint drafts are semantically
+incompatible. The editor stores this as a typed relation on either finding:
+
+```json
+{
+  "relations": [
+    { "kind": "conflicts_with", "findingId": "finding-layout-expanded" }
+  ]
+}
+```
+
+The referenced finding may belong to the same batch or another queued batch.
+If both findings are queued, A3S Test moves both to `needs_input`. It compares
+only declared finding IDs; it never scans instruction text for antonyms,
+negation, colors, layout terms, or other conflict keywords. Deleting a local
+draft also removes references to that draft before submission.
+
 ## Coding-agent handoff
 
 The MCP repair surface is:

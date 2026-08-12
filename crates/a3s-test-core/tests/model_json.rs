@@ -134,3 +134,30 @@ fn a3s_test_actor_uses_the_public_hyphenated_wire_name() {
         RepairActor::A3sTest
     );
 }
+
+#[test]
+fn repair_conflict_relation_has_a_typed_non_keyword_wire_contract() {
+    use a3s_test_core::RepairRelation;
+
+    let relation = RepairRelation::ConflictsWith {
+        finding_id: "finding-2".to_string(),
+    };
+    let encoded = serde_json::to_value(&relation).expect("serialize repair relation");
+    assert_eq!(
+        encoded,
+        serde_json::json!({
+            "kind": "conflicts_with",
+            "findingId": "finding-2"
+        })
+    );
+    assert_eq!(
+        serde_json::from_value::<RepairRelation>(encoded).expect("deserialize repair relation"),
+        relation
+    );
+    assert!(serde_json::from_value::<RepairRelation>(serde_json::json!({
+        "kind": "conflicts_with",
+        "findingId": "finding-2",
+        "instructionKeywords": ["black", "white"]
+    }))
+    .is_err());
+}

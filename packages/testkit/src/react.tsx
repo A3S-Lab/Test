@@ -153,6 +153,7 @@ export function A3SReviewOverlay({
   const [successCriteria, setSuccessCriteria] = useState("");
   const [severity, setSeverity] = useState<RepairSeverity>("important");
   const [intent, setIntent] = useState<RepairIntent>("fix");
+  const [conflictingDraftIds, setConflictingDraftIds] = useState<string[]>([]);
   const [replyFindingId, setReplyFindingId] = useState<string | null>(null);
   const [replyMessage, setReplyMessage] = useState("");
   const [keyboardNodeIds, setKeyboardNodeIds] = useState<string[]>([]);
@@ -181,6 +182,7 @@ export function A3SReviewOverlay({
     setMode(value);
     setMarking(true);
     setKeyboardNodeIds([]);
+    setConflictingDraftIds([]);
     setCandidate(value === "multi" ? { kind: "node", nodeIds: [] } : null);
     updateArea(null);
     updateDrawing(null);
@@ -418,6 +420,9 @@ export function A3SReviewOverlay({
       ...(successCriteria.trim() ? { successCriteria: successCriteria.trim() } : {}),
       intent,
       severity,
+      ...(conflictingDraftIds.length > 0 ? {
+        relations: conflictingDraftIds.map((findingId) => ({ kind: "conflicts_with" as const, findingId })),
+      } : {}),
       target: candidate,
       createdAt: new Date().toISOString(),
     };
@@ -427,6 +432,7 @@ export function A3SReviewOverlay({
     setHighlight(null);
     setCandidateLabel("");
     setInstruction("");
+    setConflictingDraftIds([]);
     if (send || autoSendEnabled) submit([draft]);
     else setDrafts((current) => {
       const index = current.findIndex((item) => item.draft.id === draft.id);
@@ -444,6 +450,11 @@ export function A3SReviewOverlay({
     setSuccessCriteria(item.draft.successCriteria ?? "");
     setSeverity(item.draft.severity);
     setIntent(item.draft.intent);
+    setConflictingDraftIds(
+      item.draft.relations
+        ?.filter((relation) => relation.kind === "conflicts_with")
+        .map((relation) => relation.findingId) ?? [],
+    );
     setOpen(true);
   }
 
@@ -508,19 +519,29 @@ export function A3SReviewOverlay({
           successCriteria={successCriteria}
           severity={severity}
           intent={intent}
+          conflictOptions={drafts
+            .filter((item) => item.draft.id !== editingDraftId)
+            .map((item) => ({
+              id: item.draft.id,
+              label: item.draft.instruction,
+              checked: conflictingDraftIds.includes(item.draft.id),
+            }))}
           onInstruction={setInstruction}
           onSuccessCriteria={setSuccessCriteria}
           onSeverity={setSeverity}
           onIntent={setIntent}
+          onConflict={(findingId, checked) => setConflictingDraftIds((current) => checked
+            ? [...new Set([...current, findingId])]
+            : current.filter((candidate) => candidate !== findingId))}
           editing={Boolean(editingDraftId)}
-          onCancel={() => { setCandidate(null); setEditingDraftId(null); }}
+          onCancel={() => { setCandidate(null); setEditingDraftId(null); setConflictingDraftIds([]); }}
           onSave={() => saveDraft(false)}
           onSend={() => saveDraft(true)}
         />}
         <section className="a3s-list" aria-live="polite">
           {drafts.map((item) => <article key={item.draft.id} className={`a3s-item${item.hidden ? " is-hidden" : ""}`}>
             <label><input type="checkbox" checked={item.selected} onChange={(event) => setDrafts((current) => current.map((candidate) => candidate.draft.id === item.draft.id ? { ...candidate, selected: event.target.checked } : candidate))} /><span><strong>{item.draft.instruction}</strong><small>{targetSummary(item.draft.target)} · draft</small></span></label>
-            <div><button type="button" onClick={() => submit([item.draft])}>Send and auto-fix</button><button type="button" className="quiet" onClick={() => editDraft(item)}>Edit</button><button type="button" className="quiet" onClick={() => setDrafts((current) => current.map((candidate) => candidate.draft.id === item.draft.id ? { ...candidate, hidden: !candidate.hidden } : candidate))}>{item.hidden ? "Reopen marker" : "Hide marker"}</button><button type="button" className="quiet" onClick={() => setDrafts((current) => current.filter((candidate) => candidate.draft.id !== item.draft.id))}>Delete</button></div>
+            <div><button type="button" onClick={() => submit([item.draft])}>Send and auto-fix</button><button type="button" className="quiet" onClick={() => editDraft(item)}>Edit</button><button type="button" className="quiet" onClick={() => setDrafts((current) => current.map((candidate) => candidate.draft.id === item.draft.id ? { ...candidate, hidden: !candidate.hidden } : candidate))}>{item.hidden ? "Reopen marker" : "Hide marker"}</button><button type="button" className="quiet" onClick={() => setDrafts((current) => removeDraft(current, item.draft.id))}>Delete</button></div>
           </article>)}
           {repairs.map((repair) => {
             const replies = bridge.listRepairReplies(repair.id);
@@ -541,11 +562,13 @@ type FindingEditorProps = {
   successCriteria: string;
   severity: RepairSeverity;
   intent: RepairIntent;
+  conflictOptions: Array<{ id: string; label: string; checked: boolean }>;
   editing: boolean;
   onInstruction(value: string): void;
   onSuccessCriteria(value: string): void;
   onSeverity(value: RepairSeverity): void;
   onIntent(value: RepairIntent): void;
+  onConflict(findingId: string, checked: boolean): void;
   onCancel(): void;
   onSave(): void;
   onSend(): void;
@@ -557,6 +580,7 @@ function FindingEditor(props: FindingEditorProps) {
     <label>Requested fix<textarea autoFocus maxLength={8192} value={props.instruction} onChange={(event) => props.onInstruction(event.target.value)} placeholder="Describe what should change" /></label>
     <label>Success criteria <span>optional</span><textarea maxLength={4096} value={props.successCriteria} onChange={(event) => props.onSuccessCriteria(event.target.value)} placeholder="What should be visibly true after the fix?" /></label>
     <div className="a3s-fields"><label>Severity<select value={props.severity} onChange={(event) => props.onSeverity(event.target.value as RepairSeverity)}><option value="blocking">Blocking</option><option value="important">Important</option><option value="suggestion">Suggestion</option></select></label><label>Intent<select value={props.intent} onChange={(event) => props.onIntent(event.target.value as RepairIntent)}><option value="fix">Fix</option><option value="change">Change</option><option value="question">Question</option><option value="approve">Approve</option></select></label></div>
+    {props.conflictOptions.length > 0 && <fieldset className="a3s-conflicts"><legend>Conflicts with another draft <span>optional</span></legend><small>Select requests that cannot both be satisfied. A3S Test will ask for clarification without interpreting their wording.</small>{props.conflictOptions.map((option) => <label key={option.id}><input type="checkbox" checked={option.checked} onChange={(event) => props.onConflict(option.id, event.target.checked)} /><span>{option.label}</span></label>)}</fieldset>}
     <div className="a3s-actions"><button type="button" className="quiet" onClick={props.onCancel}>Cancel</button><button type="button" disabled={!props.instruction.trim()} onClick={props.onSave}>{props.editing ? "Save changes" : "Add draft"}</button><button type="button" disabled={!props.instruction.trim()} onClick={props.onSend}>Send and auto-fix</button></div>
   </section>;
 }
@@ -569,6 +593,19 @@ function useLatest<T>(value: T) {
 
 function stableList(values: readonly string[] | undefined): string {
   return JSON.stringify(values ?? []);
+}
+
+function removeDraft(items: DraftItem[], findingId: string): DraftItem[] {
+  return items
+    .filter((item) => item.draft.id !== findingId)
+    .map((item) => {
+      const relations = item.draft.relations?.filter((relation) => relation.findingId !== findingId);
+      if (relations?.length === item.draft.relations?.length) return item;
+      const draft = { ...item.draft };
+      if (relations?.length) draft.relations = relations;
+      else delete draft.relations;
+      return { ...item, draft };
+    });
 }
 
 function bridgeIsCompatible(bridge: PageContextBridge | null): bridge is PageContextBridge {
@@ -681,6 +718,7 @@ header { display:flex; align-items:flex-start; justify-content:space-between; pa
 .a3s-markers { position:fixed; inset:0; pointer-events:none; } .a3s-marker { position:fixed; border:2px solid #f97316; border-radius:4px; background:rgba(249,115,22,.08); } .a3s-marker.status-review_ready, .a3s-marker.status-resolved { border-color:#22c55e; background:rgba(34,197,94,.08); } .a3s-marker.status-failed, .a3s-marker.status-verification_failed { border-color:#ef4444; background:rgba(239,68,68,.08); }
 .a3s-drawing { position:fixed; inset:0; width:100vw; height:100vh; pointer-events:none; overflow:visible; } .a3s-drawing path { fill:none; stroke:#f97316; stroke-width:3; stroke-linecap:round; stroke-linejoin:round; filter:drop-shadow(0 0 1px #fff); }
 .a3s-editor { display:flex; flex-direction:column; gap:9px; padding:12px; border-bottom:1px solid #44403c; background:#292524; } .a3s-editor label { display:flex; flex-direction:column; gap:4px; font-weight:600; } .a3s-editor label span { color:#78716c; font-weight:400; } textarea, select { width:100%; color:#f5f5f4; background:#0c0a09; border:1px solid #57534e; border-radius:7px; padding:8px; } textarea { resize:vertical; min-height:58px; } .a3s-fields { display:grid; grid-template-columns:1fr 1fr; gap:8px; } .a3s-actions { display:flex; justify-content:flex-end; gap:6px; flex-wrap:wrap; } button.quiet { border-color:transparent; background:transparent; color:#d6d3d1; }
+.a3s-conflicts { display:flex; flex-direction:column; gap:6px; margin:0; padding:8px; border:1px solid #57534e; border-radius:7px; } .a3s-conflicts legend { padding:0 4px; font-weight:600; } .a3s-conflicts legend span { color:#78716c; font-weight:400; } .a3s-conflicts label { flex-direction:row; align-items:flex-start; font-weight:400; } .a3s-conflicts input { margin-top:3px; }
 .a3s-list { overflow:auto; padding:8px 12px; display:flex; flex-direction:column; gap:8px; } .a3s-item { display:flex; flex-direction:column; gap:8px; padding:10px; border:1px solid #44403c; border-radius:9px; background:#292524; } .a3s-item.is-hidden { opacity:.62; } .a3s-item label { display:flex; gap:9px; align-items:flex-start; } .a3s-item label span, .a3s-item.submitted { display:flex; flex-direction:column; gap:3px; } .a3s-item strong { overflow-wrap:anywhere; } .a3s-item div { display:flex; flex-wrap:wrap; gap:6px; } .a3s-status { align-self:flex-start; border-radius:999px; padding:2px 7px; color:#fed7aa; background:#431407; text-transform:capitalize; font-size:11px; } .status-resolved, .status-review_ready { color:#bbf7d0; background:#052e16; } .status-failed, .status-verification_failed { color:#fecaca; background:#450a0a; } .a3s-empty { color:#a8a29e; text-align:center; padding:20px 10px; }
 .a3s-thread { display:flex; flex-direction:column; gap:6px; margin:5px 0 0; padding:8px; list-style:none; border-top:1px solid #44403c; } .a3s-thread li { display:grid; grid-template-columns:auto 1fr; gap:8px; align-items:start; } .a3s-thread span { color:#fdba74; font-size:11px; text-transform:capitalize; } .a3s-thread p { margin:0; white-space:pre-wrap; overflow-wrap:anywhere; }
 .a3s-human-actions { display:flex; flex-wrap:wrap; gap:6px; align-items:flex-end; } .a3s-reply-label { display:flex; flex:1 1 100%; flex-direction:column; gap:4px; font-weight:600; } .a3s-reply-label textarea { min-height:52px; }

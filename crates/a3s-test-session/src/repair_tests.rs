@@ -1,7 +1,8 @@
 use super::*;
 use crate::RepairWorkspace;
 use a3s_test_core::{
-    Evidence, PageContextSnapshot, RepairIntent, RepairSeverity, RepairTarget, RepairTargetKind,
+    Evidence, PageContextSnapshot, RepairIntent, RepairRelation, RepairSeverity, RepairTarget,
+    RepairTargetKind,
 };
 use serde_json::json;
 
@@ -13,6 +14,7 @@ fn finding(id: &str) -> RepairFinding {
         success_criteria: Some("The issue is visibly gone".to_string()),
         intent: RepairIntent::Fix,
         severity: RepairSeverity::Important,
+        relations: Vec::new(),
         target: RepairTarget {
             kind: RepairTargetKind::Node,
             node_ids: vec!["n1".to_string()],
@@ -572,6 +574,94 @@ async fn serializes_workspace_mutations_and_moves_overlaps_to_needs_input() {
         .expect_err("concurrent workspace claim");
     assert_eq!(error.code(), "test.session.repair_workspace_busy");
     assert!(error.retryable());
+}
+
+#[tokio::test]
+async fn detects_explicit_semantic_conflicts_without_reading_instruction_text() {
+    let temp = tempfile::tempdir().expect("tempdir");
+    let mut ledger = RepairLedger::load(temp.path().join("repairs.jsonl"))
+        .await
+        .expect("load");
+    let mut first = finding("finding-1");
+    first.target.node_ids = vec!["header-title".to_string()];
+    first.instruction = "Use the compact presentation".to_string();
+    first.relations = vec![RepairRelation::ConflictsWith {
+        finding_id: "finding-2".to_string(),
+    }];
+    let mut second = finding("finding-2");
+    second.target.node_ids = vec!["footer-summary".to_string()];
+    second.instruction = "Use the expanded presentation".to_string();
+    second.batch_id = "batch-2".to_string();
+
+    ledger
+        .ingest("repair-session", vec![first, second], 1)
+        .await
+        .expect("ingest disjoint findings");
+    let conflicts = ledger
+        .resolve_conflicts("repair-session", 2)
+        .await
+        .expect("resolve explicit conflicts");
+    assert_eq!(conflicts.len(), 2);
+    assert!(conflicts
+        .iter()
+        .all(|(record, _)| record.status == RepairStatus::NeedsInput));
+
+    let temp = tempfile::tempdir().expect("tempdir");
+    let mut ledger = RepairLedger::load(temp.path().join("repairs.jsonl"))
+        .await
+        .expect("load");
+    let mut first = finding("finding-1");
+    first.target.node_ids = vec!["header-title".to_string()];
+    first.instruction = "Make this black and never white".to_string();
+    let mut second = finding("finding-2");
+    second.target.node_ids = vec!["footer-summary".to_string()];
+    second.instruction = "Make this white and never black".to_string();
+
+    ledger
+        .ingest("repair-session", vec![first, second], 1)
+        .await
+        .expect("ingest undeclared requests");
+    assert!(ledger
+        .resolve_conflicts("repair-session", 2)
+        .await
+        .expect("resolve undeclared requests")
+        .is_empty());
+}
+
+#[tokio::test]
+async fn rejects_self_referential_duplicate_and_unbounded_conflict_relations() {
+    let invalid_relations = [
+        vec![RepairRelation::ConflictsWith {
+            finding_id: "finding-1".to_string(),
+        }],
+        vec![
+            RepairRelation::ConflictsWith {
+                finding_id: "finding-2".to_string(),
+            },
+            RepairRelation::ConflictsWith {
+                finding_id: "finding-2".to_string(),
+            },
+        ],
+        (0..101)
+            .map(|index| RepairRelation::ConflictsWith {
+                finding_id: format!("related-{index}"),
+            })
+            .collect(),
+    ];
+
+    for relations in invalid_relations {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let mut ledger = RepairLedger::load(temp.path().join("repairs.jsonl"))
+            .await
+            .expect("load");
+        let mut submitted = finding("finding-1");
+        submitted.relations = relations;
+        let error = ledger
+            .ingest("repair-session", vec![submitted], 1)
+            .await
+            .expect_err("invalid relations");
+        assert_eq!(error.code(), "test.session.repair_invalid");
+    }
 }
 
 #[tokio::test]

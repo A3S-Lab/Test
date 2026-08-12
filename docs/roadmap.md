@@ -227,7 +227,7 @@ snapshot. Pages without the SDK retain the existing Web behavior.
       reusing stale refs
 - [x] Detect overlapping node/region targets and shared source hints and move
       the affected findings to `needs_input` rather than guessing order
-- [ ] Add a typed, non-keyword mechanism for declaring semantically
+- [x] Add a typed, non-keyword mechanism for declaring semantically
       contradictory requests across otherwise disjoint targets
 - [x] Record exactly which changed files and checks the coding agent reports in
       each stored verification; preserving unrelated dirty-worktree changes

@@ -28,6 +28,7 @@ fn test_repair_finding() -> RepairFinding {
         success_criteria: Some("The button works".to_string()),
         intent: RepairIntent::Fix,
         severity: RepairSeverity::Important,
+        relations: Vec::new(),
         target: RepairTarget {
             kind: RepairTargetKind::Node,
             node_ids: vec!["n1".to_string()],

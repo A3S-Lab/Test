@@ -259,7 +259,26 @@ pub(super) fn valid_transition(from: RepairStatus, to: RepairStatus) -> bool {
 }
 
 pub(super) fn finding_conflict(left: &RepairFinding, right: &RepairFinding) -> bool {
-    if left.batch_id != right.batch_id || left.id == right.id {
+    if left.id == right.id {
+        return false;
+    }
+    let declared_conflict = left.relations.iter().any(|relation| {
+        matches!(
+            relation,
+            a3s_test_core::RepairRelation::ConflictsWith { finding_id }
+                if finding_id == &right.id
+        )
+    }) || right.relations.iter().any(|relation| {
+        matches!(
+            relation,
+            a3s_test_core::RepairRelation::ConflictsWith { finding_id }
+                if finding_id == &left.id
+        )
+    });
+    if declared_conflict {
+        return true;
+    }
+    if left.batch_id != right.batch_id {
         return false;
     }
     let shared_node = left
@@ -414,6 +433,23 @@ pub(super) fn validate_finding(finding: &RepairFinding) -> Result<(), SessionErr
             "test.session.repair_invalid",
             "submitted repair must be queued",
         ));
+    }
+    if finding.relations.len() > 100 {
+        return Err(SessionError::new(
+            "test.session.repair_invalid",
+            "repair finding may declare at most 100 relations",
+        ));
+    }
+    let mut related_ids = std::collections::HashSet::new();
+    for relation in &finding.relations {
+        let a3s_test_core::RepairRelation::ConflictsWith { finding_id } = relation;
+        validate_component(finding_id, "related finding id")?;
+        if finding_id == &finding.id || !related_ids.insert(finding_id) {
+            return Err(SessionError::new(
+                "test.session.repair_invalid",
+                "repair conflict relations must reference distinct other findings",
+            ));
+        }
     }
     Ok(())
 }

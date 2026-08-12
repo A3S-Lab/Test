@@ -146,6 +146,11 @@ export type RepairTarget = {
   drawing?: Array<{ x: number; y: number }>;
 };
 
+export type RepairRelation = {
+  kind: "conflicts_with";
+  findingId: string;
+};
+
 export type StructuredRepairExport = {
   protocol: "a3s.test.repair/1";
   page: {
@@ -161,6 +166,7 @@ export type StructuredRepairExport = {
     successCriteria?: string;
     intent: RepairIntent;
     severity: RepairSeverity;
+    relations?: RepairRelation[];
     target: RepairTarget;
     context: RepairContext;
   }>;
@@ -183,6 +189,7 @@ export type RepairDraft = {
   successCriteria?: string;
   intent: RepairIntent;
   severity: RepairSeverity;
+  relations?: RepairRelation[];
   target: RepairTarget;
   createdAt: string;
 };

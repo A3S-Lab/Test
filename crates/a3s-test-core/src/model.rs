@@ -517,6 +517,8 @@ pub struct RepairFinding {
     pub success_criteria: Option<String>,
     pub intent: RepairIntent,
     pub severity: RepairSeverity,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub relations: Vec<RepairRelation>,
     pub target: RepairTarget,
     #[serde(rename = "createdAt")]
     pub created_at: String,
@@ -529,6 +531,15 @@ pub struct RepairFinding {
     pub status: RepairStatus,
     #[serde(rename = "submittedAt")]
     pub submitted_at: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
+pub enum RepairRelation {
+    ConflictsWith {
+        #[serde(rename = "findingId")]
+        finding_id: String,
+    },
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]

@@ -150,6 +150,7 @@ describe("page context runtime", () => {
       instruction,
       intent: "fix",
       severity: "important",
+      ...(index === 0 ? { relations: [{ kind: "conflicts_with" as const, findingId: "finding-1" }] } : {}),
       target: { kind: "node", nodeIds: [nodeId] },
       createdAt: new Date(index).toISOString(),
     }));
@@ -169,7 +170,7 @@ describe("page context runtime", () => {
     expect(exported).toMatchObject({
       protocol: "a3s.test.repair/1",
       page: { id: "repairs", revision: expect.any(Number) },
-      findings: [{ instruction: "First fix", context: { untrusted: true } }, { instruction: "Second fix" }],
+      findings: [{ instruction: "First fix", relations: [{ kind: "conflicts_with", findingId: "finding-1" }], context: { untrusted: true } }, { instruction: "Second fix" }],
     });
     const markdown = bridge.exportRepairsMarkdown(drafts);
     expect(markdown).toContain("# A3S Test repair findings");

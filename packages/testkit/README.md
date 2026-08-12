@@ -46,6 +46,11 @@ be enabled for the owning A3S Test session explicitly.
 See [`../../docs/testkit.md`](../../docs/testkit.md) for the complete protocol,
 security, repair, and verification design.
 
+For requests that cannot both be satisfied, add one draft first and use the
+optional **Conflicts with another draft** control on the other. This emits a
+typed `conflicts_with` relation; A3S Test does not infer conflicts from repair
+instruction wording.
+
 Both the provider and overlay require an explicit `enabled` value. The overlay
 also requires a compatible live bridge and therefore fails closed if the
 provider is disabled or the protocol is unavailable.
