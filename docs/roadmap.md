@@ -388,3 +388,19 @@ The completion work intentionally preserves these product boundaries:
       blocking contract or become a durable ref by itself
 - [x] Add provider conformance fixtures for canvas, image-only, remote-desktop,
       and design-reference cases without bundling model weights
+
+## M15: Versioned provider interoperability
+
+- [x] Assign stable version 1 protocol identifiers to contract-generation and
+      visual-grounding provider boundaries
+- [x] Derive JSON Schema 2020-12 request and response contracts from the same
+      strict Serde types used by local admission
+- [x] Expose protocol, authority, safety invariants, and schemas through
+      `a3s-test provider schema` without selecting a transport or backend
+- [x] Prove deadline, cost, digest, identity, coordinate-space, hierarchy, and
+      point/box fields remain discoverable
+- [x] Add representative wire fixtures that round-trip and reject unknown
+      fields
+- [x] Keep contract candidates review-gated and grounding advisory; neither
+      provider may determine verdicts, claim browser observation, or authorize
+      repair

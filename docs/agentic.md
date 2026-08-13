@@ -277,6 +277,19 @@ service. A3S Test neither bundles model weights nor selects one by model-name
 string. The deploying host is responsible for credentials, capacity, privacy,
 and license compliance.
 
+External adapters can discover the transport-neutral version 1 wire contract
+without linking the Rust trait:
+
+```bash
+a3s-test provider schema visual-grounding
+```
+
+The output identifies `a3s.test.visual-grounding-provider/1`, declares
+`authority = advisory`, records the non-authority invariants, and includes
+generated JSON Schema 2020-12 documents for `GroundingProviderRequest` and
+`GroundingProviderResponse`. Unknown fields are rejected by the wire types. A
+breaking field or semantic change requires a new protocol identifier.
+
 ## Contract-generation provider
 
 Expected-interface generation is separate from both `LlmProvider` planning and
@@ -313,6 +326,19 @@ The reviewed result retains the full provider response and review record for
 audit. It does not claim browser observation, cannot pass a test by itself, and
 does not authorize repair. Model transports, credentials, runtimes, weights,
 and license decisions remain deployment-owned.
+
+The equivalent external discovery command is:
+
+```bash
+a3s-test provider schema contract-generation
+```
+
+It returns protocol `a3s.test.contract-generation-provider/1`,
+`authority = candidate_only`, explicit review and non-authority invariants,
+and generated request/response schemas. The schema is a discoverable wire
+contract, not an execution transport. An adapter may use stdio, HTTP, RPC, or
+an in-process call as long as the host independently enforces A3S Test
+admission and lifecycle policy.
 
 ## Decisions
 

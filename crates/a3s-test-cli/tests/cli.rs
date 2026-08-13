@@ -450,6 +450,44 @@ fn agent_schema_exposes_values_for_semantic_targets() {
     }
 }
 
+#[test]
+fn provider_schema_exposes_versioned_wire_contracts() {
+    for (capability, protocol, authority) in [
+        (
+            "contract-generation",
+            "a3s.test.contract-generation-provider/1",
+            "candidate_only",
+        ),
+        (
+            "visual-grounding",
+            "a3s.test.visual-grounding-provider/1",
+            "advisory",
+        ),
+    ] {
+        let output = Command::new(binary())
+            .args(["provider", "schema", capability, "--compact"])
+            .output()
+            .expect("run provider schema discovery");
+
+        assert!(output.status.success(), "{output:?}");
+        assert!(!output.stdout.ends_with(b"\n\n"));
+        let value: serde_json::Value =
+            serde_json::from_slice(&output.stdout).expect("provider schema JSON");
+        assert_eq!(value["protocol"], protocol);
+        assert_eq!(value["authority"], authority);
+        assert_eq!(value["invariants"]["may_determine_test_verdict"], false);
+        assert_eq!(value["invariants"]["may_authorize_repair"], false);
+        assert_eq!(
+            value["request_schema"]["additionalProperties"], false,
+            "request schema should reject unknown fields"
+        );
+        assert_eq!(
+            value["response_schema"]["additionalProperties"], false,
+            "response schema should reject unknown fields"
+        );
+    }
+}
+
 #[cfg(unix)]
 #[test]
 fn capabilities_returns_the_admitted_web_protocol() {

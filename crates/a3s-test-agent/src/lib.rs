@@ -6,6 +6,7 @@ mod grounding;
 mod model;
 mod policy;
 mod provider;
+mod provider_protocol;
 mod redaction;
 mod runtime;
 
@@ -34,5 +35,10 @@ pub use model::{
 };
 pub use policy::{ActionKind, ActionPolicy, CapabilityPolicy, NavigationScope, PolicyContext};
 pub use provider::{LlmImageAttachment, LlmProvider, StructuredLlmRequest, StructuredLlmResponse};
+pub use provider_protocol::{
+    contract_generation_provider_schema, visual_grounding_provider_schema, ProviderOutputAuthority,
+    ProviderProtocolSchema, ProviderSafetyInvariants, CONTRACT_GENERATION_PROVIDER_PROTOCOL,
+    VISUAL_GROUNDING_PROVIDER_PROTOCOL,
+};
 pub use redaction::{ProvenanceRedactor, REDACTED_VALUE};
 pub use runtime::{AgentLoop, AGENT_PROMPT_VERSION};

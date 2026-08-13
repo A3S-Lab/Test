@@ -471,6 +471,21 @@ inconsistent design hierarchy, invalid geometry, unbounded output, provider
 identity or provenance changes, excess cost, timeout, and cancellation. Source
 files are verified both before and after the provider call.
 
+The stable version 1 wire identifier is
+`a3s.test.contract-generation-provider/1`. The authoritative discoverable
+bundle is printed by:
+
+```bash
+a3s-test provider schema contract-generation
+```
+
+The bundle contains generated JSON Schema 2020-12 request and response
+documents plus `candidate_only` authority and safety invariants. Providers may
+propose source-bound candidates only. They cannot approve an Expected Surface,
+claim an Observed Surface, decide a test verdict, or authorize repair. Unknown
+wire fields are rejected. An incompatible field or semantic change requires a
+new protocol identifier.
+
 Generation merges candidate evidence without choosing a winner. Differing
 fields become stable explicit conflicts. A human review must approve or reject
 candidates and resolve every applicable conflict with a rationale. The result
@@ -652,3 +667,10 @@ yield an image-bound result and preserve ambiguity rather than selecting a
 node. Both variants include provider/image/observation provenance and
 `authority = advisory`. They are not durable refs, contract evidence, action
 authorization, or Repair Ledger entries.
+
+The stable version 1 wire identifier is
+`a3s.test.visual-grounding-provider/1`. Run
+`a3s-test provider schema visual-grounding` to print its generated JSON Schema
+2020-12 request/response documents and explicit advisory safety invariants.
+Unknown wire fields are rejected, and an incompatible change requires a new
+protocol identifier.

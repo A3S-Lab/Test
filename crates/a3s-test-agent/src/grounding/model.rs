@@ -1,23 +1,24 @@
 use std::time::Duration;
 
 use a3s_test_core::{PageContextSnapshot, Target};
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct GroundingProviderIdentity {
     pub provider: String,
     pub model: String,
 }
 
-#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum GroundingCoordinateSpace {
     ScreenshotPixels,
     Normalized,
 }
 
-#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum SemanticFallbackReason {
     Canvas,
@@ -27,14 +28,14 @@ pub enum SemanticFallbackReason {
     NoSemanticMatch,
 }
 
-#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub enum GroundingTrigger {
     ExplicitRequest,
     SemanticFallback { reason: SemanticFallbackReason },
 }
 
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct GroundingRequest {
     pub screenshot_path: String,
@@ -47,7 +48,7 @@ pub struct GroundingRequest {
     pub max_cost_microusd: u64,
 }
 
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct GroundingProviderRequest {
     pub screenshot_path: String,
@@ -68,7 +69,7 @@ pub struct GroundingPageContext<'a> {
     pub snapshot: &'a PageContextSnapshot,
 }
 
-#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Clone, Copy, Debug, Deserialize, JsonSchema, PartialEq, Serialize)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub enum GroundingCandidateGeometry {
     Point {
@@ -83,7 +84,7 @@ pub enum GroundingCandidateGeometry {
     },
 }
 
-#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, JsonSchema, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct GroundingCandidate {
     pub geometry: GroundingCandidateGeometry,
@@ -91,7 +92,7 @@ pub struct GroundingCandidate {
     pub label: Option<String>,
 }
 
-#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct GroundingUsage {
     pub input_units: u64,
@@ -99,7 +100,7 @@ pub struct GroundingUsage {
     pub cost_microusd: u64,
 }
 
-#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, JsonSchema, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct GroundingProviderResponse {
     pub identity: GroundingProviderIdentity,

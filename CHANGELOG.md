@@ -2,6 +2,21 @@
 
 ## Unreleased
 
+### Added
+
+- Added stable `a3s.test.contract-generation-provider/1` and
+  `a3s.test.visual-grounding-provider/1` wire identifiers with generated JSON
+  Schema 2020-12 request and response contracts.
+- Added `a3s-test provider schema contract-generation` and `a3s-test provider
+  schema visual-grounding` for transport-neutral adapter discovery, including
+  explicit authority and safety invariants.
+
+### Safety
+
+- Provider wire fixtures reject unknown fields and retain digest, deadline,
+  cost, identity, hierarchy, coordinate-space, and geometry bindings. Schema
+  conformance does not grant verdict, browser-observation, or repair authority.
+
 ## 0.8.0 - 2026-08-13
 
 ### Added

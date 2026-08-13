@@ -135,6 +135,14 @@ decisions for audit. Only selected sources become reviewed provenance, and
 source spans become ACL citations. Browser observation still happens later and
 independently.
 
+The Rust trait and transport-neutral wire contract share one source of truth.
+`a3s-test-agent` derives request and response schemas from the admitted wire
+types and exposes protocol `a3s.test.contract-generation-provider/1`; the CLI
+prints the complete bundle with `a3s-test provider schema
+contract-generation`. The bundle declares candidate-only authority and the
+review, digest, deadline, cost, identity, and non-mutation invariants. It does
+not prescribe stdio, HTTP, RPC, or an in-process transport.
+
 ### Understanding during rendering
 
 The browser already computes DOM structure, accessibility semantics, CSS
@@ -191,6 +199,14 @@ transports, weights, runtimes, credentials, and licenses stay outside
 an externally hosted GUI-grounding model, but must perform its own license and
 operational review. Research-only weights are not bundled or downloaded by A3S
 Test.
+
+The same boundary exposes protocol
+`a3s.test.visual-grounding-provider/1` through `a3s-test provider schema
+visual-grounding`. Its generated schemas cover observation and screenshot
+binding, deadlines, costs, point/box geometry, coordinate spaces, identity,
+and usage. The bundle states advisory authority and non-verdict/non-repair
+invariants so a deployment adapter cannot mistake schema conformance for
+execution authority.
 
 ```text
 DOM / AX / Test Kit semantic target ──success──> current semantic action

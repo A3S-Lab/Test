@@ -133,6 +133,18 @@ target; ambiguous or unmapped results remain advisory, image-bound candidates.
 This path is an explicit request or semantic fallback, never the default Web
 locator.
 
+Both provider boundaries have stable, transport-neutral protocol identifiers
+and generated JSON Schemas. Inspect the exact request, response, authority, and
+safety contract before implementing a local-process or remote-service adapter:
+
+```bash
+a3s-test provider schema contract-generation
+a3s-test provider schema visual-grounding
+```
+
+The protocols describe data exchange only. They do not select a backend,
+bundle model weights, grant verdict authority, or authorize workspace repair.
+
 Install the package tarball published with every GitHub Release:
 
 ```bash
@@ -407,6 +419,8 @@ opt-in. Inspect the exact protocol installed on the machine with:
 ```bash
 a3s-test capabilities --json
 a3s-test agent schema
+a3s-test provider schema contract-generation
+a3s-test provider schema visual-grounding
 ```
 
 ## Architecture

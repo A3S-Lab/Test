@@ -25,6 +25,7 @@ mod agent_session;
 mod gui_certification;
 mod mcp;
 mod mcp_web;
+mod provider_schema;
 
 #[derive(Debug, Parser)]
 #[command(
@@ -51,6 +52,8 @@ enum Commands {
     GuiCertify(gui_certification::GuiCertifyArgs),
     /// Serve surface-neutral agent sessions over MCP stdio.
     Mcp(McpArgs),
+    /// Inspect versioned contracts for deployment-supplied model providers.
+    Provider(provider_schema::ProviderArgs),
     /// Run a test suite.
     Run(RunArgs),
 }
@@ -220,6 +223,7 @@ pub async fn execute(cli: Cli) -> Result<ExitCode> {
         Commands::GuiCertification(args) => gui_certification::print_matrix(args),
         Commands::GuiCertify(args) => gui_certification::certify(args).await,
         Commands::Mcp(args) => serve_mcp(args).await,
+        Commands::Provider(args) => provider_schema::execute(args),
         Commands::Run(args) => run(args).await,
     }
 }
