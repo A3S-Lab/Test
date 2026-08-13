@@ -5,10 +5,11 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use a3s_test_agent::{
     ContractCandidate, ContractCandidateElement, ContractCandidateVariant,
-    ContractGenerationProviderIdentity, ContractGenerationProviderResponse,
-    ContractGenerationUsage, ContractSourceSpan, ContractWorkflowAdmission,
-    ContractWorkflowArtifact, GeneratedContractProvenance, CONTRACT_GENERATION_PROVIDER_PROTOCOL,
+    ContractGenerationProviderIdentity, ContractGenerationUsage, ContractSourceSpan,
+    ContractWorkflowAdmission, ContractWorkflowArtifact, GeneratedContractProvenance,
 };
+#[cfg(unix)]
+use a3s_test_agent::{ContractGenerationProviderResponse, CONTRACT_GENERATION_PROVIDER_PROTOCOL};
 use a3s_test_core::{ContractContext, ContractElement, ContractMode, ContractSeverity};
 use sha2::{Digest, Sha256};
 
@@ -561,6 +562,7 @@ fn generated_contract_workflow(root: &std::path::Path, prd: &str) -> serde_json:
     .expect("workflow JSON")
 }
 
+#[cfg(unix)]
 fn provider_response(root: &std::path::Path, prd: &str) -> ContractGenerationProviderResponse {
     let generated = generated_contract_draft(root, prd);
     ContractGenerationProviderResponse {

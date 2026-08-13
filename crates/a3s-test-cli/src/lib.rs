@@ -223,7 +223,7 @@ pub async fn execute(cli: Cli) -> Result<ExitCode> {
         Commands::Agent(args) => agent_session::execute(args).await,
         Commands::Check(args) => check(args).await,
         Commands::Capabilities(args) => capabilities(args).await,
-        Commands::Contract(args) => contract_workflow::execute(args).await,
+        Commands::Contract(args) => Box::pin(contract_workflow::execute(args)).await,
         Commands::GuiCertification(args) => gui_certification::print_matrix(args),
         Commands::GuiCertify(args) => gui_certification::certify(args).await,
         Commands::Mcp(args) => serve_mcp(args).await,
@@ -750,6 +750,21 @@ fn plural(count: usize) -> &'static str {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    const MAX_DISPATCH_FUTURE_BYTES: usize = 512 * 1024;
+
+    #[test]
+    fn command_dispatch_future_stays_below_the_windows_stack_budget() {
+        let cli = Cli::try_parse_from(["a3s-test", "gui-certification", "--json"])
+            .expect("GUI certification command");
+        let future = execute(cli);
+
+        assert!(
+            std::mem::size_of_val(&future) <= MAX_DISPATCH_FUTURE_BYTES,
+            "command dispatch future is {} bytes",
+            std::mem::size_of_val(&future)
+        );
+    }
 
     #[test]
     fn status_codes_are_stable_for_automation() {
