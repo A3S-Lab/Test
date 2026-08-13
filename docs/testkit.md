@@ -535,8 +535,20 @@ latest-observation ref expiry.
 
 ## Storage and recovery
 
-Page drafts may use browser-local ephemeral storage. Submitted repair state is
-authoritative only in the owning A3S Test agent-session directory:
+The overlay persists at most 100 drafts per page identity and full SPA route in
+browser local storage for seven days, capped at 512 KiB per route. Stored node
+IDs are discarded. A reload resolves each target again from bounded semantic
+role, label, test ID, placeholder, or exact-text locators. A draft is omitted
+when any required target is missing, duplicated, or lacks a semantic locator;
+corrupt, oversized, expired, future-dated, or structurally invalid records are
+removed. Route transitions immediately switch the visible draft set, while a
+return transition restores that route's valid drafts. Layout placements with
+no existing target node retain their typed viewport region.
+
+Local storage contains only unsent reviewer drafts. It never becomes a repair
+ledger, and applications must not put secrets or production data in review
+instructions. Submitted repair state is authoritative only in the owning A3S
+Test agent-session directory:
 
 ```text
 .a3s-test/agent-sessions/<session>/

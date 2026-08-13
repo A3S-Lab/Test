@@ -302,7 +302,7 @@ The completion work intentionally preserves these product boundaries:
   `summary`, `scoped`, `diff`, or `forensic` page context explicitly instead
   of changing the wire contract through a presentation setting.
 
-- [ ] Persist validated drafts per page and route with bounded retention,
+- [x] Persist validated drafts per page and route with bounded retention,
       semantic locator anchors, reload/SPA-route restoration, and fail-closed
       handling for targets that cannot be resolved uniquely
 - [ ] Add one global keyboard command layer for overlay toggle, Escape,
@@ -321,7 +321,7 @@ The completion work intentionally preserves these product boundaries:
 - [ ] Expose typed draft lifecycle and copy callbacks plus a host clipboard
       adapter; isolate callback failures from the overlay and never treat
       callback return values as repair instructions
-- [ ] Split the review overlay by concern before it exceeds the repository
+- [x] Split the review overlay by concern before it exceeds the repository
       file-size limit, retaining Shadow DOM isolation and one source of truth
       for persisted workflow state
 - [ ] Add React tests for storage corruption and expiry, target rebinding,

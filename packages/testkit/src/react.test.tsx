@@ -109,6 +109,43 @@ describe("React adapter and review overlay", () => {
     await waitFor(() => expect(shadowQuery(".a3s-markers").children).toHaveLength(2));
   });
 
+  it("restores page-local drafts and semantic targets after a React reload", async () => {
+    const first = render(<A3STestKit enabled page={{ id: "restored-review" }} repairStorage="memory"><main><button data-testid="restored-target">Restored target</button></main><A3SReviewOverlay enabled defaultOpen /></A3STestKit>);
+    await waitFor(() => expect(shadowQuery(".a3s-panel")).toBeTruthy());
+    const firstTarget = document.querySelector<HTMLElement>("[data-testid=restored-target]")!;
+    setRect(firstTarget, { x: 20, y: 40, width: 140, height: 32 });
+    fireEvent.click(shadowButton("Element"));
+    firstTarget.dispatchEvent(pointerEventWithPath(firstTarget, 30, 50));
+    fireEvent.change(await waitFor(() => shadowQuery(".a3s-editor textarea")), { target: { value: "Keep this draft across reload" } });
+    fireEvent.click(shadowButton("Add draft"));
+    await waitFor(() => expect(window.localStorage.length).toBe(1));
+    first.unmount();
+
+    render(<A3STestKit enabled page={{ id: "restored-review" }} repairStorage="memory"><main><p>New sibling changes private node ordering</p><button data-testid="restored-target">Restored target</button></main><A3SReviewOverlay enabled defaultOpen /></A3STestKit>);
+    await waitFor(() => expect(shadowQuery(".a3s-list").textContent).toContain("Keep this draft across reload"));
+    const restoredTarget = document.querySelector<HTMLElement>("[data-testid=restored-target]")!;
+    setRect(restoredTarget, { x: 60, y: 90, width: 160, height: 36 });
+    await waitFor(() => expect(shadowQuery(".a3s-markers").children).toHaveLength(1));
+  });
+
+  it("switches persisted drafts when an SPA route changes and restores them on return", async () => {
+    window.history.replaceState(null, "", "/profile");
+    render(<A3STestKit enabled page={{ id: "spa-review" }} repairStorage="memory"><button data-testid="spa-target">SPA target</button><A3SReviewOverlay enabled defaultOpen /></A3STestKit>);
+    await waitFor(() => expect(shadowQuery(".a3s-panel")).toBeTruthy());
+    const target = document.querySelector<HTMLElement>("[data-testid=spa-target]")!;
+    setRect(target, { x: 30, y: 40, width: 120, height: 30 });
+    fireEvent.click(shadowButton("Element"));
+    target.dispatchEvent(pointerEventWithPath(target, 40, 50));
+    fireEvent.change(await waitFor(() => shadowQuery(".a3s-editor textarea")), { target: { value: "Profile-only draft" } });
+    fireEvent.click(shadowButton("Add draft"));
+    await waitFor(() => expect(shadowQuery(".a3s-list").textContent).toContain("Profile-only draft"));
+
+    window.history.pushState(null, "", "/security");
+    await waitFor(() => expect(shadowQuery(".a3s-list").textContent).not.toContain("Profile-only draft"));
+    window.history.pushState(null, "", "/profile");
+    await waitFor(() => expect(shadowQuery(".a3s-list").textContent).toContain("Profile-only draft"));
+  });
+
   it("captures a bounded freehand finding and cycles manual themes", async () => {
     render(<A3STestKit enabled page={{ id: "draw" }} repairStorage="memory"><button id="target">Target</button><A3SReviewOverlay enabled defaultOpen /></A3STestKit>);
     await waitFor(() => expect(shadowQuery(".a3s-panel")).toBeTruthy());

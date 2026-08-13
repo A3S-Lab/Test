@@ -17,12 +17,41 @@ import {
 } from "./runtime";
 import { PAGE_CONTEXT_PROTOCOL } from "./types";
 import { OVERLAY_CSS } from "./overlay-style";
+import {
+  loadReviewDrafts,
+  reviewScope,
+  saveReviewDrafts,
+  type ReviewDraftItem,
+} from "./review-storage";
+import { FindingEditor, LayoutComposer } from "./review-components";
+import {
+  MODE_HINT,
+  MODE_LABEL,
+  type LayoutCanvas,
+  type LayoutSource,
+  type OverlayTheme,
+  type SelectionMode,
+} from "./review-model";
+import {
+  appendDrawingPoint,
+  drawingBounds,
+  markerRects,
+  normalizedArea,
+  rectStyle,
+  rectValue,
+  removeDraft,
+  repairAnnouncement,
+  repairId,
+  stableList,
+  statusLabel,
+  targetSummary,
+  validLayoutRect,
+} from "./review-utils";
 import type {
   PageContextBridge,
   RepairDraft,
   RepairIntent,
   RepairSeverity,
-  RepairStatus,
   RepairTarget,
   Rect,
   SubmittedRepair,
@@ -116,11 +145,7 @@ export function A3STestBoundary({
   return <Tag ref={ref as never} className={className} style={style}>{children}</Tag>;
 }
 
-type DraftItem = { draft: RepairDraft; selected: boolean; hidden: boolean };
-type SelectionMode = "element" | "text" | "multi" | "area" | "draw" | "layout_place" | "layout_source" | "layout_destination";
-type OverlayTheme = "system" | "light" | "dark";
-type LayoutCanvas = "page" | "wireframe";
-type LayoutSource = { nodeId: string; label: string; originalRegion: Rect };
+type DraftItem = ReviewDraftItem;
 
 export type A3SReviewOverlayProps = {
   enabled?: boolean;
@@ -172,6 +197,7 @@ export function A3SReviewOverlay({
   const [highlight, setHighlight] = useState<DOMRect | null>(null);
   const [area, setArea] = useState<{ startX: number; startY: number; currentX: number; currentY: number } | null>(null);
   const [drawing, setDrawing] = useState<Array<{ x: number; y: number }> | null>(null);
+  const restoredScopeRef = useRef<string | null>(null);
   const areaRef = useRef(area);
   const drawingRef = useRef(drawing);
   const launchRef = useRef<HTMLButtonElement | null>(null);
@@ -257,12 +283,46 @@ export function A3SReviewOverlay({
     if (!bridge) return;
     setRepairs(bridge.listRepairs());
     return bridge.subscribe((event) => {
+      if (event.type === "context.revision" && restoredScopeRef.current !== null) {
+        const scope = reviewScope(bridge);
+        const encodedScope = `${scope.pageId}\u0000${scope.route}`;
+        if (restoredScopeRef.current !== encodedScope) {
+          restoredScopeRef.current = encodedScope;
+          const restored = loadReviewDrafts(bridge);
+          setCandidate(null);
+          setEditingDraftId(null);
+          setMarking(false);
+          setHighlight(null);
+          setDrafts(restored);
+          announce(restored.length > 0
+            ? `${restored.length} saved draft${restored.length === 1 ? "" : "s"} restored for this route`
+            : "Review drafts switched to this route");
+        }
+      }
       if (event.type === "repair.submitted" || event.type === "repair.updated") {
         setRepairs(bridge.listRepairs());
       }
       if (event.type === "repair.updated") announce(repairAnnouncement(event.repair));
     });
   }, [bridge]);
+
+  useEffect(() => {
+    if (!enabled || !bridge || !mount) return;
+    const scope = reviewScope(bridge);
+    const encodedScope = `${scope.pageId}\u0000${scope.route}`;
+    if (restoredScopeRef.current === encodedScope) return;
+    restoredScopeRef.current = encodedScope;
+    const restored = loadReviewDrafts(bridge);
+    setDrafts(restored);
+    if (restored.length > 0) {
+      announce(`${restored.length} saved draft${restored.length === 1 ? "" : "s"} restored`);
+    }
+  }, [bridge, enabled, mount]);
+
+  useEffect(() => {
+    if (!enabled || !bridge || !mount || restoredScopeRef.current === null) return;
+    saveReviewDrafts(bridge, drafts);
+  }, [bridge, drafts, enabled, mount]);
 
   useLayoutEffect(() => {
     if (!open || !focusPanelOnOpenRef.current) return;
@@ -753,105 +813,10 @@ export function A3SReviewOverlay({
   return createPortal(content, mount);
 }
 
-type FindingEditorProps = {
-  label: string;
-  instruction: string;
-  successCriteria: string;
-  severity: RepairSeverity;
-  intent: RepairIntent;
-  conflictOptions: Array<{ id: string; label: string; checked: boolean }>;
-  editing: boolean;
-  onInstruction(value: string): void;
-  onSuccessCriteria(value: string): void;
-  onSeverity(value: RepairSeverity): void;
-  onIntent(value: RepairIntent): void;
-  onConflict(findingId: string, checked: boolean): void;
-  onCancel(): void;
-  onSave(): void;
-  onSend(): void;
-};
-
-function FindingEditor(props: FindingEditorProps) {
-  return <section className="a3s-editor">
-    <small>Target · {props.label}</small>
-    <label>Requested fix<textarea autoFocus maxLength={8192} value={props.instruction} onChange={(event) => props.onInstruction(event.target.value)} placeholder="Describe what should change" /></label>
-    <label>Success criteria <span>optional</span><textarea maxLength={4096} value={props.successCriteria} onChange={(event) => props.onSuccessCriteria(event.target.value)} placeholder="What should be visibly true after the fix?" /></label>
-    <div className="a3s-fields"><label>Severity<select value={props.severity} onChange={(event) => props.onSeverity(event.target.value as RepairSeverity)}><option value="blocking">Blocking</option><option value="important">Important</option><option value="suggestion">Suggestion</option></select></label><label>Intent<select value={props.intent} onChange={(event) => props.onIntent(event.target.value as RepairIntent)}><option value="fix">Fix</option><option value="change">Change</option><option value="question">Question</option><option value="approve">Approve</option></select></label></div>
-    {props.conflictOptions.length > 0 && <fieldset className="a3s-conflicts"><legend>Conflicts with another draft <span>optional</span></legend><small>Select requests that cannot both be satisfied. A3S Test will ask for clarification without interpreting their wording.</small>{props.conflictOptions.map((option) => <label key={option.id}><input type="checkbox" checked={option.checked} onChange={(event) => props.onConflict(option.id, event.target.checked)} /><span>{option.label}</span></label>)}</fieldset>}
-    <div className="a3s-actions"><button type="button" className="quiet" onClick={props.onCancel}>Cancel</button><button type="button" disabled={!props.instruction.trim()} onClick={props.onSave}>{props.editing ? "Save changes" : "Add draft"}</button><button type="button" disabled={!props.instruction.trim()} onClick={props.onSend}>Send and auto-fix</button></div>
-  </section>;
-}
-
-type LayoutComposerProps = {
-  idPrefix: string;
-  purpose: string;
-  canvas: LayoutCanvas;
-  componentType: string;
-  source: LayoutSource | null;
-  target: Rect;
-  markingMode: SelectionMode | null;
-  onPurpose(value: string): void;
-  onCanvas(value: LayoutCanvas): void;
-  onComponentType(value: string): void;
-  onPlace(): void;
-  onSelectSource(): void;
-  onDrawDestination(): void;
-  onTarget(field: keyof Rect, value: number): void;
-  onCreateRearrange(): void;
-};
-
-function LayoutComposer(props: LayoutComposerProps) {
-  const helpId = `${props.idPrefix}-layout-help`;
-  const updateNumber = (field: keyof Rect, value: number) => {
-    if (Number.isFinite(value)) props.onTarget(field, value);
-  };
-  return <section className="a3s-layout" aria-label="Layout repair intent">
-    <p id={helpId}>Describe placement and rearrangement as typed repair intent. The overlay previews coordinates without changing the page.</p>
-    <label>Purpose <span>optional</span><input type="text" aria-label="Layout purpose" aria-describedby={helpId} maxLength={512} value={props.purpose} onChange={(event) => props.onPurpose(event.target.value)} placeholder="What should this layout help people do?" /></label>
-    <div className="a3s-layout-fields">
-      <label>Canvas<select aria-label="Layout canvas" value={props.canvas} onChange={(event) => props.onCanvas(event.target.value as LayoutCanvas)}><option value="page">Current page</option><option value="wireframe">Wireframe</option></select></label>
-      <label>Component<input type="text" aria-label="Layout component type" maxLength={256} value={props.componentType} onChange={(event) => props.onComponentType(event.target.value)} placeholder="Section" /></label>
-    </div>
-    <button type="button" aria-pressed={props.markingMode === "layout_place"} className={props.markingMode === "layout_place" ? "selected" : ""} disabled={!props.componentType.trim()} onClick={props.onPlace}>Draw placement</button>
-    <div className="a3s-layout-source">
-      <span>Section to rearrange</span>
-      <strong>{props.source?.label ?? "No section selected"}</strong>
-      <button type="button" aria-pressed={props.markingMode === "layout_source"} className={props.markingMode === "layout_source" ? "selected" : ""} onClick={props.onSelectSource}>Select section on page</button>
-    </div>
-    <div className="a3s-layout-fields" aria-label="Layout destination in viewport CSS pixels">
-      <label>X<input type="number" aria-label="Layout x" step="1" value={props.target.x} onChange={(event) => updateNumber("x", event.currentTarget.valueAsNumber)} /></label>
-      <label>Y<input type="number" aria-label="Layout y" step="1" value={props.target.y} onChange={(event) => updateNumber("y", event.currentTarget.valueAsNumber)} /></label>
-      <label>Width<input type="number" aria-label="Layout width" min="8" step="1" value={props.target.width} onChange={(event) => updateNumber("width", event.currentTarget.valueAsNumber)} /></label>
-      <label>Height<input type="number" aria-label="Layout height" min="8" step="1" value={props.target.height} onChange={(event) => updateNumber("height", event.currentTarget.valueAsNumber)} /></label>
-    </div>
-    <div className="a3s-actions">
-      <button type="button" className={props.markingMode === "layout_destination" ? "selected" : ""} aria-pressed={props.markingMode === "layout_destination"} disabled={!props.source} onClick={props.onDrawDestination}>Draw destination</button>
-      <button type="button" disabled={!props.source || !validLayoutRect(props.target)} onClick={props.onCreateRearrange}>Create rearrange draft</button>
-    </div>
-  </section>;
-}
-
 function useLatest<T>(value: T) {
   const ref = useRef(value);
   ref.current = value;
   return ref;
-}
-
-function stableList(values: readonly string[] | undefined): string {
-  return JSON.stringify(values ?? []);
-}
-
-function removeDraft(items: DraftItem[], findingId: string): DraftItem[] {
-  return items
-    .filter((item) => item.draft.id !== findingId)
-    .map((item) => {
-      const relations = item.draft.relations?.filter((relation) => relation.findingId !== findingId);
-      if (relations?.length === item.draft.relations?.length) return item;
-      const draft = { ...item.draft };
-      if (relations?.length) draft.relations = relations;
-      else delete draft.relations;
-      return { ...item, draft };
-    });
 }
 
 function bridgeIsCompatible(bridge: PageContextBridge | null): bridge is PageContextBridge {
@@ -891,91 +856,3 @@ function nodeForElement(bridge: PageContextBridge, element: Element) {
   const snapshot = bridge.snapshot({ detail: "forensic", limits: { nodes: 5_000 } });
   return snapshot.nodes.find((node) => bridge.resolve(node.id) === element) ?? null;
 }
-
-function normalizedArea(startX: number, startY: number, endX: number, endY: number) {
-  return { x: Math.min(startX, endX), y: Math.min(startY, endY), width: Math.abs(endX - startX), height: Math.abs(endY - startY) };
-}
-
-function appendDrawingPoint(points: Array<{ x: number; y: number }>, x: number, y: number) {
-  const previous = points.at(-1);
-  if (previous && Math.hypot(previous.x - x, previous.y - y) < 2) return points;
-  return [...points, { x, y }];
-}
-
-function drawingBounds(points: Array<{ x: number; y: number }>) {
-  const xs = points.map((point) => point.x);
-  const ys = points.map((point) => point.y);
-  const left = Math.min(...xs);
-  const top = Math.min(...ys);
-  return { x: left, y: top, width: Math.max(1, Math.max(...xs) - left), height: Math.max(1, Math.max(...ys) - top) };
-}
-
-function rectStyle(rect: Pick<DOMRect, "x" | "y" | "width" | "height">): CSSProperties {
-  return { left: rect.x, top: rect.y, width: rect.width, height: rect.height };
-}
-
-function rectValue(rect: Pick<DOMRect, "x" | "y" | "width" | "height">): Rect {
-  return { x: rect.x, y: rect.y, width: rect.width, height: rect.height };
-}
-
-function validLayoutRect(rect: Rect): boolean {
-  return [rect.x, rect.y, rect.width, rect.height].every(Number.isFinite)
-    && rect.width >= 8
-    && rect.height >= 8;
-}
-
-function markerRects(target: RepairTarget, bridge: PageContextBridge | null): RectLike[] {
-  if (!bridge) return [];
-  if (target.layout && target.region) return [target.region];
-  const nodeRects = target.nodeIds.flatMap((nodeId) => {
-    const element = bridge.resolve(nodeId);
-    return element ? [element.getBoundingClientRect()] : [];
-  });
-  return nodeRects.length > 0 ? nodeRects : target.region ? [target.region] : [];
-}
-
-type RectLike = Pick<DOMRect, "x" | "y" | "width" | "height">;
-
-function repairId(prefix: string): string {
-  return `finding-${prefix}-${globalThis.crypto?.randomUUID?.() ?? `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`}`;
-}
-
-function targetSummary(target: RepairTarget): string {
-  if (target.layout?.kind === "placement") return `layout placement · ${target.layout.componentType} · ${target.layout.canvas}`;
-  if (target.layout?.kind === "rearrange") return `layout rearrangement · ${target.nodeIds.length} element${target.nodeIds.length === 1 ? "" : "s"}`;
-  if (target.kind === "text") return `text · ${target.selectedText?.slice(0, 36) ?? "selection"}`;
-  if (target.kind === "region") return `area · ${target.nodeIds.length} elements`;
-  if (target.kind === "drawing") return `drawing · ${target.nodeIds.length} elements`;
-  return `${target.nodeIds.length} element${target.nodeIds.length === 1 ? "" : "s"}`;
-}
-
-function statusLabel(status: RepairStatus): string {
-  return status.replaceAll("_", " ");
-}
-
-function repairAnnouncement(repair: SubmittedRepair): string {
-  if (repair.status === "needs_input") return `Repair needs input: ${repair.instruction}`;
-  if (repair.status === "review_ready") return `Repair ready for review: ${repair.instruction}`;
-  return `Repair ${statusLabel(repair.status)}: ${repair.instruction}`;
-}
-
-const MODE_LABEL: Record<SelectionMode, string> = {
-  element: "Element",
-  text: "Text",
-  multi: "Multi",
-  area: "Area",
-  draw: "Draw",
-  layout_place: "Layout placement",
-  layout_source: "Layout source",
-  layout_destination: "Layout destination",
-};
-const MODE_HINT: Record<SelectionMode, string> = {
-  element: "Click one element, or focus it and press Enter, to create a finding.",
-  text: "Select text, then release the pointer.",
-  multi: "Drag across elements, or focus each element and press Enter to add it; press Shift+Enter to finish.",
-  area: "Optional pointer mode: drag a rectangle over the page.",
-  draw: "Optional pointer mode: draw a freehand mark around the relevant page area.",
-  layout_place: "Drag the intended component region in viewport CSS pixels.",
-  layout_source: "Click a section, or focus it and press Enter, to choose what should move.",
-  layout_destination: "Drag the intended destination region in viewport CSS pixels.",
-};
