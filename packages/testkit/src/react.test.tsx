@@ -185,6 +185,40 @@ describe("React adapter and review overlay", () => {
     expect(document.querySelector<HTMLElement>("[data-a3s-testkit-overlay]")!.shadowRoot!.querySelector(".a3s-hint")).toBeNull();
   });
 
+  it("exposes a named dialog, stable control names, and focused status announcements", async () => {
+    render(<A3STestKit enabled page={{ id: "accessible-overlay" }} repairStorage="memory"><button id="accessible-target">Accessible target</button><A3SReviewOverlay enabled defaultOpen /></A3STestKit>);
+    const panel = await waitFor(() => shadowQuery(".a3s-panel"));
+    const title = shadowQuery(".a3s-panel-title");
+    const description = shadowQuery(".a3s-panel-description");
+    expect(panel.getAttribute("role")).toBe("dialog");
+    expect(panel.getAttribute("aria-labelledby")).toBe(title.id);
+    expect(panel.getAttribute("aria-describedby")).toBe(description.id);
+    expect(shadowButton("Pause").getAttribute("aria-label")).toBe("Pause page animations");
+    expect(shadowButton("Auto-send · off").getAttribute("aria-label")).toBe("Turn auto-send on");
+    expect(shadowButton("Theme · system").getAttribute("aria-label")).toBe("Change overlay theme; current theme is system");
+    expect(shadowQuery(".a3s-announcer").getAttribute("aria-atomic")).toBe("true");
+    expect(shadowQuery(".a3s-list").hasAttribute("aria-live")).toBe(false);
+
+    const launcher = shadowQuery(".a3s-launch");
+    fireEvent.click(shadowQuery("header button"));
+    await waitFor(() => expect(document.querySelector<HTMLElement>("[data-a3s-testkit-overlay]")!.shadowRoot!.activeElement).toBe(launcher));
+    fireEvent.click(launcher);
+    await waitFor(() => expect(document.querySelector<HTMLElement>("[data-a3s-testkit-overlay]")!.shadowRoot!.activeElement).toBe(shadowQuery(".a3s-panel")));
+
+    const target = document.querySelector<HTMLElement>("#accessible-target")!;
+    setRect(target, { x: 20, y: 20, width: 120, height: 32 });
+    fireEvent.click(shadowButton("Element"));
+    target.dispatchEvent(pointerEventWithPath(target, 40, 30));
+    fireEvent.change(await waitFor(() => shadowQuery(".a3s-editor textarea")), { target: { value: "Name every finding action" } });
+    fireEvent.click(shadowButton("Add draft"));
+    await waitFor(() => expect(shadowQuery(".a3s-announcer").textContent).toBe("Draft added: Name every finding action"));
+    expect(shadowButton("Edit").getAttribute("aria-label")).toBe("Edit draft: Name every finding action");
+    expect(shadowButton("Delete").getAttribute("aria-label")).toBe("Delete draft: Name every finding action");
+    fireEvent.click(shadowButton("Send and auto-fix"));
+    await waitFor(() => expect(shadowQuery(".a3s-announcer").textContent).toBe("1 finding sent for repair"));
+    expect(document.querySelector<HTMLElement>("[data-a3s-testkit-overlay]")!.shadowRoot!.activeElement).toBe(shadowQuery(".a3s-panel"));
+  });
+
   it("does not mount the overlay without an explicitly enabled compatible bridge", async () => {
     const disabled = render(<A3STestKit enabled={false} page={{ id: "disabled" }} repairStorage="memory"><A3SReviewOverlay enabled defaultOpen /></A3STestKit>);
     await waitFor(() => expect(getPageContextBridge()).toBeNull());
@@ -240,10 +274,14 @@ describe("React adapter and review overlay", () => {
       message: "Should this retain its current label?",
     });
     await waitFor(() => expect(shadowQuery(".a3s-thread").textContent).toContain("Should this retain its current label?"));
+    await waitFor(() => expect(shadowQuery(".a3s-announcer").textContent).toBe("Repair needs input: Fix with clarification"));
+    expect(shadowQuery(".a3s-status").hasAttribute("role")).toBe(false);
     fireEvent.click(shadowButton("Reply"));
-    fireEvent.change(shadowQuery("[aria-label='Reply to coding agent']"), { target: { value: "Keep the label." } });
+    fireEvent.change(shadowQuery("[aria-label='Reply to coding agent about: Fix with clarification']"), { target: { value: "Keep the label." } });
     fireEvent.click(shadowButton("Send reply"));
     await waitFor(() => expect(getPageContextBridge()?.takeRepairActions()[0]).toMatchObject({ action: "reply", findingId, message: "Keep the label." }));
+    await waitFor(() => expect(shadowQuery(".a3s-announcer").textContent).toBe("Reply sent to the coding agent"));
+    await waitFor(() => expect(document.querySelector<HTMLElement>("[data-a3s-testkit-overlay]")!.shadowRoot!.activeElement).toBe(shadowButton("Reply")));
   });
 
   it("lets a human accept or reject only review-ready repairs", async () => {

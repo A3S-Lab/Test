@@ -155,7 +155,9 @@ export function A3SReviewOverlay({
   const [intent, setIntent] = useState<RepairIntent>("fix");
   const [conflictingDraftIds, setConflictingDraftIds] = useState<string[]>([]);
   const [replyFindingId, setReplyFindingId] = useState<string | null>(null);
+  const [restoreReplyFocusId, setRestoreReplyFocusId] = useState<string | null>(null);
   const [replyMessage, setReplyMessage] = useState("");
+  const [announcement, setAnnouncement] = useState("");
   const [keyboardNodeIds, setKeyboardNodeIds] = useState<string[]>([]);
   const [highlight, setHighlight] = useState<DOMRect | null>(null);
   const [area, setArea] = useState<{ startX: number; startY: number; currentX: number; currentY: number } | null>(null);
@@ -164,6 +166,8 @@ export function A3SReviewOverlay({
   const drawingRef = useRef(drawing);
   const launchRef = useRef<HTMLButtonElement | null>(null);
   const panelRef = useRef<HTMLElement | null>(null);
+  const replyTriggerRefs = useRef(new Map<string, HTMLButtonElement>());
+  const focusPanelOnOpenRef = useRef(false);
   const restoreFocusRef = useRef<HTMLElement | null>(null);
   const lastApplicationFocusRef = useRef<HTMLElement | null>(null);
   const idPrefix = useId().replace(/:/g, "");
@@ -174,6 +178,15 @@ export function A3SReviewOverlay({
   function closeOverlay() {
     setOpen(false);
     queueMicrotask(() => launchRef.current?.focus());
+  }
+
+  function openOverlay(focusPanel = false) {
+    if (focusPanel) focusPanelOnOpenRef.current = true;
+    setOpen(true);
+  }
+
+  function focusPanel() {
+    queueMicrotask(() => panelRef.current?.focus());
   }
 
   function startMarking(value: SelectionMode) {
@@ -229,8 +242,22 @@ export function A3SReviewOverlay({
       if (event.type === "repair.submitted" || event.type === "repair.updated") {
         setRepairs(bridge.listRepairs());
       }
+      if (event.type === "repair.updated") announce(repairAnnouncement(event.repair));
     });
   }, [bridge]);
+
+  useLayoutEffect(() => {
+    if (!open || !focusPanelOnOpenRef.current) return;
+    focusPanelOnOpenRef.current = false;
+    panelRef.current?.focus();
+  }, [mount, open]);
+
+  useLayoutEffect(() => {
+    if (!restoreReplyFocusId || replyFindingId !== null) return;
+    const trigger = replyTriggerRefs.current.get(restoreReplyFocusId);
+    (trigger ?? panelRef.current)?.focus();
+    setRestoreReplyFocusId(null);
+  }, [repairs, replyFindingId, restoreReplyFocusId]);
 
   useEffect(() => {
     if (!enabled) return;
@@ -399,7 +426,7 @@ export function A3SReviewOverlay({
     setCandidateLabel(label);
     setInstruction("");
     setSuccessCriteria("");
-    setOpen(true);
+    openOverlay();
   }
 
   function updateArea(value: typeof area) {
@@ -414,6 +441,7 @@ export function A3SReviewOverlay({
 
   function saveDraft(send = false) {
     if (!candidate || !instruction.trim()) return;
+    const wasEditing = editingDraftId !== null;
     const draft: RepairDraft = {
       id: editingDraftId ?? repairId(idPrefix),
       instruction: instruction.trim(),
@@ -433,13 +461,17 @@ export function A3SReviewOverlay({
     setCandidateLabel("");
     setInstruction("");
     setConflictingDraftIds([]);
-    if (send || autoSendEnabled) submit([draft]);
-    else setDrafts((current) => {
+    if (send || autoSendEnabled) {
+      submit([draft]);
+    } else {
+      setDrafts((current) => {
       const index = current.findIndex((item) => item.draft.id === draft.id);
       if (index < 0) return [...current, { draft, selected: true, hidden: false }];
       return current.map((item, itemIndex) => itemIndex === index ? { ...item, draft } : item);
-    });
-    queueMicrotask(() => panelRef.current?.focus());
+      });
+      announce(`${wasEditing ? "Draft updated" : "Draft added"}: ${draft.instruction}`);
+      focusPanel();
+    }
   }
 
   function editDraft(item: DraftItem) {
@@ -455,7 +487,7 @@ export function A3SReviewOverlay({
         ?.filter((relation) => relation.kind === "conflicts_with")
         .map((relation) => relation.findingId) ?? [],
     );
-    setOpen(true);
+    openOverlay();
   }
 
   function submit(items: RepairDraft[]) {
@@ -465,6 +497,10 @@ export function A3SReviewOverlay({
     setDrafts((current) => current.filter((item) => !submittedIds.has(item.draft.id)));
     setRepairs(bridge.listRepairs());
     onSubmitted?.(submitted);
+    if (submitted.length > 0) {
+      announce(`${submitted.length} finding${submitted.length === 1 ? "" : "s"} sent for repair`);
+      focusPanel();
+    }
   }
 
   function submitHumanAction(
@@ -474,10 +510,17 @@ export function A3SReviewOverlay({
   ) {
     if (!bridge) return;
     if (!bridge.submitRepairAction({ findingId, action, ...(message?.trim() ? { message: message.trim() } : {}) })) return;
+    announce(action === "reply" ? "Reply sent to the coding agent" : `Repair ${action} action queued`);
     if (action === "reply") {
+      setRestoreReplyFocusId(findingId);
       setReplyFindingId(null);
       setReplyMessage("");
     }
+  }
+
+  function announce(message: string) {
+    setAnnouncement("");
+    queueMicrotask(() => setAnnouncement(message));
   }
 
   async function copyDrafts() {
@@ -500,16 +543,17 @@ export function A3SReviewOverlay({
       {(highlight || areaRect) && <div className="a3s-highlight" style={rectStyle(areaRect ?? highlight!)} aria-hidden="true" />}
       {drawingPath && <svg className="a3s-drawing" aria-hidden="true"><path d={drawingPath} /></svg>}
       <div className="a3s-markers" aria-hidden="true">{markers.flatMap((marker) => markerRects(marker.target, bridge).map((rect, index) => <span key={`${marker.id}-${index}`} className={`a3s-marker status-${marker.status}`} style={rectStyle(rect)} />))}</div>
-      <button ref={launchRef} className={`a3s-launch ${marking ? "is-active" : ""}`} type="button" onClick={() => open ? closeOverlay() : setOpen(true)} aria-expanded={open} aria-controls={`${idPrefix}-review-panel`}>
+      <button ref={launchRef} className={`a3s-launch ${marking ? "is-active" : ""}`} type="button" onClick={() => open ? closeOverlay() : openOverlay(true)} aria-expanded={open} aria-controls={`${idPrefix}-review-panel`}>
         A3S Review{drafts.length + repairs.length > 0 ? ` · ${drafts.length + repairs.length}` : ""}
       </button>
-      {open && <aside ref={panelRef} id={`${idPrefix}-review-panel`} className="a3s-panel" aria-label="A3S Test review" role="dialog" aria-modal="false" tabIndex={-1}>
-        <header><div><strong>Review & repair</strong><small>Send bounded findings to the active A3S Test agent</small></div><button type="button" onClick={closeOverlay} aria-label="Close">×</button></header>
+      <div className="a3s-announcer" role="status" aria-live="polite" aria-atomic="true">{announcement}</div>
+      {open && <aside ref={panelRef} id={`${idPrefix}-review-panel`} className="a3s-panel" aria-labelledby={`${idPrefix}-review-title`} aria-describedby={`${idPrefix}-review-description`} role="dialog" aria-modal="false" tabIndex={-1}>
+        <header><div><strong id={`${idPrefix}-review-title`} className="a3s-panel-title">Review & repair</strong><small id={`${idPrefix}-review-description`} className="a3s-panel-description">Send bounded findings to the active A3S Test agent</small></div><button type="button" onClick={closeOverlay} aria-label="Close review overlay">×</button></header>
         <section className="a3s-tools" aria-label="Mark page">
           {(["element", "text", "multi", "area", "draw"] as SelectionMode[]).map((value) => <button key={value} type="button" aria-label={`Mark ${MODE_LABEL[value].toLowerCase()}`} aria-pressed={marking && mode === value} className={marking && mode === value ? "selected" : ""} onClick={() => startMarking(value)}>{MODE_LABEL[value]}</button>)}
-          <button type="button" className={paused ? "selected" : ""} onClick={() => { const next = !paused; bridge?.setAnimationsPaused(next); setPaused(next); }}>{paused ? "Resume" : "Pause"}</button>
-          <button type="button" aria-pressed={autoSendEnabled} className={autoSendEnabled ? "selected" : ""} onClick={() => setAutoSendEnabled((current) => !current)}>Auto-send · {autoSendEnabled ? "on" : "off"}</button>
-          <button type="button" aria-label="Change overlay theme" onClick={() => setTheme((current) => current === "system" ? "light" : current === "light" ? "dark" : "system")}>Theme · {theme}</button>
+          <button type="button" aria-label={paused ? "Resume page animations" : "Pause page animations"} aria-pressed={paused} className={paused ? "selected" : ""} onClick={() => { const next = !paused; bridge?.setAnimationsPaused(next); setPaused(next); announce(next ? "Page animations paused" : "Page animations resumed"); }}>{paused ? "Resume" : "Pause"}</button>
+          <button type="button" aria-label={`Turn auto-send ${autoSendEnabled ? "off" : "on"}`} aria-pressed={autoSendEnabled} className={autoSendEnabled ? "selected" : ""} onClick={() => setAutoSendEnabled((current) => !current)}>Auto-send · {autoSendEnabled ? "on" : "off"}</button>
+          <button type="button" aria-label={`Change overlay theme; current theme is ${theme}`} onClick={() => setTheme((current) => current === "system" ? "light" : current === "light" ? "dark" : "system")}>Theme · {theme}</button>
           {marking && <button type="button" className="danger" onClick={() => stopMarking()}>Cancel</button>}
         </section>
         {marking && <p className="a3s-hint" role="status">{MODE_HINT[mode]} Press Esc to cancel.</p>}
@@ -538,14 +582,14 @@ export function A3SReviewOverlay({
           onSave={() => saveDraft(false)}
           onSend={() => saveDraft(true)}
         />}
-        <section className="a3s-list" aria-live="polite">
+        <section className="a3s-list" aria-label="Draft and submitted findings">
           {drafts.map((item) => <article key={item.draft.id} className={`a3s-item${item.hidden ? " is-hidden" : ""}`}>
-            <label><input type="checkbox" checked={item.selected} onChange={(event) => setDrafts((current) => current.map((candidate) => candidate.draft.id === item.draft.id ? { ...candidate, selected: event.target.checked } : candidate))} /><span><strong>{item.draft.instruction}</strong><small>{targetSummary(item.draft.target)} · draft</small></span></label>
-            <div><button type="button" onClick={() => submit([item.draft])}>Send and auto-fix</button><button type="button" className="quiet" onClick={() => editDraft(item)}>Edit</button><button type="button" className="quiet" onClick={() => setDrafts((current) => current.map((candidate) => candidate.draft.id === item.draft.id ? { ...candidate, hidden: !candidate.hidden } : candidate))}>{item.hidden ? "Reopen marker" : "Hide marker"}</button><button type="button" className="quiet" onClick={() => setDrafts((current) => removeDraft(current, item.draft.id))}>Delete</button></div>
+            <label><input type="checkbox" aria-label={`Select draft: ${item.draft.instruction}`} checked={item.selected} onChange={(event) => setDrafts((current) => current.map((candidate) => candidate.draft.id === item.draft.id ? { ...candidate, selected: event.target.checked } : candidate))} /><span><strong>{item.draft.instruction}</strong><small>{targetSummary(item.draft.target)} · draft</small></span></label>
+            <div><button type="button" aria-label={`Send draft for auto-fix: ${item.draft.instruction}`} onClick={() => submit([item.draft])}>Send and auto-fix</button><button type="button" className="quiet" aria-label={`Edit draft: ${item.draft.instruction}`} onClick={() => editDraft(item)}>Edit</button><button type="button" className="quiet" aria-label={`${item.hidden ? "Reopen" : "Hide"} marker for draft: ${item.draft.instruction}`} onClick={() => setDrafts((current) => current.map((candidate) => candidate.draft.id === item.draft.id ? { ...candidate, hidden: !candidate.hidden } : candidate))}>{item.hidden ? "Reopen marker" : "Hide marker"}</button><button type="button" className="quiet" aria-label={`Delete draft: ${item.draft.instruction}`} onClick={() => { setDrafts((current) => removeDraft(current, item.draft.id)); announce(`Draft deleted: ${item.draft.instruction}`); focusPanel(); }}>Delete</button></div>
           </article>)}
           {repairs.map((repair) => {
             const replies = bridge.listRepairReplies(repair.id);
-            return <article key={repair.id} className="a3s-item submitted"><span className={`a3s-status status-${repair.status}`}>{statusLabel(repair.status)}</span><strong>{repair.instruction}</strong><small>{targetSummary(repair.target)} · revision {repair.contextRevision}</small>{replies.length > 0 && <ol className="a3s-thread" aria-label="Repair conversation">{replies.map((reply) => <li key={reply.requestId}><span>{reply.actor}</span><p>{reply.message}</p></li>)}</ol>}{repair.status === "needs_input" && <div className="a3s-human-actions">{replyFindingId === repair.id ? <><label className="a3s-reply-label">Reply to the coding agent<textarea aria-label="Reply to coding agent" autoFocus maxLength={8192} value={replyMessage} onChange={(event) => setReplyMessage(event.target.value)} /></label><button type="button" disabled={!replyMessage.trim()} onClick={() => submitHumanAction(repair.id, "reply", replyMessage)}>Send reply</button><button type="button" className="quiet" onClick={() => { setReplyFindingId(null); setReplyMessage(""); }}>Cancel</button></> : <button type="button" onClick={() => setReplyFindingId(repair.id)}>Reply</button>}</div>}{repair.status === "review_ready" && <div className="a3s-human-actions" aria-label="Review repair"><button type="button" onClick={() => submitHumanAction(repair.id, "accept")}>Accept repair</button><button type="button" className="quiet" onClick={() => submitHumanAction(repair.id, "dismiss")}>Reject</button><button type="button" className="quiet" onClick={() => submitHumanAction(repair.id, "reopen")}>Reopen</button></div>}{["resolved", "dismissed", "cancelled", "failed", "verification_failed"].includes(repair.status) && <div className="a3s-human-actions"><button type="button" className="quiet" onClick={() => submitHumanAction(repair.id, "reopen")}>Reopen</button></div>}</article>;
+            return <article key={repair.id} className="a3s-item submitted"><span className={`a3s-status status-${repair.status}`}>{statusLabel(repair.status)}</span><strong>{repair.instruction}</strong><small>{targetSummary(repair.target)} · revision {repair.contextRevision}</small>{replies.length > 0 && <ol className="a3s-thread" aria-label={`Repair conversation: ${repair.instruction}`}>{replies.map((reply) => <li key={reply.requestId}><span>{reply.actor}</span><p>{reply.message}</p></li>)}</ol>}{repair.status === "needs_input" && <div className="a3s-human-actions">{replyFindingId === repair.id ? <><label className="a3s-reply-label">Reply to the coding agent<textarea aria-label={`Reply to coding agent about: ${repair.instruction}`} autoFocus maxLength={8192} value={replyMessage} onChange={(event) => setReplyMessage(event.target.value)} /></label><button type="button" disabled={!replyMessage.trim()} onClick={() => submitHumanAction(repair.id, "reply", replyMessage)}>Send reply</button><button type="button" className="quiet" onClick={() => { setRestoreReplyFocusId(repair.id); setReplyFindingId(null); setReplyMessage(""); }}>Cancel reply</button></> : <button ref={(element) => { if (element) replyTriggerRefs.current.set(repair.id, element); else replyTriggerRefs.current.delete(repair.id); }} type="button" aria-label={`Reply about repair: ${repair.instruction}`} onClick={() => setReplyFindingId(repair.id)}>Reply</button>}</div>}{repair.status === "review_ready" && <div className="a3s-human-actions" aria-label={`Review repair: ${repair.instruction}`}><button type="button" aria-label={`Accept repair: ${repair.instruction}`} onClick={() => submitHumanAction(repair.id, "accept")}>Accept repair</button><button type="button" className="quiet" aria-label={`Reject repair: ${repair.instruction}`} onClick={() => submitHumanAction(repair.id, "dismiss")}>Reject</button><button type="button" className="quiet" aria-label={`Reopen repair: ${repair.instruction}`} onClick={() => submitHumanAction(repair.id, "reopen")}>Reopen</button></div>}{["resolved", "dismissed", "cancelled", "failed", "verification_failed"].includes(repair.status) && <div className="a3s-human-actions"><button type="button" className="quiet" aria-label={`Reopen repair: ${repair.instruction}`} onClick={() => submitHumanAction(repair.id, "reopen")}>Reopen</button></div>}</article>;
           })}
           {drafts.length === 0 && repairs.length === 0 && !candidate && <p className="a3s-empty">Choose a marking mode, select the page context, then describe the desired fix.</p>}
         </section>
@@ -694,6 +738,12 @@ function statusLabel(status: RepairStatus): string {
   return status.replaceAll("_", " ");
 }
 
+function repairAnnouncement(repair: SubmittedRepair): string {
+  if (repair.status === "needs_input") return `Repair needs input: ${repair.instruction}`;
+  if (repair.status === "review_ready") return `Repair ready for review: ${repair.instruction}`;
+  return `Repair ${statusLabel(repair.status)}: ${repair.instruction}`;
+}
+
 const MODE_LABEL: Record<SelectionMode, string> = { element: "Element", text: "Text", multi: "Multi", area: "Area", draw: "Draw" };
 const MODE_HINT: Record<SelectionMode, string> = {
   element: "Click one element, or focus it and press Enter, to create a finding.",
@@ -707,12 +757,14 @@ const OVERLAY_CSS = `
 :host { all: initial; color-scheme: light dark; }
 *, *::before, *::after { box-sizing: border-box; }
 button, input, textarea, select { font: inherit; }
+.a3s-announcer { position:fixed; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0 0 0 0); clip-path:inset(50%); white-space:nowrap; border:0; }
 .a3s-root { position: fixed; inset: 0; z-index: 2147483646; pointer-events: none; font: 13px/1.45 ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color: #f5f5f4; }
 .a3s-launch { pointer-events: auto; position: fixed; right: 20px; bottom: 20px; border: 1px solid #57534e; border-radius: 999px; padding: 10px 14px; background: #1c1917; color: #fafaf9; box-shadow: 0 8px 30px rgba(0,0,0,.28); cursor: pointer; font-weight: 700; }
 .a3s-launch.is-active { outline: 3px solid rgba(249,115,22,.35); border-color: #fb923c; }
 .a3s-panel { pointer-events: auto; position: fixed; right: 20px; bottom: 70px; width: min(390px, calc(100vw - 32px)); max-height: min(720px, calc(100vh - 100px)); display: flex; flex-direction: column; overflow: hidden; background: #1c1917; border: 1px solid #44403c; border-radius: 14px; box-shadow: 0 20px 65px rgba(0,0,0,.42); }
 header { display:flex; align-items:flex-start; justify-content:space-between; padding:15px 16px 12px; border-bottom:1px solid #44403c; } header div { display:flex; flex-direction:column; gap:2px; } header strong { font-size:15px; } small { color:#a8a29e; } header button { border:0; background:none; color:#d6d3d1; cursor:pointer; font-size:20px; line-height:1; }
 .a3s-tools { display:flex; flex-wrap:wrap; gap:6px; padding:10px 12px; border-bottom:1px solid #292524; } .a3s-tools button { flex:1 1 58px; } button { border:1px solid #57534e; border-radius:7px; padding:7px 9px; background:#292524; color:#f5f5f4; cursor:pointer; } button:hover, button.selected { border-color:#fb923c; background:#431407; } button:disabled { opacity:.45; cursor:not-allowed; } button.danger { color:#fecaca; }
+button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-visible, .a3s-panel:focus-visible { outline:3px solid currentColor; outline-offset:2px; }
 .a3s-hint { margin:0; padding:8px 12px; background:#431407; color:#fed7aa; }
 .a3s-highlight { position:fixed; pointer-events:none; border:2px solid #f97316; background:rgba(249,115,22,.12); box-shadow:0 0 0 1px rgba(255,255,255,.75) inset; }
 .a3s-markers { position:fixed; inset:0; pointer-events:none; } .a3s-marker { position:fixed; border:2px solid #f97316; border-radius:4px; background:rgba(249,115,22,.08); } .a3s-marker.status-review_ready, .a3s-marker.status-resolved { border-color:#22c55e; background:rgba(34,197,94,.08); } .a3s-marker.status-failed, .a3s-marker.status-verification_failed { border-color:#ef4444; background:rgba(239,68,68,.08); }
