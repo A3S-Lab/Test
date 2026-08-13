@@ -537,9 +537,11 @@ the CLI; it is not another runner.
 - **Typed actions.** The generated JSON Schema is authoritative. Unknown
   variants and fields fail before reaching a driver.
 - **Scoped navigation and network.** Explicit URL actions stay inside the
-  initial origin plus `--allow-origin` entries. Browser requests are limited
-  to the admitted hostnames; `--allow-domain` expands network access without
-  granting top-level navigation permission.
+  initial origin plus `--allow-origin` entries. A3S Browser 0.4.x enforces
+  exact scheme, host, and effective port before requests are sent;
+  `--allow-domain` adds an intentional hostname-wide network exception without
+  granting top-level navigation permission. Standalone 0.26.x projects the
+  same policy to its hostname-only boundary and reports that limitation.
 - **Contained evidence.** Screenshot, accessibility, console, HAR, trace,
   video, and download paths must resolve to fresh regular files inside the
   canonical session artifact root.

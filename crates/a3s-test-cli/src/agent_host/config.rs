@@ -74,11 +74,7 @@ pub(super) fn parse_config(source: &str) -> Result<AgentRunConfig> {
     allowed_origins.sort_by_key(|url| url.origin().ascii_serialization());
     allowed_origins.dedup_by(|left, right| left.origin() == right.origin());
 
-    let mut allowed_domains = allowed_origins
-        .iter()
-        .filter_map(|url| url.host_str().map(str::to_string))
-        .collect::<Vec<_>>();
-    allowed_domains.extend(optional_string_list(root, "allow_domains", "agent_run")?);
+    let mut allowed_domains = optional_string_list(root, "allow_domains", "agent_run")?;
     allowed_domains.sort();
     allowed_domains.dedup();
 
@@ -513,7 +509,7 @@ agent_run "checkout" {
 
         assert_eq!(config.id, "checkout");
         assert_eq!(config.allowed_origins.len(), 2);
-        assert_eq!(config.allowed_domains.len(), 3);
+        assert_eq!(config.allowed_domains, ["cdn.example.test"]);
         assert_eq!(config.allowed_actions.len(), 4);
         assert_eq!(config.verification.scenarios[0].steps.len(), 2);
     }

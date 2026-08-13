@@ -151,7 +151,7 @@ struct McpArgs {
     /// Show Web MCP browser windows.
     #[arg(long)]
     headed: bool,
-    /// Additional hostname admitted by the Web MCP browser network filter.
+    /// Additional hostname admitted by the Web MCP browser network policy.
     #[arg(long = "web-allow-domain")]
     web_allowed_domains: Vec<String>,
     /// Browser daemon inactivity deadline between MCP turns.
@@ -353,14 +353,14 @@ async fn serve_mcp(args: McpArgs) -> Result<ExitCode> {
         if !matches!(parsed.scheme(), "http" | "https") {
             anyhow::bail!("MCP Web URL must use http or https");
         }
-        let host = parsed
-            .host_str()
-            .context("MCP Web URL must contain a hostname")?;
-        let mut domains = vec![host.to_string()];
-        domains.extend(args.web_allowed_domains.iter().cloned());
-        let network_policy =
-            a3s_test_driver_web::BrowserNetworkPolicy::restricted_to_domains(domains)
-                .map_err(anyhow::Error::new)?;
+        if parsed.host_str().is_none() {
+            anyhow::bail!("MCP Web URL must contain a hostname");
+        }
+        let network_policy = a3s_test_driver_web::BrowserNetworkPolicy::restricted(
+            [parsed.origin().ascii_serialization()],
+            args.web_allowed_domains.iter().cloned(),
+        )
+        .map_err(anyhow::Error::new)?;
         let browser = AgentBrowserDriver::new(AgentBrowserConfig {
             command: browser_command(args.browser_driver, args.browser_executable.clone()),
             namespace: String::new(),

@@ -133,7 +133,7 @@ impl CommandExecutor for RecordingExecutor {
             .last()
             .is_some_and(|argument| argument == "--version");
         let default_version = if invocation.args.starts_with(&os(&["use", "browser"])) {
-            "a3s use browser 0.1.1"
+            "a3s use browser 0.4.0"
         } else {
             "agent-browser 0.26.0"
         };
@@ -350,10 +350,10 @@ async fn maps_typed_actions_and_scopes_browser_lifecycle() {
         headed: false,
         command_timeout: Duration::from_secs(5),
         idle_timeout: Duration::from_secs(30),
-        network_policy: BrowserNetworkPolicy::restricted_to_domains([
-            "example.test",
-            "*.cdn.example.test",
-        ])
+        network_policy: BrowserNetworkPolicy::restricted(
+            ["https://example.test"],
+            ["*.cdn.example.test"],
+        )
         .expect("network policy"),
     };
     let driver = AgentBrowserDriver::with_executor(config, executor.clone());
@@ -461,8 +461,12 @@ async fn maps_typed_actions_and_scopes_browser_lifecycle() {
                 runtime.clone()
             ),
             (
+                OsString::from("A3S_USE_BROWSER_ALLOWED_ORIGINS"),
+                OsString::from("https://example.test")
+            ),
+            (
                 OsString::from("A3S_USE_BROWSER_ALLOWED_DOMAINS"),
-                OsString::from("*.cdn.example.test,example.test")
+                OsString::from("*.cdn.example.test")
             ),
         ])
     );
@@ -848,12 +852,43 @@ async fn discovers_and_admits_the_typed_browser_protocol() {
     assert!(capabilities
         .features
         .contains(&WebCapability::DomainContainment));
+    assert!(!capabilities
+        .features
+        .contains(&WebCapability::ExactOriginContainment));
     assert!(capabilities.features.contains(&WebCapability::MouseWheel));
     assert!(capabilities.features.contains(&WebCapability::Viewport));
 
     let invocations = executor.invocations.lock().unwrap();
     assert_eq!(invocations.len(), 1);
     assert_eq!(invocations[0].args, os(&["--version"]));
+}
+
+#[tokio::test]
+async fn a3s_browser_reports_exact_origin_containment() {
+    let executor = Arc::new(RecordingExecutor::default());
+    let driver = AgentBrowserDriver::with_executor(
+        AgentBrowserConfig {
+            command: BrowserCommand::A3s {
+                executable: PathBuf::from("/opt/a3s"),
+            },
+            namespace: "capabilities".to_string(),
+            headed: false,
+            command_timeout: Duration::from_secs(5),
+            idle_timeout: Duration::from_secs(2),
+            network_policy: BrowserNetworkPolicy::restricted(
+                ["https://example.test"],
+                std::iter::empty::<&str>(),
+            )
+            .expect("exact origin policy"),
+        },
+        executor,
+    );
+
+    let capabilities = driver.capabilities().await.expect("capabilities");
+    assert_eq!(capabilities.integration, BrowserIntegration::A3s);
+    assert!(capabilities
+        .features
+        .contains(&WebCapability::ExactOriginContainment));
 }
 
 #[tokio::test]

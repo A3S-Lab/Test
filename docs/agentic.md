@@ -71,25 +71,29 @@ unapproved HTTP(S) origin returns
 `test.driver.web.navigation_origin_denied`. The generated
 `a3s-test agent schema` output is the authoritative action contract.
 
-The browser also receives a hostname allowlist derived from the initial URL
-and every `--allow-origin`. This network layer rejects cross-domain links,
-redirects, scripts, images, fetches, and similar requests before the next
-observation. Add `--allow-domain` only when a page needs a CDN or API hostname
-without adding that hostname to A3S Test's exact-origin permission. The
-underlying filter applies to document requests as well as subresources, so a
-page-driven request to such a hostname can occur; the next observation still
-rejects it unless `--allow-origin` admits the exact origin. The filter also
-cannot distinguish two schemes or ports on the same hostname, so exact-origin
-enforcement remains the responsibility of the explicit-action and observation
-checks above.
+The browser also receives an exact-origin policy derived from the initial URL
+and every `--allow-origin`. A3S Browser 0.4.x rejects links, redirects,
+scripts, images, fetches, workers, popups, WebSockets, and direct reads whose
+scheme, host, and effective port are not admitted. Add `--allow-domain` only
+when a page needs hostname-wide network access for a CDN or API without adding
+that hostname to A3S Test's exact-origin navigation permission. A page-driven
+document request admitted only by a domain exception can occur, but the next
+observation still rejects it unless `--allow-origin` admits the exact origin.
+Standalone 0.26.x projects origins to hostnames because its protocol cannot
+distinguish schemes or ports; explicit-action and observation checks retain the
+exact navigation boundary.
 
-The domain policy is persisted when `agent start` creates the browser daemon.
-A session file from an earlier release has no proof that its already-running
-daemon was started with this policy. A3S Test therefore keeps that state
-readable but rejects `observe` and action turns with
+The policy and its typed deployment mode are persisted when `agent start`
+creates the browser daemon. `exact_origin_v1` identifies A3S Browser;
+`hostname_v1` identifies standalone. A session file from an earlier release
+has no proof of either deployment. A3S Test keeps that state readable but
+rejects `observe` and action turns with
 `test.session.browser_network_policy_missing`. `finish` and `abort` remain
 available so the exact owned browser session and runtime can be cleaned up;
-start a new session before continuing the test.
+start a new session before continuing the test. A stored mode that conflicts
+with the selected driver returns `test.session.browser_containment_mismatch`;
+non-canonical or drifted policy lists return
+`test.session.browser_network_policy_mismatch`.
 
 Action protocol revision 6 is the current cross-surface schema. Revision 2
 introduced the browser interactions needed to inspect document-style
@@ -235,12 +239,12 @@ agent_run "checkout" {
 }
 ```
 
-`allow_origins` adds exact HTTP(S) origins for explicit URL actions and every
-successful observation. `allow_domains` adds only browser network hostnames,
-for example an API or CDN; it never grants exact-origin navigation. The
-browser protocol currently enforces hostnames at its network boundary, so
-scheme and effective port remain independently checked on explicit actions
-and observations.
+`allow_origins` adds exact HTTP(S) origins for browser requests, explicit URL
+actions, and every successful observation when the A3S Browser integration is
+used. `allow_domains` adds only hostname-wide browser network access, for
+example an API or CDN; it never grants exact-origin navigation. Standalone
+0.26.x receives the origin hostnames because its network protocol cannot
+express scheme or effective port.
 
 The workflow deadline begins before surface opening and covers opening,
 initial navigation, every observation, provider call, proposed action,

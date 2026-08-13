@@ -124,8 +124,16 @@ printf '{"success":true}\n'
         serde_json::from_slice(&finish.stdout).expect("finish JSON");
     assert_eq!(finish_json["status"], "passed");
     assert_eq!(
+        finish_json["report"]["browser_allowed_origins"],
+        serde_json::json!(["https://example.test"])
+    );
+    assert_eq!(
         finish_json["report"]["browser_allowed_domains"],
         serde_json::json!([])
+    );
+    assert_eq!(
+        finish_json["report"]["browser_containment"],
+        serde_json::Value::Null
     );
     assert!(
         !finish_runtime.exists(),
@@ -192,9 +200,9 @@ fn strip_browser_policy(workspace: &Path, session: &str) -> PathBuf {
         state
             .as_object_mut()
             .expect("session object")
-            .remove("browser_allowed_domains")
+            .remove("browser_containment")
             .is_some(),
-        "new session did not persist a browser policy"
+        "new session did not persist a typed containment mode"
     );
     fs::write(
         state_path,

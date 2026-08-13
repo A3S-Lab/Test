@@ -22,6 +22,7 @@ pub enum WebCapability {
     ContextClicks,
     Dialogs,
     DomainContainment,
+    ExactOriginContainment,
     Downloads,
     DragAndDrop,
     ElementInteractions,
@@ -91,34 +92,39 @@ pub(crate) async fn discover(
     };
     admit_version(integration, &version)?;
 
+    let mut features: BTreeSet<_> = [
+        WebCapability::Accessibility,
+        WebCapability::Console,
+        WebCapability::ContextClicks,
+        WebCapability::Dialogs,
+        WebCapability::DomainContainment,
+        WebCapability::Downloads,
+        WebCapability::DragAndDrop,
+        WebCapability::ElementInteractions,
+        WebCapability::FormControls,
+        WebCapability::Frames,
+        WebCapability::Har,
+        WebCapability::MouseWheel,
+        WebCapability::NetworkRoutes,
+        WebCapability::PageErrors,
+        WebCapability::Screenshots,
+        WebCapability::Tabs,
+        WebCapability::Trace,
+        WebCapability::Uploads,
+        WebCapability::Video,
+        WebCapability::Viewport,
+    ]
+    .into_iter()
+    .collect();
+    if integration == BrowserIntegration::A3s {
+        features.insert(WebCapability::ExactOriginContainment);
+    }
+
     Ok(BrowserCapabilities {
         integration,
         version: version.to_string(),
         protocol_revision: ACTION_PROTOCOL_REVISION,
-        features: [
-            WebCapability::Accessibility,
-            WebCapability::Console,
-            WebCapability::ContextClicks,
-            WebCapability::Dialogs,
-            WebCapability::DomainContainment,
-            WebCapability::Downloads,
-            WebCapability::DragAndDrop,
-            WebCapability::ElementInteractions,
-            WebCapability::FormControls,
-            WebCapability::Frames,
-            WebCapability::Har,
-            WebCapability::MouseWheel,
-            WebCapability::NetworkRoutes,
-            WebCapability::PageErrors,
-            WebCapability::Screenshots,
-            WebCapability::Tabs,
-            WebCapability::Trace,
-            WebCapability::Uploads,
-            WebCapability::Video,
-            WebCapability::Viewport,
-        ]
-        .into_iter()
-        .collect(),
+        features,
         page_context_protocol: None,
     })
 }
@@ -138,7 +144,7 @@ fn parse_version(output: &str) -> Result<Version, DriverError> {
 
 fn admit_version(integration: BrowserIntegration, version: &Version) -> Result<(), DriverError> {
     let (minimum, maximum) = match integration {
-        BrowserIntegration::A3s => (Version::new(0, 1, 1), Version::new(0, 2, 0)),
+        BrowserIntegration::A3s => (Version::new(0, 4, 0), Version::new(0, 5, 0)),
         BrowserIntegration::Standalone => (Version::new(0, 26, 0), Version::new(0, 27, 0)),
     };
     if version < &minimum || version >= &maximum {
@@ -169,6 +175,15 @@ mod tests {
     fn rejects_versions_outside_the_verified_protocol_window() {
         let error = admit_version(BrowserIntegration::Standalone, &Version::new(0, 27, 0))
             .expect_err("unverified minor");
+        assert_eq!(error.code(), "test.driver.web.version_unsupported");
+    }
+
+    #[test]
+    fn admits_the_exact_origin_a3s_browser_window() {
+        admit_version(BrowserIntegration::A3s, &Version::new(0, 4, 0))
+            .expect("minimum exact-origin Browser version");
+        let error = admit_version(BrowserIntegration::A3s, &Version::new(0, 3, 2))
+            .expect_err("hostname-only Browser version");
         assert_eq!(error.code(), "test.driver.web.version_unsupported");
     }
 }

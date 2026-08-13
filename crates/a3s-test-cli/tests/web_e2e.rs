@@ -496,10 +496,12 @@ fn run_agent_domain_containment(browser: &Path, fixture: &WebFixture, workspace:
     assert_process_success("start contained agent session", &start);
     let start_json: serde_json::Value =
         serde_json::from_slice(&start.stdout).expect("contained start JSON");
+    assert_eq!(start_json["browser_containment"], "hostname_v1");
     assert_eq!(
-        start_json["browser_allowed_domains"],
-        serde_json::json!(["127.0.0.1"])
+        start_json["browser_allowed_origins"],
+        serde_json::json!([fixture.origin()])
     );
+    assert_eq!(start_json["browser_allowed_domains"], serde_json::json!([]));
 
     let observe = Command::new(binary())
         .args([

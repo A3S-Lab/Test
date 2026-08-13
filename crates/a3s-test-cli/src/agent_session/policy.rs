@@ -49,25 +49,20 @@ pub(super) fn web_origin(url: &Url) -> Result<String> {
     Ok(url.origin().ascii_serialization())
 }
 
-pub(super) fn web_domain(url: &Url) -> Result<String> {
-    web_origin(url)?;
-    url.host_str()
-        .map(str::to_string)
-        .context("agent Web session URL does not contain a hostname")
-}
-
 pub(super) fn browser_network_policy(
     allowed_origins: &[String],
     additional_domains: &[String],
 ) -> Result<BrowserNetworkPolicy> {
-    let mut domains = std::collections::BTreeSet::new();
     for origin in allowed_origins {
         let parsed = Url::parse(origin)
             .with_context(|| format!("stored allowed origin '{origin}' is invalid"))?;
-        domains.insert(web_domain(&parsed)?);
+        web_origin(&parsed)?;
     }
-    domains.extend(additional_domains.iter().cloned());
-    BrowserNetworkPolicy::restricted_to_domains(domains).map_err(anyhow::Error::new)
+    BrowserNetworkPolicy::restricted(
+        allowed_origins.iter().cloned(),
+        additional_domains.iter().cloned(),
+    )
+    .map_err(anyhow::Error::new)
 }
 
 pub(super) fn validate_observation_origin(

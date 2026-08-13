@@ -149,9 +149,14 @@ async fn execute_with_executor(
     let mut options = config.options.clone();
     options.provenance_redactor = redactor.clone();
     let agent = AgentLoop::new(provider, policy, options)?;
-    let network_policy =
-        BrowserNetworkPolicy::restricted_to_domains(config.allowed_domains.iter().cloned())
-            .map_err(anyhow::Error::new)?;
+    let network_policy = BrowserNetworkPolicy::restricted(
+        config
+            .allowed_origins
+            .iter()
+            .map(|origin| origin.origin().ascii_serialization()),
+        config.allowed_domains.iter().cloned(),
+    )
+    .map_err(anyhow::Error::new)?;
     let browser_config = AgentBrowserConfig {
         command: browser_command(args.browser_driver, args.browser_executable),
         namespace: String::new(),

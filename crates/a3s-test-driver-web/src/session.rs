@@ -156,7 +156,8 @@ impl AgentBrowserDriver {
             }
             None => None,
         };
-        self.capabilities().await?;
+        let capabilities = self.capabilities().await?;
+        validate_containment_capability(&self.config, &capabilities)?;
 
         Ok(AgentBrowserSession {
             config: self.config.clone(),
@@ -183,7 +184,8 @@ impl SurfaceDriver for AgentBrowserDriver {
 
     async fn open(&self, context: &ScenarioContext) -> Result<Box<dyn DriverSession>, DriverError> {
         self.config.validate()?;
-        self.capabilities().await?;
+        let capabilities = self.capabilities().await?;
+        validate_containment_capability(&self.config, &capabilities)?;
         let requested_namespace = if self.config.namespace.is_empty() {
             context.run_id.clone()
         } else {
@@ -239,6 +241,24 @@ impl SurfaceDriver for AgentBrowserDriver {
             lifecycle: AtomicU8::new(SESSION_FRESH),
         }))
     }
+}
+
+fn validate_containment_capability(
+    config: &AgentBrowserConfig,
+    capabilities: &BrowserCapabilities,
+) -> Result<(), DriverError> {
+    if !config.network_policy.allowed_origins().is_empty()
+        && capabilities.integration == crate::BrowserIntegration::A3s
+        && !capabilities
+            .features
+            .contains(&crate::WebCapability::ExactOriginContainment)
+    {
+        return Err(DriverError::new(
+            "test.driver.web.exact_origin_containment_unavailable",
+            "A3S Browser did not report exact-origin containment for the requested network policy",
+        ));
+    }
+    Ok(())
 }
 
 pub struct AgentBrowserSession {

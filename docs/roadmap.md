@@ -40,13 +40,13 @@
       exact browser cleanup must be retried
 - [x] Observation-bound refs and origin gates for explicit URL actions
 - [x] Observation-time detection of detached pages and unapproved origins
-- [x] Browser-level cross-domain containment for links, redirects, scripts,
-      images, fetches, and other requests through a typed domain policy
-- [x] Fail-closed migration for sessions created before browser domain policy
-      persistence, with `finish` and `abort` cleanup retained
-- [ ] Browser-level exact scheme-and-port containment; admitted upstream
-      protocols expose hostname allowlists, while A3S Test keeps exact-origin
-      validation on explicit actions and observations
+- [x] A3S Browser exact-origin containment for links, redirects, scripts,
+      images, fetches, workers, popups, WebSockets, and direct reads, with
+      explicit network-only domain exceptions
+- [x] Typed persistence of `exact_origin_v1` and `hostname_v1` containment
+      modes, with fail-closed migration and retained `finish`/`abort` cleanup
+- [ ] Standalone exact-origin containment after its protocol exposes scheme,
+      host, and effective-port authorization; 0.26.x remains hostname-only
 - [x] Compact pointer, form, keyboard, wheel, viewport, and evidence turns plus
       full typed actions
 - [x] Typed LLM provider and planner interface

@@ -649,19 +649,25 @@ code and path to repair manifests.
 
 `a3s-test capabilities --json` probes the configured executable before any
 browser session launches. Action protocol revision 6 admits A3S Browser
-`>= 0.1.1, < 0.2.0` and standalone agent-browser `>= 0.26.0, < 0.27.0`.
+`>= 0.4.0, < 0.5.0` and standalone agent-browser `>= 0.26.0, < 0.27.0`.
 Unverified versions fail with `test.driver.web.version_unsupported`.
 
-Persistent agent sessions derive a browser hostname allowlist from the initial
-URL and each `--allow-origin`. `--allow-origin` also permits explicit
+Persistent agent sessions derive a browser exact-origin policy from the
+initial URL and each `--allow-origin`. `--allow-origin` also permits explicit
 navigation to that exact HTTP(S) origin. `--allow-domain` adds a hostname or a
-leading `*.` wildcard to the browser's network policy for required
-requests, but does not add an A3S navigation origin. The browser filter also
-admits document requests for that hostname; explicit URL actions and successful
-observations remain separately constrained by scheme, host, and effective port.
-The normalized hostname policy is persisted in new agent session metadata.
-Legacy metadata without that policy remains readable and terminally cleanable,
-but observation and action turns fail with
+leading `*.` wildcard as a wider network-only exception, but does not add an
+A3S navigation origin. A3S Browser 0.4.x enforces scheme, host, and effective
+port before requests and redirects are sent. Standalone 0.26.x receives a
+hostname projection because its protocol cannot express exact origins.
+
+New session metadata persists both normalized policy lists and a typed
+deployment mode: `exact_origin_v1` for A3S Browser or `hostname_v1` for
+standalone. A stored mode that does not match the selected driver fails with
+`test.session.browser_containment_mismatch`; a policy that is no longer
+canonical or no longer matches the session's admitted origins fails with
+`test.session.browser_network_policy_mismatch`. Legacy metadata without typed
+deployment proof remains readable and terminally cleanable, but observation
+and action turns fail with
 `test.session.browser_network_policy_missing`; callers must abort or finish the
 old session and start a new one.
 
@@ -710,8 +716,9 @@ agent_run "checkout" {
 The run label uses 1 through 64 ASCII letters, digits, `-`, or `_`.
 `url` and every `allow_origins` value must be HTTP(S) URLs with a hostname.
 The initial origin is always admitted. Origins are deduplicated by scheme,
-host, and effective port. Their hostnames seed the browser network policy;
+host, and effective port. They remain exact in A3S Browser's network policy;
 `allow_domains` adds network-only hostnames without adding navigation origins.
+Standalone projects origin hostnames into its older containment protocol.
 
 `allow_actions` contains unique values from `navigate`, `snapshot`, `click`,
 `hover`, `focus`, `double_click`, `context_click`, `fill`, `type`, `check`,

@@ -4,6 +4,7 @@ use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use a3s_test_core::DriverError;
+use url::Url;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum BrowserCommand {
@@ -66,20 +67,34 @@ impl BrowserCommand {
         (OsString::from(name), runtime_dir.as_os_str().to_os_string())
     }
 
-    pub(crate) fn allowed_domains_environment(
+    pub(crate) fn network_policy_environment(
         &self,
         policy: &BrowserNetworkPolicy,
-    ) -> Option<(OsString, OsString)> {
-        let value = policy.environment_value()?;
-        let name = match self {
-            Self::A3s { .. } => "A3S_USE_BROWSER_ALLOWED_DOMAINS",
-            Self::Standalone { .. } => "AGENT_BROWSER_ALLOWED_DOMAINS",
-        };
-        Some((OsString::from(name), value))
+    ) -> Vec<(OsString, OsString)> {
+        let mut values = Vec::new();
+        match self {
+            Self::A3s { .. } => {
+                if let Some(domains) = policy.domains_environment_value() {
+                    values.push((OsString::from("A3S_USE_BROWSER_ALLOWED_DOMAINS"), domains));
+                }
+                if let Some(origins) = policy.origins_environment_value() {
+                    values.push((OsString::from("A3S_USE_BROWSER_ALLOWED_ORIGINS"), origins));
+                }
+            }
+            Self::Standalone { .. } => {
+                if let Some(domains) = policy.standalone_domains_environment_value() {
+                    values.push((OsString::from("AGENT_BROWSER_ALLOWED_DOMAINS"), domains));
+                }
+            }
+        }
+        values
     }
 
     pub(crate) fn domain_policy_args(&self, policy: &BrowserNetworkPolicy) -> Vec<OsString> {
-        let Some(value) = policy.environment_value() else {
+        let Some(value) = (match self {
+            Self::A3s { .. } => policy.domains_environment_value(),
+            Self::Standalone { .. } => policy.standalone_domains_environment_value(),
+        }) else {
             return Vec::new();
         };
         match self {
@@ -136,34 +151,61 @@ fn with_enforced_headless(inherited: Option<String>) -> OsString {
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct BrowserNetworkPolicy {
+    allowed_origins: Vec<String>,
     allowed_domains: Vec<String>,
 }
 
 impl BrowserNetworkPolicy {
-    pub fn restricted_to_domains<I, S>(domains: I) -> Result<Self, DriverError>
+    pub fn restricted<I, O, J, D>(origins: I, domains: J) -> Result<Self, DriverError>
     where
-        I: IntoIterator<Item = S>,
-        S: Into<String>,
+        I: IntoIterator<Item = O>,
+        O: Into<String>,
+        J: IntoIterator<Item = D>,
+        D: Into<String>,
     {
-        let mut normalized = BTreeSet::new();
+        let mut normalized_origins = BTreeSet::new();
+        for origin in origins {
+            normalized_origins.insert(normalize_origin(&origin.into())?);
+            if normalized_origins.len() > 64 {
+                return Err(DriverError::new(
+                    "test.driver.web.origin_policy_too_large",
+                    "browser origin policy cannot contain more than 64 entries",
+                ));
+            }
+        }
+        let mut normalized_domains = BTreeSet::new();
         for domain in domains {
-            normalized.insert(normalize_domain_pattern(&domain.into())?);
-            if normalized.len() > 64 {
+            normalized_domains.insert(normalize_domain_pattern(&domain.into())?);
+            if normalized_domains.len() > 64 {
                 return Err(DriverError::new(
                     "test.driver.web.domain_policy_too_large",
                     "browser domain policy cannot contain more than 64 entries",
                 ));
             }
         }
-        if normalized.is_empty() {
+        if normalized_origins.is_empty() && normalized_domains.is_empty() {
             return Err(DriverError::new(
-                "test.driver.web.domain_policy_invalid",
-                "restricted browser domain policy requires at least one domain",
+                "test.driver.web.network_policy_invalid",
+                "restricted browser network policy requires at least one origin or domain",
             ));
         }
         Ok(Self {
-            allowed_domains: normalized.into_iter().collect(),
+            allowed_origins: normalized_origins.into_iter().collect(),
+            allowed_domains: normalized_domains.into_iter().collect(),
         })
+    }
+
+    pub fn restricted_to_domains<I, S>(domains: I) -> Result<Self, DriverError>
+    where
+        I: IntoIterator<Item = S>,
+        S: Into<String>,
+    {
+        Self::restricted(std::iter::empty::<String>(), domains)
+    }
+
+    #[must_use]
+    pub fn allowed_origins(&self) -> &[String] {
+        &self.allowed_origins
     }
 
     #[must_use]
@@ -171,8 +213,27 @@ impl BrowserNetworkPolicy {
         &self.allowed_domains
     }
 
-    fn environment_value(&self) -> Option<OsString> {
+    fn domains_environment_value(&self) -> Option<OsString> {
         (!self.allowed_domains.is_empty()).then(|| OsString::from(self.allowed_domains.join(",")))
+    }
+
+    fn origins_environment_value(&self) -> Option<OsString> {
+        (!self.allowed_origins.is_empty()).then(|| OsString::from(self.allowed_origins.join(",")))
+    }
+
+    fn standalone_domains_environment_value(&self) -> Option<OsString> {
+        let mut domains = self
+            .allowed_domains
+            .iter()
+            .cloned()
+            .collect::<BTreeSet<_>>();
+        domains.extend(self.allowed_origins.iter().filter_map(|origin| {
+            Url::parse(origin)
+                .ok()
+                .and_then(|url| url.host_str().map(str::to_string))
+        }));
+        (!domains.is_empty())
+            .then(|| OsString::from(domains.into_iter().collect::<Vec<_>>().join(",")))
     }
 }
 
@@ -248,6 +309,30 @@ fn normalize_domain_pattern(value: &str) -> Result<String, DriverError> {
     })
 }
 
+fn normalize_origin(value: &str) -> Result<String, DriverError> {
+    let parsed = Url::parse(value).map_err(|_| invalid_origin(value))?;
+    if !matches!(parsed.scheme(), "http" | "https")
+        || !parsed.username().is_empty()
+        || parsed.password().is_some()
+        || parsed.path() != "/"
+        || parsed.query().is_some()
+        || parsed.fragment().is_some()
+        || parsed.host_str().is_none()
+    {
+        return Err(invalid_origin(value));
+    }
+    Ok(parsed.origin().ascii_serialization())
+}
+
+fn invalid_origin(value: &str) -> DriverError {
+    DriverError::new(
+        "test.driver.web.origin_policy_invalid",
+        format!(
+            "invalid browser origin {value:?}; expected an HTTP(S) origin without credentials, path, query, or fragment"
+        ),
+    )
+}
+
 fn invalid_domain_pattern(value: &str) -> DriverError {
     DriverError::new(
         "test.driver.web.domain_policy_invalid",
@@ -297,6 +382,36 @@ mod tests {
             let error = BrowserNetworkPolicy::restricted_to_domains([invalid])
                 .expect_err("invalid domain policy");
             assert_eq!(error.code(), "test.driver.web.domain_policy_invalid");
+        }
+    }
+
+    #[test]
+    fn network_policy_normalizes_exact_origins_independently_from_domains() {
+        let policy = BrowserNetworkPolicy::restricted(
+            ["https://Example.COM", "http://127.0.0.1:8080"],
+            ["*.cdn.example.com"],
+        )
+        .expect("network policy");
+
+        assert_eq!(
+            policy.allowed_origins(),
+            ["http://127.0.0.1:8080", "https://example.com"]
+        );
+        assert_eq!(policy.allowed_domains(), ["*.cdn.example.com"]);
+    }
+
+    #[test]
+    fn origin_policy_rejects_urls_that_are_not_origins() {
+        for invalid in [
+            "ftp://example.com",
+            "https://user@example.com",
+            "https://example.com/path",
+            "https://example.com?query=1",
+            "https://example.com#fragment",
+        ] {
+            let error = BrowserNetworkPolicy::restricted([invalid], std::iter::empty::<&str>())
+                .expect_err("invalid origin policy");
+            assert_eq!(error.code(), "test.driver.web.origin_policy_invalid");
         }
     }
 }

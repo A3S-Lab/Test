@@ -40,7 +40,8 @@ use self::runtime::{
 };
 use self::store::{
     AgentSessionError, AgentSessionReport, AgentSessionState, AgentSessionStatus,
-    AgentSessionStore, StoredBrowserConfig, StoredBrowserDriver, SESSION_SCHEMA_VERSION,
+    AgentSessionStore, StoredBrowserConfig, StoredBrowserContainment, StoredBrowserDriver,
+    SESSION_SCHEMA_VERSION,
 };
 use self::validation::{compact_target, validate_session_id};
 use super::{validate_timeout, BrowserDriverKind};
@@ -282,6 +283,11 @@ async fn start(args: StartArgs) -> Result<ExitCode> {
     }
     let allowed_origins = allowed_origins.into_iter().collect::<Vec<_>>();
     let browser_network_policy = browser_network_policy(&allowed_origins, &args.allowed_domains)?;
+    let browser_driver = match args.browser_driver {
+        BrowserDriverKind::A3s => StoredBrowserDriver::A3s,
+        BrowserDriverKind::Standalone => StoredBrowserDriver::Standalone,
+    };
+    let browser_containment = containment_for_driver(browser_driver);
 
     store.create_directories().await?;
     let runtime_dir = create_runtime_directory(&workspace, &args.session).await?;
@@ -302,12 +308,11 @@ async fn start(args: StartArgs) -> Result<ExitCode> {
         success_criteria: args.success_criteria,
         auto_resolve_repairs: args.auto_resolve_repairs,
         allowed_origins,
+        browser_containment: Some(browser_containment),
+        browser_allowed_origins: Some(browser_network_policy.allowed_origins().to_vec()),
         browser_allowed_domains: Some(browser_network_policy.allowed_domains().to_vec()),
         browser: StoredBrowserConfig {
-            driver: match args.browser_driver {
-                BrowserDriverKind::A3s => StoredBrowserDriver::A3s,
-                BrowserDriverKind::Standalone => StoredBrowserDriver::Standalone,
-            },
+            driver: browser_driver,
             executable,
             headed: args.headed,
             command_timeout_ms: args.command_timeout_ms,
@@ -405,6 +410,8 @@ async fn start(args: StartArgs) -> Result<ExitCode> {
             "success_criteria": state.success_criteria,
             "auto_resolve_repairs": state.auto_resolve_repairs,
             "allowed_origins": state.allowed_origins,
+            "browser_containment": state.browser_containment,
+            "browser_allowed_origins": state.browser_allowed_origins,
             "browser_allowed_domains": state.browser_allowed_domains,
             "output": output,
             "artifacts_dir": state.artifacts_dir,
@@ -618,6 +625,8 @@ async fn finish(args: FinishArgs) -> Result<ExitCode> {
         success_criteria: state.success_criteria.clone(),
         auto_resolve_repairs: state.auto_resolve_repairs,
         allowed_origins: state.allowed_origins.clone(),
+        browser_containment: state.browser_containment,
+        browser_allowed_origins: state.browser_allowed_origins.clone().unwrap_or_default(),
         browser_allowed_domains: state.browser_allowed_domains.clone().unwrap_or_default(),
         event_count: state.next_sequence.saturating_sub(1),
         artifacts_dir: state.artifacts_dir.clone(),
@@ -907,18 +916,47 @@ fn validate_turn_browser_network_policy(state: &AgentSessionState) -> Result<(),
     stored_browser_network_policy(state, BrowserConnectionPurpose::Turn).map(drop)
 }
 
+fn containment_for_driver(driver: StoredBrowserDriver) -> StoredBrowserContainment {
+    match driver {
+        StoredBrowserDriver::A3s => StoredBrowserContainment::ExactOriginV1,
+        StoredBrowserDriver::Standalone => StoredBrowserContainment::HostnameV1,
+    }
+}
+
 fn stored_browser_network_policy(
     state: &AgentSessionState,
     purpose: BrowserConnectionPurpose,
 ) -> Result<BrowserNetworkPolicy, DriverError> {
-    match &state.browser_allowed_domains {
-        Some(domains) => BrowserNetworkPolicy::restricted_to_domains(domains.clone()),
-        None if matches!(purpose, BrowserConnectionPurpose::Cleanup) => {
-            Ok(BrowserNetworkPolicy::default())
+    if matches!(purpose, BrowserConnectionPurpose::Cleanup) {
+        return Ok(BrowserNetworkPolicy::default());
+    }
+    match (
+        state.browser_containment,
+        &state.browser_allowed_origins,
+        &state.browser_allowed_domains,
+    ) {
+        (Some(containment), Some(origins), Some(domains))
+            if containment == containment_for_driver(state.browser.driver) =>
+        {
+            let policy = BrowserNetworkPolicy::restricted(origins.clone(), domains.clone())?;
+            if policy.allowed_origins() != origins
+                || policy.allowed_domains() != domains
+                || policy.allowed_origins() != state.allowed_origins
+            {
+                return Err(DriverError::new(
+                    "test.session.browser_network_policy_mismatch",
+                    "stored browser policy is not canonical or no longer matches the session origins; abort this session and start a new one",
+                ));
+            }
+            Ok(policy)
         }
-        None => Err(DriverError::new(
+        (Some(_), Some(_), Some(_)) => Err(DriverError::new(
+            "test.session.browser_containment_mismatch",
+            "stored browser containment mode does not match the selected driver; abort this session and start a new one",
+        )),
+        _ => Err(DriverError::new(
             "test.session.browser_network_policy_missing",
-            "agent session predates browser domain containment; abort it and start a new session before executing another turn",
+            "agent session predates typed browser containment; abort it and start a new session before executing another turn",
         )),
     }
 }

@@ -24,6 +24,13 @@ pub(crate) enum StoredBrowserDriver {
     Standalone,
 }
 
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub(crate) enum StoredBrowserContainment {
+    ExactOriginV1,
+    HostnameV1,
+}
+
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub(crate) struct StoredBrowserConfig {
     pub(crate) driver: StoredBrowserDriver,
@@ -45,6 +52,10 @@ pub(crate) struct AgentSessionState {
     #[serde(default)]
     pub(crate) auto_resolve_repairs: bool,
     pub(crate) allowed_origins: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) browser_containment: Option<StoredBrowserContainment>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) browser_allowed_origins: Option<Vec<String>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(crate) browser_allowed_domains: Option<Vec<String>>,
     pub(crate) browser: StoredBrowserConfig,
@@ -91,6 +102,10 @@ pub(crate) struct AgentSessionReport {
     #[serde(default)]
     pub(crate) auto_resolve_repairs: bool,
     pub(crate) allowed_origins: Vec<String>,
+    #[serde(default)]
+    pub(crate) browser_containment: Option<StoredBrowserContainment>,
+    #[serde(default)]
+    pub(crate) browser_allowed_origins: Vec<String>,
     #[serde(default)]
     pub(crate) browser_allowed_domains: Vec<String>,
     pub(crate) event_count: u64,

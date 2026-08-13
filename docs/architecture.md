@@ -484,25 +484,24 @@ never followed. Persistent CLI sessions add a separate workspace/session owner
 marker check when their saved state is loaded and again before runtime removal.
 
 External-planner Web sessions apply two complementary navigation boundaries.
-`BrowserNetworkPolicy` supplies a normalized, bounded hostname allowlist to
-every browser command. It blocks cross-domain page links, redirects, scripts,
-images, fetches, and related network activity before A3S Test receives another
-turn. Separately, explicit URL actions and every successful observation are
-checked against exact HTTP(S) origins, including scheme and effective port.
-`--allow-origin` expands both layers; `--allow-domain` expands only the network
-layer. The latter is not subresource-only: an upstream hostname filter also
-admits document requests, while A3S Test still rejects explicit navigation and
-subsequent observations unless the exact origin was separately admitted. The
-browser protocols expose hostname semantics, not scheme-and-port semantics, so
-the network layer alone must not be described as exact-origin enforcement.
+`BrowserNetworkPolicy` carries exact origins and wider network-only domains as
+separate normalized, bounded sets. A3S Browser 0.4.x applies their union before
+page links, redirects, scripts, images, fetches, workers, popups, WebSockets,
+and direct reads are sent. Separately, explicit URL actions and every
+successful observation are checked against exact HTTP(S) navigation origins.
+`--allow-origin` expands both exact layers; `--allow-domain` expands only the
+network layer. A domain exception is not subresource-only: it can admit a
+document request, while A3S Test still rejects explicit navigation and the
+next observation unless the exact origin was separately admitted.
 
-The upstream daemon reads its hostname policy at daemon creation, not as a
-per-command authorization update. Persistent state therefore stores the exact
-normalized policy used at session start. Legacy state without that field is a
-one-way compatibility boundary: metadata inspection and terminal cleanup are
-allowed, while observation and action turns fail closed. Cleanup connects
-without claiming that a newly supplied environment value retrofitted the
-already-running daemon.
+Standalone 0.26.x has only a hostname protocol, so its adapter projects exact
+origin hostnames together with domain exceptions and does not report
+`exact_origin_containment`. Persistent state records both policy sets and the
+deployed mode, `exact_origin_v1` or `hostname_v1`. The mode must agree with the
+stored driver before any turn. Legacy state without typed deployment proof is
+a one-way compatibility boundary: metadata inspection and terminal cleanup
+are allowed, while observation and action turns fail closed. Cleanup connects
+without claiming that newly supplied policy retrofitted an existing daemon.
 
 The shared action protocol is revisioned independently of browser executable
 versions. Revision 2 adds Office-grade interactions. A basic interaction uses
@@ -696,9 +695,10 @@ must carry the latest observation identifier, explicit URL-bearing actions are
 limited to admitted HTTP(S) origins, and evidence paths cannot leave the
 session root. Successful observations must also report an admitted HTTP(S)
 origin, so a detached or page-driven replacement is surfaced before new refs
-are issued. The initial and `--allow-origin` hostnames also form a browser-level
-domain allowlist; `--allow-domain` adds a hostname only to that network layer,
-not to the exact-origin action and observation gates. The browser runtime uses
+are issued. The initial and `--allow-origin` values form Browser's exact-origin
+network policy; `--allow-domain` adds a hostname only to that network layer,
+not to the exact-origin action and observation gates. Standalone receives a
+hostname projection of the exact origins. The browser runtime uses
 an isolated namespace, an ownership marker, and a bounded idle timeout so
 persisted metadata cannot redirect cleanup and an abandoned external planner
 does not leave an unbounded process. Descriptive external session names are
@@ -768,8 +768,9 @@ text, or CSS locator and the driver revalidates the observation revision.
 The HTTP provider is a Layer 4 proposal adapter. It cannot claim browser
 observation, determine a verdict, execute actions itself, or authorize repair.
 The host enforces exact origins before URL-bearing actions and after every
-observation; the Web adapter separately enforces its available hostname
-network policy. The model's finish result reaches a successful report only
+observation; the Web adapter enforces exact-origin network containment with
+A3S Browser and an explicit hostname-only projection with standalone. The
+model's finish result reaches a successful report only
 after local read-only expectations and exact cleanup pass.
 
 One workflow deadline includes surface opening, initial navigation, every

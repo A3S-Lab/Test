@@ -106,7 +106,7 @@ pub(super) struct StartArgs {
     /// Additional navigation origin allowed during this session.
     #[arg(long = "allow-origin")]
     pub(super) allowed_origins: Vec<String>,
-    /// Additional hostname allowed by the browser network filter, not the A3S origin gate.
+    /// Additional hostname allowed by the browser network policy, not the A3S origin gate.
     #[arg(long = "allow-domain")]
     pub(super) allowed_domains: Vec<String>,
     /// Browser driver integration.

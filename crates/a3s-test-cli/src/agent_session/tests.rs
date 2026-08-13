@@ -81,7 +81,7 @@ fn runner_owned_contract_actions_are_not_interactive_turns() {
 }
 
 #[test]
-fn browser_network_policy_combines_origin_hosts_and_network_only_domains() {
+fn browser_network_policy_keeps_origins_exact_and_domains_network_only() {
     let policy = browser_network_policy(
         &[
             "https://example.test".to_string(),
@@ -92,8 +92,12 @@ fn browser_network_policy_combines_origin_hosts_and_network_only_domains() {
     .expect("browser network policy");
 
     assert_eq!(
+        policy.allowed_origins(),
+        ["https://api.example.test:8443", "https://example.test"]
+    );
+    assert_eq!(
         policy.allowed_domains(),
-        ["*.cdn.example.test", "api.example.test", "example.test"]
+        ["*.cdn.example.test", "example.test"]
     );
 }
 
@@ -103,11 +107,11 @@ fn legacy_session_metadata_remains_readable_but_cannot_execute_turns() {
     encoded
         .as_object_mut()
         .expect("session object")
-        .remove("browser_allowed_domains");
+        .remove("browser_containment");
 
     let legacy: AgentSessionState =
         serde_json::from_value(encoded).expect("legacy session metadata");
-    assert!(legacy.browser_allowed_domains.is_none());
+    assert!(legacy.browser_containment.is_none());
 
     let turn_error = validate_turn_browser_network_policy(&legacy)
         .expect_err("legacy session turn must fail closed");
@@ -119,6 +123,36 @@ fn legacy_session_metadata_remains_readable_but_cannot_execute_turns() {
     let cleanup_policy = stored_browser_network_policy(&legacy, BrowserConnectionPurpose::Cleanup)
         .expect("legacy cleanup policy");
     assert!(cleanup_policy.allowed_domains().is_empty());
+    assert!(cleanup_policy.allowed_origins().is_empty());
+}
+
+#[test]
+fn stored_containment_mode_must_match_the_selected_driver() {
+    let mut state = test_state(None);
+    state.browser.driver = StoredBrowserDriver::A3s;
+    state.browser_containment = Some(StoredBrowserContainment::HostnameV1);
+
+    let error = validate_turn_browser_network_policy(&state)
+        .expect_err("mismatched containment mode must fail closed");
+    assert_eq!(error.code(), "test.session.browser_containment_mismatch");
+
+    state.browser_containment = Some(StoredBrowserContainment::ExactOriginV1);
+    validate_turn_browser_network_policy(&state).expect("matching A3S containment mode");
+}
+
+#[test]
+fn stored_browser_policy_must_remain_canonical_and_match_session_origins() {
+    let mut state = test_state(None);
+    state.browser_allowed_origins = Some(vec!["https://outside.test".to_string()]);
+
+    let error =
+        validate_turn_browser_network_policy(&state).expect_err("policy drift must fail closed");
+    assert_eq!(error.code(), "test.session.browser_network_policy_mismatch");
+
+    state.browser_allowed_origins = Some(vec!["HTTPS://EXAMPLE.TEST:443".to_string()]);
+    let error = validate_turn_browser_network_policy(&state)
+        .expect_err("non-canonical policy must fail closed");
+    assert_eq!(error.code(), "test.session.browser_network_policy_mismatch");
 }
 
 #[test]
@@ -219,7 +253,9 @@ fn test_state(latest_observation: Option<u64>) -> AgentSessionState {
         success_criteria: vec!["Pass".to_string()],
         auto_resolve_repairs: false,
         allowed_origins: vec!["https://example.test".to_string()],
-        browser_allowed_domains: Some(vec!["example.test".to_string()]),
+        browser_containment: Some(StoredBrowserContainment::HostnameV1),
+        browser_allowed_origins: Some(vec!["https://example.test".to_string()]),
+        browser_allowed_domains: Some(Vec::new()),
         browser: StoredBrowserConfig {
             driver: StoredBrowserDriver::Standalone,
             executable: PathBuf::from("agent-browser"),

@@ -118,13 +118,26 @@ impl RepairSession {
         let runtime_dir = self.state["runtime_dir"]
             .as_str()
             .expect("browser runtime directory");
-        let allowed_domains = self.state["browser_allowed_domains"]
+        let mut allowed_domains = self.state["browser_allowed_origins"]
             .as_array()
-            .expect("browser allowed domains")
+            .expect("browser allowed origins")
             .iter()
-            .map(|domain| domain.as_str().expect("allowed domain"))
-            .collect::<Vec<_>>()
-            .join(",");
+            .filter_map(|origin| {
+                url::Url::parse(origin.as_str().expect("allowed origin"))
+                    .ok()
+                    .and_then(|url| url.host_str().map(str::to_string))
+            })
+            .collect::<Vec<_>>();
+        allowed_domains.extend(
+            self.state["browser_allowed_domains"]
+                .as_array()
+                .expect("browser allowed domains")
+                .iter()
+                .map(|domain| domain.as_str().expect("allowed domain").to_string()),
+        );
+        allowed_domains.sort();
+        allowed_domains.dedup();
+        let allowed_domains = allowed_domains.join(",");
         let mut command = Command::new(&self.browser);
         command
             .env("AGENT_BROWSER_NAMESPACE", namespace)

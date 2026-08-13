@@ -45,9 +45,9 @@ pub(crate) fn invocation(
         let (headless_name, headless_value) = config.command.enforced_headless_environment();
         env.insert(headless_name, headless_value);
     }
-    if let Some((policy_name, policy_value)) = config
+    for (policy_name, policy_value) in config
         .command
-        .allowed_domains_environment(&config.network_policy)
+        .network_policy_environment(&config.network_policy)
     {
         env.insert(policy_name, policy_value);
     }

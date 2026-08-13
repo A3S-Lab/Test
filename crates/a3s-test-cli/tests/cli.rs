@@ -581,6 +581,11 @@ fn capabilities_returns_the_admitted_web_protocol() {
             .iter()
             .any(|feature| feature.as_str() == Some("domain_containment"))
     }));
+    assert!(value["features"].as_array().is_some_and(|features| {
+        features
+            .iter()
+            .all(|feature| feature.as_str() != Some("exact_origin_containment"))
+    }));
 }
 
 #[cfg(unix)]
@@ -644,9 +649,14 @@ esac
     assert_eq!(start_json["session"], "checkout");
     assert_eq!(start_json["status"], "active");
     assert_eq!(start_json["auto_resolve_repairs"], true);
+    assert_eq!(start_json["browser_containment"], "hostname_v1");
+    assert_eq!(
+        start_json["browser_allowed_origins"],
+        serde_json::json!(["https://example.test"])
+    );
     assert_eq!(
         start_json["browser_allowed_domains"],
-        serde_json::json!(["cdn.example.test", "example.test"])
+        serde_json::json!(["cdn.example.test"])
     );
 
     let observe = Command::new(binary())
@@ -733,10 +743,12 @@ esac
         serde_json::from_slice(&fs::read(session_root.join("session.json")).expect("state"))
             .expect("state JSON");
     assert_eq!(state["auto_resolve_repairs"], true);
+    assert_eq!(state["browser_containment"], "hostname_v1");
     let report: serde_json::Value =
         serde_json::from_slice(&fs::read(session_root.join("report.json")).expect("report"))
             .expect("report JSON");
     assert_eq!(report["auto_resolve_repairs"], true);
+    assert_eq!(report["browser_containment"], "hostname_v1");
     let runtime = PathBuf::from(state["runtime_dir"].as_str().expect("runtime path"));
     assert!(!runtime.exists(), "runtime directory survived finish");
 
@@ -807,7 +819,8 @@ esac
             fields.next()?;
             let arguments = fields.next()?;
             let policy = fields.next()?;
-            arguments.starts_with("--session ").then_some(policy)
+            (arguments.starts_with("--session ") && !arguments.ends_with(" close"))
+                .then_some(policy)
         })
         .collect::<HashSet<_>>();
     assert_eq!(
