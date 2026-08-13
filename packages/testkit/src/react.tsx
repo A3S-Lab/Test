@@ -23,6 +23,7 @@ import type {
   RepairSeverity,
   RepairStatus,
   RepairTarget,
+  Rect,
   SubmittedRepair,
   TestKitOptions,
   TestKitRuntime,
@@ -115,8 +116,10 @@ export function A3STestBoundary({
 }
 
 type DraftItem = { draft: RepairDraft; selected: boolean; hidden: boolean };
-type SelectionMode = "element" | "text" | "multi" | "area" | "draw";
+type SelectionMode = "element" | "text" | "multi" | "area" | "draw" | "layout_place" | "layout_source" | "layout_destination";
 type OverlayTheme = "system" | "light" | "dark";
+type LayoutCanvas = "page" | "wireframe";
+type LayoutSource = { nodeId: string; label: string; originalRegion: Rect };
 
 export type A3SReviewOverlayProps = {
   enabled?: boolean;
@@ -144,6 +147,12 @@ export function A3SReviewOverlay({
   const [autoSendEnabled, setAutoSendEnabled] = useState(autoSend);
   const [mode, setMode] = useState<SelectionMode>("element");
   const [theme, setTheme] = useState<OverlayTheme>("system");
+  const [layoutMode, setLayoutMode] = useState(false);
+  const [layoutPurpose, setLayoutPurpose] = useState("");
+  const [layoutCanvas, setLayoutCanvas] = useState<LayoutCanvas>("page");
+  const [layoutComponentType, setLayoutComponentType] = useState("Section");
+  const [layoutSource, setLayoutSource] = useState<LayoutSource | null>(null);
+  const [layoutTarget, setLayoutTarget] = useState<Rect>({ x: 40, y: 120, width: 640, height: 240 });
   const [drafts, setDrafts] = useState<DraftItem[]>([]);
   const [repairs, setRepairs] = useState<SubmittedRepair[]>([]);
   const [candidate, setCandidate] = useState<RepairTarget | null>(null);
@@ -200,9 +209,17 @@ export function A3SReviewOverlay({
     updateArea(null);
     updateDrawing(null);
     setHighlight(null);
-    if (["element", "multi", "text"].includes(value)) {
+    if (["element", "multi", "text", "layout_source"].includes(value)) {
       queueMicrotask(() => restoreFocusRef.current?.focus());
     }
+  }
+
+  function toggleLayoutMode() {
+    const next = !layoutMode;
+    if (marking) stopMarking(false);
+    if (!next) setLayoutSource(null);
+    setLayoutMode(next);
+    announce(next ? "Layout mode enabled" : "Layout mode disabled");
   }
 
   function stopMarking(restoreFocus = true) {
@@ -278,16 +295,16 @@ export function A3SReviewOverlay({
         updateDrawing(appendDrawingPoint(drawingRef.current, event.clientX, event.clientY));
         return;
       }
-      if ((mode === "area" || mode === "multi") && areaRef.current) {
+      if (["area", "multi", "layout_place", "layout_destination"].includes(mode) && areaRef.current) {
         updateArea({ ...areaRef.current, currentX: event.clientX, currentY: event.clientY });
         return;
       }
-      if (mode !== "element") return;
+      if (!["element", "layout_source"].includes(mode)) return;
       const element = targetElement(event, host);
       setHighlight(element?.getBoundingClientRect() ?? null);
     };
     const onPointerDown = (event: PointerEvent) => {
-      if (!(["area", "multi", "draw"] as SelectionMode[]).includes(mode) || event.button !== 0 || isOverlayEvent(event, host)) return;
+      if (!(["area", "multi", "draw", "layout_place", "layout_destination"] as SelectionMode[]).includes(mode) || event.button !== 0 || isOverlayEvent(event, host)) return;
       event.preventDefault();
       event.stopPropagation();
       if (mode === "draw") {
@@ -308,6 +325,54 @@ export function A3SReviewOverlay({
         updateDrawing(null);
         updateArea(null);
         setHighlight(null);
+        setMarking(false);
+        return;
+      }
+      if ((mode === "layout_place" || mode === "layout_destination") && areaRef.current) {
+        event.preventDefault();
+        event.stopPropagation();
+        const region = normalizedArea(areaRef.current.startX, areaRef.current.startY, event.clientX, event.clientY);
+        updateArea(null);
+        setHighlight(null);
+        if (region.width < 8 || region.height < 8) {
+          announce("Layout regions must be at least 8 by 8 CSS pixels");
+          stopMarking(false);
+          focusPanel();
+          return;
+        }
+        if (mode === "layout_destination") {
+          setLayoutTarget(region);
+          announce("Layout destination updated");
+          stopMarking(false);
+          focusPanel();
+          return;
+        }
+        const componentType = layoutComponentType.trim();
+        if (!componentType) {
+          announce("Choose a component type before drawing its placement");
+          stopMarking(false);
+          focusPanel();
+          return;
+        }
+        stageCandidate(
+          {
+            kind: "region",
+            nodeIds: [],
+            region,
+            layout: {
+              kind: "placement",
+              componentType,
+              canvas: layoutCanvas,
+              ...(layoutPurpose.trim() ? { purpose: layoutPurpose.trim() } : {}),
+            },
+          },
+          `${componentType} placement`,
+          {
+            instruction: `Place ${componentType} in the selected layout region`,
+            successCriteria: `${componentType} is visibly present within the requested layout region`,
+            intent: "change",
+          },
+        );
         setMarking(false);
         return;
       }
@@ -345,6 +410,10 @@ export function A3SReviewOverlay({
       event.stopPropagation();
       const node = nodeForElement(bridge, element);
       if (!node) return;
+      if (mode === "layout_source") {
+        selectLayoutSource(element, node);
+        return;
+      }
       if (mode === "multi") {
         setCandidate((current) => ({
           kind: "node",
@@ -361,7 +430,7 @@ export function A3SReviewOverlay({
         stopMarking();
         return;
       }
-      if (!marking || !["element", "multi", "text"].includes(mode) || event.key !== "Enter") return;
+      if (!marking || !["element", "multi", "text", "layout_source"].includes(mode) || event.key !== "Enter") return;
       if (mode === "text") {
         const selection = window.getSelection();
         const text = selection?.toString().trim() ?? "";
@@ -381,7 +450,9 @@ export function A3SReviewOverlay({
       if (!node) return;
       event.preventDefault();
       event.stopPropagation();
-      if (mode === "multi") {
+      if (mode === "layout_source") {
+        selectLayoutSource(focused, node);
+      } else if (mode === "multi") {
         if (event.shiftKey && keyboardNodeIds.length > 0) {
           event.preventDefault();
           event.stopPropagation();
@@ -408,7 +479,7 @@ export function A3SReviewOverlay({
       document.removeEventListener("pointerup", onPointerUp, true);
       document.removeEventListener("keydown", onKeyDown, true);
     };
-  }, [bridge, host, keyboardNodeIds, marking, mode]);
+  }, [bridge, host, keyboardNodeIds, layoutCanvas, layoutComponentType, layoutPurpose, marking, mode]);
 
   if (!enabled || !bridge || !mount) return null;
 
@@ -420,13 +491,51 @@ export function A3SReviewOverlay({
     ...repairs.map((repair) => ({ id: repair.id, target: repair.target, status: repair.status })),
   ];
 
-  function stageCandidate(target: RepairTarget, label: string) {
+  function stageCandidate(
+    target: RepairTarget,
+    label: string,
+    defaults: { instruction?: string; successCriteria?: string; intent?: RepairIntent } = {},
+  ) {
     setEditingDraftId(null);
     setCandidate(target);
     setCandidateLabel(label);
-    setInstruction("");
-    setSuccessCriteria("");
+    setInstruction(defaults.instruction ?? "");
+    setSuccessCriteria(defaults.successCriteria ?? "");
+    if (defaults.intent) setIntent(defaults.intent);
     openOverlay();
+  }
+
+  function selectLayoutSource(element: Element, node: { id: string; name?: string; text?: string; tag: string }) {
+    const originalRegion = rectValue(element.getBoundingClientRect());
+    const label = node.name ?? node.text ?? `<${node.tag}>`;
+    setLayoutSource({ nodeId: node.id, label, originalRegion });
+    setLayoutTarget(originalRegion);
+    setHighlight(null);
+    stopMarking(false);
+    announce(`Layout section selected: ${label}`);
+    focusPanel();
+  }
+
+  function createRearrangeCandidate() {
+    if (!layoutSource || !validLayoutRect(layoutTarget)) return;
+    stageCandidate(
+      {
+        kind: "node",
+        nodeIds: [layoutSource.nodeId],
+        region: layoutTarget,
+        layout: {
+          kind: "rearrange",
+          originalRegion: layoutSource.originalRegion,
+          ...(layoutPurpose.trim() ? { purpose: layoutPurpose.trim() } : {}),
+        },
+      },
+      `${layoutSource.label} rearrangement`,
+      {
+        instruction: `Move ${layoutSource.label} to the selected layout region`,
+        successCriteria: `${layoutSource.label} appears within the requested layout region`,
+        intent: "change",
+      },
+    );
   }
 
   function updateArea(value: typeof area) {
@@ -475,6 +584,29 @@ export function A3SReviewOverlay({
   }
 
   function editDraft(item: DraftItem) {
+    const layout = item.draft.target.layout;
+    if (layout) {
+      setLayoutMode(true);
+      setLayoutPurpose(layout.purpose ?? "");
+      if (item.draft.target.region) setLayoutTarget(item.draft.target.region);
+      if (layout.kind === "placement") {
+        setLayoutCanvas(layout.canvas);
+        setLayoutComponentType(layout.componentType);
+        setLayoutSource(null);
+      } else {
+        const nodeId = item.draft.target.nodeIds[0];
+        const node = nodeId
+          ? bridge?.snapshot({ detail: "summary", scope: { kind: "node", nodeId } }).nodes.find((candidate) => candidate.id === nodeId)
+          : undefined;
+        if (nodeId) {
+          setLayoutSource({
+            nodeId,
+            label: node?.name ?? node?.text ?? `<${node?.tag ?? "element"}>`,
+            originalRegion: layout.originalRegion,
+          });
+        }
+      }
+    }
     setEditingDraftId(item.draft.id);
     setCandidate(item.draft.target);
     setCandidateLabel(targetSummary(item.draft.target));
@@ -540,7 +672,9 @@ export function A3SReviewOverlay({
 
   const content = (
     <div className="a3s-root" data-a3s-testkit-overlay="" data-theme={theme}>
+      {layoutMode && layoutCanvas === "wireframe" && <div className="a3s-wireframe" aria-hidden="true" />}
       {(highlight || areaRect) && <div className="a3s-highlight" style={rectStyle(areaRect ?? highlight!)} aria-hidden="true" />}
+      {layoutMode && layoutSource && !candidate && <div className="a3s-layout-target-preview" style={rectStyle(layoutTarget)} aria-hidden="true" />}
       {drawingPath && <svg className="a3s-drawing" aria-hidden="true"><path d={drawingPath} /></svg>}
       <div className="a3s-markers" aria-hidden="true">{markers.flatMap((marker) => markerRects(marker.target, bridge).map((rect, index) => <span key={`${marker.id}-${index}`} className={`a3s-marker status-${marker.status}`} style={rectStyle(rect)} />))}</div>
       <button ref={launchRef} className={`a3s-launch ${marking ? "is-active" : ""}`} type="button" onClick={() => open ? closeOverlay() : openOverlay(true)} aria-expanded={open} aria-controls={`${idPrefix}-review-panel`}>
@@ -551,11 +685,29 @@ export function A3SReviewOverlay({
         <header><div><strong id={`${idPrefix}-review-title`} className="a3s-panel-title">Review & repair</strong><small id={`${idPrefix}-review-description`} className="a3s-panel-description">Send bounded findings to the active A3S Test agent</small></div><button type="button" onClick={closeOverlay} aria-label="Close review overlay">×</button></header>
         <section className="a3s-tools" aria-label="Mark page">
           {(["element", "text", "multi", "area", "draw"] as SelectionMode[]).map((value) => <button key={value} type="button" aria-label={`Mark ${MODE_LABEL[value].toLowerCase()}`} aria-pressed={marking && mode === value} className={marking && mode === value ? "selected" : ""} onClick={() => startMarking(value)}>{MODE_LABEL[value]}</button>)}
+          <button type="button" aria-pressed={layoutMode} className={layoutMode ? "selected" : ""} onClick={toggleLayoutMode}>Layout</button>
           <button type="button" aria-label={paused ? "Resume page animations" : "Pause page animations"} aria-pressed={paused} className={paused ? "selected" : ""} onClick={() => { const next = !paused; bridge?.setAnimationsPaused(next); setPaused(next); announce(next ? "Page animations paused" : "Page animations resumed"); }}>{paused ? "Resume" : "Pause"}</button>
           <button type="button" aria-label={`Turn auto-send ${autoSendEnabled ? "off" : "on"}`} aria-pressed={autoSendEnabled} className={autoSendEnabled ? "selected" : ""} onClick={() => setAutoSendEnabled((current) => !current)}>Auto-send · {autoSendEnabled ? "on" : "off"}</button>
           <button type="button" aria-label={`Change overlay theme; current theme is ${theme}`} onClick={() => setTheme((current) => current === "system" ? "light" : current === "light" ? "dark" : "system")}>Theme · {theme}</button>
           {marking && <button type="button" className="danger" onClick={() => stopMarking()}>Cancel</button>}
         </section>
+        {layoutMode && <LayoutComposer
+          idPrefix={idPrefix}
+          purpose={layoutPurpose}
+          canvas={layoutCanvas}
+          componentType={layoutComponentType}
+          source={layoutSource}
+          target={layoutTarget}
+          markingMode={marking ? mode : null}
+          onPurpose={setLayoutPurpose}
+          onCanvas={setLayoutCanvas}
+          onComponentType={setLayoutComponentType}
+          onPlace={() => startMarking("layout_place")}
+          onSelectSource={() => startMarking("layout_source")}
+          onDrawDestination={() => startMarking("layout_destination")}
+          onTarget={(field, value) => setLayoutTarget((current) => ({ ...current, [field]: value }))}
+          onCreateRearrange={createRearrangeCandidate}
+        />}
         {marking && <p className="a3s-hint" role="status">{MODE_HINT[mode]} Press Esc to cancel.</p>}
         {candidate && <FindingEditor
           label={candidateLabel || `${candidate.nodeIds.length} selected elements`}
@@ -626,6 +778,55 @@ function FindingEditor(props: FindingEditorProps) {
     <div className="a3s-fields"><label>Severity<select value={props.severity} onChange={(event) => props.onSeverity(event.target.value as RepairSeverity)}><option value="blocking">Blocking</option><option value="important">Important</option><option value="suggestion">Suggestion</option></select></label><label>Intent<select value={props.intent} onChange={(event) => props.onIntent(event.target.value as RepairIntent)}><option value="fix">Fix</option><option value="change">Change</option><option value="question">Question</option><option value="approve">Approve</option></select></label></div>
     {props.conflictOptions.length > 0 && <fieldset className="a3s-conflicts"><legend>Conflicts with another draft <span>optional</span></legend><small>Select requests that cannot both be satisfied. A3S Test will ask for clarification without interpreting their wording.</small>{props.conflictOptions.map((option) => <label key={option.id}><input type="checkbox" checked={option.checked} onChange={(event) => props.onConflict(option.id, event.target.checked)} /><span>{option.label}</span></label>)}</fieldset>}
     <div className="a3s-actions"><button type="button" className="quiet" onClick={props.onCancel}>Cancel</button><button type="button" disabled={!props.instruction.trim()} onClick={props.onSave}>{props.editing ? "Save changes" : "Add draft"}</button><button type="button" disabled={!props.instruction.trim()} onClick={props.onSend}>Send and auto-fix</button></div>
+  </section>;
+}
+
+type LayoutComposerProps = {
+  idPrefix: string;
+  purpose: string;
+  canvas: LayoutCanvas;
+  componentType: string;
+  source: LayoutSource | null;
+  target: Rect;
+  markingMode: SelectionMode | null;
+  onPurpose(value: string): void;
+  onCanvas(value: LayoutCanvas): void;
+  onComponentType(value: string): void;
+  onPlace(): void;
+  onSelectSource(): void;
+  onDrawDestination(): void;
+  onTarget(field: keyof Rect, value: number): void;
+  onCreateRearrange(): void;
+};
+
+function LayoutComposer(props: LayoutComposerProps) {
+  const helpId = `${props.idPrefix}-layout-help`;
+  const updateNumber = (field: keyof Rect, value: number) => {
+    if (Number.isFinite(value)) props.onTarget(field, value);
+  };
+  return <section className="a3s-layout" aria-label="Layout repair intent">
+    <p id={helpId}>Describe placement and rearrangement as typed repair intent. The overlay previews coordinates without changing the page.</p>
+    <label>Purpose <span>optional</span><input type="text" aria-label="Layout purpose" aria-describedby={helpId} maxLength={512} value={props.purpose} onChange={(event) => props.onPurpose(event.target.value)} placeholder="What should this layout help people do?" /></label>
+    <div className="a3s-layout-fields">
+      <label>Canvas<select aria-label="Layout canvas" value={props.canvas} onChange={(event) => props.onCanvas(event.target.value as LayoutCanvas)}><option value="page">Current page</option><option value="wireframe">Wireframe</option></select></label>
+      <label>Component<input type="text" aria-label="Layout component type" maxLength={256} value={props.componentType} onChange={(event) => props.onComponentType(event.target.value)} placeholder="Section" /></label>
+    </div>
+    <button type="button" aria-pressed={props.markingMode === "layout_place"} className={props.markingMode === "layout_place" ? "selected" : ""} disabled={!props.componentType.trim()} onClick={props.onPlace}>Draw placement</button>
+    <div className="a3s-layout-source">
+      <span>Section to rearrange</span>
+      <strong>{props.source?.label ?? "No section selected"}</strong>
+      <button type="button" aria-pressed={props.markingMode === "layout_source"} className={props.markingMode === "layout_source" ? "selected" : ""} onClick={props.onSelectSource}>Select section on page</button>
+    </div>
+    <div className="a3s-layout-fields" aria-label="Layout destination in viewport CSS pixels">
+      <label>X<input type="number" aria-label="Layout x" step="1" value={props.target.x} onChange={(event) => updateNumber("x", event.currentTarget.valueAsNumber)} /></label>
+      <label>Y<input type="number" aria-label="Layout y" step="1" value={props.target.y} onChange={(event) => updateNumber("y", event.currentTarget.valueAsNumber)} /></label>
+      <label>Width<input type="number" aria-label="Layout width" min="8" step="1" value={props.target.width} onChange={(event) => updateNumber("width", event.currentTarget.valueAsNumber)} /></label>
+      <label>Height<input type="number" aria-label="Layout height" min="8" step="1" value={props.target.height} onChange={(event) => updateNumber("height", event.currentTarget.valueAsNumber)} /></label>
+    </div>
+    <div className="a3s-actions">
+      <button type="button" className={props.markingMode === "layout_destination" ? "selected" : ""} aria-pressed={props.markingMode === "layout_destination"} disabled={!props.source} onClick={props.onDrawDestination}>Draw destination</button>
+      <button type="button" disabled={!props.source || !validLayoutRect(props.target)} onClick={props.onCreateRearrange}>Create rearrange draft</button>
+    </div>
   </section>;
 }
 
@@ -712,8 +913,19 @@ function rectStyle(rect: Pick<DOMRect, "x" | "y" | "width" | "height">): CSSProp
   return { left: rect.x, top: rect.y, width: rect.width, height: rect.height };
 }
 
+function rectValue(rect: Pick<DOMRect, "x" | "y" | "width" | "height">): Rect {
+  return { x: rect.x, y: rect.y, width: rect.width, height: rect.height };
+}
+
+function validLayoutRect(rect: Rect): boolean {
+  return [rect.x, rect.y, rect.width, rect.height].every(Number.isFinite)
+    && rect.width >= 8
+    && rect.height >= 8;
+}
+
 function markerRects(target: RepairTarget, bridge: PageContextBridge | null): RectLike[] {
   if (!bridge) return [];
+  if (target.layout && target.region) return [target.region];
   const nodeRects = target.nodeIds.flatMap((nodeId) => {
     const element = bridge.resolve(nodeId);
     return element ? [element.getBoundingClientRect()] : [];
@@ -728,6 +940,8 @@ function repairId(prefix: string): string {
 }
 
 function targetSummary(target: RepairTarget): string {
+  if (target.layout?.kind === "placement") return `layout placement · ${target.layout.componentType} · ${target.layout.canvas}`;
+  if (target.layout?.kind === "rearrange") return `layout rearrangement · ${target.nodeIds.length} element${target.nodeIds.length === 1 ? "" : "s"}`;
   if (target.kind === "text") return `text · ${target.selectedText?.slice(0, 36) ?? "selection"}`;
   if (target.kind === "region") return `area · ${target.nodeIds.length} elements`;
   if (target.kind === "drawing") return `drawing · ${target.nodeIds.length} elements`;
@@ -744,13 +958,25 @@ function repairAnnouncement(repair: SubmittedRepair): string {
   return `Repair ${statusLabel(repair.status)}: ${repair.instruction}`;
 }
 
-const MODE_LABEL: Record<SelectionMode, string> = { element: "Element", text: "Text", multi: "Multi", area: "Area", draw: "Draw" };
+const MODE_LABEL: Record<SelectionMode, string> = {
+  element: "Element",
+  text: "Text",
+  multi: "Multi",
+  area: "Area",
+  draw: "Draw",
+  layout_place: "Layout placement",
+  layout_source: "Layout source",
+  layout_destination: "Layout destination",
+};
 const MODE_HINT: Record<SelectionMode, string> = {
   element: "Click one element, or focus it and press Enter, to create a finding.",
   text: "Select text, then release the pointer.",
   multi: "Drag across elements, or focus each element and press Enter to add it; press Shift+Enter to finish.",
   area: "Optional pointer mode: drag a rectangle over the page.",
   draw: "Optional pointer mode: draw a freehand mark around the relevant page area.",
+  layout_place: "Drag the intended component region in viewport CSS pixels.",
+  layout_source: "Click a section, or focus it and press Enter, to choose what should move.",
+  layout_destination: "Drag the intended destination region in viewport CSS pixels.",
 };
 
 const OVERLAY_CSS = `
@@ -767,15 +993,18 @@ header { display:flex; align-items:flex-start; justify-content:space-between; pa
 button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-visible, .a3s-panel:focus-visible { outline:3px solid currentColor; outline-offset:2px; }
 .a3s-hint { margin:0; padding:8px 12px; background:#431407; color:#fed7aa; }
 .a3s-highlight { position:fixed; pointer-events:none; border:2px solid #f97316; background:rgba(249,115,22,.12); box-shadow:0 0 0 1px rgba(255,255,255,.75) inset; }
+.a3s-wireframe { position:fixed; inset:16px; pointer-events:none; border:1px solid rgba(249,115,22,.55); background:linear-gradient(90deg, rgba(249,115,22,.08) 1px, transparent 1px),linear-gradient(rgba(249,115,22,.08) 1px, transparent 1px); background-size:24px 24px; }
+.a3s-layout-target-preview { position:fixed; pointer-events:none; border:2px dashed #38bdf8; background:rgba(14,165,233,.1); box-shadow:0 0 0 1px rgba(255,255,255,.75) inset; }
 .a3s-markers { position:fixed; inset:0; pointer-events:none; } .a3s-marker { position:fixed; border:2px solid #f97316; border-radius:4px; background:rgba(249,115,22,.08); } .a3s-marker.status-review_ready, .a3s-marker.status-resolved { border-color:#22c55e; background:rgba(34,197,94,.08); } .a3s-marker.status-failed, .a3s-marker.status-verification_failed { border-color:#ef4444; background:rgba(239,68,68,.08); }
 .a3s-drawing { position:fixed; inset:0; width:100vw; height:100vh; pointer-events:none; overflow:visible; } .a3s-drawing path { fill:none; stroke:#f97316; stroke-width:3; stroke-linecap:round; stroke-linejoin:round; filter:drop-shadow(0 0 1px #fff); }
+.a3s-layout { display:flex; flex-direction:column; gap:9px; padding:12px; border-bottom:1px solid #44403c; background:#292524; } .a3s-layout > p { margin:0; color:#a8a29e; } .a3s-layout label { display:flex; flex-direction:column; gap:4px; font-weight:600; } .a3s-layout label span { color:#a8a29e; font-weight:400; } .a3s-layout input[type="text"], .a3s-layout input[type="number"] { width:100%; color:#f5f5f4; background:#0c0a09; border:1px solid #57534e; border-radius:7px; padding:8px; } .a3s-layout-fields { display:grid; grid-template-columns:1fr 1fr; gap:8px; } .a3s-layout-source { display:flex; flex-direction:column; gap:6px; padding-top:3px; border-top:1px solid #44403c; } .a3s-layout-source > span { color:#a8a29e; } .a3s-layout-source strong { overflow-wrap:anywhere; }
 .a3s-editor { display:flex; flex-direction:column; gap:9px; padding:12px; border-bottom:1px solid #44403c; background:#292524; } .a3s-editor label { display:flex; flex-direction:column; gap:4px; font-weight:600; } .a3s-editor label span { color:#78716c; font-weight:400; } textarea, select { width:100%; color:#f5f5f4; background:#0c0a09; border:1px solid #57534e; border-radius:7px; padding:8px; } textarea { resize:vertical; min-height:58px; } .a3s-fields { display:grid; grid-template-columns:1fr 1fr; gap:8px; } .a3s-actions { display:flex; justify-content:flex-end; gap:6px; flex-wrap:wrap; } button.quiet { border-color:transparent; background:transparent; color:#d6d3d1; }
 .a3s-conflicts { display:flex; flex-direction:column; gap:6px; margin:0; padding:8px; border:1px solid #57534e; border-radius:7px; } .a3s-conflicts legend { padding:0 4px; font-weight:600; } .a3s-conflicts legend span { color:#78716c; font-weight:400; } .a3s-conflicts label { flex-direction:row; align-items:flex-start; font-weight:400; } .a3s-conflicts input { margin-top:3px; }
 .a3s-list { overflow:auto; padding:8px 12px; display:flex; flex-direction:column; gap:8px; } .a3s-item { display:flex; flex-direction:column; gap:8px; padding:10px; border:1px solid #44403c; border-radius:9px; background:#292524; } .a3s-item.is-hidden { opacity:.62; } .a3s-item label { display:flex; gap:9px; align-items:flex-start; } .a3s-item label span, .a3s-item.submitted { display:flex; flex-direction:column; gap:3px; } .a3s-item strong { overflow-wrap:anywhere; } .a3s-item div { display:flex; flex-wrap:wrap; gap:6px; } .a3s-status { align-self:flex-start; border-radius:999px; padding:2px 7px; color:#fed7aa; background:#431407; text-transform:capitalize; font-size:11px; } .status-resolved, .status-review_ready { color:#bbf7d0; background:#052e16; } .status-failed, .status-verification_failed { color:#fecaca; background:#450a0a; } .a3s-empty { color:#a8a29e; text-align:center; padding:20px 10px; }
 .a3s-thread { display:flex; flex-direction:column; gap:6px; margin:5px 0 0; padding:8px; list-style:none; border-top:1px solid #44403c; } .a3s-thread li { display:grid; grid-template-columns:auto 1fr; gap:8px; align-items:start; } .a3s-thread span { color:#fdba74; font-size:11px; text-transform:capitalize; } .a3s-thread p { margin:0; white-space:pre-wrap; overflow-wrap:anywhere; }
 .a3s-human-actions { display:flex; flex-wrap:wrap; gap:6px; align-items:flex-end; } .a3s-reply-label { display:flex; flex:1 1 100%; flex-direction:column; gap:4px; font-weight:600; } .a3s-reply-label textarea { min-height:52px; }
 footer { display:flex; justify-content:flex-end; gap:7px; padding:11px 12px; border-top:1px solid #44403c; background:#0c0a09; }
-@media (prefers-color-scheme: light) { .a3s-panel { background:#fafaf9; border-color:#d6d3d1; color:#1c1917; } header, .a3s-tools, .a3s-editor, footer { border-color:#e7e5e4; } .a3s-editor, .a3s-item { background:#f5f5f4; border-color:#d6d3d1; } textarea, select { background:#fff; color:#1c1917; border-color:#a8a29e; } button { background:#e7e5e4; color:#1c1917; border-color:#a8a29e; } button.quiet, header button { color:#57534e; } }
-.a3s-root[data-theme="light"] .a3s-panel { background:#fafaf9; border-color:#d6d3d1; color:#1c1917; } .a3s-root[data-theme="light"] header, .a3s-root[data-theme="light"] .a3s-tools, .a3s-root[data-theme="light"] .a3s-editor, .a3s-root[data-theme="light"] footer { border-color:#e7e5e4; } .a3s-root[data-theme="light"] .a3s-editor, .a3s-root[data-theme="light"] .a3s-item { background:#f5f5f4; border-color:#d6d3d1; } .a3s-root[data-theme="light"] textarea, .a3s-root[data-theme="light"] select { background:#fff; color:#1c1917; border-color:#a8a29e; } .a3s-root[data-theme="light"] button { background:#e7e5e4; color:#1c1917; border-color:#a8a29e; }
+@media (prefers-color-scheme: light) { .a3s-panel { background:#fafaf9; border-color:#d6d3d1; color:#1c1917; } header, .a3s-tools, .a3s-layout, .a3s-editor, footer { border-color:#e7e5e4; } .a3s-layout, .a3s-editor, .a3s-item { background:#f5f5f4; border-color:#d6d3d1; } .a3s-layout input[type="text"], .a3s-layout input[type="number"], textarea, select { background:#fff; color:#1c1917; border-color:#a8a29e; } button { background:#e7e5e4; color:#1c1917; border-color:#a8a29e; } button.quiet, header button { color:#57534e; } }
+.a3s-root[data-theme="light"] .a3s-panel { background:#fafaf9; border-color:#d6d3d1; color:#1c1917; } .a3s-root[data-theme="light"] header, .a3s-root[data-theme="light"] .a3s-tools, .a3s-root[data-theme="light"] .a3s-layout, .a3s-root[data-theme="light"] .a3s-editor, .a3s-root[data-theme="light"] footer { border-color:#e7e5e4; } .a3s-root[data-theme="light"] .a3s-layout, .a3s-root[data-theme="light"] .a3s-editor, .a3s-root[data-theme="light"] .a3s-item { background:#f5f5f4; border-color:#d6d3d1; } .a3s-root[data-theme="light"] .a3s-layout input[type="text"], .a3s-root[data-theme="light"] .a3s-layout input[type="number"], .a3s-root[data-theme="light"] textarea, .a3s-root[data-theme="light"] select { background:#fff; color:#1c1917; border-color:#a8a29e; } .a3s-root[data-theme="light"] button { background:#e7e5e4; color:#1c1917; border-color:#a8a29e; }
 @media (max-width: 600px) { .a3s-panel { left:8px; right:8px; bottom:64px; width:auto; max-height:calc(100vh - 76px); } .a3s-launch { right:12px; bottom:12px; } }
 `;

@@ -136,6 +136,60 @@ describe("React adapter and review overlay", () => {
     });
   });
 
+  it("creates typed layout placements and rearrangements with pointer and keyboard input", async () => {
+    const onSubmitted = vi.fn();
+    render(<A3STestKit enabled page={{ id: "layout-mode" }} repairStorage="memory"><section id="layout-hero" data-testid="layout-hero" tabIndex={-1}>Hero section</section><A3SReviewOverlay enabled defaultOpen onSubmitted={onSubmitted} /></A3STestKit>);
+    await waitFor(() => expect(shadowQuery(".a3s-panel")).toBeTruthy());
+    const hero = document.querySelector<HTMLElement>("#layout-hero")!;
+    setRect(hero, { x: 20, y: 30, width: 600, height: 220 });
+
+    fireEvent.click(shadowButton("Layout"));
+    expect(shadowButton("Layout").getAttribute("aria-pressed")).toBe("true");
+    fireEvent.change(shadowQuery("[aria-label='Layout purpose']"), { target: { value: "Developer tool landing page" } });
+    fireEvent.change(shadowQuery("[aria-label='Layout canvas']"), { target: { value: "wireframe" } });
+    fireEvent.change(shadowQuery("[aria-label='Layout component type']"), { target: { value: "Pricing section" } });
+    expect(shadowQuery(".a3s-wireframe")).toBeTruthy();
+
+    fireEvent.click(shadowButton("Draw placement"));
+    document.body.dispatchEvent(pointerEvent("pointerdown", document.body, 80, 300));
+    document.body.dispatchEvent(pointerEvent("pointermove", document.body, 720, 560));
+    document.body.dispatchEvent(pointerEvent("pointerup", document.body, 720, 560));
+    await waitFor(() => expect(shadowQuery(".a3s-editor textarea").getAttribute("value") ?? (shadowQuery(".a3s-editor textarea") as HTMLTextAreaElement).value).toContain("Pricing section"));
+    fireEvent.click(shadowButton("Add draft"));
+    await waitFor(() => expect(shadowQuery(".a3s-list").textContent).toContain("Place Pricing section"));
+
+    hero.focus();
+    hero.dispatchEvent(new FocusEvent("focusin", { bubbles: true, composed: true }));
+    fireEvent.click(shadowButton("Select section on page"));
+    await waitFor(() => expect(document.activeElement).toBe(hero));
+    fireEvent.keyDown(hero, { key: "Enter" });
+    await waitFor(() => expect(shadowQuery(".a3s-layout-source").textContent).toContain("Hero section"));
+    for (const [label, value] of [["Layout x", "40"], ["Layout y", "80"], ["Layout width", "600"], ["Layout height", "220"]] as const) {
+      fireEvent.change(shadowQuery(`[aria-label='${label}']`), { target: { value } });
+    }
+    fireEvent.click(shadowButton("Create rearrange draft"));
+    await waitFor(() => expect((shadowQuery(".a3s-editor textarea") as HTMLTextAreaElement).value).toContain("Move Hero section"));
+    fireEvent.click(shadowButton("Add draft"));
+    await waitFor(() => expect(shadowButton("Send selected (2)")).toBeTruthy());
+    fireEvent.click(shadowButton("Send selected (2)"));
+
+    await waitFor(() => expect(onSubmitted).toHaveBeenCalledTimes(1));
+    const submitted = onSubmitted.mock.calls[0]![0];
+    expect(submitted.map((repair: { target: { layout?: { kind: string } } }) => repair.target.layout?.kind)).toEqual(["placement", "rearrange"]);
+    expect(submitted[0].target).toMatchObject({
+      kind: "region",
+      nodeIds: [],
+      region: { x: 80, y: 300, width: 640, height: 260 },
+      layout: { kind: "placement", componentType: "Pricing section", canvas: "wireframe", purpose: "Developer tool landing page" },
+    });
+    expect(submitted[1].target).toMatchObject({
+      kind: "node",
+      region: { x: 40, y: 80, width: 600, height: 220 },
+      layout: { kind: "rearrange", originalRegion: { x: 20, y: 30, width: 600, height: 220 }, purpose: "Developer tool landing page" },
+    });
+    expect(hero.getAttribute("style")).toBeNull();
+  });
+
   it("copies bounded Markdown and JSON repair exports", async () => {
     const writeText = vi.fn().mockResolvedValue(undefined);
     Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } });
