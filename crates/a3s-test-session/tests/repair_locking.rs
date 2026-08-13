@@ -27,6 +27,7 @@ fn repair_finding() -> RepairFinding {
             selected_text: None,
             region: None,
             drawing: None,
+            layout: None,
         },
         created_at: "2026-08-12T00:00:00Z".to_string(),
         page_id: "checkout".to_string(),

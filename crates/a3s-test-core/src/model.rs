@@ -580,6 +580,31 @@ pub struct RepairTarget {
     pub selected_text: Option<String>,
     pub region: Option<PageContextRect>,
     pub drawing: Option<Vec<PageContextPoint>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub layout: Option<RepairLayoutIntent>,
+}
+
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+#[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
+pub enum RepairLayoutIntent {
+    Placement {
+        #[serde(rename = "componentType")]
+        component_type: String,
+        canvas: RepairLayoutCanvas,
+        purpose: Option<String>,
+    },
+    Rearrange {
+        #[serde(rename = "originalRegion")]
+        original_region: PageContextRect,
+        purpose: Option<String>,
+    },
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum RepairLayoutCanvas {
+    Page,
+    Wireframe,
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]

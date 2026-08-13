@@ -63,8 +63,38 @@ function validDraft(value: RepairDraft): boolean {
       value.instruction.length <= 8_192 &&
       value.target &&
       Array.isArray(value.target.nodeIds) &&
+      validTarget(value.target) &&
       validRelations(value),
   );
+}
+
+function validTarget(target: RepairDraft["target"]): boolean {
+  if (!onlyKeys(target, ["kind", "nodeIds", "selectedText", "region", "drawing", "layout"])) return false;
+  if (!(["node", "text", "region", "drawing"] as const).includes(target.kind)) return false;
+  if (target.nodeIds.length > 5_000 || target.nodeIds.some((nodeId) => typeof nodeId !== "string" || nodeId.length === 0 || nodeId.length > 128)) return false;
+  if (target.region !== undefined && !validRect(target.region)) return false;
+  if (target.selectedText !== undefined && (typeof target.selectedText !== "string" || target.selectedText.length > 4_096)) return false;
+  if (target.drawing !== undefined && (!Array.isArray(target.drawing) || target.drawing.length > 2_000 || target.drawing.some((point) => !finite(point.x) || !finite(point.y)))) return false;
+  const layout = target.layout;
+  if (layout === undefined) return true;
+  if (layout.purpose !== undefined && (typeof layout.purpose !== "string" || layout.purpose.length > 2_048)) return false;
+  if (layout.kind === "placement") {
+    return onlyKeys(layout, ["kind", "componentType", "canvas", "purpose"]) && typeof layout.componentType === "string" && layout.componentType.trim().length > 0 && layout.componentType.length <= 128 && ["page", "wireframe"].includes(layout.canvas) && target.region !== undefined;
+  }
+  return layout.kind === "rearrange" && onlyKeys(layout, ["kind", "originalRegion", "purpose"]) && validRect(layout.originalRegion) && target.nodeIds.length > 0 && target.region !== undefined;
+}
+
+function validRect(rect: RepairDraft["target"]["region"]): boolean {
+  return Boolean(rect && finite(rect.x) && finite(rect.y) && finite(rect.width) && finite(rect.height) && rect.width > 0 && rect.height > 0);
+}
+
+function finite(value: number): boolean {
+  return typeof value === "number" && Number.isFinite(value);
+}
+
+function onlyKeys(value: object, allowed: string[]): boolean {
+  const keys = new Set(allowed);
+  return Object.keys(value).every((key) => keys.has(key));
 }
 
 function validRelations(value: RepairDraft): boolean {

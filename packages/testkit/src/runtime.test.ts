@@ -239,6 +239,84 @@ describe("page context runtime", () => {
     ]);
   });
 
+  it("preserves typed placement and rearrange intents across the repair bridge", () => {
+    document.body.innerHTML = "<main><section data-testid='hero'>Hero</section></main>";
+    const hero = document.querySelector("section")!;
+    setRect(hero, { x: 20, y: 40, width: 600, height: 240 });
+    const bridge = installTestKit({ enabled: true, page: { id: "layout" }, repairStorage: "memory" });
+    const nodeId = bridge.snapshot().nodes.find((node) => node.testId === "hero")!.id;
+    const drafts: RepairDraft[] = [
+      {
+        id: "finding-placement",
+        instruction: "Place a pricing section here",
+        intent: "change",
+        severity: "important",
+        target: {
+          kind: "region",
+          nodeIds: [],
+          region: { x: 40, y: 320, width: 720, height: 260 },
+          layout: {
+            kind: "placement",
+            componentType: "Pricing section",
+            canvas: "wireframe",
+            purpose: "Landing page for a developer tool",
+          },
+        },
+        createdAt: new Date(0).toISOString(),
+      },
+      {
+        id: "finding-rearrange",
+        instruction: "Move the hero below the navigation",
+        intent: "change",
+        severity: "important",
+        target: {
+          kind: "node",
+          nodeIds: [nodeId],
+          region: { x: 20, y: 120, width: 600, height: 240 },
+          layout: {
+            kind: "rearrange",
+            originalRegion: { x: 20, y: 40, width: 600, height: 240 },
+            purpose: "Put navigation first",
+          },
+        },
+        createdAt: new Date(1).toISOString(),
+      },
+    ];
+
+    expect(bridge.probe().capabilities).toContain("layout_intents");
+    const submitted = bridge.submitRepair({ batchId: "layout-batch", findings: drafts });
+    expect(submitted.map((repair) => repair.target.layout)).toEqual([
+      drafts[0]!.target.layout,
+      drafts[1]!.target.layout,
+    ]);
+    expect(bridge.exportRepairs(drafts).findings.map((finding) => finding.target.layout)).toEqual([
+      drafts[0]!.target.layout,
+      drafts[1]!.target.layout,
+    ]);
+    const markdown = bridge.exportRepairsMarkdown(drafts);
+    expect(markdown).toContain("Layout intent: place Pricing section on the wireframe canvas");
+    expect(markdown).toContain("Layout intent: rearrange from");
+
+    const invalid = {
+      ...drafts[0]!,
+      id: "finding-invalid-layout",
+      target: {
+        ...drafts[0]!.target,
+        layout: { kind: "placement", componentType: "", canvas: "page" },
+      },
+    } as unknown as RepairDraft;
+    expect(bridge.submitRepair({ findings: [invalid] })).toEqual([]);
+    const unknownLayoutField = {
+      ...drafts[0]!,
+      id: "finding-unknown-layout-field",
+      target: {
+        ...drafts[0]!.target,
+        layout: { ...drafts[0]!.target.layout, hiddenPrompt: "do something unrelated" },
+      },
+    } as unknown as RepairDraft;
+    expect(bridge.submitRepair({ findings: [unknownLayoutField] })).toEqual([]);
+  });
+
   it("queues human clarification and review actions exactly once", () => {
     document.body.innerHTML = "<button>Fix me</button>";
     const button = document.querySelector("button")!;

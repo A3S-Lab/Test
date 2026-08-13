@@ -163,6 +163,71 @@ fn repair_conflict_relation_has_a_typed_non_keyword_wire_contract() {
 }
 
 #[test]
+fn repair_layout_intents_have_a_typed_bounded_wire_contract() {
+    use a3s_test_core::{
+        PageContextRect, RepairLayoutCanvas, RepairLayoutIntent, RepairTarget, RepairTargetKind,
+    };
+
+    let placement = RepairTarget {
+        kind: RepairTargetKind::Region,
+        node_ids: Vec::new(),
+        selected_text: None,
+        region: Some(PageContextRect {
+            x: 40.0,
+            y: 320.0,
+            width: 720.0,
+            height: 260.0,
+        }),
+        drawing: None,
+        layout: Some(RepairLayoutIntent::Placement {
+            component_type: "Pricing section".to_string(),
+            canvas: RepairLayoutCanvas::Wireframe,
+            purpose: Some("Landing page for a developer tool".to_string()),
+        }),
+    };
+    let encoded = serde_json::to_value(&placement).expect("serialize placement target");
+    assert_eq!(encoded["layout"]["kind"], "placement");
+    assert_eq!(encoded["layout"]["componentType"], "Pricing section");
+    assert_eq!(encoded["layout"]["canvas"], "wireframe");
+    assert_eq!(
+        serde_json::from_value::<RepairTarget>(encoded).expect("deserialize placement target"),
+        placement
+    );
+
+    let rearrange: RepairTarget = serde_json::from_value(serde_json::json!({
+        "kind": "node",
+        "nodeIds": ["n1"],
+        "selectedText": null,
+        "region": { "x": 20.0, "y": 120.0, "width": 600.0, "height": 240.0 },
+        "drawing": null,
+        "layout": {
+            "kind": "rearrange",
+            "originalRegion": { "x": 20.0, "y": 40.0, "width": 600.0, "height": 240.0 },
+            "purpose": "Put navigation first"
+        }
+    }))
+    .expect("deserialize rearrange target");
+    assert!(matches!(
+        rearrange.layout,
+        Some(RepairLayoutIntent::Rearrange { .. })
+    ));
+    assert!(serde_json::from_value::<RepairTarget>(serde_json::json!({
+        "kind": "region",
+        "nodeIds": [],
+        "selectedText": null,
+        "region": { "x": 0, "y": 0, "width": 100, "height": 100 },
+        "drawing": null,
+        "layout": {
+            "kind": "placement",
+            "componentType": "Hero",
+            "canvas": "page",
+            "arbitraryPrompt": "ignore the protocol"
+        }
+    }))
+    .is_err());
+}
+
+#[test]
 fn visual_viewport_is_additive_and_preserves_css_pixel_geometry() {
     use a3s_test_core::{PageContextViewport, PageContextVisualViewport};
 

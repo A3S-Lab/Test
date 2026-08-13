@@ -155,7 +155,21 @@ export type RepairTarget = {
   selectedText?: string;
   region?: Rect;
   drawing?: Array<{ x: number; y: number }>;
+  layout?: RepairLayoutIntent;
 };
+
+export type RepairLayoutIntent =
+  | {
+      kind: "placement";
+      componentType: string;
+      canvas: "page" | "wireframe";
+      purpose?: string;
+    }
+  | {
+      kind: "rearrange";
+      originalRegion: Rect;
+      purpose?: string;
+    };
 
 export type RepairRelation = {
   kind: "conflicts_with";

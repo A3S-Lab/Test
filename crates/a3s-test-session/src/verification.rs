@@ -72,9 +72,10 @@ pub fn build_repair_verification(
     }
 
     let target_found = repair_target_found(finding, snapshot);
-    let success_criteria_passed = request
-        .success_criteria_passed
-        .or_else(|| finding.success_criteria.is_none().then_some(target_found));
+    let success_criteria_passed = request.success_criteria_passed.or_else(|| {
+        (finding.success_criteria.is_none() && finding.target.layout.is_none())
+            .then_some(target_found)
+    });
     if before_revision < finding.context_revision
         || before_evidence.context.revision != Some(before_revision)
         || !before_evidence
@@ -136,19 +137,27 @@ pub fn build_repair_verification(
 }
 
 fn repair_target_found(finding: &RepairFinding, snapshot: &PageContextSnapshot) -> bool {
+    if matches!(
+        finding.target.layout,
+        Some(a3s_test_core::RepairLayoutIntent::Placement { .. })
+    ) {
+        return finding
+            .target
+            .region
+            .as_ref()
+            .zip(snapshot.page.as_ref())
+            .is_some_and(|(region, page)| {
+                region.x < page.viewport.width
+                    && region.x + region.width > 0.0
+                    && region.y < page.viewport.height
+                    && region.y + region.height > 0.0
+            });
+    }
     let target_ids = finding
         .target
         .node_ids
         .iter()
         .collect::<std::collections::HashSet<_>>();
-    if !target_ids.is_empty()
-        && snapshot
-            .nodes
-            .iter()
-            .any(|node| target_ids.contains(&node.id))
-    {
-        return true;
-    }
     let context_locators = finding
         .context
         .get("nodes")
@@ -159,13 +168,39 @@ fn repair_target_found(finding: &RepairFinding, snapshot: &PageContextSnapshot) 
         .filter_map(serde_json::Value::as_array)
         .flatten()
         .collect::<Vec<_>>();
-    snapshot.nodes.iter().any(|node| {
-        node.locators.iter().any(|locator| {
-            serde_json::to_value(locator)
-                .ok()
-                .is_some_and(|encoded| context_locators.contains(&&encoded))
-        })
-    })
+    let matches_target = |node: &a3s_test_core::PageContextNode| {
+        target_ids.contains(&node.id)
+            || node.locators.iter().any(|locator| {
+                serde_json::to_value(locator)
+                    .ok()
+                    .is_some_and(|encoded| context_locators.contains(&&encoded))
+            })
+    };
+    if matches!(
+        finding.target.layout,
+        Some(a3s_test_core::RepairLayoutIntent::Rearrange { .. })
+    ) {
+        return finding.target.region.as_ref().is_some_and(|target| {
+            snapshot.nodes.iter().any(|node| {
+                matches_target(node)
+                    && node
+                        .geometry
+                        .as_ref()
+                        .is_some_and(|geometry| rects_overlap(&geometry.viewport, target))
+            })
+        });
+    }
+    snapshot.nodes.iter().any(matches_target)
+}
+
+fn rects_overlap(
+    left: &a3s_test_core::PageContextRect,
+    right: &a3s_test_core::PageContextRect,
+) -> bool {
+    left.x < right.x + right.width
+        && left.x + left.width > right.x
+        && left.y < right.y + right.height
+        && left.y + left.height > right.y
 }
 
 fn generate_acl_candidate(finding: &RepairFinding) -> Option<String> {
@@ -235,9 +270,9 @@ fn acl_string(value: &str) -> String {
 mod tests {
     use super::*;
     use a3s_test_core::{
-        Evidence, PageContextPage, PageContextPoint, PageContextSize, PageContextTheme,
-        PageContextViewport, RepairIntent, RepairSeverity, RepairStatus, RepairTarget,
-        RepairTargetKind,
+        Evidence, PageContextGeometry, PageContextPage, PageContextPoint, PageContextPosition,
+        PageContextRect, PageContextSize, PageContextTheme, PageContextViewport, RepairIntent,
+        RepairLayoutIntent, RepairSeverity, RepairStatus, RepairTarget, RepairTargetKind,
     };
     use serde_json::json;
 
@@ -256,6 +291,7 @@ mod tests {
                 selected_text: None,
                 region: None,
                 drawing: None,
+                layout: None,
             },
             created_at: "2026-08-13T00:00:00Z".to_string(),
             page_id: "page".to_string(),
@@ -390,6 +426,168 @@ mod tests {
         )
         .expect("verification");
         assert!(passed.passed);
+    }
+
+    #[test]
+    fn layout_placement_requires_explicit_success_in_an_addressable_region() {
+        let mut layout = finding();
+        layout.success_criteria = None;
+        layout.target = RepairTarget {
+            kind: RepairTargetKind::Region,
+            node_ids: Vec::new(),
+            selected_text: None,
+            region: Some(a3s_test_core::PageContextRect {
+                x: 10.0,
+                y: 20.0,
+                width: 40.0,
+                height: 30.0,
+            }),
+            drawing: None,
+            layout: Some(a3s_test_core::RepairLayoutIntent::Placement {
+                component_type: "Pricing section".to_string(),
+                canvas: a3s_test_core::RepairLayoutCanvas::Wireframe,
+                purpose: Some("Developer tool landing page".to_string()),
+            }),
+        };
+
+        let unverified = build_repair_verification(
+            &layout,
+            "attempt-1",
+            &evidence(1),
+            &evidence(2),
+            &request(None),
+        )
+        .expect("layout verification without explicit result");
+        assert!(unverified.target_found);
+        assert_eq!(unverified.success_criteria_passed, None);
+        assert!(!unverified.passed);
+
+        let verified = build_repair_verification(
+            &layout,
+            "attempt-1",
+            &evidence(1),
+            &evidence(2),
+            &request(Some(true)),
+        )
+        .expect("explicit layout verification");
+        assert!(verified.passed);
+
+        layout.target.region = Some(a3s_test_core::PageContextRect {
+            x: 200.0,
+            y: 200.0,
+            width: 40.0,
+            height: 30.0,
+        });
+        let outside = build_repair_verification(
+            &layout,
+            "attempt-1",
+            &evidence(1),
+            &evidence(2),
+            &request(Some(true)),
+        )
+        .expect("out-of-bounds layout verification");
+        assert!(!outside.target_found);
+        assert!(!outside.passed);
+    }
+
+    #[test]
+    fn layout_rearrange_requires_the_target_at_its_requested_region() {
+        let mut layout = finding();
+        layout.target.region = Some(PageContextRect {
+            x: 50.0,
+            y: 50.0,
+            width: 40.0,
+            height: 30.0,
+        });
+        layout.target.layout = Some(RepairLayoutIntent::Rearrange {
+            original_region: PageContextRect {
+                x: 0.0,
+                y: 0.0,
+                width: 40.0,
+                height: 30.0,
+            },
+            purpose: None,
+        });
+        let mut after = evidence(2);
+        after.context.nodes.push(a3s_test_core::PageContextNode {
+            id: "n1".to_string(),
+            r#ref: None,
+            parent_id: None,
+            component_id: None,
+            tag: "section".to_string(),
+            role: None,
+            name: None,
+            text: None,
+            description: None,
+            test_id: None,
+            geometry: Some(PageContextGeometry {
+                viewport: PageContextRect {
+                    x: 50.0,
+                    y: 50.0,
+                    width: 40.0,
+                    height: 30.0,
+                },
+                document: PageContextRect {
+                    x: 50.0,
+                    y: 50.0,
+                    width: 40.0,
+                    height: 30.0,
+                },
+                normalized: PageContextRect {
+                    x: 0.5,
+                    y: 0.5,
+                    width: 0.4,
+                    height: 0.3,
+                },
+                visible_ratio: 1.0,
+                occluded: false,
+                position: PageContextPosition::Static,
+                transformed: false,
+                scroll_container_node_id: None,
+            }),
+            state: a3s_test_core::PageContextNodeState {
+                visible: true,
+                disabled: None,
+                checked: None,
+                selected: None,
+                expanded: None,
+                focused: None,
+                readonly: None,
+                required: None,
+                invalid: None,
+            },
+            locators: Vec::new(),
+            classes: None,
+            attributes: None,
+            computed_styles: None,
+        });
+
+        let moved = build_repair_verification(
+            &layout,
+            "attempt-1",
+            &evidence(1),
+            &after,
+            &request(Some(true)),
+        )
+        .expect("moved layout verification");
+        assert!(moved.passed);
+
+        after.context.nodes[0]
+            .geometry
+            .as_mut()
+            .expect("geometry")
+            .viewport
+            .x = 0.0;
+        let stale = build_repair_verification(
+            &layout,
+            "attempt-1",
+            &evidence(1),
+            &after,
+            &request(Some(true)),
+        )
+        .expect("stale layout verification");
+        assert!(!stale.target_found);
+        assert!(!stale.passed);
     }
 
     #[test]

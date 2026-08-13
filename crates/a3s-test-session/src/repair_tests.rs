@@ -1,8 +1,8 @@
 use super::*;
 use crate::RepairWorkspace;
 use a3s_test_core::{
-    Evidence, PageContextSnapshot, RepairIntent, RepairRelation, RepairSeverity, RepairTarget,
-    RepairTargetKind,
+    Evidence, PageContextRect, PageContextSnapshot, RepairIntent, RepairLayoutCanvas,
+    RepairLayoutIntent, RepairRelation, RepairSeverity, RepairTarget, RepairTargetKind,
 };
 use serde_json::json;
 
@@ -21,6 +21,7 @@ fn finding(id: &str) -> RepairFinding {
             selected_text: None,
             region: None,
             drawing: None,
+            layout: None,
         },
         created_at: "2026-08-12T00:00:00Z".to_string(),
         page_id: "checkout".to_string(),
@@ -661,6 +662,98 @@ async fn rejects_self_referential_duplicate_and_unbounded_conflict_relations() {
             .ingest("repair-session", vec![submitted], 1)
             .await
             .expect_err("invalid relations");
+        assert_eq!(error.code(), "test.session.repair_invalid");
+    }
+}
+
+#[tokio::test]
+async fn rejects_inconsistent_or_unbounded_layout_intents() {
+    let invalid_targets = [
+        RepairTarget {
+            kind: RepairTargetKind::Node,
+            node_ids: Vec::new(),
+            selected_text: None,
+            region: Some(PageContextRect {
+                x: 0.0,
+                y: 0.0,
+                width: 100.0,
+                height: 100.0,
+            }),
+            drawing: None,
+            layout: Some(RepairLayoutIntent::Placement {
+                component_type: "Hero".to_string(),
+                canvas: RepairLayoutCanvas::Page,
+                purpose: None,
+            }),
+        },
+        RepairTarget {
+            kind: RepairTargetKind::Region,
+            node_ids: Vec::new(),
+            selected_text: None,
+            region: Some(PageContextRect {
+                x: 0.0,
+                y: 0.0,
+                width: 100.0,
+                height: 100.0,
+            }),
+            drawing: None,
+            layout: Some(RepairLayoutIntent::Placement {
+                component_type: " ".to_string(),
+                canvas: RepairLayoutCanvas::Wireframe,
+                purpose: None,
+            }),
+        },
+        RepairTarget {
+            kind: RepairTargetKind::Node,
+            node_ids: Vec::new(),
+            selected_text: None,
+            region: Some(PageContextRect {
+                x: 0.0,
+                y: 100.0,
+                width: 100.0,
+                height: 100.0,
+            }),
+            drawing: None,
+            layout: Some(RepairLayoutIntent::Rearrange {
+                original_region: PageContextRect {
+                    x: 0.0,
+                    y: 0.0,
+                    width: 100.0,
+                    height: 100.0,
+                },
+                purpose: None,
+            }),
+        },
+        RepairTarget {
+            kind: RepairTargetKind::Region,
+            node_ids: Vec::new(),
+            selected_text: None,
+            region: Some(PageContextRect {
+                x: 0.0,
+                y: 0.0,
+                width: f64::INFINITY,
+                height: 100.0,
+            }),
+            drawing: None,
+            layout: Some(RepairLayoutIntent::Placement {
+                component_type: "Hero".to_string(),
+                canvas: RepairLayoutCanvas::Page,
+                purpose: Some("x".repeat(2_049)),
+            }),
+        },
+    ];
+
+    for (index, target) in invalid_targets.into_iter().enumerate() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let mut ledger = RepairLedger::load(temp.path().join("repairs.jsonl"))
+            .await
+            .expect("load");
+        let mut submitted = finding(&format!("layout-{index}"));
+        submitted.target = target;
+        let error = ledger
+            .ingest("repair-session", vec![submitted], 1)
+            .await
+            .expect_err("invalid layout target");
         assert_eq!(error.code(), "test.session.repair_invalid");
     }
 }

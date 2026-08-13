@@ -434,6 +434,7 @@ pub(super) fn validate_finding(finding: &RepairFinding) -> Result<(), SessionErr
             "submitted repair must be queued",
         ));
     }
+    validate_target(&finding.target)?;
     if finding.relations.len() > 100 {
         return Err(SessionError::new(
             "test.session.repair_invalid",
@@ -452,6 +453,75 @@ pub(super) fn validate_finding(finding: &RepairFinding) -> Result<(), SessionErr
         }
     }
     Ok(())
+}
+
+fn validate_target(target: &a3s_test_core::RepairTarget) -> Result<(), SessionError> {
+    if target.node_ids.len() > 5_000
+        || target
+            .node_ids
+            .iter()
+            .any(|node_id| node_id.is_empty() || node_id.len() > 128)
+        || target
+            .selected_text
+            .as_ref()
+            .is_some_and(|text| text.len() > 4_096)
+        || target
+            .region
+            .as_ref()
+            .is_some_and(|region| !valid_rect(region))
+        || target.drawing.as_ref().is_some_and(|drawing| {
+            drawing.len() > 2_000
+                || drawing
+                    .iter()
+                    .any(|point| !point.x.is_finite() || !point.y.is_finite())
+        })
+    {
+        return Err(SessionError::new(
+            "test.session.repair_invalid",
+            "repair target contains unbounded or invalid geometry",
+        ));
+    }
+    let Some(layout) = target.layout.as_ref() else {
+        return Ok(());
+    };
+    let purpose_valid = match layout {
+        a3s_test_core::RepairLayoutIntent::Placement { purpose, .. }
+        | a3s_test_core::RepairLayoutIntent::Rearrange { purpose, .. } => purpose
+            .as_ref()
+            .is_none_or(|purpose| purpose.len() <= 2_048),
+    };
+    let shape_valid = match layout {
+        a3s_test_core::RepairLayoutIntent::Placement { component_type, .. } => {
+            target.kind == a3s_test_core::RepairTargetKind::Region
+                && target.region.is_some()
+                && !component_type.trim().is_empty()
+                && component_type.len() <= 128
+        }
+        a3s_test_core::RepairLayoutIntent::Rearrange {
+            original_region, ..
+        } => {
+            target.kind == a3s_test_core::RepairTargetKind::Node
+                && !target.node_ids.is_empty()
+                && target.region.is_some()
+                && valid_rect(original_region)
+        }
+    };
+    if !purpose_valid || !shape_valid {
+        return Err(SessionError::new(
+            "test.session.repair_invalid",
+            "repair layout intent does not match its bounded target geometry",
+        ));
+    }
+    Ok(())
+}
+
+fn valid_rect(rect: &a3s_test_core::PageContextRect) -> bool {
+    rect.x.is_finite()
+        && rect.y.is_finite()
+        && rect.width.is_finite()
+        && rect.height.is_finite()
+        && rect.width > 0.0
+        && rect.height > 0.0
 }
 
 pub(super) fn validate_evidence(
