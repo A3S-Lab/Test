@@ -826,6 +826,10 @@ fn spawn_descendant_fixture() {
 }
 
 #[cfg(windows)]
+#[allow(
+    clippy::zombie_processes,
+    reason = "the descendant must outlive its launcher so the owning Job can prove tree cleanup"
+)]
 fn spawn_descendant_fixture() {
     use std::os::windows::process::CommandExt as _;
 

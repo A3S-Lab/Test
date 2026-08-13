@@ -107,6 +107,12 @@ send the findings to the coding agent through the owning A3S Test session.
 Layout Mode adds typed component placement and section rearrangement with
 viewport CSS-pixel targets while leaving the host DOM unchanged.
 
+Install the package tarball published with every GitHub Release:
+
+```bash
+npm install https://github.com/A3S-Lab/Test/releases/latest/download/a3s-testkit.tgz
+```
+
 A3S Test captures owned before/after evidence, serializes workspace mutation
 across sessions and processes, and proves an admitted ACL candidate in a fresh
 browser before a repair becomes review-ready. Human acceptance is the default;
@@ -187,7 +193,7 @@ tagged Rust package:
 
 ```bash
 cargo install --git https://github.com/A3S-Lab/Test \
-  --tag v0.5.1 --locked a3s-test-cli
+  --tag v0.6.0 --locked a3s-test-cli
 ```
 
 ## Turn a proven path into a regression

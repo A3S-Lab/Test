@@ -2,6 +2,70 @@
 
 ## Unreleased
 
+## 0.6.0 - 2026-08-13
+
+### Added
+
+- Added the development-only `@a3s-lab/testkit` package with framework-neutral
+  and React entry points. Its versioned page-context bridge reports bounded
+  page identity, route, readiness, component ownership, semantic locators,
+  form state, application facts, and viewport/document/normalized CSS-pixel
+  geometry without changing the host DOM.
+- Added a Shadow DOM review overlay for element, text, rectangular, freehand,
+  click/drag multi-selection, and ordered batch findings. Reviewers can edit,
+  hide, restore, copy, submit, discuss, accept, reject, and reopen individual
+  findings while retaining persistent markers and drafts across route or
+  hot-reload changes.
+- Added typed Layout Mode placement and rearrangement intent, including a
+  searchable catalog of 90 component types across ten categories and a
+  free-form project-specific component field.
+- Added typed page-context models, atomic accessibility/context observations,
+  revision-bound `@cN` refs, scoped inspection, capability discovery, CLI and
+  MCP projections, generated schemas, and compatibility coverage. Pages that
+  do not embed the Test Kit preserve the existing Web behavior.
+- Added an append-only repair ledger and complete single/batch lifecycle for
+  claim, clarification, cancellation, repair, verification, human review, and
+  resolution. Workspace mutation is serialized across sessions and processes,
+  and admitted ACL candidates are proved in a fresh browser before promotion.
+- Added owned before/after context, screenshot, console, page-error, diff, and
+  verification evidence for repair work, plus machine-readable CLI commands
+  and MCP tools for repair pickup, status, replies, human actions, recovery,
+  and inspection.
+- Added keyboard controls, focus restoration, a polite status announcer,
+  named non-modal dialog semantics, theme and marker preferences, optional
+  host-pointer blocking, animation pause, page wireframe fade, panel docking,
+  and bounded Markdown/JSON copy for the review overlay.
+- GitHub Releases now include a checksum-protected `a3s-testkit.tgz` package in
+  addition to the CLI archives, installers, and Coding Agent Skill.
+
+### Fixed
+
+- Persisted review drafts now rebind through stable semantic locators after
+  route changes, virtualization, DOM reordering, and hot reload instead of
+  relying on private node order.
+- Browser command output in real-browser release gates now uses bounded
+  file-backed capture, preventing persistent daemons from retaining inherited
+  pipes and stalling successful commands on Windows.
+- The cross-platform real-browser gates now use pinned Chrome Headless Shell
+  builds, portable cleanup checks, and deterministic process fixtures on
+  macOS and Windows.
+
+### Safety
+
+- Test Kit context is size-bounded, redacted, and explicitly untrusted. The
+  browser bridge exposes no shell, filesystem, cookie, credential, arbitrary
+  network, source-editing, or JavaScript-evaluation authority.
+- Context and layout refs are bound to the latest observation and page
+  revision; navigation, revision drift, failed actions, and state-changing
+  actions expire them before input dispatch.
+- Repair execution uses an exact owning session, one persistent workspace
+  mutation lock, bounded evidence, typed conflict relations, and fail-closed
+  verification. Human acceptance remains the default, while automatic
+  resolution requires explicit session-scoped enablement.
+- The review runtime and overlay both require explicit enablement, isolate
+  styles and events from the host page, omit themselves from captured page
+  context, and retain headless context collection when the overlay is hidden.
+
 ## 0.5.1 - 2026-08-06
 
 ### Fixed

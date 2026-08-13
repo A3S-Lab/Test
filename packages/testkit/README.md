@@ -2,6 +2,10 @@
 
 Development-only page context and human review SDK for A3S Test.
 
+```bash
+npm install https://github.com/A3S-Lab/Test/releases/latest/download/a3s-testkit.tgz
+```
+
 ```tsx
 import { A3SReviewOverlay, A3STestBoundary, A3STestKit } from "@a3s-lab/testkit/react";
 
@@ -48,8 +52,9 @@ proves an admitted regression candidate in a fresh browser before presenting a
 repair for review. Human acceptance is the default; automatic resolution must
 be enabled for the owning A3S Test session explicitly.
 
-See [`../../docs/testkit.md`](../../docs/testkit.md) for the complete protocol,
-security, repair, and verification design.
+See the
+[Test Kit design and security contract](https://github.com/A3S-Lab/Test/blob/main/docs/testkit.md)
+for the complete protocol, security, repair, and verification design.
 
 For requests that cannot both be satisfied, add one draft first and use the
 optional **Conflicts with another draft** control on the other. This emits a

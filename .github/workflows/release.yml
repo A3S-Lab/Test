@@ -102,6 +102,53 @@ jobs:
           "${RUNNER_TEMP}/a3s-test.skill.sha256"
           --clobber
 
+  upload-testkit:
+    name: Test Kit package
+    needs: create-release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Install Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: packages/testkit/package-lock.json
+
+      - name: Build and verify Test Kit
+        working-directory: packages/testkit
+        run: |
+          npm ci
+          npm run typecheck
+          npm test
+          npm run build
+
+      - name: Package Test Kit
+        working-directory: packages/testkit
+        shell: bash
+        run: |
+          set -euo pipefail
+          package="$(npm pack --silent --pack-destination "$RUNNER_TEMP")"
+          mv "$RUNNER_TEMP/$package" "$RUNNER_TEMP/a3s-testkit.tgz"
+          (
+            cd "$RUNNER_TEMP"
+            sha256sum a3s-testkit.tgz > a3s-testkit.tgz.sha256
+          )
+
+      - name: Upload Test Kit
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >-
+          gh release upload "${GITHUB_REF_NAME}"
+          "${RUNNER_TEMP}/a3s-testkit.tgz"
+          "${RUNNER_TEMP}/a3s-testkit.tgz.sha256"
+          --clobber
+
   upload-installers:
     name: Installers
     needs: create-release
