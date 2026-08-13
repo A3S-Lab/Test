@@ -314,15 +314,52 @@ Auto-send can be enabled only for the current browser session through the
 visible overlay toggle (or the initial `autoSend` prop). It does not persist
 across restart.
 
+The overlay also exposes global review commands. `Ctrl/Command+Shift+F`
+toggles the panel from anywhere outside an editable target. While the panel is
+open, `L` toggles Layout Mode, `P` pauses or resumes page motion, `H` hides or
+shows markers, `C` copies the selected drafts as Markdown, and `X` clears all
+local drafts. `Escape` cancels the active marking/editor state first, then
+closes the panel. Commands are ignored inside inputs, textareas, selects,
+contenteditable regions, and ARIA textbox, searchbox, combobox, or spinbutton
+controls. Each command also has a named button and visible shortcut tooltip.
+
+Marker rectangles remain pointer-transparent page evidence. A draft marker
+adds only a 28 CSS-pixel edit button at its top-start corner; activating it
+opens the normal editor, where the draft can be updated or deleted. Reviewers
+can hide one draft marker, hide all markers, or clear every local draft without
+affecting submitted repairs.
+
+Host applications may observe bounded local workflow events without replacing
+the A3S Test repair ledger:
+
+```tsx
+<A3SReviewOverlay
+  enabled={import.meta.env.DEV}
+  copyToClipboard={(text) => applicationClipboard.writeText(text)}
+  onDraftAdded={(draft) => auditLocalDraft("added", draft)}
+  onDraftUpdated={(draft) => auditLocalDraft("updated", draft)}
+  onDraftDeleted={(draft) => auditLocalDraft("deleted", draft)}
+  onDraftsCleared={(drafts) => auditLocalClear(drafts)}
+  onCopied={({ format, text, drafts }) => auditLocalCopy(format, drafts.length)}
+  onSubmitted={(repairs) => auditSubmittedIds(repairs.map((repair) => repair.id))}
+/>
+```
+
+Callback values are structured clones and callback failures are isolated from
+review state. Return values are ignored and never become repair instructions.
+`copyToClipboard` replaces only the browser clipboard write; A3S Test still
+generates the bounded Markdown or JSON payload.
+
 ### Accessibility and audit boundary
 
 The review surface is a named, non-modal dialog inside an open Shadow DOM.
 Every repeated draft and repair action includes the finding instruction in its
-accessible name. Pause, auto-send, and theme controls expose stable state-aware
-names, and keyboard focus returns to a durable control when closing the dialog,
-sending or deleting a draft, or completing a clarification reply. Repair state
-changes and submission results use one visually hidden polite live region so a
-screen reader does not announce the entire finding list again.
+accessible name. Pause, marker visibility, auto-send, and theme controls expose
+stable state-aware names, and keyboard focus returns to a durable control when
+closing the dialog, sending or deleting a draft, or completing a clarification
+reply. Repair state changes and submission results use one visually hidden
+polite live region so a screen reader does not announce the entire finding list
+again.
 
 Automated React tests cover dialog naming, control names, live-region messages,
 and Shadow DOM focus restoration. The ignored real Chromium Test Kit suite also

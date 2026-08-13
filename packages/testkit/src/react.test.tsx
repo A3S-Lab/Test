@@ -255,6 +255,113 @@ describe("React adapter and review overlay", () => {
     });
   });
 
+  it("provides guarded global shortcuts for review controls, copy, and clear", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } });
+    render(<A3STestKit enabled page={{ id: "shortcuts" }} repairStorage="memory"><input aria-label="Application input" /><div contentEditable aria-label="Application editor" /><div role="textbox" tabIndex={0} aria-label="ARIA editor" /><button id="shortcut-target">Shortcut target</button><A3SReviewOverlay enabled /></A3STestKit>);
+    await waitFor(() => expect(shadowQuery(".a3s-launch")).toBeTruthy());
+    const input = document.querySelector<HTMLInputElement>("[aria-label='Application input']")!;
+    const target = document.querySelector<HTMLElement>("#shortcut-target")!;
+    setRect(target, { x: 20, y: 20, width: 120, height: 32 });
+
+    fireEvent.keyDown(input, { key: "F", metaKey: true, shiftKey: true });
+    expect(document.querySelector<HTMLElement>("[data-a3s-testkit-overlay]")!.shadowRoot!.querySelector(".a3s-panel")).toBeNull();
+    fireEvent.keyDown(document, { key: "F", metaKey: true, shiftKey: true });
+    await waitFor(() => expect(shadowQuery(".a3s-panel")).toBeTruthy());
+
+    fireEvent.click(shadowButton("Element"));
+    target.dispatchEvent(pointerEventWithPath(target, 30, 30));
+    fireEvent.change(await waitFor(() => shadowQuery(".a3s-editor textarea")), { target: { value: "Shortcut draft" } });
+    fireEvent.click(shadowButton("Add draft"));
+    await waitFor(() => expect(shadowQuery(".a3s-markers").children).toHaveLength(1));
+
+    const editableTargets = [
+      input,
+      document.querySelector<HTMLElement>("[aria-label='Application editor']")!,
+      document.querySelector<HTMLElement>("[aria-label='ARIA editor']")!,
+    ];
+    for (const editable of editableTargets) {
+      for (const key of ["l", "p", "h", "c", "x"]) fireEvent.keyDown(editable, { key });
+    }
+    expect(shadowButton("Layout").getAttribute("aria-pressed")).toBe("false");
+    expect(getPageContextBridge()?.animationsPaused()).toBe(false);
+    expect(shadowQuery(".a3s-markers").children).toHaveLength(1);
+    expect(writeText).not.toHaveBeenCalled();
+    expect(shadowQuery(".a3s-list").textContent).toContain("Shortcut draft");
+
+    fireEvent.keyDown(document, { key: "l" });
+    expect(shadowButton("Layout").getAttribute("aria-pressed")).toBe("true");
+    fireEvent.keyDown(document, { key: "p" });
+    expect(getPageContextBridge()?.animationsPaused()).toBe(true);
+    fireEvent.keyDown(document, { key: "h" });
+    expect(shadowButton("Show markers").getAttribute("aria-pressed")).toBe("false");
+    expect(shadowQuery(".a3s-markers").children).toHaveLength(0);
+    fireEvent.keyDown(document, { key: "c" });
+    await waitFor(() => expect(writeText).toHaveBeenCalledTimes(1));
+    fireEvent.keyDown(document, { key: "x" });
+    await waitFor(() => expect(shadowQuery(".a3s-list").textContent).not.toContain("Shortcut draft"));
+    expect(window.localStorage.length).toBe(0);
+    fireEvent.keyDown(document, { key: "Escape" });
+    await waitFor(() => expect(document.querySelector<HTMLElement>("[data-a3s-testkit-overlay]")!.shadowRoot!.querySelector(".a3s-panel")).toBeNull());
+  });
+
+  it("exposes spatial draft editing and isolates typed host integration callbacks", async () => {
+    const onDraftAdded = vi.fn(() => { throw new Error("host add failure"); });
+    const onDraftUpdated = vi.fn(() => { throw new Error("host update failure"); });
+    const onDraftDeleted = vi.fn(() => { throw new Error("host delete failure"); });
+    const onDraftsCleared = vi.fn(() => { throw new Error("host clear failure"); });
+    const onCopied = vi.fn(() => { throw new Error("host copy failure"); });
+    const onSubmitted = vi.fn(() => { throw new Error("host submit failure"); });
+    const copyToClipboard = vi.fn().mockResolvedValue(undefined);
+    render(<A3STestKit enabled page={{ id: "host-callbacks" }} repairStorage="memory"><button id="callback-target">Callback target</button><A3SReviewOverlay
+      enabled
+      defaultOpen
+      copyToClipboard={copyToClipboard}
+      onCopied={onCopied}
+      onDraftAdded={onDraftAdded}
+      onDraftUpdated={onDraftUpdated}
+      onDraftDeleted={onDraftDeleted}
+      onDraftsCleared={onDraftsCleared}
+      onSubmitted={onSubmitted}
+    /></A3STestKit>);
+    await waitFor(() => expect(shadowQuery(".a3s-panel")).toBeTruthy());
+    const target = document.querySelector<HTMLElement>("#callback-target")!;
+    setRect(target, { x: 40, y: 60, width: 140, height: 36 });
+
+    await addElementDraft(target, "Callback draft");
+    expect(onDraftAdded).toHaveBeenCalledWith(expect.objectContaining({ instruction: "Callback draft" }));
+    const markerEdit = shadowQuery("[aria-label='Edit draft marker: Callback draft']");
+    fireEvent.click(markerEdit);
+    fireEvent.change(shadowQuery(".a3s-editor textarea"), { target: { value: "Updated callback draft" } });
+    fireEvent.click(shadowButton("Save changes"));
+    expect(onDraftUpdated).toHaveBeenCalledWith(expect.objectContaining({ instruction: "Updated callback draft" }));
+
+    fireEvent.click(shadowQuery("[aria-label='Edit draft marker: Updated callback draft']"));
+    fireEvent.click(shadowButton("Delete draft"));
+    expect(onDraftDeleted).toHaveBeenCalledWith(expect.objectContaining({ instruction: "Updated callback draft" }));
+    expect(shadowQuery(".a3s-list").textContent).not.toContain("Updated callback draft");
+
+    await addElementDraft(target, "Copy callback draft");
+    fireEvent.click(shadowButton("Copy Markdown"));
+    await waitFor(() => expect(copyToClipboard).toHaveBeenCalledTimes(1));
+    expect(onCopied).toHaveBeenCalledWith(expect.objectContaining({
+      format: "markdown",
+      drafts: [expect.objectContaining({ instruction: "Copy callback draft" })],
+      text: expect.stringContaining("Copy callback draft"),
+    }));
+    await addElementDraft(target, "Clear callback draft");
+    fireEvent.click(shadowButton("Clear drafts"));
+    expect(onDraftsCleared).toHaveBeenCalledWith(expect.arrayContaining([
+      expect.objectContaining({ instruction: "Copy callback draft" }),
+      expect.objectContaining({ instruction: "Clear callback draft" }),
+    ]));
+
+    await addElementDraft(target, "Submit callback draft");
+    fireEvent.click(shadowButton("Send and auto-fix"));
+    await waitFor(() => expect(onSubmitted).toHaveBeenCalledTimes(1));
+    expect(shadowQuery(".a3s-list").textContent).toContain("Submit callback draft");
+  });
+
   it("marks a focused application element with Enter and restores focus on Escape", async () => {
     render(<A3STestKit enabled page={{ id: "keyboard" }} repairStorage="memory"><button id="keyboard-target">Keyboard target</button><A3SReviewOverlay enabled defaultOpen /></A3STestKit>);
     await waitFor(() => expect(shadowQuery(".a3s-panel")).toBeTruthy());
@@ -405,4 +512,12 @@ function pointerEvent(type: string, target: Element, clientX: number, clientY: n
   const event = new MouseEvent(type, { bubbles: true, composed: true, button: 0, clientX, clientY });
   Object.defineProperty(event, "composedPath", { value: () => [target, document.body, document.documentElement, document, window] });
   return event;
+}
+
+async function addElementDraft(target: HTMLElement, instruction: string): Promise<void> {
+  fireEvent.click(shadowButton("Element"));
+  target.dispatchEvent(pointerEventWithPath(target, 50, 70));
+  fireEvent.change(await waitFor(() => shadowQuery(".a3s-editor textarea")), { target: { value: instruction } });
+  fireEvent.click(shadowButton("Add draft"));
+  await waitFor(() => expect(shadowQuery(".a3s-list").textContent).toContain(instruction));
 }

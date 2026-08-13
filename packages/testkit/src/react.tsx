@@ -25,6 +25,12 @@ import {
 } from "./review-storage";
 import { FindingEditor, LayoutComposer } from "./review-components";
 import {
+  invokeCallback,
+  isEditableEvent,
+  writeClipboard,
+  type ReviewCallback,
+} from "./review-integration";
+import {
   MODE_HINT,
   MODE_LABEL,
   type LayoutCanvas,
@@ -147,19 +153,46 @@ export function A3STestBoundary({
 
 type DraftItem = ReviewDraftItem;
 
+export type A3SReviewCopyEvent = {
+  format: "markdown" | "json";
+  text: string;
+  drafts: RepairDraft[];
+};
+
 export type A3SReviewOverlayProps = {
   enabled?: boolean;
   defaultOpen?: boolean;
   autoSend?: boolean;
-  onSubmitted?: (repairs: SubmittedRepair[]) => void;
+  copyToClipboard?: (text: string) => void | Promise<void>;
+  onCopied?: ReviewCallback<A3SReviewCopyEvent>;
+  onDraftAdded?: ReviewCallback<RepairDraft>;
+  onDraftUpdated?: ReviewCallback<RepairDraft>;
+  onDraftDeleted?: ReviewCallback<RepairDraft>;
+  onDraftsCleared?: ReviewCallback<RepairDraft[]>;
+  onSubmitted?: ReviewCallback<SubmittedRepair[]>;
 };
 
 export function A3SReviewOverlay({
   enabled = false,
   defaultOpen = false,
   autoSend = false,
+  copyToClipboard,
+  onCopied,
+  onDraftAdded,
+  onDraftUpdated,
+  onDraftDeleted,
+  onDraftsCleared,
   onSubmitted,
 }: A3SReviewOverlayProps) {
+  const callbacks = useLatest({
+    copyToClipboard,
+    onCopied,
+    onDraftAdded,
+    onDraftUpdated,
+    onDraftDeleted,
+    onDraftsCleared,
+    onSubmitted,
+  });
   const context = useContext(TestKitContext);
   const candidateBridge = context.providerConfigured
     ? context.bridge
@@ -170,6 +203,7 @@ export function A3SReviewOverlay({
   const [open, setOpen] = useState(defaultOpen);
   const [marking, setMarking] = useState(false);
   const [paused, setPaused] = useState(false);
+  const [markersVisible, setMarkersVisible] = useState(true);
   const [autoSendEnabled, setAutoSendEnabled] = useState(autoSend);
   const [mode, setMode] = useState<SelectionMode>("element");
   const [theme, setTheme] = useState<OverlayTheme>("system");
@@ -247,6 +281,19 @@ export function A3SReviewOverlay({
     if (!next) setLayoutSource(null);
     setLayoutMode(next);
     announce(next ? "Layout mode enabled" : "Layout mode disabled");
+  }
+
+  function togglePause() {
+    const next = !paused;
+    bridge?.setAnimationsPaused(next);
+    setPaused(next);
+    announce(next ? "Page animations paused" : "Page animations resumed");
+  }
+
+  function toggleMarkers() {
+    const next = !markersVisible;
+    setMarkersVisible(next);
+    announce(next ? "Finding markers shown" : "Finding markers hidden");
   }
 
   function stopMarking(restoreFocus = true) {
@@ -348,6 +395,47 @@ export function A3SReviewOverlay({
     document.addEventListener("focusin", rememberApplicationFocus, true);
     return () => document.removeEventListener("focusin", rememberApplicationFocus, true);
   }, [enabled, host]);
+
+  useEffect(() => {
+    if (!enabled || !bridge) return;
+    const onGlobalKeyDown = (event: KeyboardEvent) => {
+      if (event.defaultPrevented || isEditableEvent(event)) return;
+      const key = event.key.toLowerCase();
+      if ((event.metaKey || event.ctrlKey) && event.shiftKey && key === "f") {
+        event.preventDefault();
+        event.stopPropagation();
+        if (marking) stopMarking(false);
+        if (open) closeOverlay();
+        else openOverlay(true);
+        return;
+      }
+      if (event.metaKey || event.ctrlKey || event.altKey || event.shiftKey) return;
+      if (event.key === "Escape") {
+        if (marking) stopMarking();
+        else if (candidate) {
+          setCandidate(null);
+          setEditingDraftId(null);
+          setConflictingDraftIds([]);
+          focusPanel();
+        } else if (open) closeOverlay();
+        else return;
+        event.preventDefault();
+        event.stopPropagation();
+        return;
+      }
+      if (!open) return;
+      if (key === "l") toggleLayoutMode();
+      else if (key === "p") togglePause();
+      else if (key === "h") toggleMarkers();
+      else if (key === "c" && drafts.length > 0) void copyDraftsMarkdown();
+      else if (key === "x" && drafts.length > 0) clearDrafts();
+      else return;
+      event.preventDefault();
+      event.stopPropagation();
+    };
+    document.addEventListener("keydown", onGlobalKeyDown, true);
+    return () => document.removeEventListener("keydown", onGlobalKeyDown, true);
+  }, [bridge, candidate, drafts, enabled, marking, open, paused, markersVisible, layoutMode]);
 
   useEffect(() => {
     if (!marking || !bridge) return;
@@ -487,10 +575,6 @@ export function A3SReviewOverlay({
       }
     };
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        stopMarking();
-        return;
-      }
       if (!marking || !["element", "multi", "text", "layout_source"].includes(mode) || event.key !== "Enter") return;
       if (mode === "text") {
         const selection = window.getSelection();
@@ -639,9 +723,34 @@ export function A3SReviewOverlay({
       if (index < 0) return [...current, { draft, selected: true, hidden: false }];
       return current.map((item, itemIndex) => itemIndex === index ? { ...item, draft } : item);
       });
+      invokeCallback(wasEditing ? callbacks.current.onDraftUpdated : callbacks.current.onDraftAdded, structuredClone(draft));
       announce(`${wasEditing ? "Draft updated" : "Draft added"}: ${draft.instruction}`);
       focusPanel();
     }
+  }
+
+  function deleteDraft(draft: RepairDraft) {
+    setDrafts((current) => removeDraft(current, draft.id));
+    if (editingDraftId === draft.id) {
+      setCandidate(null);
+      setEditingDraftId(null);
+      setConflictingDraftIds([]);
+    }
+    invokeCallback(callbacks.current.onDraftDeleted, structuredClone(draft));
+    announce(`Draft deleted: ${draft.instruction}`);
+    focusPanel();
+  }
+
+  function clearDrafts() {
+    if (drafts.length === 0) return;
+    const cleared = drafts.map((item) => structuredClone(item.draft));
+    setDrafts([]);
+    setCandidate(null);
+    setEditingDraftId(null);
+    setConflictingDraftIds([]);
+    invokeCallback(callbacks.current.onDraftsCleared, cleared);
+    announce(`${cleared.length} draft${cleared.length === 1 ? "" : "s"} cleared`);
+    focusPanel();
   }
 
   function editDraft(item: DraftItem) {
@@ -689,7 +798,7 @@ export function A3SReviewOverlay({
     const submittedIds = new Set(submitted.map((repair) => repair.id));
     setDrafts((current) => current.filter((item) => !submittedIds.has(item.draft.id)));
     setRepairs(bridge.listRepairs());
-    onSubmitted?.(submitted);
+    invokeCallback(callbacks.current.onSubmitted, structuredClone(submitted));
     if (submitted.length > 0) {
       announce(`${submitted.length} finding${submitted.length === 1 ? "" : "s"} sent for repair`);
       focusPanel();
@@ -719,16 +828,19 @@ export function A3SReviewOverlay({
   async function copyDrafts() {
     if (!bridge || drafts.length === 0) return;
     const selected = drafts.filter((item) => item.selected).map((item) => item.draft);
-    const exported = bridge.exportRepairs(selected.length > 0 ? selected : drafts.map((item) => item.draft));
-    await navigator.clipboard?.writeText(JSON.stringify(exported, null, 2));
+    const copied = selected.length > 0 ? selected : drafts.map((item) => item.draft);
+    const text = JSON.stringify(bridge.exportRepairs(copied), null, 2);
+    if (!await writeClipboard(text, callbacks.current.copyToClipboard)) return;
+    invokeCallback(callbacks.current.onCopied, { format: "json", text, drafts: structuredClone(copied) });
   }
 
   async function copyDraftsMarkdown() {
     if (!bridge || drafts.length === 0) return;
     const selected = drafts.filter((item) => item.selected).map((item) => item.draft);
-    await navigator.clipboard?.writeText(
-      bridge.exportRepairsMarkdown(selected.length > 0 ? selected : drafts.map((item) => item.draft)),
-    );
+    const copied = selected.length > 0 ? selected : drafts.map((item) => item.draft);
+    const text = bridge.exportRepairsMarkdown(copied);
+    if (!await writeClipboard(text, callbacks.current.copyToClipboard)) return;
+    invokeCallback(callbacks.current.onCopied, { format: "markdown", text, drafts: structuredClone(copied) });
   }
 
   const content = (
@@ -737,8 +849,10 @@ export function A3SReviewOverlay({
       {(highlight || areaRect) && <div className="a3s-highlight" style={rectStyle(areaRect ?? highlight!)} aria-hidden="true" />}
       {layoutMode && layoutSource && !candidate && <div className="a3s-layout-target-preview" style={rectStyle(layoutTarget)} aria-hidden="true" />}
       {drawingPath && <svg className="a3s-drawing" aria-hidden="true"><path d={drawingPath} /></svg>}
-      <div className="a3s-markers" aria-hidden="true">{markers.flatMap((marker) => markerRects(marker.target, bridge).map((rect, index) => <span key={`${marker.id}-${index}`} className={`a3s-marker status-${marker.status}`} style={rectStyle(rect)} />))}</div>
-      <button ref={launchRef} className={`a3s-launch ${marking ? "is-active" : ""}`} type="button" onClick={() => open ? closeOverlay() : openOverlay(true)} aria-expanded={open} aria-controls={`${idPrefix}-review-panel`}>
+      <div className="a3s-markers">{markersVisible && markers.flatMap((marker) => markerRects(marker.target, bridge).map((rect, index) => marker.status === "draft"
+        ? <span key={`${marker.id}-${index}`} className="a3s-marker status-draft" style={rectStyle(rect)}><button type="button" className="a3s-marker-action" aria-label={`Edit draft marker: ${drafts.find((item) => item.draft.id === marker.id)?.draft.instruction ?? marker.id}`} onClick={() => { const item = drafts.find((candidate) => candidate.draft.id === marker.id); if (item) editDraft(item); }}><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 11.8 3.5 9l6.7-6.7a1.4 1.4 0 0 1 2 0l1.5 1.5a1.4 1.4 0 0 1 0 2L7 12.5l-2.8.5Z" /><path d="m9.3 3.2 3.5 3.5" /></svg></button></span>
+        : <span key={`${marker.id}-${index}`} className={`a3s-marker status-${marker.status}`} style={rectStyle(rect)} aria-hidden="true" />))}</div>
+      <button ref={launchRef} className={`a3s-launch ${marking ? "is-active" : ""}`} type="button" title="Toggle review overlay (Ctrl/Command+Shift+F)" onClick={() => open ? closeOverlay() : openOverlay(true)} aria-expanded={open} aria-controls={`${idPrefix}-review-panel`}>
         A3S Review{drafts.length + repairs.length > 0 ? ` · ${drafts.length + repairs.length}` : ""}
       </button>
       <div className="a3s-announcer" role="status" aria-live="polite" aria-atomic="true">{announcement}</div>
@@ -746,8 +860,9 @@ export function A3SReviewOverlay({
         <header><div><strong id={`${idPrefix}-review-title`} className="a3s-panel-title">Review & repair</strong><small id={`${idPrefix}-review-description`} className="a3s-panel-description">Send bounded findings to the active A3S Test agent</small></div><button type="button" onClick={closeOverlay} aria-label="Close review overlay">×</button></header>
         <section className="a3s-tools" aria-label="Mark page">
           {(["element", "text", "multi", "area", "draw"] as SelectionMode[]).map((value) => <button key={value} type="button" aria-label={`Mark ${MODE_LABEL[value].toLowerCase()}`} aria-pressed={marking && mode === value} className={marking && mode === value ? "selected" : ""} onClick={() => startMarking(value)}>{MODE_LABEL[value]}</button>)}
-          <button type="button" aria-pressed={layoutMode} className={layoutMode ? "selected" : ""} onClick={toggleLayoutMode}>Layout</button>
-          <button type="button" aria-label={paused ? "Resume page animations" : "Pause page animations"} aria-pressed={paused} className={paused ? "selected" : ""} onClick={() => { const next = !paused; bridge?.setAnimationsPaused(next); setPaused(next); announce(next ? "Page animations paused" : "Page animations resumed"); }}>{paused ? "Resume" : "Pause"}</button>
+          <button type="button" title="Toggle Layout Mode (L)" aria-pressed={layoutMode} className={layoutMode ? "selected" : ""} onClick={toggleLayoutMode}>Layout</button>
+          <button type="button" title="Pause or resume page motion (P)" aria-label={paused ? "Resume page animations" : "Pause page animations"} aria-pressed={paused} className={paused ? "selected" : ""} onClick={togglePause}>{paused ? "Resume" : "Pause"}</button>
+          <button type="button" title="Show or hide finding markers (H)" aria-label={markersVisible ? "Hide markers" : "Show markers"} aria-pressed={markersVisible} className={markersVisible ? "selected" : ""} onClick={toggleMarkers}>{markersVisible ? "Hide markers" : "Show markers"}</button>
           <button type="button" aria-label={`Turn auto-send ${autoSendEnabled ? "off" : "on"}`} aria-pressed={autoSendEnabled} className={autoSendEnabled ? "selected" : ""} onClick={() => setAutoSendEnabled((current) => !current)}>Auto-send · {autoSendEnabled ? "on" : "off"}</button>
           <button type="button" aria-label={`Change overlay theme; current theme is ${theme}`} onClick={() => setTheme((current) => current === "system" ? "light" : current === "light" ? "dark" : "system")}>Theme · {theme}</button>
           {marking && <button type="button" className="danger" onClick={() => stopMarking()}>Cancel</button>}
@@ -792,13 +907,14 @@ export function A3SReviewOverlay({
             : current.filter((candidate) => candidate !== findingId))}
           editing={Boolean(editingDraftId)}
           onCancel={() => { setCandidate(null); setEditingDraftId(null); setConflictingDraftIds([]); }}
+          {...(editingDraftId ? { onDelete: () => { const item = drafts.find((candidate) => candidate.draft.id === editingDraftId); if (item) deleteDraft(item.draft); } } : {})}
           onSave={() => saveDraft(false)}
           onSend={() => saveDraft(true)}
         />}
         <section className="a3s-list" aria-label="Draft and submitted findings">
           {drafts.map((item) => <article key={item.draft.id} className={`a3s-item${item.hidden ? " is-hidden" : ""}`}>
             <label><input type="checkbox" aria-label={`Select draft: ${item.draft.instruction}`} checked={item.selected} onChange={(event) => setDrafts((current) => current.map((candidate) => candidate.draft.id === item.draft.id ? { ...candidate, selected: event.target.checked } : candidate))} /><span><strong>{item.draft.instruction}</strong><small>{targetSummary(item.draft.target)} · draft</small></span></label>
-            <div><button type="button" aria-label={`Send draft for auto-fix: ${item.draft.instruction}`} onClick={() => submit([item.draft])}>Send and auto-fix</button><button type="button" className="quiet" aria-label={`Edit draft: ${item.draft.instruction}`} onClick={() => editDraft(item)}>Edit</button><button type="button" className="quiet" aria-label={`${item.hidden ? "Reopen" : "Hide"} marker for draft: ${item.draft.instruction}`} onClick={() => setDrafts((current) => current.map((candidate) => candidate.draft.id === item.draft.id ? { ...candidate, hidden: !candidate.hidden } : candidate))}>{item.hidden ? "Reopen marker" : "Hide marker"}</button><button type="button" className="quiet" aria-label={`Delete draft: ${item.draft.instruction}`} onClick={() => { setDrafts((current) => removeDraft(current, item.draft.id)); announce(`Draft deleted: ${item.draft.instruction}`); focusPanel(); }}>Delete</button></div>
+            <div><button type="button" aria-label={`Send draft for auto-fix: ${item.draft.instruction}`} onClick={() => submit([item.draft])}>Send and auto-fix</button><button type="button" className="quiet" aria-label={`Edit draft: ${item.draft.instruction}`} onClick={() => editDraft(item)}>Edit</button><button type="button" className="quiet" aria-label={`${item.hidden ? "Reopen" : "Hide"} marker for draft: ${item.draft.instruction}`} onClick={() => setDrafts((current) => current.map((candidate) => candidate.draft.id === item.draft.id ? { ...candidate, hidden: !candidate.hidden } : candidate))}>{item.hidden ? "Reopen marker" : "Hide marker"}</button><button type="button" className="quiet" aria-label={`Delete draft: ${item.draft.instruction}`} onClick={() => deleteDraft(item.draft)}>Delete</button></div>
           </article>)}
           {repairs.map((repair) => {
             const replies = bridge.listRepairReplies(repair.id);
@@ -806,7 +922,7 @@ export function A3SReviewOverlay({
           })}
           {drafts.length === 0 && repairs.length === 0 && !candidate && <p className="a3s-empty">Choose a marking mode, select the page context, then describe the desired fix.</p>}
         </section>
-        {drafts.length > 0 && <footer><button type="button" className="quiet" onClick={() => void copyDraftsMarkdown()}>Copy Markdown</button><button type="button" className="quiet" onClick={() => void copyDrafts()}>Copy JSON</button><button type="button" disabled={selectedCount === 0} onClick={() => submit(drafts.filter((item) => item.selected).map((item) => item.draft))}>Send selected ({selectedCount})</button><button type="button" onClick={() => submit(drafts.map((item) => item.draft))}>Send all</button></footer>}
+        {drafts.length > 0 && <footer><button type="button" className="quiet" title="Clear all local drafts (X)" onClick={clearDrafts}>Clear drafts</button><button type="button" className="quiet" title="Copy selected drafts as Markdown (C)" onClick={() => void copyDraftsMarkdown()}>Copy Markdown</button><button type="button" className="quiet" onClick={() => void copyDrafts()}>Copy JSON</button><button type="button" disabled={selectedCount === 0} onClick={() => submit(drafts.filter((item) => item.selected).map((item) => item.draft))}>Send selected ({selectedCount})</button><button type="button" onClick={() => submit(drafts.map((item) => item.draft))}>Send all</button></footer>}
       </aside>}
     </div>
   );

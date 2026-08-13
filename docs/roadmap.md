@@ -305,11 +305,11 @@ The completion work intentionally preserves these product boundaries:
 - [x] Persist validated drafts per page and route with bounded retention,
       semantic locator anchors, reload/SPA-route restoration, and fail-closed
       handling for targets that cannot be resolved uniquely
-- [ ] Add one global keyboard command layer for overlay toggle, Escape,
+- [x] Add one global keyboard command layer for overlay toggle, Escape,
       Layout Mode, pause, marker visibility, copy, and clear, and ignore
       commands originating in inputs, textareas, selects, contenteditable
       regions, or ARIA text-entry controls
-- [ ] Add global marker visibility, clear-all, direct marker-to-editor access,
+- [x] Add global marker visibility, clear-all, direct marker-to-editor access,
       and deletion from the active editor without making the full marker
       rectangle intercept normal page input
 - [ ] Persist bounded presentation preferences for theme, marker color,
@@ -318,7 +318,7 @@ The completion work intentionally preserves these product boundaries:
 - [ ] Add an independently defined, categorized, searchable catalog of at
       least 65 common Web component types while retaining an explicit
       free-form component field
-- [ ] Expose typed draft lifecycle and copy callbacks plus a host clipboard
+- [x] Expose typed draft lifecycle and copy callbacks plus a host clipboard
       adapter; isolate callback failures from the overlay and never treat
       callback return values as repair instructions
 - [x] Split the review overlay by concern before it exceeds the repository
