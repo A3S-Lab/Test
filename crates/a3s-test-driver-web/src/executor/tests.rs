@@ -24,10 +24,6 @@ const DESCENDANT_LEAF_ENV: &str = "A3S_TEST_BROWSER_LEAF_FILE";
 const DESCENDANT_ATTACHED_ENV: &str = "A3S_TEST_BROWSER_ATTACHED_FILE";
 const DESCENDANT_OUTPUT_PID_ENV: &str = "A3S_TEST_BROWSER_OUTPUT_PID_FILE";
 #[cfg(windows)]
-const DESCENDANT_EXE_ENV: &str = "A3S_TEST_BROWSER_DESCENDANT_EXE";
-#[cfg(windows)]
-const DESCENDANT_TEST_ENV: &str = "A3S_TEST_BROWSER_DESCENDANT_TEST";
-#[cfg(windows)]
 const CONSOLE_PROBE_TEST: &str = "executor::tests::windows_browser_command_console_probe_fixture";
 #[cfg(windows)]
 const CONSOLE_PROBE_ENV: &str = "A3S_TEST_BROWSER_CONSOLE_PROBE";
@@ -834,26 +830,15 @@ fn spawn_descendant_fixture() {
     use std::os::windows::process::CommandExt as _;
 
     const CREATE_NO_WINDOW: u32 = 0x0800_0000;
-    let powershell = PathBuf::from(std::env::var_os("SystemRoot").expect("SystemRoot"))
-        .join(r"System32\WindowsPowerShell\v1.0\powershell.exe");
-    let script = format!(
-        "Start-Process -FilePath $env:{DESCENDANT_EXE_ENV} -ArgumentList \
-         @($env:{DESCENDANT_TEST_ENV}, '--ignored', '--exact') -WindowStyle Hidden"
-    );
-    let status = std::process::Command::new(powershell)
-        .args(["-NoLogo", "-NoProfile", "-NonInteractive", "-Command"])
-        .arg(script)
-        .env(DESCENDANT_MODE_ENV, "leaf")
-        .env(
-            DESCENDANT_EXE_ENV,
-            std::env::current_exe().expect("current descendant fixture executable"),
-        )
-        .env(DESCENDANT_TEST_ENV, DESCENDANT_FIXTURE_TEST)
-        .stdin(Stdio::null())
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .creation_flags(CREATE_NO_WINDOW)
-        .status()
-        .expect("run descendant fixture launcher");
-    assert!(status.success(), "descendant fixture launcher failed");
+    std::process::Command::new(
+        std::env::current_exe().expect("current descendant fixture executable"),
+    )
+    .args([DESCENDANT_FIXTURE_TEST, "--ignored", "--exact"])
+    .env(DESCENDANT_MODE_ENV, "leaf")
+    .stdin(Stdio::null())
+    .stdout(Stdio::null())
+    .stderr(Stdio::null())
+    .creation_flags(CREATE_NO_WINDOW)
+    .spawn()
+    .expect("spawn descendant fixture");
 }
