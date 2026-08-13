@@ -63,6 +63,32 @@ fn contract_generation_schema_exposes_bounded_wire_fields_and_design_geometry() 
     assert!(contains_string(&bundle, "normalized"));
     assert!(contains_string(&bundle, "parent_candidate_id"));
     assert!(!contains_string(&bundle["response_schema"], "citations"));
+    assert_eq!(bundle["http"]["method"], "POST");
+    assert_eq!(bundle["http"]["content_type"], "application/json");
+    assert_eq!(bundle["http"]["redirects_allowed"], false);
+    assert_eq!(bundle["http"]["endpoint_policy"], "https_or_loopback_http");
+    assert!(contains_string(
+        &bundle["http"]["request_envelope_schema"],
+        "protocol"
+    ));
+    assert!(contains_string(
+        &bundle["http"]["request_envelope_schema"],
+        CONTRACT_GENERATION_PROVIDER_PROTOCOL
+    ));
+    assert_eq!(
+        bundle["http"]["request_envelope_schema"]["properties"]["protocol"]["const"],
+        CONTRACT_GENERATION_PROVIDER_PROTOCOL
+    );
+    assert!(contains_string(
+        &bundle["http"]["response_envelope_schema"],
+        "error"
+    ));
+    for value in ["status", "success", "failure", "response"] {
+        assert!(
+            contains_string(&bundle["http"]["response_envelope_schema"], value),
+            "HTTP response schema is missing {value}"
+        );
+    }
 }
 
 #[test]
@@ -93,6 +119,26 @@ fn visual_grounding_schema_exposes_binding_fields_and_geometry_variants() {
     assert!(contains_string(&bundle, "box"));
     assert!(contains_string(&bundle, "screenshot_pixels"));
     assert!(contains_string(&bundle, "normalized"));
+    assert_eq!(bundle["http"]["method"], "POST");
+    assert_eq!(bundle["http"]["redirects_allowed"], false);
+    assert!(contains_string(
+        &bundle["http"]["request_envelope_schema"],
+        "observation_id"
+    ));
+    assert!(contains_string(
+        &bundle["http"]["request_envelope_schema"],
+        VISUAL_GROUNDING_PROVIDER_PROTOCOL
+    ));
+    assert_eq!(
+        bundle["http"]["request_envelope_schema"]["properties"]["protocol"]["const"],
+        VISUAL_GROUNDING_PROVIDER_PROTOCOL
+    );
+    for value in ["status", "success", "failure", "response", "error"] {
+        assert!(
+            contains_string(&bundle["http"]["response_envelope_schema"], value),
+            "HTTP response schema is missing {value}"
+        );
+    }
 }
 
 #[test]

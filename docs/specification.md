@@ -486,6 +486,39 @@ claim an Observed Surface, decide a test verdict, or authorize repair. Unknown
 wire fields are rejected. An incompatible field or semantic change requires a
 new protocol identifier.
 
+The discovered bundle also contains the standard HTTP projection. A request is
+one `POST application/json` document:
+
+```json
+{
+  "protocol": "a3s.test.contract-generation-provider/1",
+  "request": {}
+}
+```
+
+A response repeats `protocol` and sets `status` to `success` with one
+`response`, or to `failure` with one `error`:
+
+```json
+{
+  "status": "failure",
+  "protocol": "a3s.test.contract-generation-provider/1",
+  "error": {
+    "code": "capacity_exhausted",
+    "message": "queue is full",
+    "retryable": true
+  }
+}
+```
+
+An error has bounded `code`, `message`, and `retryable` fields. Unknown fields,
+missing or unknown statuses, and envelopes containing both result forms are
+rejected. The client requires HTTP 200 and JSON media type, does not follow
+redirects or use environment proxies, accepts plaintext only on explicit
+loopback addresses, bounds both bodies, and applies the earlier of the
+configured timeout and the wire deadline. The typed response is still subject
+to local contract generation admission.
+
 Generation merges candidate evidence without choosing a winner. Differing
 fields become stable explicit conflicts. A human review must approve or reject
 candidates and resolve every applicable conflict with a rationale. The result
@@ -674,3 +707,10 @@ The stable version 1 wire identifier is
 2020-12 request/response documents and explicit advisory safety invariants.
 Unknown wire fields are rejected, and an incompatible change requires a new
 protocol identifier.
+
+Visual grounding uses the same HTTP projection with protocol
+`a3s.test.visual-grounding-provider/1`. The request envelope preserves the
+screenshot digest, observation, dimensions, trigger, deadline, and cost
+ceiling. The HTTP adapter checks the configured response identity before
+returning; `VisualGroundingService` then independently verifies the full image,
+observation, geometry, usage, and authority binding.

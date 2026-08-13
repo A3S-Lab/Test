@@ -143,6 +143,14 @@ contract-generation`. The bundle declares candidate-only authority and the
 review, digest, deadline, cost, identity, and non-mutation invariants. It does
 not prescribe stdio, HTTP, RPC, or an in-process transport.
 
+The standard HTTP projection lives in `a3s-test-agent`, not Core. It adds only
+deployment plumbing: a fixed typed endpoint, optional secret-safe authorization,
+version envelope, bounded bodies, deadline, status/media-type admission, and
+typed remote errors. Redirects and environment proxies are disabled. HTTPS is
+required except for explicit loopback HTTP used by a local inference service.
+The adapter cannot choose a model, read source evidence, approve candidates, or
+replace `ContractGenerationService` validation.
+
 ### Understanding during rendering
 
 The browser already computes DOM structure, accessibility semantics, CSS
@@ -207,6 +215,14 @@ binding, deadlines, costs, point/box geometry, coordinate spaces, identity,
 and usage. The bundle states advisory authority and non-verdict/non-repair
 invariants so a deployment adapter cannot mistake schema conformance for
 execution authority.
+
+The same transport supports a persistent local visual model server without
+starting or downloading that runtime. Keeping model lifecycle deployment-owned
+avoids per-request weight loading and keeps license, GPU capacity, credentials,
+and health policy outside A3S Test. The adapter only exchanges a versioned
+request and response; `VisualGroundingService` remains the authority boundary
+for screenshot rehashing, current-observation binding, semantic hit-testing,
+cost, and advisory provenance.
 
 ```text
 DOM / AX / Test Kit semantic target ──success──> current semantic action

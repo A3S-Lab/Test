@@ -404,3 +404,21 @@ The completion work intentionally preserves these product boundaries:
 - [x] Keep contract candidates review-gated and grounding advisory; neither
       provider may determine verdicts, claim browser observation, or authorize
       repair
+
+## M16: Deployment-owned provider transport
+
+- [x] Add typed HTTP adapters for contract generation and visual grounding
+      without selecting or bundling a model runtime
+- [x] Publish the HTTP request/response envelope schemas through existing
+      provider discovery
+- [x] Require HTTPS except for explicit loopback HTTP, disable redirects and
+      environment proxies, and keep one fixed endpoint per typed provider
+- [x] Bound serialized requests and streamed responses and enforce both the
+      transport timeout and request wire deadline
+- [x] Preserve provider/model identity, digest, observation, cost, and usage
+      bindings through the transport while leaving final admission local
+- [x] Map HTTP status and typed remote errors with retryability and redact
+      configured authorization values from error output and Debug
+- [x] Add real TCP conformance fixtures for both provider capabilities,
+      endpoint policy, tagged envelopes, request/streamed-response limits,
+      protocol mismatch, timeout, and error handling

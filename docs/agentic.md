@@ -290,6 +290,13 @@ generated JSON Schema 2020-12 documents for `GroundingProviderRequest` and
 `GroundingProviderResponse`. Unknown fields are rejected by the wire types. A
 breaking field or semantic change requires a new protocol identifier.
 
+`HttpVisualGroundingProvider` is the standard execution adapter for a
+deployment-owned inference service. Its typed `HttpProviderConfig` fixes one
+endpoint and optional authorization value; public SDK options do not select a
+backend with a model-name string. The adapter posts the version envelope shown
+in the discovered `http.request_envelope_schema` and admits the corresponding
+response envelope before `VisualGroundingService` performs semantic admission.
+
 ## Contract-generation provider
 
 Expected-interface generation is separate from both `LlmProvider` planning and
@@ -339,6 +346,15 @@ and generated request/response schemas. The schema is a discoverable wire
 contract, not an execution transport. An adapter may use stdio, HTTP, RPC, or
 an in-process call as long as the host independently enforces A3S Test
 admission and lifecycle policy.
+
+`HttpContractGenerationProvider` implements the same HTTP envelope and
+endpoint policy for source-to-contract generation. Both adapters disable
+redirects and environment proxies, accept HTTPS or explicit loopback HTTP,
+bound serialized requests and streamed responses, honor the earlier of the
+configured transport timeout and wire deadline, require JSON media type and
+HTTP 200, and map bounded typed remote errors without exposing configured
+authorization values. HTTP conformance never bypasses the service-level
+source, identity, cost, evidence, review, or authority checks.
 
 ## Decisions
 

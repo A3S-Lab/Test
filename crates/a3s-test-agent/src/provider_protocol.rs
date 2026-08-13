@@ -3,7 +3,8 @@ use serde::Serialize;
 
 use crate::{
     ContractGenerationProviderRequest, ContractGenerationProviderResponse,
-    GroundingProviderRequest, GroundingProviderResponse,
+    GroundingProviderRequest, GroundingProviderResponse, HttpContractGenerationRequest,
+    HttpContractGenerationResponse, HttpVisualGroundingRequest, HttpVisualGroundingResponse,
 };
 
 pub const CONTRACT_GENERATION_PROVIDER_PROTOCOL: &str = "a3s.test.contract-generation-provider/1";
@@ -38,6 +39,17 @@ pub struct ProviderProtocolSchema {
     pub invariants: ProviderSafetyInvariants,
     pub request_schema: Schema,
     pub response_schema: Schema,
+    pub http: HttpProviderProtocolSchema,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize)]
+pub struct HttpProviderProtocolSchema {
+    pub method: &'static str,
+    pub content_type: &'static str,
+    pub redirects_allowed: bool,
+    pub endpoint_policy: &'static str,
+    pub request_envelope_schema: Schema,
+    pub response_envelope_schema: Schema,
 }
 
 #[must_use]
@@ -60,6 +72,14 @@ pub fn contract_generation_provider_schema() -> ProviderProtocolSchema {
         },
         request_schema: schemars::schema_for!(ContractGenerationProviderRequest),
         response_schema: schemars::schema_for!(ContractGenerationProviderResponse),
+        http: HttpProviderProtocolSchema {
+            method: "POST",
+            content_type: "application/json",
+            redirects_allowed: false,
+            endpoint_policy: "https_or_loopback_http",
+            request_envelope_schema: schemars::schema_for!(HttpContractGenerationRequest),
+            response_envelope_schema: schemars::schema_for!(HttpContractGenerationResponse),
+        },
     }
 }
 
@@ -83,5 +103,13 @@ pub fn visual_grounding_provider_schema() -> ProviderProtocolSchema {
         },
         request_schema: schemars::schema_for!(GroundingProviderRequest),
         response_schema: schemars::schema_for!(GroundingProviderResponse),
+        http: HttpProviderProtocolSchema {
+            method: "POST",
+            content_type: "application/json",
+            redirects_allowed: false,
+            endpoint_policy: "https_or_loopback_http",
+            request_envelope_schema: schemars::schema_for!(HttpVisualGroundingRequest),
+            response_envelope_schema: schemars::schema_for!(HttpVisualGroundingResponse),
+        },
     }
 }

@@ -10,12 +10,20 @@
 - Added `a3s-test provider schema contract-generation` and `a3s-test provider
   schema visual-grounding` for transport-neutral adapter discovery, including
   explicit authority and safety invariants.
+- Added typed HTTP adapters for deployment-owned contract-generation and
+  visual-grounding services. Provider discovery now includes their versioned
+  request and response envelope schemas.
 
 ### Safety
 
 - Provider wire fixtures reject unknown fields and retain digest, deadline,
   cost, identity, hierarchy, coordinate-space, and geometry bindings. Schema
   conformance does not grant verdict, browser-observation, or repair authority.
+- HTTP providers use a fixed typed endpoint, disable redirects and environment
+  proxies, require HTTPS except for explicit loopback HTTP, bound bodies,
+  enforce wire and transport deadlines, and redact configured authorization
+  values from diagnostics. Service-level evidence and authority admission
+  remains mandatory.
 
 ## 0.8.0 - 2026-08-13
 

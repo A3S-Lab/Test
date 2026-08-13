@@ -477,6 +477,10 @@ fn provider_schema_exposes_versioned_wire_contracts() {
         assert_eq!(value["authority"], authority);
         assert_eq!(value["invariants"]["may_determine_test_verdict"], false);
         assert_eq!(value["invariants"]["may_authorize_repair"], false);
+        assert_eq!(value["http"]["method"], "POST");
+        assert_eq!(value["http"]["content_type"], "application/json");
+        assert_eq!(value["http"]["redirects_allowed"], false);
+        assert_eq!(value["http"]["endpoint_policy"], "https_or_loopback_http");
         assert_eq!(
             value["request_schema"]["additionalProperties"], false,
             "request schema should reject unknown fields"

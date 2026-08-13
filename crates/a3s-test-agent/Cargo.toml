@@ -10,6 +10,7 @@ description = "Schema-constrained model execution, contract generation, and visu
 [dependencies]
 a3s-test-core = { path = "../a3s-test-core" }
 async-trait.workspace = true
+reqwest.workspace = true
 schemars.workspace = true
 serde.workspace = true
 serde_json.workspace = true

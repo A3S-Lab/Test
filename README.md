@@ -145,6 +145,37 @@ a3s-test provider schema visual-grounding
 The protocols describe data exchange only. They do not select a backend,
 bundle model weights, grant verdict authority, or authorize workspace repair.
 
+For deployment-owned inference services, `a3s-test-agent` also provides
+`HttpContractGenerationProvider` and `HttpVisualGroundingProvider`. Configure
+them with a typed `HttpProviderConfig` and an explicit provider/model identity:
+
+```rust
+use std::sync::Arc;
+use a3s_test_agent::{
+    GroundingProviderIdentity, HttpProviderConfig, HttpProviderEndpoint,
+    HttpVisualGroundingProvider, VisualGroundingService,
+};
+
+let endpoint: HttpProviderEndpoint =
+    "http://127.0.0.1:8080/v1/ground".parse()?;
+let transport = HttpProviderConfig::new(endpoint);
+let provider = Arc::new(HttpVisualGroundingProvider::new(
+    GroundingProviderIdentity {
+        provider: "deployment-gateway".into(),
+        model: "ui-grounding-model".into(),
+    },
+    transport,
+)?);
+let service = VisualGroundingService::new(provider, Default::default())?;
+```
+
+The adapter uses one `POST application/json` version envelope, disables
+redirects and environment proxies, requires HTTPS except for explicit
+loopback HTTP, bounds request/response bodies, enforces both transport and
+wire deadlines, and redacts configured authorization values from remote error
+messages. The surrounding service still rehashes evidence and independently
+admits identity, provenance, geometry, usage, and authority.
+
 Install the package tarball published with every GitHub Release:
 
 ```bash
