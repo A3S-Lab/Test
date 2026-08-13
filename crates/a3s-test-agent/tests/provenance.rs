@@ -8,8 +8,9 @@ use a3s_test_agent::{
     StructuredLlmRequest, StructuredLlmResponse, REDACTED_VALUE,
 };
 use a3s_test_core::{
-    Action, DriverError, DriverSession, Evidence, StepOutput, Surface, SurfaceObservation, Target,
-    TestStep,
+    Action, DriverError, DriverSession, Evidence, PageContextComponent, PageContextLocator,
+    PageContextNode, PageContextNodeState, PageContextObservation, PageContextSnapshot,
+    PageContextSource, StepOutput, Surface, SurfaceObservation, Target, TestStep,
 };
 use async_trait::async_trait;
 use serde_json::json;
@@ -146,6 +147,8 @@ async fn redacts_the_complete_result_without_changing_execution_inputs() {
     assert!(!encoded.contains(INPUT_SECRET));
     assert!(!encoded.contains("implicit-observation-secret"));
     assert!(!encoded.contains("implicit-output-secret"));
+    assert!(!encoded.contains("implicit-context-secret"));
+    assert!(!encoded.contains("implicit-node-secret"));
     assert!(encoded.contains(REDACTED_VALUE));
     assert!(encoded.contains("safe observation"));
     assert!(encoded.contains("safe output"));
@@ -224,6 +227,69 @@ fn observation(label: &str) -> SurfaceObservation {
             path: format!("artifacts/{EXACT_SECRET}.png"),
             media_type: "image/png".to_string(),
         })
+        .with_page_context(secret_page_context())
+}
+
+fn secret_page_context() -> PageContextObservation {
+    PageContextObservation::from_snapshot(PageContextSnapshot {
+        protocol: Some("a3s.test.page-context/1".to_string()),
+        sdk_version: Some("0.2.0".to_string()),
+        revision: Some(3),
+        page: None,
+        components: vec![PageContextComponent {
+            id: "checkout".to_string(),
+            name: format!("Checkout {EXACT_SECRET}"),
+            parent_id: None,
+            source: Some(PageContextSource {
+                file: format!("src/{EXACT_SECRET}/Checkout.tsx"),
+                line: Some(1),
+                column: Some(1),
+            }),
+            ready: true,
+            facts: serde_json::Map::from_iter([(
+                "authorization".to_string(),
+                json!("Bearer implicit-context-secret"),
+            )]),
+            boxes: Vec::new(),
+        }],
+        nodes: vec![PageContextNode {
+            id: "submit".to_string(),
+            r#ref: Some("@c1".to_string()),
+            parent_id: None,
+            component_id: Some("checkout".to_string()),
+            tag: "button".to_string(),
+            role: Some("button".to_string()),
+            name: Some(format!("Submit {EXACT_SECRET}")),
+            text: Some("Submit".to_string()),
+            description: None,
+            test_id: Some("submit".to_string()),
+            geometry: None,
+            state: PageContextNodeState {
+                visible: true,
+                disabled: Some(false),
+                checked: None,
+                selected: None,
+                expanded: None,
+                focused: None,
+                readonly: None,
+                required: None,
+                invalid: None,
+            },
+            locators: vec![PageContextLocator::Label {
+                value: format!("Submit {EXACT_SECRET}"),
+            }],
+            classes: None,
+            attributes: Some(serde_json::Map::from_iter([(
+                "password".to_string(),
+                json!("implicit-node-secret"),
+            )])),
+            computed_styles: None,
+        }],
+        facts: serde_json::Map::new(),
+        removed_node_ids: Vec::new(),
+        truncated: false,
+        next_cursor: None,
+    })
 }
 
 fn response(decision: AgentDecision, request_id: String) -> StructuredLlmResponse {

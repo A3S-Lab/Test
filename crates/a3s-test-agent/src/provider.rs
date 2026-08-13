@@ -1,27 +1,30 @@
 use async_trait::async_trait;
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use crate::{LlmError, LlmIdentity, LlmUsage, PlannerContext};
 
-#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, JsonSchema, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct StructuredLlmRequest {
     pub prompt_version: String,
     pub system_instruction: String,
     pub context: PlannerContext,
-    #[serde(default)]
     pub image_attachments: Vec<LlmImageAttachment>,
     pub response_schema: Value,
 }
 
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct LlmImageAttachment {
     pub name: String,
     pub path: String,
     pub media_type: String,
 }
 
-#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, JsonSchema, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct StructuredLlmResponse {
     pub decision: Value,
     pub usage: LlmUsage,

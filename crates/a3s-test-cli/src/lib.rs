@@ -23,6 +23,7 @@ use sha2::{Digest, Sha256};
 use tokio_util::sync::CancellationToken;
 
 mod action_schema;
+mod agent_host;
 mod agent_session;
 mod contract_workflow;
 mod gui_certification;

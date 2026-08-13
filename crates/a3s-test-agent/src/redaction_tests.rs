@@ -78,3 +78,22 @@ fn strips_url_credentials_query_and_fragment() {
         }
     );
 }
+
+#[test]
+fn strips_sensitive_components_from_nested_url_fields() {
+    let redactor = ProvenanceRedactor::default();
+    let mut value = json!({
+        "initial_url": "https://user:password@example.test/start?token=value#fragment",
+        "nested": { "url": "https://example.test/page?session=secret" },
+        "visible": "https://example.test/page?not-a-typed-url-field=true"
+    });
+
+    redactor.redact_json(&mut value);
+
+    assert_eq!(value["initial_url"], "https://example.test/start");
+    assert_eq!(value["nested"]["url"], "https://example.test/page");
+    assert_eq!(
+        value["visible"],
+        "https://example.test/page?not-a-typed-url-field=true"
+    );
+}

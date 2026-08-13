@@ -1,8 +1,9 @@
 use a3s_test_agent::{
-    contract_generation_provider_schema, visual_grounding_provider_schema,
+    contract_generation_provider_schema, llm_provider_schema, visual_grounding_provider_schema,
     ContractGenerationProviderRequest, ContractGenerationProviderResponse,
     GroundingProviderRequest, GroundingProviderResponse, ProviderOutputAuthority,
-    CONTRACT_GENERATION_PROVIDER_PROTOCOL, VISUAL_GROUNDING_PROVIDER_PROTOCOL,
+    StructuredLlmRequest, StructuredLlmResponse, CONTRACT_GENERATION_PROVIDER_PROTOCOL,
+    LLM_PROVIDER_PROTOCOL, VISUAL_GROUNDING_PROVIDER_PROTOCOL,
 };
 use serde::de::DeserializeOwned;
 use serde::Serialize;
@@ -18,6 +19,7 @@ fn provider_protocol_identifiers_and_authority_are_stable() {
         VISUAL_GROUNDING_PROVIDER_PROTOCOL,
         "a3s.test.visual-grounding-provider/1"
     );
+    assert_eq!(LLM_PROVIDER_PROTOCOL, "a3s.test.llm-provider/1");
 
     let contract = contract_generation_provider_schema();
     assert_eq!(contract.protocol, CONTRACT_GENERATION_PROVIDER_PROTOCOL);
@@ -31,6 +33,7 @@ fn provider_protocol_identifiers_and_authority_are_stable() {
     assert!(!contract.invariants.may_determine_test_verdict);
     assert!(!contract.invariants.may_authorize_repair);
     assert!(!contract.invariants.may_claim_browser_observation);
+    assert!(!contract.invariants.may_propose_surface_actions);
 
     let grounding = visual_grounding_provider_schema();
     assert_eq!(grounding.protocol, VISUAL_GROUNDING_PROVIDER_PROTOCOL);
@@ -40,6 +43,92 @@ fn provider_protocol_identifiers_and_authority_are_stable() {
     assert!(!grounding.invariants.may_determine_test_verdict);
     assert!(!grounding.invariants.may_authorize_repair);
     assert!(!grounding.invariants.may_claim_browser_observation);
+    assert!(!grounding.invariants.may_propose_surface_actions);
+
+    let llm = llm_provider_schema();
+    assert_eq!(llm.protocol, LLM_PROVIDER_PROTOCOL);
+    assert_eq!(llm.authority, ProviderOutputAuthority::ProposalOnly);
+    assert!(llm.invariants.request_deadline_required);
+    assert!(llm.invariants.request_cost_ceiling_required);
+    assert!(llm.invariants.response_identity_bound);
+    assert!(llm.invariants.observation_scoped_output);
+    assert!(llm.invariants.local_admission_required);
+    assert!(!llm.invariants.may_determine_test_verdict);
+    assert!(!llm.invariants.may_authorize_repair);
+    assert!(!llm.invariants.may_claim_browser_observation);
+    assert!(llm.invariants.may_propose_surface_actions);
+}
+
+#[test]
+fn llm_schema_exposes_typed_context_decisions_and_http_envelopes() {
+    let bundle = serde_json::to_value(llm_provider_schema()).expect("schema JSON");
+    assert_required_properties(
+        &bundle["request_schema"],
+        &[
+            "prompt_version",
+            "system_instruction",
+            "context",
+            "image_attachments",
+            "response_schema",
+        ],
+    );
+    assert_required_properties(&bundle["response_schema"], &["decision", "usage"]);
+    assert!(contains_string(&bundle["response_schema"], "request_id"));
+    assert!(contains_string(&bundle, "remaining"));
+    assert!(contains_string(&bundle, "success_criteria"));
+    assert!(contains_string(&bundle, "page_context"));
+    assert_eq!(bundle["http"]["method"], "POST");
+    assert_eq!(bundle["http"]["redirects_allowed"], false);
+    assert_eq!(
+        bundle["http"]["request_envelope_schema"]["properties"]["protocol"]["const"],
+        LLM_PROVIDER_PROTOCOL
+    );
+    for value in ["status", "success", "failure", "response", "error"] {
+        assert!(
+            contains_string(&bundle["http"]["response_envelope_schema"], value),
+            "HTTP response schema is missing {value}"
+        );
+    }
+}
+
+#[test]
+fn llm_wire_round_trips_and_rejects_unknown_fields() {
+    let request = json!({
+        "prompt_version": "a3s-test-agent/v2",
+        "system_instruction": "Return one typed decision",
+        "context": {
+            "goal": {
+                "instruction": "Submit the form",
+                "success_criteria": ["Confirmation is visible"]
+            },
+            "surface": "web",
+            "turn": 1,
+            "observation": {
+                "summary": "Form",
+                "data": null,
+                "evidence": []
+            },
+            "history": [],
+            "remaining": {
+                "turns": 4,
+                "tokens": 1000,
+                "cost_microusd": 1000,
+                "time_ms": 30000
+            }
+        },
+        "image_attachments": [],
+        "response_schema": { "type": "object" }
+    });
+    assert_round_trip::<StructuredLlmRequest>(request.clone());
+    assert_unknown_field_rejected::<StructuredLlmRequest>(request);
+
+    let response = json!({
+        "decision": { "type": "finish", "summary": "Confirmation is visible" },
+        "usage": { "input_tokens": 10, "output_tokens": 4, "cost_microusd": 8 },
+        "request_id": "llm-request-1"
+    });
+    assert_round_trip::<StructuredLlmResponse>(response.clone());
+    assert_unknown_field_rejected::<StructuredLlmResponse>(response);
 }
 
 #[test]

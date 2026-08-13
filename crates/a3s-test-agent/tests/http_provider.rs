@@ -5,14 +5,16 @@ use std::time::Duration;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use a3s_test_agent::{
-    ContractGenerationProvider, ContractGenerationProviderIdentity,
+    AgentGoal, ContractGenerationProvider, ContractGenerationProviderIdentity,
     ContractGenerationProviderRequest, GroundingProviderIdentity, GroundingProviderRequest,
     GroundingTrigger, HttpContractGenerationProvider, HttpContractGenerationRequest,
-    HttpProviderConfig, HttpProviderEndpoint, HttpVisualGroundingProvider,
-    HttpVisualGroundingRequest, VisualGroundingProvider, CONTRACT_GENERATION_PROVIDER_PROTOCOL,
+    HttpLlmCompletionRequest, HttpLlmProvider, HttpProviderConfig, HttpProviderEndpoint,
+    HttpVisualGroundingProvider, HttpVisualGroundingRequest, LlmIdentity, LlmProvider,
+    PlannerContext, RemainingBudget, StructuredLlmRequest, VisualGroundingProvider,
+    CONTRACT_GENERATION_PROVIDER_PROTOCOL, LLM_PROVIDER_PROTOCOL,
     VISUAL_GROUNDING_PROVIDER_PROTOCOL,
 };
-use a3s_test_core::{ContractContext, ContractMode};
+use a3s_test_core::{ContractContext, ContractMode, Surface, SurfaceObservation};
 use serde_json::{json, Value};
 use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
 use tokio::net::{TcpListener, TcpStream};
@@ -175,6 +177,48 @@ async fn visual_grounding_adapter_preserves_digest_deadline_cost_and_identity() 
     let envelope: HttpVisualGroundingRequest =
         serde_json::from_slice(&requests[0].body).expect("grounding request envelope");
     assert_eq!(envelope.protocol, VISUAL_GROUNDING_PROVIDER_PROTOCOL);
+    assert_eq!(envelope.request, request);
+}
+
+#[tokio::test]
+async fn llm_adapter_sends_the_schema_constrained_planner_request() {
+    let server = FixtureServer::start(vec![ResponseSpec::json(json!({
+        "status": "success",
+        "protocol": LLM_PROVIDER_PROTOCOL,
+        "response": {
+            "decision": { "type": "finish", "summary": "The criterion is visible" },
+            "usage": { "input_tokens": 11, "output_tokens": 5, "cost_microusd": 17 },
+            "request_id": "llm-http-1"
+        }
+    }))])
+    .await;
+    let provider = HttpLlmProvider::new(
+        LlmIdentity {
+            provider: "fixture".to_string(),
+            model: "planner".to_string(),
+        },
+        HttpProviderConfig::new(server.endpoint.clone())
+            .with_authorization("Bearer planner-secret")
+            .expect("authorization"),
+    )
+    .expect("HTTP LLM provider");
+    let request = llm_request();
+
+    let response = provider
+        .complete(request.clone())
+        .await
+        .expect("LLM provider response");
+
+    assert_eq!(response.request_id.as_deref(), Some("llm-http-1"));
+    let requests = server.finish().await;
+    let captured = &requests[0];
+    assert_eq!(
+        captured.headers.get("authorization").map(String::as_str),
+        Some("Bearer planner-secret")
+    );
+    let envelope: HttpLlmCompletionRequest =
+        serde_json::from_slice(&captured.body).expect("LLM request envelope");
+    assert_eq!(envelope.protocol, LLM_PROVIDER_PROTOCOL);
     assert_eq!(envelope.request, request);
 }
 
@@ -539,6 +583,31 @@ fn grounding_request() -> GroundingProviderRequest {
         issued_at_unix_ms,
         deadline_unix_ms: issued_at_unix_ms + 15_000,
         max_cost_microusd: 10_000,
+    }
+}
+
+fn llm_request() -> StructuredLlmRequest {
+    StructuredLlmRequest {
+        prompt_version: "a3s-test-agent/v2".to_string(),
+        system_instruction: "Return exactly one typed decision".to_string(),
+        context: PlannerContext {
+            goal: AgentGoal {
+                instruction: "Reach the confirmation page".to_string(),
+                success_criteria: vec!["The confirmation is visible".to_string()],
+            },
+            surface: Surface::Web,
+            turn: 1,
+            observation: SurfaceObservation::new("Checkout form"),
+            history: Vec::new(),
+            remaining: RemainingBudget {
+                turns: 4,
+                tokens: 1_000,
+                cost_microusd: 1_000,
+                time_ms: 30_000,
+            },
+        },
+        image_attachments: Vec::new(),
+        response_schema: json!({ "type": "object" }),
     }
 }
 

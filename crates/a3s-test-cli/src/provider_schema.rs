@@ -1,7 +1,8 @@
 use std::process::ExitCode;
 
 use a3s_test_agent::{
-    contract_generation_provider_schema, visual_grounding_provider_schema, ProviderProtocolSchema,
+    contract_generation_provider_schema, llm_provider_schema, visual_grounding_provider_schema,
+    ProviderProtocolSchema,
 };
 use anyhow::Result;
 use clap::{Args, Subcommand, ValueEnum};
@@ -31,6 +32,7 @@ struct ProviderSchemaArgs {
 #[derive(Clone, Copy, Debug, Eq, PartialEq, ValueEnum)]
 enum ProviderCapability {
     ContractGeneration,
+    Llm,
     VisualGrounding,
 }
 
@@ -43,6 +45,7 @@ pub(crate) fn execute(args: ProviderArgs) -> Result<ExitCode> {
 fn print_schema(args: ProviderSchemaArgs) -> Result<ExitCode> {
     let schema = match args.capability {
         ProviderCapability::ContractGeneration => contract_generation_provider_schema(),
+        ProviderCapability::Llm => llm_provider_schema(),
         ProviderCapability::VisualGrounding => visual_grounding_provider_schema(),
     };
     print_json(&schema, args.compact)?;

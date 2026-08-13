@@ -1,5 +1,6 @@
 use a3s_test_core::{
-    Action, DriverError, RepairCheckResult, StepOutput, Surface, SurfaceObservation,
+    Action, DriverError, PageContextRefError, RepairCheckResult, StepOutput, Surface,
+    SurfaceObservation,
 };
 use serde::{Deserialize, Serialize};
 
@@ -154,6 +155,12 @@ impl std::fmt::Display for SessionError {
 }
 
 impl std::error::Error for SessionError {}
+
+impl From<PageContextRefError> for SessionError {
+    fn from(error: PageContextRefError) -> Self {
+        Self::new("test.session.context_ref_invalid", error.message())
+    }
+}
 
 pub(crate) fn validate_start(request: &StartSessionRequest) -> Result<(), SessionError> {
     validate_session_id(&request.session)?;

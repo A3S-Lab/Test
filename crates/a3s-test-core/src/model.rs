@@ -279,14 +279,14 @@ pub enum Expectation {
     Visible(Target),
 }
 
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
 pub struct Evidence {
     pub name: String,
     pub path: String,
     pub media_type: String,
 }
 
-#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, JsonSchema, PartialEq, Serialize)]
 pub struct StepOutput {
     pub summary: String,
     pub data: Value,
@@ -325,7 +325,7 @@ impl StepOutput {
     }
 }
 
-#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, JsonSchema, PartialEq, Serialize)]
 pub struct SurfaceObservation {
     pub summary: String,
     pub data: Value,
@@ -334,7 +334,7 @@ pub struct SurfaceObservation {
     pub page_context: Option<PageContextObservation>,
 }
 
-#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, JsonSchema, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct PageContextObservation {
     pub present: bool,
@@ -344,7 +344,7 @@ pub struct PageContextObservation {
     pub snapshot: Option<PageContextSnapshot>,
 }
 
-#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, JsonSchema, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct PageContextSnapshot {
     pub protocol: Option<String>,
@@ -362,7 +362,7 @@ pub struct PageContextSnapshot {
     pub next_cursor: Option<String>,
 }
 
-#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, JsonSchema, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct PageContextPage {
     pub id: String,
@@ -377,7 +377,7 @@ pub struct PageContextPage {
     pub theme: PageContextTheme,
 }
 
-#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, JsonSchema, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct PageContextViewport {
     pub width: f64,
@@ -387,7 +387,7 @@ pub struct PageContextViewport {
     pub visual: Option<PageContextVisualViewport>,
 }
 
-#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, JsonSchema, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct PageContextVisualViewport {
     pub x: f64,
@@ -397,14 +397,14 @@ pub struct PageContextVisualViewport {
     pub scale: f64,
 }
 
-#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, JsonSchema, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct PageContextSize {
     pub width: f64,
     pub height: f64,
 }
 
-#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, JsonSchema, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct PageContextPoint {
     pub x: f64,
@@ -419,7 +419,7 @@ pub enum PageContextTheme {
     Unknown,
 }
 
-#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, JsonSchema, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct PageContextComponent {
     pub id: String,
@@ -432,7 +432,7 @@ pub struct PageContextComponent {
     pub boxes: Vec<PageContextRect>,
 }
 
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct PageContextSource {
     pub file: String,
@@ -440,7 +440,7 @@ pub struct PageContextSource {
     pub column: Option<u32>,
 }
 
-#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, JsonSchema, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct PageContextNode {
     pub id: String,
@@ -466,7 +466,7 @@ pub struct PageContextNode {
     pub computed_styles: Option<serde_json::Map<String, Value>>,
 }
 
-#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, JsonSchema, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct PageContextGeometry {
     pub viewport: PageContextRect,
@@ -481,7 +481,7 @@ pub struct PageContextGeometry {
     pub scroll_container_node_id: Option<String>,
 }
 
-#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, JsonSchema, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct PageContextRect {
     pub x: f64,
@@ -490,7 +490,7 @@ pub struct PageContextRect {
     pub height: f64,
 }
 
-#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
 #[serde(rename_all = "lowercase")]
 pub enum PageContextPosition {
     Static,
@@ -500,7 +500,7 @@ pub enum PageContextPosition {
     Sticky,
 }
 
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct PageContextNodeState {
     pub visible: bool,
@@ -514,7 +514,7 @@ pub struct PageContextNodeState {
     pub invalid: Option<bool>,
 }
 
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
 #[serde(tag = "type", rename_all = "snake_case", deny_unknown_fields)]
 pub enum PageContextLocator {
     Role { role: String, name: String },

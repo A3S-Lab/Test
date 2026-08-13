@@ -12,6 +12,11 @@ and surface drivers:
 2. The optional **embedded planner SDK** in `a3s-test-agent` is for a host that
    intentionally injects its own `LlmProvider` and owns the surrounding
    surface lifecycle.
+3. The **direct embedded-planner CLI** is that host for one bounded Web run.
+   `a3s-test agent run <config.acl>` opens the surface, calls a
+   deployment-supplied HTTP provider, admits each proposal locally, verifies
+   success deterministically, publishes one report, and closes the exact
+   surface it opened.
 
 Both boundaries reject unknown action shapes, use typed policies, preserve
 structured evidence, and must close the exact owned surface. They do not use
@@ -192,6 +197,75 @@ budget exhaustion, timeout, and cancellation. The deterministic `Runner`
 and external-planner session application demonstrate the required
 bounded-cleanup behavior.
 
+## Direct embedded-planner CLI
+
+Use this path when the deployment intentionally wants A3S Test to own a
+complete one-shot Web workflow around its model service:
+
+```bash
+a3s-test provider schema llm
+a3s-test agent run examples/agent-web.acl --json
+```
+
+The config is A3S ACL, the same product configuration language used by suites
+and workflows:
+
+```acl
+agent_run "checkout" {
+  url = "http://127.0.0.1:3000/checkout"
+  goal = "Complete checkout with the fixture account"
+  success_criteria = ["The order confirmation is visible"]
+  allow_actions = ["click", "fill", "wait"]
+  max_turns = 8
+  max_total_tokens = 20000
+  max_cost_microusd = 50000
+  timeout_ms = 120000
+
+  provider {
+    name = "deployment"
+    model = "planner"
+    endpoint = "https://models.example.test/v1/plan"
+    authorization_env = "A3S_TEST_PROVIDER_AUTHORIZATION_DEPLOYMENT"
+  }
+
+  verification {
+    expect "confirmation" { text = "Order confirmed" }
+    screenshot "final" { path = "confirmation.png" }
+  }
+}
+```
+
+`allow_origins` adds exact HTTP(S) origins for explicit URL actions and every
+successful observation. `allow_domains` adds only browser network hostnames,
+for example an API or CDN; it never grants exact-origin navigation. The
+browser protocol currently enforces hostnames at its network boundary, so
+scheme and effective port remain independently checked on explicit actions
+and observations.
+
+The workflow deadline begins before surface opening and covers opening,
+initial navigation, every observation, provider call, proposed action,
+page-context revision check, and deterministic verification. Cleanup has a
+separate `--cleanup-timeout-ms` because process reaping must still be attempted
+after a workflow timeout. Per-command browser and HTTP limits remain bounded by
+`--command-timeout-ms`.
+
+The model's `finish` decision is provisional. Verification accepts only
+`snapshot`, `wait`, `expect`, `screenshot`, `accessibility`, `console`, and
+`page_errors`, and it requires at least one `expect`. No verification action
+may mutate the page. The final status is successful only when the model
+finishes, every local verification step passes, and exact surface cleanup
+succeeds.
+
+Every admitted run writes protocol `a3s.test.agent-run/1` to
+`.a3s-test/agent-runs/<run-id>/report.json` by default, including failures
+during surface opening. The report contains provider identity and usage,
+decision digests, observations, action outputs, verification results, and a
+separate cleanup error. It is bounded, redacted, and atomically published;
+`--report` selects another path and `--force` is required to replace a regular
+file. A report path cannot be placed inside the run's browser artifact
+directory, which is prepared under the Web driver's stricter fresh-artifact
+rules.
+
 ## Provider contract
 
 `LlmProvider` is an object-safe `Send + Sync` interface:
@@ -231,6 +305,42 @@ provider request ID. The loop independently deserializes the value after the
 provider returns it. A provider claiming structured output does not bypass
 local validation. Prompt contract `a3s-test-agent/v2` tells multimodal hosts to
 ground pixel actions only in the attached observation image.
+
+For this protocol, `context.remaining.time_ms` is the request deadline budget,
+`context.remaining.cost_microusd` is the cumulative cost ceiling available to
+the response, and the configured provider/model identity is bound by the host
+rather than repeated in each response. The loop updates cumulative usage and
+rejects a response that takes the run above its token or cost budget before
+executing a proposed action.
+
+The HTTP projection uses protocol `a3s.test.llm-provider/1` and `POST
+application/json`. The request envelope is:
+
+```json
+{
+  "protocol": "a3s.test.llm-provider/1",
+  "request": { "prompt_version": "a3s-test-agent/v2" }
+}
+```
+
+The service returns either `status = "success"` with one typed `response`, or
+`status = "failure"` with a bounded `error`. The generated schema is
+authoritative. The adapter requires HTTPS except for explicit loopback HTTP,
+disables redirects and environment proxies, bounds both bodies, enforces its
+configured timeout, and redacts the configured authorization value from
+diagnostics. Provider output has `proposal_only` authority: it may propose a
+typed action but cannot determine the test verdict, claim that an observation
+occurred, or authorize workspace repair.
+
+The authoritative discovery command is:
+
+```bash
+a3s-test provider schema llm
+```
+
+It publishes the transport-neutral request and response schemas, the standard
+HTTP envelopes, and the deadline, cumulative cost, configured-identity, local
+admission, observation scope, and non-authority invariants.
 
 ## Optional visual-grounding provider
 

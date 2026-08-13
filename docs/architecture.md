@@ -12,7 +12,10 @@ Coding agents are external planners in the primary agentic workflow. A3S Code,
 Codex, Claude Code, or another agent repeatedly calls `agent observe` and one
 typed action command through the portable Skill. The CLI preserves the surface
 between calls and records the run. The optional `a3s-test-agent` library
-supports hosts that intentionally inject a separate LLM provider.
+supports hosts that intentionally inject a separate LLM provider. The
+`a3s-test agent run` command is the shipped one-shot Web host for that
+library; it reads bounded ACL, calls a deployment-owned HTTP provider,
+performs local verification, writes a complete report, and owns exact cleanup.
 
 Those capabilities are injected through typed interfaces:
 
@@ -277,6 +280,7 @@ Layer 6  Planner interface
 
 Layer 5  Product interface
          session application layer + persistent CLI/MCP + deterministic CLI
+         + direct embedded-planner CLI host
 
 Layer 4  Agentic planning
          external coding agent, or user-supplied LLM provider in SDK hosts
@@ -720,6 +724,50 @@ or `end_session` tool call reports a retryable failure, so the retry continues
 from the same ownership proof. Non-retryable ownership loss still ends the CUA
 session without terminating an unrelated process.
 
+## Direct embedded Web execution
+
+The one-shot CLI host composes existing layers rather than introducing a
+second runner or driver:
+
+```text
+agent_run ACL
+      |
+      v
+bounded config admission ---------> deployment HTTP LLM provider
+      |                                      |
+      v                                      v
+owned Web session -> atomic observation -> proposal_only decision
+      ^                                      |
+      |                                      v
+      +----- Core ref binding + policy + revision validation
+      |
+      v
+read-only deterministic verification
+      |
+      v
+exact close -> redacted a3s.test.agent-run/1 report
+```
+
+Core owns page-context ref binding because persistent sessions, SDK hosts, and
+the direct CLI all consume the same observation contract. `@cN` never exposes
+the Test Kit's private node identity. Before a proposed `@cN` action reaches
+the driver, it resolves to the preferred test ID, role, label, placeholder,
+text, or CSS locator and the driver revalidates the observation revision.
+
+The HTTP provider is a Layer 4 proposal adapter. It cannot claim browser
+observation, determine a verdict, execute actions itself, or authorize repair.
+The host enforces exact origins before URL-bearing actions and after every
+observation; the Web adapter separately enforces its available hostname
+network policy. The model's finish result reaches a successful report only
+after local read-only expectations and exact cleanup pass.
+
+One workflow deadline includes surface opening, initial navigation, every
+observe/provider/action turn, ref revision checks, and deterministic
+verification. Cleanup retains its own short deadline so timeout or
+cancellation cannot remove the obligation to reap the exact owned surface.
+Failures during surface opening are reports too, preserving a single
+machine-readable lifecycle outcome.
+
 ## Embedded agentic execution
 
 An SDK host can alternatively inject a real LLM provider and run the bounded
@@ -758,8 +806,10 @@ throughout unstructured trace text. Provider requests and driver inputs remain
 operationally complete; they are trusted transient inputs, not persistence
 formats. Evidence files retain their normal artifact access controls.
 
-The external-planner CLI does not call this provider. A3S Code, Codex, or
-Claude Code is already the planner and drives typed CLI turns directly.
+Persistent external-planner commands do not call this provider. A3S Code,
+Codex, or Claude Code is already the planner and drives those typed CLI turns
+directly. Only the explicitly selected one-shot `agent run` host calls the
+deployment provider.
 
 `AgentLoop` operates on an already-open session and deliberately does not own
 `close()`. The runner or SDK host that opens the session must retain bounded
@@ -772,6 +822,8 @@ Artifacts live under:
 ```text
 .a3s-test/runs/<run-id>/<scenario-id>/
 .a3s-test/agent-sessions/<session>/artifacts/
+.a3s-test/agent-runs/<run-id>/artifacts/
+.a3s-test/agent-runs/<run-id>/report.json
 .a3s-test/mcp-sessions/<session>/
 .a3s-test/gui-certification/gui-certification/
 ```

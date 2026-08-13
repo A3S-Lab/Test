@@ -63,8 +63,10 @@
 - [x] Cancellation-safe terminal cleanup tasks with `cleanup_in_progress`
       admission and a retryable cleanup-only state that preserves the exact
       driver session for `finish` or `abort`
-- [ ] Direct embedded-LLM CLI host; external coding agents already drive the
-      session CLI without a nested model
+- [x] Direct embedded-LLM CLI host with ACL admission, a deployment-supplied
+      HTTP planner, local action policy, deterministic verification, complete
+      redacted reports, and exact owned Web cleanup; external coding agents
+      still drive the session CLI without a nested model
 - [x] No keyword-based intent router or production heuristic fallback
 
 ## M3: GUI through A3S CUA

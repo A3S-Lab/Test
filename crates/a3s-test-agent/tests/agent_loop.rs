@@ -8,7 +8,8 @@ use a3s_test_agent::{
     StructuredLlmResponse,
 };
 use a3s_test_core::{
-    Action, DriverError, DriverSession, Evidence, ModifierKey, StepOutput, Surface,
+    Action, DriverError, DriverSession, Evidence, ModifierKey, PageContextLocator, PageContextNode,
+    PageContextNodeState, PageContextObservation, PageContextSnapshot, StepOutput, Surface,
     SurfaceObservation, Target, TestStep,
 };
 use async_trait::async_trait;
@@ -66,6 +67,7 @@ impl LlmProvider for ScriptedProvider {
 struct FakeSession {
     observations: VecDeque<SurfaceObservation>,
     actions: Vec<Action>,
+    validated_revisions: Vec<u64>,
 }
 
 impl FakeSession {
@@ -73,6 +75,7 @@ impl FakeSession {
         Self {
             observations: observations.into_iter().collect(),
             actions: Vec::new(),
+            validated_revisions: Vec::new(),
         }
     }
 }
@@ -91,6 +94,14 @@ impl DriverSession for FakeSession {
     async fn execute(&mut self, step: &TestStep) -> Result<StepOutput, DriverError> {
         self.actions.push(step.action.clone());
         Ok(StepOutput::new("action executed"))
+    }
+
+    async fn validate_page_context_revision(
+        &mut self,
+        expected_revision: u64,
+    ) -> Result<(), DriverError> {
+        self.validated_revisions.push(expected_revision);
+        Ok(())
     }
 
     async fn close(&mut self) -> Result<(), DriverError> {
@@ -311,6 +322,97 @@ async fn blocks_cross_origin_navigation_before_surface_execution() {
         Some("test.agent.policy.navigation_origin_denied")
     );
     assert!(session.actions.is_empty());
+}
+
+#[tokio::test]
+async fn blocks_cross_origin_tab_and_video_navigation_before_surface_execution() {
+    let actions = [
+        Action::Tab {
+            operation: a3s_test_core::TabOperation::New {
+                url: Some("https://untrusted.test/tab".to_string()),
+                label: None,
+            },
+        },
+        Action::Video {
+            operation: a3s_test_core::VideoOperation::Start {
+                path: "capture.webm".to_string(),
+                url: Some("https://untrusted.test/video".to_string()),
+            },
+        },
+    ];
+
+    for action in actions {
+        let provider = Arc::new(ScriptedProvider::new([response(
+            AgentDecision::Act {
+                action: action.clone(),
+            },
+            usage(5, 3, 8),
+        )]));
+        let policy = Arc::new(CapabilityPolicy::new(
+            [ActionKind::Tab, ActionKind::Video],
+            NavigationScope::Origins(vec![
+                Url::parse("https://trusted.test").expect("trusted URL")
+            ]),
+        ));
+        let agent = AgentLoop::new(provider, policy, options()).expect("valid agent");
+        let mut session = FakeSession::new([SurfaceObservation::new("Page is ready")]);
+
+        let result = agent
+            .run(
+                &goal(),
+                Surface::Web,
+                &mut session,
+                CancellationToken::new(),
+            )
+            .await;
+
+        assert_eq!(result.status, AgentStatus::PolicyDenied);
+        assert_eq!(
+            result.error.as_ref().map(|error| error.code.as_str()),
+            Some("test.agent.policy.navigation_origin_denied")
+        );
+        assert!(session.actions.is_empty());
+    }
+}
+
+#[tokio::test]
+async fn resolves_page_context_refs_before_surface_execution() {
+    let provider = Arc::new(ScriptedProvider::new([response(
+        AgentDecision::Act {
+            action: Action::Click {
+                target: Target::Ref {
+                    value: "@c1".to_string(),
+                },
+            },
+        },
+        usage(5, 3, 8),
+    )]));
+    let policy = Arc::new(CapabilityPolicy::new(
+        [ActionKind::Click],
+        NavigationScope::Denied,
+    ));
+    let agent = AgentLoop::new(provider, policy, options()).expect("valid agent");
+    let mut session = FakeSession::new([page_context_observation()]);
+
+    let result = agent
+        .run(
+            &goal(),
+            Surface::Web,
+            &mut session,
+            CancellationToken::new(),
+        )
+        .await;
+
+    assert_eq!(result.status, AgentStatus::Failed);
+    assert_eq!(session.validated_revisions, [7]);
+    assert_eq!(
+        session.actions,
+        [Action::Click {
+            target: Target::TestId {
+                value: "submit".to_string()
+            }
+        }]
+    );
 }
 
 #[tokio::test]
@@ -552,4 +654,50 @@ fn usage(input_tokens: u64, output_tokens: u64, cost_microusd: u64) -> LlmUsage 
         output_tokens,
         cost_microusd,
     }
+}
+
+fn page_context_observation() -> SurfaceObservation {
+    SurfaceObservation::new("Checkout")
+        .with_data(serde_json::json!({ "url": "https://example.test/" }))
+        .with_page_context(PageContextObservation::from_snapshot(PageContextSnapshot {
+            protocol: Some("a3s.test.page-context/1".to_string()),
+            sdk_version: Some("0.2.0".to_string()),
+            revision: Some(7),
+            page: None,
+            components: Vec::new(),
+            nodes: vec![PageContextNode {
+                id: String::new(),
+                r#ref: Some("@c1".to_string()),
+                parent_id: None,
+                component_id: None,
+                tag: "button".to_string(),
+                role: Some("button".to_string()),
+                name: Some("Submit".to_string()),
+                text: Some("Submit".to_string()),
+                description: None,
+                test_id: Some("submit".to_string()),
+                geometry: None,
+                state: PageContextNodeState {
+                    visible: true,
+                    disabled: Some(false),
+                    checked: None,
+                    selected: None,
+                    expanded: None,
+                    focused: None,
+                    readonly: None,
+                    required: None,
+                    invalid: None,
+                },
+                locators: vec![PageContextLocator::TestId {
+                    value: "submit".to_string(),
+                }],
+                classes: None,
+                attributes: None,
+                computed_styles: None,
+            }],
+            facts: Default::default(),
+            removed_node_ids: Vec::new(),
+            truncated: false,
+            next_cursor: None,
+        }))
 }

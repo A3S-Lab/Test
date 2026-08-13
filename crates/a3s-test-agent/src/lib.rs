@@ -34,7 +34,8 @@ pub use grounding::{
 };
 pub use http_provider::{
     HttpContractGenerationProvider, HttpContractGenerationRequest, HttpContractGenerationResponse,
-    HttpProviderConfig, HttpProviderConfigError, HttpProviderEndpoint, HttpProviderErrorResponse,
+    HttpLlmCompletionRequest, HttpLlmCompletionResponse, HttpLlmProvider, HttpProviderConfig,
+    HttpProviderConfigError, HttpProviderEndpoint, HttpProviderErrorResponse,
     HttpVisualGroundingProvider, HttpVisualGroundingRequest, HttpVisualGroundingResponse,
 };
 pub use model::{
@@ -44,9 +45,9 @@ pub use model::{
 pub use policy::{ActionKind, ActionPolicy, CapabilityPolicy, NavigationScope, PolicyContext};
 pub use provider::{LlmImageAttachment, LlmProvider, StructuredLlmRequest, StructuredLlmResponse};
 pub use provider_protocol::{
-    contract_generation_provider_schema, visual_grounding_provider_schema,
+    contract_generation_provider_schema, llm_provider_schema, visual_grounding_provider_schema,
     HttpProviderProtocolSchema, ProviderOutputAuthority, ProviderProtocolSchema,
-    ProviderSafetyInvariants, CONTRACT_GENERATION_PROVIDER_PROTOCOL,
+    ProviderSafetyInvariants, CONTRACT_GENERATION_PROVIDER_PROTOCOL, LLM_PROVIDER_PROTOCOL,
     VISUAL_GROUNDING_PROVIDER_PROTOCOL,
 };
 pub use redaction::{ProvenanceRedactor, REDACTED_VALUE};

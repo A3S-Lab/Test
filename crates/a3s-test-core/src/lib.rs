@@ -5,6 +5,7 @@ mod driver;
 mod error;
 mod manifest;
 mod model;
+mod page_context;
 mod reconcile;
 
 pub use contract::{
@@ -32,6 +33,11 @@ pub use model::{
     RepairThreadMessage, RepairVerification, StepOutput, Surface, SurfaceObservation, TabOperation,
     Target, TestScenario, TestStep, TestSuite, VideoOperation, WaitCondition,
     ACTION_PROTOCOL_REVISION, PAGE_CONTEXT_PROTOCOL, REPAIR_PROTOCOL,
+};
+pub use page_context::{
+    action_uses_observation_target, action_uses_page_context_ref, bind_page_context_refs,
+    preferred_page_context_target, resolve_page_context_refs, PageContextBindings,
+    PageContextRefError,
 };
 pub use reconcile::{
     ContractFinding, ContractMatch, ContractMatchStrategy, ContractOutcome, ContractReport,

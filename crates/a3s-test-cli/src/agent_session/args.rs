@@ -13,6 +13,8 @@ pub(crate) struct AgentArgs {
 
 #[derive(Debug, Subcommand)]
 pub(super) enum AgentCommand {
+    /// Run one bounded Web test with a deployment-supplied LLM provider.
+    Run(crate::agent_host::AgentRunArgs),
     /// Start a persistent Web test session for an external coding agent.
     #[command(alias = "open")]
     Start(StartArgs),

@@ -13,16 +13,18 @@ mod wire;
 
 pub use config::{HttpProviderConfig, HttpProviderConfigError, HttpProviderEndpoint};
 pub use wire::{
-    HttpContractGenerationRequest, HttpContractGenerationResponse, HttpProviderErrorResponse,
-    HttpVisualGroundingRequest, HttpVisualGroundingResponse,
+    HttpContractGenerationRequest, HttpContractGenerationResponse, HttpLlmCompletionRequest,
+    HttpLlmCompletionResponse, HttpProviderErrorResponse, HttpVisualGroundingRequest,
+    HttpVisualGroundingResponse,
 };
 use wire::{HttpProviderRemoteError, HttpProviderRequestEnvelope, HttpProviderResponseEnvelope};
 
 use crate::{
     ContractGenerationError, ContractGenerationProvider, ContractGenerationProviderIdentity,
     ContractGenerationProviderRequest, ContractGenerationProviderResponse, GroundingError,
-    GroundingProviderIdentity, GroundingProviderRequest, GroundingProviderResponse,
-    VisualGroundingProvider, CONTRACT_GENERATION_PROVIDER_PROTOCOL,
+    GroundingProviderIdentity, GroundingProviderRequest, GroundingProviderResponse, LlmError,
+    LlmIdentity, LlmProvider, StructuredLlmRequest, StructuredLlmResponse, VisualGroundingProvider,
+    CONTRACT_GENERATION_PROVIDER_PROTOCOL, LLM_PROVIDER_PROTOCOL,
     VISUAL_GROUNDING_PROVIDER_PROTOCOL,
 };
 
@@ -65,10 +67,39 @@ impl HttpProviderTransport {
         Response: DeserializeOwned,
     {
         admitted_request_timeout(issued_at_unix_ms, deadline_unix_ms, self.config.timeout)?;
+        self.exchange_with_timeout(
+            protocol,
+            request,
+            admitted_request_timeout(issued_at_unix_ms, deadline_unix_ms, self.config.timeout)?,
+        )
+        .await
+    }
+
+    async fn exchange_without_wire_deadline<Request, Response>(
+        &self,
+        protocol: &'static str,
+        request: &Request,
+    ) -> Result<Response, HttpExchangeError>
+    where
+        Request: Serialize,
+        Response: DeserializeOwned,
+    {
+        self.exchange_with_timeout(protocol, request, self.config.timeout)
+            .await
+    }
+
+    async fn exchange_with_timeout<Request, Response>(
+        &self,
+        protocol: &'static str,
+        request: &Request,
+        request_timeout: Duration,
+    ) -> Result<Response, HttpExchangeError>
+    where
+        Request: Serialize,
+        Response: DeserializeOwned,
+    {
         let envelope = HttpProviderRequestEnvelope { protocol, request };
         let body = serialize_bounded_request(&envelope, self.config.max_request_bytes)?;
-        let request_timeout =
-            admitted_request_timeout(issued_at_unix_ms, deadline_unix_ms, self.config.timeout)?;
 
         let mut request_builder = self
             .client
@@ -244,6 +275,51 @@ impl HttpExchangeError {
     }
 }
 
+pub struct HttpLlmProvider {
+    identity: LlmIdentity,
+    transport: HttpProviderTransport,
+}
+
+impl fmt::Debug for HttpLlmProvider {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("HttpLlmProvider")
+            .field("identity", &self.identity)
+            .field("transport", &self.transport)
+            .finish()
+    }
+}
+
+impl HttpLlmProvider {
+    pub fn new(
+        identity: LlmIdentity,
+        config: HttpProviderConfig,
+    ) -> Result<Self, HttpProviderConfigError> {
+        validate_identity(&identity.provider, &identity.model)?;
+        Ok(Self {
+            identity,
+            transport: HttpProviderTransport::new(config)?,
+        })
+    }
+}
+
+#[async_trait]
+impl LlmProvider for HttpLlmProvider {
+    fn identity(&self) -> LlmIdentity {
+        self.identity.clone()
+    }
+
+    async fn complete(
+        &self,
+        request: StructuredLlmRequest,
+    ) -> Result<StructuredLlmResponse, LlmError> {
+        self.transport
+            .exchange_without_wire_deadline(LLM_PROVIDER_PROTOCOL, &request)
+            .await
+            .map_err(llm_http_error)
+    }
+}
+
 pub struct HttpContractGenerationProvider {
     identity: ContractGenerationProviderIdentity,
     transport: HttpProviderTransport,
@@ -403,6 +479,14 @@ fn contract_http_error(error: HttpExchangeError) -> ContractGenerationError {
 fn grounding_http_error(error: HttpExchangeError) -> GroundingError {
     GroundingError::new(
         format!("test.agent.grounding.http.{}", error.code),
+        error.message,
+        error.retryable,
+    )
+}
+
+fn llm_http_error(error: HttpExchangeError) -> LlmError {
+    LlmError::new(
+        format!("test.agent.llm.http.{}", error.code),
         error.message,
         error.retryable,
     )

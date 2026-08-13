@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 
-use a3s_test_core::{Action, Surface, SurfaceObservation};
+use a3s_test_core::{Action, Surface, SurfaceObservation, TabOperation, VideoOperation};
 use url::{Origin, Url};
 
 use crate::{ActionHistory, AgentError, AgentGoal};
@@ -131,7 +131,7 @@ impl ActionPolicy for CapabilityPolicy {
             ));
         }
 
-        let Action::Navigate { url } = action else {
+        let Some(url) = action_navigation_url(action) else {
             return Ok(());
         };
         let parsed = Url::parse(url).map_err(|error| {
@@ -169,5 +169,18 @@ impl ActionPolicy for CapabilityPolicy {
                 }
             }
         }
+    }
+}
+
+fn action_navigation_url(action: &Action) -> Option<&str> {
+    match action {
+        Action::Navigate { url }
+        | Action::Tab {
+            operation: TabOperation::New { url: Some(url), .. },
+        }
+        | Action::Video {
+            operation: VideoOperation::Start { url: Some(url), .. },
+        } => Some(url),
+        _ => None,
     }
 }

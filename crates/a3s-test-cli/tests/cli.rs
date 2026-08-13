@@ -40,6 +40,37 @@ fn check_returns_machine_readable_suite() {
 }
 
 #[test]
+fn provider_schema_discovers_the_llm_planner_wire_contract() {
+    let output = Command::new(binary())
+        .args(["provider", "schema", "llm", "--compact"])
+        .output()
+        .expect("run LLM provider schema discovery");
+
+    assert!(output.status.success(), "{output:?}");
+    let value: serde_json::Value =
+        serde_json::from_slice(&output.stdout).expect("provider schema JSON");
+    assert_eq!(value["protocol"], "a3s.test.llm-provider/1");
+    assert_eq!(value["authority"], "proposal_only");
+    assert_eq!(value["invariants"]["local_admission_required"], true);
+    assert_eq!(value["invariants"]["may_determine_test_verdict"], false);
+    assert_eq!(value["invariants"]["may_authorize_repair"], false);
+}
+
+#[test]
+fn agent_run_help_exposes_the_acl_driven_embedded_host() {
+    let output = Command::new(binary())
+        .args(["agent", "run", "--help"])
+        .output()
+        .expect("run embedded host help");
+
+    assert!(output.status.success(), "{output:?}");
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("ACL agent-run configuration"), "{stdout}");
+    assert!(stdout.contains("--cleanup-timeout-ms"), "{stdout}");
+    assert!(stdout.contains("--report"), "{stdout}");
+}
+
+#[test]
 fn check_admits_every_referenced_surface_contract() {
     let temp = tempfile::tempdir().expect("tempdir");
     let contracts = temp.path().join("contracts");

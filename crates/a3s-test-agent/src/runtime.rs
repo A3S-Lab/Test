@@ -1,7 +1,10 @@
 use std::future::Future;
 use std::sync::Arc;
 
-use a3s_test_core::{DriverSession, Surface, TestStep};
+use a3s_test_core::{
+    action_uses_page_context_ref, preferred_page_context_target, resolve_page_context_refs,
+    DriverSession, PageContextBindings, Surface, SurfaceObservation, TestStep,
+};
 use schemars::schema_for;
 use sha2::{Digest, Sha256};
 use tokio::time::Instant;
@@ -153,7 +156,6 @@ impl AgentLoop {
                     )),
                 );
             }
-
             let request = StructuredLlmRequest {
                 prompt_version: AGENT_PROMPT_VERSION.to_string(),
                 system_instruction: SYSTEM_INSTRUCTION.to_string(),
@@ -304,6 +306,75 @@ impl AgentLoop {
                         );
                     }
 
+                    let (action, expected_revision) =
+                        match resolve_observation_target(action, &agent_turn.observation) {
+                            Ok(resolved) => resolved,
+                            Err(error) => {
+                                agent_turn.error = Some(error.clone());
+                                turns.push(agent_turn);
+                                return self.result(
+                                    AgentStatus::PolicyDenied,
+                                    None,
+                                    usage,
+                                    turns,
+                                    Some(error),
+                                );
+                            }
+                        };
+                    if let Some(revision) = expected_revision {
+                        match await_stage(
+                            &cancellation,
+                            deadline,
+                            session.validate_page_context_revision(revision),
+                        )
+                        .await
+                        {
+                            Stage::Completed(Ok(())) => {}
+                            Stage::Completed(Err(error)) => {
+                                let error = AgentError::new(error.code(), error.message());
+                                agent_turn.error = Some(error.clone());
+                                turns.push(agent_turn);
+                                return self.result(
+                                    AgentStatus::PolicyDenied,
+                                    None,
+                                    usage,
+                                    turns,
+                                    Some(error),
+                                );
+                            }
+                            Stage::Cancelled => {
+                                let error = AgentError::new(
+                                    "test.agent.cancelled",
+                                    "agent run was cancelled while validating page context",
+                                );
+                                agent_turn.error = Some(error.clone());
+                                turns.push(agent_turn);
+                                return self.result(
+                                    AgentStatus::Cancelled,
+                                    None,
+                                    usage,
+                                    turns,
+                                    Some(error),
+                                );
+                            }
+                            Stage::TimedOut => {
+                                let error = AgentError::new(
+                                    "test.agent.timeout",
+                                    "agent deadline expired while validating page context",
+                                );
+                                agent_turn.error = Some(error.clone());
+                                turns.push(agent_turn);
+                                return self.result(
+                                    AgentStatus::TimedOut,
+                                    None,
+                                    usage,
+                                    turns,
+                                    Some(error),
+                                );
+                            }
+                        }
+                    }
+
                     let step = TestStep {
                         id: format!("agent-turn-{turn}"),
                         action: action.clone(),
@@ -412,6 +483,57 @@ impl AgentLoop {
                 error,
             })
     }
+}
+
+fn resolve_observation_target(
+    action: a3s_test_core::Action,
+    observation: &SurfaceObservation,
+) -> Result<(a3s_test_core::Action, Option<u64>), AgentError> {
+    let uses_page_context = action_uses_page_context_ref(&action);
+    let bindings = observation_page_context_bindings(observation);
+    let expected_revision = if uses_page_context {
+        Some(bindings.revision.ok_or_else(|| {
+            AgentError::new(
+                "test.agent.policy.observation_revision_missing",
+                "page context ref is missing its observation revision",
+            )
+        })?)
+    } else {
+        None
+    };
+    resolve_page_context_refs(action, &bindings)
+        .map(|action| (action, expected_revision))
+        .map_err(|error| {
+            AgentError::new("test.agent.policy.observation_ref_invalid", error.message())
+        })
+}
+
+fn observation_page_context_bindings(observation: &SurfaceObservation) -> PageContextBindings {
+    let mut bindings = PageContextBindings {
+        revision: observation
+            .page_context
+            .as_ref()
+            .and_then(|context| context.revision),
+        ..Default::default()
+    };
+    let Some(nodes) = observation
+        .page_context
+        .as_ref()
+        .and_then(|context| context.snapshot.as_ref())
+        .map(|snapshot| snapshot.nodes.as_slice())
+    else {
+        return bindings;
+    };
+    for node in nodes {
+        let (Some(reference), Some(target)) = (
+            node.r#ref.as_ref(),
+            preferred_page_context_target(&node.locators),
+        ) else {
+            continue;
+        };
+        bindings.targets.insert(reference.clone(), target);
+    }
+    bindings
 }
 
 enum Stage<T> {

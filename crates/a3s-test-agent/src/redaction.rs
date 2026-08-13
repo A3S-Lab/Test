@@ -75,6 +75,12 @@ impl ProvenanceRedactor {
         })
     }
 
+    /// Applies the same credential-key and exact-secret policy to a host-owned
+    /// JSON report that contains an [`AgentRunResult`] or adjacent metadata.
+    pub fn redact_json(&self, value: &mut Value) {
+        self.redact_value(value);
+    }
+
     pub(crate) fn redact_result(&self, mut result: AgentRunResult) -> AgentRunResult {
         self.redact_text(&mut result.provider.provider);
         self.redact_text(&mut result.provider.model);
@@ -277,12 +283,28 @@ impl ProvenanceRedactor {
         self.redact_text(&mut observation.summary);
         self.redact_value(&mut observation.data);
         self.redact_evidence(&mut observation.evidence);
+        if let Some(page_context) = observation.page_context.as_mut() {
+            self.redact_page_context(page_context);
+        }
     }
 
     fn redact_output(&self, output: &mut StepOutput) {
         self.redact_text(&mut output.summary);
         self.redact_value(&mut output.data);
         self.redact_evidence(&mut output.evidence);
+        if let Some(page_context) = output.page_context.as_mut() {
+            self.redact_page_context(page_context);
+        }
+    }
+
+    fn redact_page_context(&self, page_context: &mut a3s_test_core::PageContextObservation) {
+        let Ok(mut value) = serde_json::to_value(&*page_context) else {
+            return;
+        };
+        self.redact_value(&mut value);
+        if let Ok(redacted) = serde_json::from_value(value) {
+            *page_context = redacted;
+        }
     }
 
     fn redact_evidence(&self, evidence: &mut [Evidence]) {
@@ -344,6 +366,12 @@ impl ProvenanceRedactor {
             self.redact_text(&mut key);
             if sensitive {
                 value = Value::String(self.replacement.clone());
+            } else if normalized.ends_with("url") {
+                if let Value::String(url) = &mut value {
+                    self.redact_url(url);
+                } else {
+                    self.redact_value(&mut value);
+                }
             } else {
                 self.redact_value(&mut value);
             }

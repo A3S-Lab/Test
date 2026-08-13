@@ -6,29 +6,36 @@ use serde::{Deserialize, Serialize};
 
 use crate::{AgentError, ProvenanceRedactor};
 
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct AgentGoal {
     pub instruction: String,
     pub success_criteria: Vec<String>,
 }
 
 impl AgentGoal {
-    pub(crate) fn validate(&self) -> Result<(), AgentError> {
-        if self.instruction.trim().is_empty() {
+    pub fn validate(&self) -> Result<(), AgentError> {
+        const MAX_INSTRUCTION_BYTES: usize = 64 * 1_024;
+        const MAX_SUCCESS_CRITERIA: usize = 64;
+        const MAX_CRITERION_BYTES: usize = 16 * 1_024;
+
+        if self.instruction.trim().is_empty() || self.instruction.len() > MAX_INSTRUCTION_BYTES {
             return Err(AgentError::new(
                 "test.agent.goal.instruction_required",
-                "agent instruction must not be empty",
+                format!("agent instruction must contain 1 to {MAX_INSTRUCTION_BYTES} bytes"),
             ));
         }
         if self.success_criteria.is_empty()
-            || self
-                .success_criteria
-                .iter()
-                .any(|criterion| criterion.trim().is_empty())
+            || self.success_criteria.len() > MAX_SUCCESS_CRITERIA
+            || self.success_criteria.iter().any(|criterion| {
+                criterion.trim().is_empty() || criterion.len() > MAX_CRITERION_BYTES
+            })
         {
             return Err(AgentError::new(
                 "test.agent.goal.success_criteria_required",
-                "at least one non-empty success criterion is required",
+                format!(
+                    "agent goal requires 1 to {MAX_SUCCESS_CRITERIA} success criteria of 1 to {MAX_CRITERION_BYTES} bytes each"
+                ),
             ));
         }
         Ok(())
@@ -60,29 +67,41 @@ impl Default for AgentOptions {
 }
 
 impl AgentOptions {
-    pub(crate) fn validate(&self) -> Result<(), AgentError> {
-        if self.max_turns == 0 {
+    pub fn validate(&self) -> Result<(), AgentError> {
+        const MAX_TURNS: u32 = 256;
+        const MAX_TOTAL_TOKENS: u64 = 100_000_000;
+        const MAX_COST_MICROUSD: u64 = 1_000_000_000;
+        const MAX_CONTEXT_BYTES: usize = 64 * 1_024 * 1_024;
+        const MAX_TIMEOUT: Duration = Duration::from_secs(24 * 60 * 60);
+
+        if !(1..=MAX_TURNS).contains(&self.max_turns) {
             return Err(AgentError::new(
                 "test.agent.config.turns_invalid",
-                "maximum turns must be greater than zero",
+                format!("maximum turns must be between 1 and {MAX_TURNS}"),
             ));
         }
-        if self.max_total_tokens == 0 {
+        if !(1..=MAX_TOTAL_TOKENS).contains(&self.max_total_tokens) {
             return Err(AgentError::new(
                 "test.agent.config.tokens_invalid",
-                "maximum total tokens must be greater than zero",
+                format!("maximum total tokens must be between 1 and {MAX_TOTAL_TOKENS}"),
             ));
         }
-        if self.max_context_bytes == 0 {
+        if self.max_cost_microusd > MAX_COST_MICROUSD {
+            return Err(AgentError::new(
+                "test.agent.config.cost_invalid",
+                format!("maximum cost must not exceed {MAX_COST_MICROUSD} micro-USD"),
+            ));
+        }
+        if !(1..=MAX_CONTEXT_BYTES).contains(&self.max_context_bytes) {
             return Err(AgentError::new(
                 "test.agent.config.context_invalid",
-                "maximum context bytes must be greater than zero",
+                format!("maximum context bytes must be between 1 and {MAX_CONTEXT_BYTES}"),
             ));
         }
-        if self.timeout.is_zero() {
+        if self.timeout.is_zero() || self.timeout > MAX_TIMEOUT {
             return Err(AgentError::new(
                 "test.agent.config.timeout_invalid",
-                "agent timeout must be greater than zero",
+                "agent timeout must be between 1 millisecond and 24 hours",
             ));
         }
         Ok(())
@@ -108,7 +127,8 @@ pub enum AgentStatus {
     Cancelled,
 }
 
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct LlmIdentity {
     pub provider: String,
     pub model: String,
@@ -126,7 +146,8 @@ impl LlmIdentity {
     }
 }
 
-#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct LlmUsage {
     pub input_tokens: u64,
     pub output_tokens: u64,
@@ -149,14 +170,16 @@ impl LlmUsage {
     }
 }
 
-#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, JsonSchema, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct ActionHistory {
     pub turn: u32,
     pub action: Action,
     pub output: StepOutput,
 }
 
-#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct RemainingBudget {
     pub turns: u32,
     pub tokens: u64,
@@ -164,7 +187,8 @@ pub struct RemainingBudget {
     pub time_ms: u64,
 }
 
-#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, JsonSchema, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct PlannerContext {
     pub goal: AgentGoal,
     pub surface: Surface,

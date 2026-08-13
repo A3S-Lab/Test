@@ -49,6 +49,7 @@ use a3s_test_session::{
 
 pub(crate) async fn execute(args: AgentArgs) -> Result<ExitCode> {
     match args.command {
+        AgentCommand::Run(args) => super::agent_host::execute(args).await,
         AgentCommand::Start(args) => start(args).await,
         AgentCommand::Observe(args) => observe(args).await,
         AgentCommand::Inspect(args) => inspect::execute(args).await,

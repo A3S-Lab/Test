@@ -671,15 +671,89 @@ is bounded from 0 through 10. Only errors marked retryable because a command
 was not dispatched can be retried; assertions, command timeouts, and non-zero
 browser action exits are never retried.
 
+## Agent-run configuration
+
+An agent-run config is a separate A3S ACL document for
+`a3s-test agent run <path>`. It contains exactly one labeled `agent_run` block;
+it is not a deterministic `suite` and cannot be mixed with suite blocks.
+
+```acl
+agent_run "checkout" {
+  url = "http://127.0.0.1:3000/checkout"
+  goal = "Complete checkout with the fixture account"
+  success_criteria = ["The order confirmation is visible"]
+  allow_origins = ["https://auth.example.test"]
+  allow_domains = ["cdn.example.test"]
+  allow_actions = ["click", "fill", "wait"]
+  max_turns = 8
+  max_total_tokens = 20000
+  max_cost_microusd = 50000
+  max_context_bytes = 524288
+  timeout_ms = 120000
+
+  provider {
+    name = "deployment"
+    model = "planner"
+    endpoint = "https://models.example.test/v1/plan"
+    authorization_env = "A3S_TEST_PROVIDER_AUTHORIZATION_DEPLOYMENT"
+  }
+
+  verification {
+    expect "confirmation" { text = "Order confirmed" }
+    screenshot "final" { path = "confirmation.png" }
+  }
+}
+```
+
+`url`, `goal`, `success_criteria`, `allow_actions`,
+`max_cost_microusd`, one `provider`, and one `verification` block are required.
+The run label uses 1 through 64 ASCII letters, digits, `-`, or `_`.
+`url` and every `allow_origins` value must be HTTP(S) URLs with a hostname.
+The initial origin is always admitted. Origins are deduplicated by scheme,
+host, and effective port. Their hostnames seed the browser network policy;
+`allow_domains` adds network-only hostnames without adding navigation origins.
+
+`allow_actions` contains unique values from `navigate`, `snapshot`, `click`,
+`hover`, `focus`, `double_click`, `context_click`, `fill`, `type`, `check`,
+`uncheck`, `select`, `drag`, `press`, `wheel`, `viewport`, `wait`, `assert`,
+`screenshot`, `tab`, `frame`, `dialog`, `upload`, `download`,
+`network_route`, `network_unroute`, `har`, `trace`, `video`, `accessibility`,
+`console`, and `page_errors`. Runner-owned `verify_contract` is never an
+agent proposal.
+
+`max_turns` defaults to 12 and is bounded from 1 through 256.
+`max_total_tokens` defaults to 64,000 and is bounded from 1 through
+100,000,000. `max_cost_microusd` is required, may be zero, and cannot exceed
+1,000,000,000. `max_context_bytes` defaults to 524,288 and is bounded from 1
+through 67,108,864. `timeout_ms` defaults to 120,000 and is bounded by the
+agent runtime to 24 hours. The single workflow deadline covers surface open,
+initial navigation, model turns, actions, and local verification; cleanup has
+the separate CLI deadline.
+
+The provider block accepts only `name`, `model`, `endpoint`, and optional
+`authorization_env`. Provider and model identities must be bounded and
+non-empty. The endpoint must use HTTPS or explicit loopback HTTP and cannot
+contain credentials, a query, or a fragment. An authorization variable must
+start with `A3S_TEST_PROVIDER_AUTHORIZATION_`; the suffix accepts uppercase
+ASCII letters, digits, and `_`. The variable value is read at runtime and is
+never an ACL value or report field.
+
+Verification accepts only labeled `snapshot`, `wait`, `expect`, `screenshot`,
+`accessibility`, `console`, and `page_errors` actions, using the same attribute
+grammar as deterministic suites. It requires at least one `expect`. A URL wait
+or expectation must remain inside the admitted exact-origin set. The model's
+`finish` decision is not a verdict; all verification actions and exact browser
+cleanup must succeed before the report can be successful.
+
 ## Agentic boundary
 
-The ACL grammar describes deterministic scenarios only. It does not accept
-free-form `agent`, `prompt`, or natural-language action blocks. A coding agent
-drives exploratory execution through the persistent `a3s-test agent` CLI and
-the generated action schema. A host that intentionally embeds its own model
-can instead use `a3s-test-agent` with a typed goal, real `LlmProvider`, explicit
-budgets, and an `ActionPolicy`. A future ACL version may project that same
-application contract; it must not introduce a keyword intent router.
+The deterministic suite grammar still rejects free-form `agent`, `prompt`, or
+natural-language action blocks. A coding agent drives exploratory execution
+through persistent `a3s-test agent` commands and the generated action schema.
+A deployment that intentionally embeds its own model can use the separate
+`agent_run` ACL root above or inject the same typed `a3s-test-agent` contracts
+from an SDK host. Neither path introduces keyword intent routing or another
+configuration language.
 
 GUI sessions revalidate their host-selected application identity, PID, and
 top-level window binding immediately before each observation and effectful

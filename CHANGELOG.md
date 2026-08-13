@@ -4,6 +4,14 @@
 
 ### Added
 
+- Added `a3s-test agent run <agent-run.acl>` for one bounded Web workflow with
+  a deployment-supplied HTTP LLM provider, typed action capabilities, exact
+  origin checks, shared Test Kit `@cN` targets, deterministic local
+  verification, and `a3s.test.agent-run/1` reports.
+- Added stable `a3s.test.llm-provider/1` discovery through `a3s-test provider
+  schema llm`. Its authority is `proposal_only`: it may propose typed surface
+  actions but cannot determine the test verdict, claim browser observation,
+  or authorize repair.
 - Added `a3s-test contract generate` and `a3s-test contract review` for an
   operational, two-stage path from contained PRD/design sources through a
   deployment-owned HTTP provider to reviewed ACL Surface Contracts.
@@ -22,6 +30,16 @@
 
 ### Safety
 
+- Embedded CLI runs require at least one local `expect` action. Model
+  `finish` is provisional until read-only verification passes and the exact
+  browser session closes successfully. One workflow deadline covers opening,
+  initial navigation, observe-decide-act turns, and verification; cleanup has
+  its own bounded deadline.
+- Planner endpoints use HTTPS or explicit loopback HTTP, disable redirects and
+  environment proxies, bound request and response bodies, and obtain optional
+  authorization only from a named environment variable. Complete reports,
+  including surface-open failures and Test Kit context, use the same exact
+  secret and credential-key redaction policy before atomic publication.
 - CLI commands run on an explicitly sized async worker stack, and command
   futures are type-erased at dispatch so large unrelated branches cannot
   exhaust the smaller Windows process-entry stack.

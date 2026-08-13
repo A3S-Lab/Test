@@ -1,0 +1,28 @@
+agent_run "checkout" {
+  url = "http://127.0.0.1:3000/checkout"
+  goal = "Complete checkout with the fixture account"
+  success_criteria = ["The order confirmation is visible"]
+  allow_actions = ["click", "fill", "wait"]
+  max_turns = 8
+  max_total_tokens = 20000
+  max_cost_microusd = 50000
+  max_context_bytes = 524288
+  timeout_ms = 120000
+
+  provider {
+    name = "deployment"
+    model = "planner"
+    endpoint = "https://models.example.test/v1/plan"
+    authorization_env = "A3S_TEST_PROVIDER_AUTHORIZATION_DEPLOYMENT"
+  }
+
+  verification {
+    expect "confirmation" {
+      text = "Order confirmed"
+    }
+
+    screenshot "final" {
+      path = "confirmation.png"
+    }
+  }
+}

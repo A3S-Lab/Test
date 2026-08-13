@@ -3,7 +3,8 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     ContractGenerationProviderRequest, ContractGenerationProviderResponse,
-    GroundingProviderRequest, GroundingProviderResponse,
+    GroundingProviderRequest, GroundingProviderResponse, StructuredLlmRequest,
+    StructuredLlmResponse,
 };
 
 fn contract_generation_protocol_schema(_: &mut SchemaGenerator) -> Schema {
@@ -17,6 +18,13 @@ fn visual_grounding_protocol_schema(_: &mut SchemaGenerator) -> Schema {
     schemars::json_schema!({
         "type": "string",
         "const": "a3s.test.visual-grounding-provider/1"
+    })
+}
+
+fn llm_protocol_schema(_: &mut SchemaGenerator) -> Schema {
+    schemars::json_schema!({
+        "type": "string",
+        "const": "a3s.test.llm-provider/1"
     })
 }
 
@@ -74,6 +82,29 @@ pub enum HttpVisualGroundingResponse {
     },
     Failure {
         #[schemars(schema_with = "visual_grounding_protocol_schema")]
+        protocol: String,
+        error: HttpProviderErrorResponse,
+    },
+}
+
+#[derive(Clone, Debug, Deserialize, JsonSchema, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct HttpLlmCompletionRequest {
+    #[schemars(schema_with = "llm_protocol_schema")]
+    pub protocol: String,
+    pub request: StructuredLlmRequest,
+}
+
+#[derive(Clone, Debug, Deserialize, JsonSchema, PartialEq, Serialize)]
+#[serde(tag = "status", rename_all = "snake_case", deny_unknown_fields)]
+pub enum HttpLlmCompletionResponse {
+    Success {
+        #[schemars(schema_with = "llm_protocol_schema")]
+        protocol: String,
+        response: StructuredLlmResponse,
+    },
+    Failure {
+        #[schemars(schema_with = "llm_protocol_schema")]
         protocol: String,
         error: HttpProviderErrorResponse,
     },

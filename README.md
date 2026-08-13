@@ -24,11 +24,14 @@
   <a href="#documentation">Read the contracts</a>
 </p>
 
-The coding agent remains the planner. A3S Code, Codex, Claude Code, or another
-Agent Skills-compatible tool observes the surface and chooses one action at a
-time; A3S Test validates that action, keeps the surface alive, records the
-turn, and closes only the runtime it owns. There is no nested model, keyword
-router, or second hidden test engine in this workflow.
+In the primary workflow, the coding agent remains the planner. A3S Code,
+Codex, Claude Code, or another Agent Skills-compatible tool observes the
+surface and chooses one action at a time; A3S Test validates that action,
+keeps the surface alive, records the turn, and closes only the runtime it
+owns. There is no nested model, keyword router, or second hidden test engine
+in this workflow. Deployments that intentionally want a one-shot embedded
+planner can instead use `a3s-test agent run` with ACL, a deployment-supplied
+HTTP LLM provider, and deterministic local verification.
 
 Web testing is available through
 [A3S Browser](https://github.com/A3S-Lab/Browser) or a compatible standalone
@@ -97,6 +100,38 @@ Each workspace keeps an append-only execution record:
 `agent observe`. Compact commands cover common browser turns; `agent act
 --action-json` exposes the complete generated action schema.
 
+### Run one workflow with a deployment planner
+
+The direct host keeps ACL as the only product configuration language and owns
+the complete Web lifecycle:
+
+```bash
+a3s-test provider schema llm
+a3s-test agent run examples/agent-web.acl --json
+```
+
+The ACL declares the initial URL, observable goal, exact action capability
+set, origin and network scope, turn/token/cost/context/time budgets, provider
+endpoint, and read-only verification. The provider can propose one typed
+action or finish/fail; it cannot determine the verdict, claim browser
+observation, or authorize repair. A model finish succeeds only after at least
+one local `expect` passes and the exact browser session closes successfully.
+
+Complete, redacted reports are atomically written even when surface opening
+fails:
+
+```text
+.a3s-test/agent-runs/<run-id>/
+├── report.json
+└── artifacts/
+```
+
+The workflow deadline covers surface open, initial navigation, model turns,
+actions, Test Kit revision checks, and deterministic verification. Cleanup
+uses a separate bounded deadline so timed-out work still retains exact process
+reaping responsibility. See the [agentic contract](docs/agentic.md) and
+[agent-run ACL specification](docs/specification.md#agent-run-configuration).
+
 ### Embed page context and human repair review
 
 Development frontends can embed [`@a3s-lab/testkit`](packages/testkit) to
@@ -139,6 +174,7 @@ safety contract before implementing a local-process or remote-service adapter:
 
 ```bash
 a3s-test provider schema contract-generation
+a3s-test provider schema llm
 a3s-test provider schema visual-grounding
 ```
 
@@ -501,7 +537,7 @@ and cleanup invariants.
 
 | Surface | Status | Interface | Backing adapter |
 | --- | --- | --- | --- |
-| Web | Available | Persistent agent CLI and ACL suites | A3S Browser or compatible standalone `agent-browser` |
+| Web | Available | Persistent agent CLI, direct embedded-planner CLI, and ACL suites | A3S Browser or compatible standalone `agent-browser` |
 | GUI | Contract-tested on macOS | Surface-neutral MCP agent sessions and ACL runner boundary | Locked A3S CUA `0.10.0` semantic and window-vision profiles |
 | TUI | Planned | Driver contract reserved | PTY and semantic terminal model |
 
@@ -538,6 +574,7 @@ opt-in. Inspect the exact protocol installed on the machine with:
 a3s-test capabilities --json
 a3s-test agent schema
 a3s-test provider schema contract-generation
+a3s-test provider schema llm
 a3s-test provider schema visual-grounding
 ```
 
