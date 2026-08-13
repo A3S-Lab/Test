@@ -220,7 +220,9 @@ observation ID, dimensions, finite in-bounds geometry, confidence, strings,
 candidate count, deadline, cancellation, and provider-reported cost. Screenshot
 pixels or normalized coordinates are converted to current visual-viewport CSS
 pixels before hit-testing visible, unobscured Test Kit nodes. Exactly one hit
-can be upgraded to that node's current ref or preferred semantic locator.
+can be upgraded to that node's current ref or preferred semantic locator. The
+operational CLI binds a complete current snapshot first, so its semantic hits
+use observation-scoped `@cN` refs.
 Multiple hits are reported as ambiguous and never guessed.
 
 Provider output is never a durable element identity. An unmapped or ambiguous
@@ -234,7 +236,7 @@ operational review. Research-only weights are not bundled or downloaded by A3S
 Test.
 
 The same boundary exposes protocol
-`a3s.test.visual-grounding-provider/1` through `a3s-test provider schema
+`a3s.test.visual-grounding-provider/2` through `a3s-test provider schema
 visual-grounding`. Its generated schemas cover observation and screenshot
 binding, deadlines, costs, point/box geometry, coordinate spaces, identity,
 and usage. The bundle states advisory authority and non-verdict/non-repair
@@ -248,6 +250,15 @@ and health policy outside A3S Test. The adapter only exchanges a versioned
 request and response; `VisualGroundingService` remains the authority boundary
 for screenshot rehashing, current-observation binding, semantic hit-testing,
 cost, and advisory provenance.
+
+`a3s-test agent ground` is the operational external-planner composition. It
+admits ACL, credentials, identity, limits, and query before touching the
+browser; captures a 32 MiB-bounded PNG against the latest stored Test Kit
+revision; rebuilds and compares current `@cN` bindings; sends the image in the
+version 2 HTTP envelope; and revalidates the revision after inference. The
+command produces an event and screenshot evidence but no action. A provider
+or page-context failure invalidates the observation so a stale candidate
+cannot be retried.
 
 ```text
 DOM / AX / Test Kit semantic target ──success──> current semantic action

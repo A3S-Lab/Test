@@ -300,6 +300,7 @@ async fn rejects_page_context_from_another_observation() {
             request(GroundingTrigger::ExplicitRequest),
             Some(GroundingPageContext {
                 observation_id: 16,
+                surface_revision: 17,
                 snapshot: &stale_page,
             }),
             CancellationToken::new(),
@@ -311,25 +312,71 @@ async fn rejects_page_context_from_another_observation() {
 }
 
 #[tokio::test]
+async fn keeps_agent_observation_ids_independent_from_surface_revisions() {
+    let provider = Arc::new(FakeProvider::new([Ok(response(vec![point(
+        320.0, 180.0, 0.97,
+    )]))]));
+    let service = service(provider, Duration::from_secs(1));
+    let mut page = snapshot(vec![node(
+        "current-target",
+        "@c1",
+        300.0,
+        160.0,
+        100.0,
+        50.0,
+    )]);
+    page.revision = Some(42);
+    page.page = Some(page_for_viewport(640.0, 360.0));
+
+    let result = service
+        .ground(
+            request(GroundingTrigger::ExplicitRequest),
+            Some(GroundingPageContext {
+                observation_id: 17,
+                surface_revision: 42,
+                snapshot: &page,
+            }),
+            CancellationToken::new(),
+        )
+        .await
+        .expect("independent surface revision");
+
+    let GroundingResult::Semantic { matches, .. } = result else {
+        panic!("current semantic target expected");
+    };
+    assert_eq!(matches[0].reference.as_deref(), Some("@c1"));
+}
+
+#[tokio::test]
 async fn rejects_truncated_or_revision_mismatched_page_context() {
-    for page in [
-        {
-            let mut page = snapshot(Vec::new());
-            page.truncated = true;
-            page
-        },
-        {
-            let mut page = snapshot(Vec::new());
-            page.revision = Some(16);
-            page
-        },
+    for (page, surface_revision) in [
+        (
+            {
+                let mut page = snapshot(Vec::new());
+                page.truncated = true;
+                page
+            },
+            17,
+        ),
+        (
+            {
+                let mut page = snapshot(Vec::new());
+                page.revision = Some(16);
+                page
+            },
+            17,
+        ),
     ] {
         let provider = Arc::new(FakeProvider::new([]));
         let service = service(provider.clone(), Duration::from_secs(1));
         let error = service
             .ground(
                 request(GroundingTrigger::ExplicitRequest),
-                Some(context(&page)),
+                Some(GroundingPageContext {
+                    observation_id: 17,
+                    surface_revision,
+                    snapshot: &page,
+                }),
                 CancellationToken::new(),
             )
             .await
@@ -571,6 +618,7 @@ fn snapshot(nodes: Vec<PageContextNode>) -> PageContextSnapshot {
 fn context(snapshot: &PageContextSnapshot) -> GroundingPageContext<'_> {
     GroundingPageContext {
         observation_id: 17,
+        surface_revision: snapshot.revision.unwrap_or_default(),
         snapshot,
     }
 }

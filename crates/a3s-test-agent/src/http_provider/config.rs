@@ -67,7 +67,7 @@ impl HttpProviderConfig {
         Self {
             endpoint,
             timeout: Duration::from_secs(30),
-            max_request_bytes: 32 * 1_024 * 1_024,
+            max_request_bytes: 64 * 1_024 * 1_024,
             max_response_bytes: 32 * 1_024 * 1_024,
             authorization: None,
         }

@@ -168,6 +168,24 @@ target; ambiguous or unmapped results remain advisory, image-bound candidates.
 This path is an explicit request or semantic fallback, never the default Web
 locator.
 
+Persistent Web sessions can use that boundary directly without granting the
+provider action authority:
+
+```bash
+a3s-test agent ground "Checkout button" \
+  --session checkout \
+  --observation 1 \
+  --config examples/visual-grounding.acl \
+  --reason no-semantic-match \
+  --json
+```
+
+The command admits the ACL and credentials before connecting to the browser,
+captures one PNG while the latest Test Kit revision remains stable, sends the
+digest-bound bytes in the version 2 HTTP envelope, and revalidates the page
+revision after provider inference. It never clicks. A unique hit may return a
+current `@cN` ref; zero or multiple hits remain image-bound advisory evidence.
+
 Both provider boundaries have stable, transport-neutral protocol identifiers
 and generated JSON Schemas. Inspect the exact request, response, authority, and
 safety contract before implementing a local-process or remote-service adapter:
@@ -205,12 +223,14 @@ let provider = Arc::new(HttpVisualGroundingProvider::new(
 let service = VisualGroundingService::new(provider, Default::default())?;
 ```
 
-The adapter uses one `POST application/json` version envelope, disables
-redirects and environment proxies, requires HTTPS except for explicit
-loopback HTTP, bounds request/response bodies, enforces both transport and
-wire deadlines, and redacts configured authorization values from remote error
-messages. The surrounding service still rehashes evidence and independently
-admits identity, provenance, geometry, usage, and authority.
+The visual-grounding version 2 envelope carries a logical image name plus the
+admitted PNG bytes, so remote services do not need access to a client-local
+filesystem path. The adapter uses one `POST application/json` version
+envelope, disables redirects and environment proxies, requires HTTPS except
+for explicit loopback HTTP, bounds request/response bodies, enforces both
+transport and wire deadlines, and redacts configured authorization values from
+remote error messages. The surrounding service still rehashes evidence and
+independently admits identity, provenance, geometry, usage, and authority.
 
 ### Generate a reviewed contract from sources
 

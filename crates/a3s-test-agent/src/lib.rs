@@ -26,8 +26,8 @@ pub use contract_generation::{
 pub use error::{AgentError, ContractGenerationError, GroundingError, LlmError};
 pub use grounding::{
     GroundingAuthority, GroundingCandidate, GroundingCandidateGeometry, GroundingCoordinateSpace,
-    GroundingImageCandidate, GroundingOptions, GroundingPageContext, GroundingPoint,
-    GroundingProvenance, GroundingProviderIdentity, GroundingProviderRequest,
+    GroundingImageAttachment, GroundingImageCandidate, GroundingOptions, GroundingPageContext,
+    GroundingPoint, GroundingProvenance, GroundingProviderIdentity, GroundingProviderRequest,
     GroundingProviderResponse, GroundingRequest, GroundingResult, GroundingSemanticMatch,
     GroundingTrigger, GroundingUsage, SemanticFallbackReason, VisualGroundingProvider,
     VisualGroundingService,

@@ -3,10 +3,14 @@ use std::io::{self, Write};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use async_trait::async_trait;
+use base64::engine::general_purpose::STANDARD as BASE64_STANDARD;
+use base64::Engine as _;
 use reqwest::header::{ACCEPT, CONTENT_LENGTH, CONTENT_TYPE};
 use reqwest::{redirect, Client, StatusCode};
 use serde::de::DeserializeOwned;
 use serde::Serialize;
+use sha2::{Digest, Sha256};
+use tokio::io::AsyncReadExt;
 
 mod config;
 mod wire;
@@ -19,13 +23,14 @@ pub use wire::{
 };
 use wire::{HttpProviderRemoteError, HttpProviderRequestEnvelope, HttpProviderResponseEnvelope};
 
+use crate::grounding::MAX_GROUNDING_IMAGE_BYTES;
 use crate::{
     ContractGenerationError, ContractGenerationProvider, ContractGenerationProviderIdentity,
     ContractGenerationProviderRequest, ContractGenerationProviderResponse, GroundingError,
-    GroundingProviderIdentity, GroundingProviderRequest, GroundingProviderResponse, LlmError,
-    LlmIdentity, LlmProvider, StructuredLlmRequest, StructuredLlmResponse, VisualGroundingProvider,
-    CONTRACT_GENERATION_PROVIDER_PROTOCOL, LLM_PROVIDER_PROTOCOL,
-    VISUAL_GROUNDING_PROVIDER_PROTOCOL,
+    GroundingImageAttachment, GroundingProviderIdentity, GroundingProviderRequest,
+    GroundingProviderResponse, LlmError, LlmIdentity, LlmProvider, StructuredLlmRequest,
+    StructuredLlmResponse, VisualGroundingProvider, CONTRACT_GENERATION_PROVIDER_PROTOCOL,
+    LLM_PROVIDER_PROTOCOL, VISUAL_GROUNDING_PROVIDER_PROTOCOL,
 };
 
 const MAX_ERROR_MESSAGE_CHARACTERS: usize = 64 * 1_024;
@@ -66,13 +71,9 @@ impl HttpProviderTransport {
         Request: Serialize,
         Response: DeserializeOwned,
     {
-        admitted_request_timeout(issued_at_unix_ms, deadline_unix_ms, self.config.timeout)?;
-        self.exchange_with_timeout(
-            protocol,
-            request,
-            admitted_request_timeout(issued_at_unix_ms, deadline_unix_ms, self.config.timeout)?,
-        )
-        .await
+        let timeout =
+            admitted_request_timeout(issued_at_unix_ms, deadline_unix_ms, self.config.timeout)?;
+        self.exchange_with_timeout(protocol, request, timeout).await
     }
 
     async fn exchange_without_wire_deadline<Request, Response>(
@@ -88,6 +89,27 @@ impl HttpProviderTransport {
             .await
     }
 
+    async fn exchange_visual_grounding<Response>(
+        &self,
+        protocol: &'static str,
+        request: &GroundingProviderRequest,
+        image: &GroundingImageAttachment,
+        issued_at_unix_ms: u64,
+        deadline_unix_ms: u64,
+    ) -> Result<Response, HttpExchangeError>
+    where
+        Response: DeserializeOwned,
+    {
+        let timeout =
+            admitted_request_timeout(issued_at_unix_ms, deadline_unix_ms, self.config.timeout)?;
+        let envelope = HttpVisualGroundingRequest {
+            protocol: protocol.to_string(),
+            request: request.clone(),
+            image: image.clone(),
+        };
+        self.exchange_envelope(protocol, &envelope, timeout).await
+    }
+
     async fn exchange_with_timeout<Request, Response>(
         &self,
         protocol: &'static str,
@@ -99,7 +121,21 @@ impl HttpProviderTransport {
         Response: DeserializeOwned,
     {
         let envelope = HttpProviderRequestEnvelope { protocol, request };
-        let body = serialize_bounded_request(&envelope, self.config.max_request_bytes)?;
+        self.exchange_envelope(protocol, &envelope, request_timeout)
+            .await
+    }
+
+    async fn exchange_envelope<Envelope, Response>(
+        &self,
+        protocol: &'static str,
+        envelope: &Envelope,
+        request_timeout: Duration,
+    ) -> Result<Response, HttpExchangeError>
+    where
+        Envelope: Serialize,
+        Response: DeserializeOwned,
+    {
+        let body = serialize_bounded_request(envelope, self.config.max_request_bytes)?;
 
         let mut request_builder = self
             .client
@@ -417,12 +453,41 @@ impl VisualGroundingProvider for HttpVisualGroundingProvider {
         &self,
         request: GroundingProviderRequest,
     ) -> Result<GroundingProviderResponse, GroundingError> {
+        admitted_request_timeout(
+            request.issued_at_unix_ms,
+            request.deadline_unix_ms,
+            self.transport.config.timeout,
+        )
+        .map_err(grounding_http_error)?;
+        let screenshot_path = request.screenshot_path.clone();
+        let screenshot_sha256 = request.screenshot_sha256.clone();
+        let issued_at_unix_ms = request.issued_at_unix_ms;
+        let deadline_unix_ms = request.deadline_unix_ms;
+        let screenshot_bytes = read_grounding_image(&screenshot_path).await?;
+        let actual_sha256 = format!("sha256:{:x}", Sha256::digest(&screenshot_bytes));
+        if actual_sha256 != screenshot_sha256 {
+            return Err(GroundingError::new(
+                "test.agent.grounding.http.image_mismatch",
+                "grounding image bytes changed after request admission",
+                false,
+            ));
+        }
+        let wire_request = GroundingProviderRequest {
+            screenshot_path: "observation.png".to_string(),
+            ..request
+        };
+        let image = GroundingImageAttachment {
+            screenshot_sha256,
+            media_type: "image/png".to_string(),
+            bytes_base64: BASE64_STANDARD.encode(screenshot_bytes),
+        };
         self.transport
-            .exchange(
+            .exchange_visual_grounding(
                 VISUAL_GROUNDING_PROVIDER_PROTOCOL,
-                &request,
-                request.issued_at_unix_ms,
-                request.deadline_unix_ms,
+                &wire_request,
+                &image,
+                issued_at_unix_ms,
+                deadline_unix_ms,
             )
             .await
             .and_then(|response: GroundingProviderResponse| {
@@ -436,6 +501,66 @@ impl VisualGroundingProvider for HttpVisualGroundingProvider {
             })
             .map_err(grounding_http_error)
     }
+}
+
+async fn read_grounding_image(path: &str) -> Result<Vec<u8>, GroundingError> {
+    validate_grounding_image_path(path)?;
+    let metadata = tokio::fs::symlink_metadata(path).await.map_err(|error| {
+        GroundingError::new(
+            "test.agent.grounding.http.image_invalid",
+            format!("failed to inspect grounding image: {error}"),
+            false,
+        )
+    })?;
+    if !metadata.file_type().is_file()
+        || metadata.file_type().is_symlink()
+        || metadata.len() == 0
+        || metadata.len() > MAX_GROUNDING_IMAGE_BYTES
+    {
+        return Err(GroundingError::new(
+            "test.agent.grounding.http.image_invalid",
+            "grounding image must be a bounded non-empty regular file",
+            false,
+        ));
+    }
+    let file = tokio::fs::File::open(path).await.map_err(|error| {
+        GroundingError::new(
+            "test.agent.grounding.http.image_invalid",
+            format!("failed to open grounding image: {error}"),
+            false,
+        )
+    })?;
+    let mut bytes = Vec::with_capacity(metadata.len() as usize);
+    file.take(MAX_GROUNDING_IMAGE_BYTES + 1)
+        .read_to_end(&mut bytes)
+        .await
+        .map_err(|error| {
+            GroundingError::new(
+                "test.agent.grounding.http.image_invalid",
+                format!("failed to read grounding image: {error}"),
+                false,
+            )
+        })?;
+    if bytes.is_empty() || bytes.len() as u64 > MAX_GROUNDING_IMAGE_BYTES {
+        return Err(GroundingError::new(
+            "test.agent.grounding.http.image_invalid",
+            "grounding image changed outside the admitted size bound",
+            false,
+        ));
+    }
+    Ok(bytes)
+}
+
+fn validate_grounding_image_path(path: &str) -> Result<(), GroundingError> {
+    const MAX_PATH_BYTES: usize = 16 * 1_024;
+    if path.trim().is_empty() || path.len() > MAX_PATH_BYTES {
+        return Err(GroundingError::new(
+            "test.agent.grounding.http.image_invalid",
+            format!("grounding image path must contain 1 to {MAX_PATH_BYTES} bytes"),
+            false,
+        ));
+    }
+    Ok(())
 }
 
 fn admitted_request_timeout(

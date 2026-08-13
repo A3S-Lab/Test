@@ -387,14 +387,14 @@ service. A3S Test neither bundles model weights nor selects one by model-name
 string. The deploying host is responsible for credentials, capacity, privacy,
 and license compliance.
 
-External adapters can discover the transport-neutral version 1 wire contract
+External adapters can discover the transport-neutral version 2 wire contract
 without linking the Rust trait:
 
 ```bash
 a3s-test provider schema visual-grounding
 ```
 
-The output identifies `a3s.test.visual-grounding-provider/1`, declares
+The output identifies `a3s.test.visual-grounding-provider/2`, declares
 `authority = advisory`, records the non-authority invariants, and includes
 generated JSON Schema 2020-12 documents for `GroundingProviderRequest` and
 `GroundingProviderResponse`. Unknown fields are rejected by the wire types. A
@@ -406,6 +406,29 @@ endpoint and optional authorization value; public SDK options do not select a
 backend with a model-name string. The adapter posts the version envelope shown
 in the discovered `http.request_envelope_schema` and admits the corresponding
 response envelope before `VisualGroundingService` performs semantic admission.
+Version 2 embeds the admitted PNG as a digest-bound Base64 attachment and uses
+`observation.png` as its logical path; a remote provider never dereferences the
+client's local evidence path.
+
+The persistent external-planner CLI exposes this path explicitly:
+
+```bash
+a3s-test agent ground "Primary checkout action" \
+  --session checkout \
+  --observation 7 \
+  --config examples/visual-grounding.acl \
+  --reason no-semantic-match \
+  --json
+```
+
+Configuration, authorization, provider identity, query size, and grounding
+limits are admitted before browser connection. The Web driver captures one
+bounded PNG between two matching Test Kit revisions. The CLI rebuilds the
+current `@cN` bindings and requires them to exactly match the latest
+observation, invokes the provider, then verifies the revision again. Any
+provider failure, cancellation, binding change, or revision drift invalidates
+the observation. Success records advisory evidence only and never dispatches
+input.
 
 ## Contract-generation provider
 

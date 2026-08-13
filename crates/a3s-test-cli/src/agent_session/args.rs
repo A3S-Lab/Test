@@ -23,6 +23,8 @@ pub(super) enum AgentCommand {
     Observe(ObserveArgs),
     /// Inspect one bounded Test Kit page, component, node, or region scope.
     Inspect(InspectArgs),
+    /// Locate a target from a fresh revision-bound screenshot without acting.
+    Ground(GroundArgs),
     /// Execute one schema-validated action in an active session.
     Act(ActArgs),
     /// Click a ref or CSS target in an active session.
@@ -166,6 +168,37 @@ pub(super) struct InspectArgs {
     /// Emit machine-readable JSON.
     #[arg(long)]
     pub(super) json: bool,
+}
+
+#[derive(Debug, Args)]
+pub(super) struct GroundArgs {
+    /// Natural-language description of the target to locate.
+    pub(super) query: String,
+    /// Active session identifier.
+    #[arg(long)]
+    pub(super) session: String,
+    /// Latest observation identifier whose page revision is being grounded.
+    #[arg(long)]
+    pub(super) observation: u64,
+    /// ACL provider configuration.
+    #[arg(long)]
+    pub(super) config: PathBuf,
+    /// Typed reason for using visual fallback.
+    #[arg(long, value_enum, default_value_t = GroundingReason::Explicit)]
+    pub(super) reason: GroundingReason,
+    /// Emit machine-readable JSON.
+    #[arg(long)]
+    pub(super) json: bool,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq, ValueEnum)]
+pub(super) enum GroundingReason {
+    Explicit,
+    Canvas,
+    ImageOnly,
+    RemoteDesktop,
+    DesignReference,
+    NoSemanticMatch,
 }
 
 #[derive(Debug, Args)]

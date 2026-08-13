@@ -81,6 +81,15 @@ impl ProvenanceRedactor {
         self.redact_value(value);
     }
 
+    /// Redact configured secrets and sensitive URL components in host-owned
+    /// unstructured diagnostics before they are persisted or emitted.
+    #[must_use]
+    pub fn redacted_text(&self, value: impl Into<String>) -> String {
+        let mut value = value.into();
+        self.redact_text(&mut value);
+        value
+    }
+
     pub(crate) fn redact_result(&self, mut result: AgentRunResult) -> AgentRunResult {
         self.redact_text(&mut result.provider.provider);
         self.redact_text(&mut result.provider.model);

@@ -1,8 +1,11 @@
 use std::path::{Component, Path, PathBuf};
 
 use a3s_test_core::DriverError;
+use tokio::io::AsyncReadExt;
 
 use crate::path_security::{is_link_like, normalize_canonical_path};
+
+pub(crate) const MAX_GROUNDING_IMAGE_BYTES: u64 = 32 * 1_024 * 1_024;
 
 pub(crate) async fn prepare_artifact_root(path: &Path) -> Result<PathBuf, DriverError> {
     let absolute = absolute_path(path)?;
@@ -113,6 +116,49 @@ pub(crate) async fn validate_artifact_file(root: &Path, path: &Path) -> Result<(
         ));
     }
     Ok(())
+}
+
+pub(crate) async fn read_bounded_artifact(
+    root: &Path,
+    path: &Path,
+    max_bytes: u64,
+) -> Result<Vec<u8>, DriverError> {
+    validate_artifact_file(root, path).await?;
+    let metadata = tokio::fs::symlink_metadata(path).await.map_err(|error| {
+        DriverError::new(
+            "test.driver.web.artifact_output_invalid",
+            format!("failed to inspect browser artifact: {error}"),
+        )
+    })?;
+    if metadata.len() == 0 || metadata.len() > max_bytes {
+        return Err(DriverError::new(
+            "test.driver.web.artifact_output_invalid",
+            format!("browser artifact must contain 1 to {max_bytes} bytes"),
+        ));
+    }
+    let file = tokio::fs::File::open(path).await.map_err(|error| {
+        DriverError::new(
+            "test.driver.web.artifact_output_invalid",
+            format!("failed to open browser artifact: {error}"),
+        )
+    })?;
+    let mut bytes = Vec::with_capacity(metadata.len() as usize);
+    file.take(max_bytes + 1)
+        .read_to_end(&mut bytes)
+        .await
+        .map_err(|error| {
+            DriverError::new(
+                "test.driver.web.artifact_output_invalid",
+                format!("failed to read browser artifact: {error}"),
+            )
+        })?;
+    if bytes.is_empty() || bytes.len() as u64 > max_bytes {
+        return Err(DriverError::new(
+            "test.driver.web.artifact_output_invalid",
+            format!("browser artifact must contain 1 to {max_bytes} bytes"),
+        ));
+    }
+    Ok(bytes)
 }
 
 async fn prepare_contained_directory(root: &Path, relative: &Path) -> Result<PathBuf, DriverError> {

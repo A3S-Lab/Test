@@ -3,8 +3,8 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     ContractGenerationProviderRequest, ContractGenerationProviderResponse,
-    GroundingProviderRequest, GroundingProviderResponse, StructuredLlmRequest,
-    StructuredLlmResponse,
+    GroundingImageAttachment, GroundingProviderRequest, GroundingProviderResponse,
+    StructuredLlmRequest, StructuredLlmResponse,
 };
 
 fn contract_generation_protocol_schema(_: &mut SchemaGenerator) -> Schema {
@@ -17,7 +17,7 @@ fn contract_generation_protocol_schema(_: &mut SchemaGenerator) -> Schema {
 fn visual_grounding_protocol_schema(_: &mut SchemaGenerator) -> Schema {
     schemars::json_schema!({
         "type": "string",
-        "const": "a3s.test.visual-grounding-provider/1"
+        "const": "a3s.test.visual-grounding-provider/2"
     })
 }
 
@@ -70,6 +70,7 @@ pub struct HttpVisualGroundingRequest {
     #[schemars(schema_with = "visual_grounding_protocol_schema")]
     pub protocol: String,
     pub request: GroundingProviderRequest,
+    pub image: GroundingImageAttachment,
 }
 
 #[derive(Clone, Debug, Deserialize, JsonSchema, PartialEq, Serialize)]

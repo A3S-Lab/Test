@@ -16,10 +16,16 @@ use a3s_test_agent::{
 };
 use a3s_test_core::{ContractContext, ContractMode, Surface, SurfaceObservation};
 use serde_json::{json, Value};
+use sha2::{Digest, Sha256};
 use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
 use tokio::net::{TcpListener, TcpStream};
 
 const MAX_TEST_REQUEST_BYTES: usize = 2 * 1_024 * 1_024;
+const GROUNDING_IMAGE_BYTES: &[u8] = b"a3s-test HTTP grounding fixture";
+
+thread_local! {
+    static GROUNDING_IMAGES: std::cell::RefCell<Vec<tempfile::TempDir>> = const { std::cell::RefCell::new(Vec::new()) };
+}
 
 #[derive(Clone, Debug)]
 struct CapturedRequest {
@@ -177,7 +183,20 @@ async fn visual_grounding_adapter_preserves_digest_deadline_cost_and_identity() 
     let envelope: HttpVisualGroundingRequest =
         serde_json::from_slice(&requests[0].body).expect("grounding request envelope");
     assert_eq!(envelope.protocol, VISUAL_GROUNDING_PROVIDER_PROTOCOL);
-    assert_eq!(envelope.request, request);
+    assert_eq!(envelope.request.screenshot_path, "observation.png");
+    assert_eq!(
+        envelope.request.screenshot_sha256,
+        request.screenshot_sha256
+    );
+    assert_eq!(envelope.image.screenshot_sha256, request.screenshot_sha256);
+    assert_eq!(envelope.image.media_type, "image/png");
+    assert_eq!(
+        envelope.image.bytes_base64,
+        "YTNzLXRlc3QgSFRUUCBncm91bmRpbmcgZml4dHVyZQ=="
+    );
+    let debug = format!("{:?}", envelope.image);
+    assert!(debug.contains("<redacted>"));
+    assert!(!debug.contains(&envelope.image.bytes_base64));
 }
 
 #[tokio::test]
@@ -389,6 +408,40 @@ async fn adapter_rejects_oversized_requests_before_network_dispatch() {
 }
 
 #[tokio::test]
+async fn adapter_rejects_replaced_image_bytes_before_network_dispatch() {
+    let server = FixtureServer::start(Vec::new()).await;
+    let provider = grounding_provider(&server, None);
+    let request = grounding_request();
+    std::fs::write(&request.screenshot_path, b"replacement bytes")
+        .expect("replace grounding image");
+
+    let error = provider
+        .locate(request)
+        .await
+        .expect_err("digest mismatch must fail closed");
+
+    assert_eq!(error.code(), "test.agent.grounding.http.image_mismatch");
+    assert!(!error.retryable());
+    assert!(server.finish().await.is_empty());
+}
+
+#[tokio::test]
+async fn adapter_rejects_unbounded_image_paths_before_filesystem_or_network_access() {
+    let server = FixtureServer::start(Vec::new()).await;
+    let provider = grounding_provider(&server, None);
+    let mut request = grounding_request();
+    request.screenshot_path = "x".repeat(16 * 1_024 + 1);
+
+    let error = provider
+        .locate(request)
+        .await
+        .expect_err("unbounded image path");
+
+    assert_eq!(error.code(), "test.agent.grounding.http.image_invalid");
+    assert!(server.finish().await.is_empty());
+}
+
+#[tokio::test]
 async fn adapter_rejects_ambiguous_missing_and_unknown_response_statuses() {
     let server = FixtureServer::start(vec![
         ResponseSpec::json(json!({
@@ -572,9 +625,13 @@ fn contract_request() -> ContractGenerationProviderRequest {
 
 fn grounding_request() -> GroundingProviderRequest {
     let issued_at_unix_ms = unix_ms();
+    let directory = tempfile::tempdir().expect("temporary grounding image directory");
+    let screenshot_path = directory.path().join("observation.png");
+    std::fs::write(&screenshot_path, GROUNDING_IMAGE_BYTES).expect("write grounding image fixture");
+    GROUNDING_IMAGES.with(|images| images.borrow_mut().push(directory));
     GroundingProviderRequest {
-        screenshot_path: "/workspace/screenshot.png".to_string(),
-        screenshot_sha256: format!("sha256:{}", "a".repeat(64)),
+        screenshot_path: screenshot_path.to_string_lossy().into_owned(),
+        screenshot_sha256: format!("sha256:{:x}", Sha256::digest(GROUNDING_IMAGE_BYTES)),
         width: 1_440,
         height: 900,
         query: "Checkout button".to_string(),

@@ -45,6 +45,13 @@ a3s-test agent inspect \
   [--limit 100] \
   --json
 
+a3s-test agent ground <query> \
+  --session <id> \
+  --observation <latest-observation-id> \
+  --config <visual-grounding.acl> \
+  [--reason explicit|canvas|image-only|remote-desktop|design-reference|no-semantic-match] \
+  --json
+
 a3s-test agent finish \
   --session <id> \
   --status passed|failed \
@@ -61,6 +68,15 @@ Omit `--headed` for enforced headless execution even when the user Browser
 environment or configuration requests a visible window. `--headed` is the
 explicit debugging opt-in. On Windows, Browser command shims run without
 creating a CMD window.
+
+`ground` is an advisory location operation, not an action. ACL and provider
+admission happen before browser connection. The command captures one bounded
+PNG against the stored Test Kit revision, requires current `@cN` bindings to
+match the latest observation, sends the digest-bound image to the configured
+provider, and revalidates the revision afterward. A unique hit may return a
+current `@cN`; ambiguity remains image-bound. It never dispatches input,
+determines a verdict, or authorizes repair. Any failure invalidates the latest
+observation.
 
 ## Compact actions
 

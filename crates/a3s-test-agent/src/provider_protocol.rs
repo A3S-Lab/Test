@@ -11,7 +11,7 @@ use crate::{
 
 pub const CONTRACT_GENERATION_PROVIDER_PROTOCOL: &str = "a3s.test.contract-generation-provider/1";
 pub const LLM_PROVIDER_PROTOCOL: &str = "a3s.test.llm-provider/1";
-pub const VISUAL_GROUNDING_PROVIDER_PROTOCOL: &str = "a3s.test.visual-grounding-provider/1";
+pub const VISUAL_GROUNDING_PROVIDER_PROTOCOL: &str = "a3s.test.visual-grounding-provider/2";
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]

@@ -3,9 +3,9 @@ use std::path::PathBuf;
 use async_trait::async_trait;
 
 use crate::{
-    ContractReport, DriverError, PageContextObservation, RepairAclProof, RepairEvidenceBundle,
-    RepairEvidenceRequest, RepairFinding, RepairHumanAction, RepairStatusEvent, StepOutput,
-    Surface, SurfaceObservation, TestStep,
+    ContractReport, DriverError, GroundingScreenshot, PageContextObservation, RepairAclProof,
+    RepairEvidenceBundle, RepairEvidenceRequest, RepairFinding, RepairHumanAction,
+    RepairStatusEvent, StepOutput, Surface, SurfaceObservation, TestStep,
 };
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -146,6 +146,21 @@ pub trait DriverSession: Send {
         Err(DriverError::new(
             "test.driver.page_error_count_unsupported",
             "this surface driver does not expose a bounded page error count",
+        ))
+    }
+
+    /// Capture a bounded screenshot for an advisory visual-grounding request.
+    ///
+    /// Drivers must bind the image to `expected_surface_revision` when one is
+    /// supplied and fail closed if the surface changes during capture.
+    async fn capture_grounding_screenshot(
+        &mut self,
+        _requested_path: &str,
+        _expected_surface_revision: Option<u64>,
+    ) -> Result<GroundingScreenshot, DriverError> {
+        Err(DriverError::new(
+            "test.driver.grounding_screenshot_unsupported",
+            "this surface driver cannot capture revision-bound grounding evidence",
         ))
     }
 

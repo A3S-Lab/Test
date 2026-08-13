@@ -1,8 +1,8 @@
 use a3s_test_agent::{ActionPolicy, AgentError, PolicyContext};
 use a3s_test_core::{
-    Action, DriverError, DriverSession, PageContextInspectRequest, PageContextObservation,
-    RepairAclProof, RepairEvidenceBundle, RepairEvidenceRequest, RepairFinding, RepairHumanAction,
-    RepairStatusEvent, StepOutput, SurfaceObservation, TestStep,
+    Action, DriverError, DriverSession, GroundingScreenshot, PageContextInspectRequest,
+    PageContextObservation, RepairAclProof, RepairEvidenceBundle, RepairEvidenceRequest,
+    RepairFinding, RepairHumanAction, RepairStatusEvent, StepOutput, SurfaceObservation, TestStep,
 };
 use async_trait::async_trait;
 use url::Url;
@@ -141,6 +141,16 @@ impl DriverSession for AgentHostSession {
 
     async fn page_error_count(&mut self) -> Result<u32, DriverError> {
         self.inner.page_error_count().await
+    }
+
+    async fn capture_grounding_screenshot(
+        &mut self,
+        requested_path: &str,
+        expected_surface_revision: Option<u64>,
+    ) -> Result<GroundingScreenshot, DriverError> {
+        self.inner
+            .capture_grounding_screenshot(requested_path, expected_surface_revision)
+            .await
     }
 
     async fn close(&mut self) -> Result<(), DriverError> {

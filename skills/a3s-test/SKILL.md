@@ -75,6 +75,22 @@ to an ACL suite.
    An inspection replaces the latest observation. Its `@cN` refs expire on
    every state change, failed action, navigation, or newer observation.
 
+   When semantics cannot represent a canvas, image-only control, remote
+   desktop, or design reference and the deployment provides an admitted ACL,
+   request advisory visual location explicitly:
+
+   ```bash
+   a3s-test agent ground "Checkout button" \
+     --session checkout --observation 1 \
+     --config tests/visual-grounding.acl \
+     --reason no-semantic-match --json
+   ```
+
+   This command never clicks. Prefer a returned current `@cN` semantic match.
+   Zero or multiple semantic hits remain image-bound and require a fresh
+   observation or human decision. On any grounding error, observe again before
+   using refs because the command invalidates the observation.
+
 5. Execute exactly one typed action. Common actions have compact commands:
 
    ```bash

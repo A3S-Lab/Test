@@ -1,3 +1,4 @@
+use std::fmt;
 use std::time::Duration;
 
 use a3s_test_core::{PageContextSnapshot, Target};
@@ -51,6 +52,9 @@ pub struct GroundingRequest {
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct GroundingProviderRequest {
+    /// Adapter-owned evidence path for in-process or shared-filesystem providers.
+    /// HTTP adapters replace this with the logical attachment name and send
+    /// the admitted bytes in their versioned envelope.
     pub screenshot_path: String,
     pub screenshot_sha256: String,
     pub width: u32,
@@ -63,9 +67,32 @@ pub struct GroundingProviderRequest {
     pub max_cost_microusd: u64,
 }
 
+#[derive(Clone, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct GroundingImageAttachment {
+    #[schemars(regex(pattern = r"^sha256:[0-9a-f]{64}$"))]
+    pub screenshot_sha256: String,
+    #[schemars(regex(pattern = r"^image/png$"))]
+    pub media_type: String,
+    #[schemars(length(min = 4, max = 44739244))]
+    pub bytes_base64: String,
+}
+
+impl fmt::Debug for GroundingImageAttachment {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("GroundingImageAttachment")
+            .field("screenshot_sha256", &self.screenshot_sha256)
+            .field("media_type", &self.media_type)
+            .field("bytes_base64", &"<redacted>")
+            .finish()
+    }
+}
+
 #[derive(Clone, Copy, Debug)]
 pub struct GroundingPageContext<'a> {
     pub observation_id: u64,
+    pub surface_revision: u64,
     pub snapshot: &'a PageContextSnapshot,
 }
 

@@ -34,6 +34,11 @@ struct PageContextExecutor {
     revisions: Mutex<Vec<u64>>,
 }
 
+struct GroundingScreenshotExecutor {
+    invocations: Mutex<Vec<CommandInvocation>>,
+    revisions: Mutex<Vec<u64>>,
+}
+
 struct QualityProjectionExecutor {
     invocations: Mutex<Vec<CommandInvocation>>,
     accepted: bool,
@@ -60,6 +65,15 @@ impl PageContextExecutor {
         Self {
             invocations: Mutex::new(Vec::new()),
             revisions: Mutex::new(vec![1, 2, 3, 4]),
+        }
+    }
+}
+
+impl GroundingScreenshotExecutor {
+    fn new(revisions: Vec<u64>) -> Self {
+        Self {
+            invocations: Mutex::new(Vec::new()),
+            revisions: Mutex::new(revisions),
         }
     }
 }
@@ -193,6 +207,46 @@ impl CommandExecutor for PageContextExecutor {
             page_context_response(revision)
         } else {
             r#"{"success":true,"data":{"snapshot":"accessibility"}}"#.to_string()
+        };
+        Ok(CommandOutput {
+            exit_code: 0,
+            stdout,
+            stderr: String::new(),
+        })
+    }
+}
+
+#[async_trait]
+impl CommandExecutor for GroundingScreenshotExecutor {
+    async fn run(&self, invocation: CommandInvocation) -> Result<CommandOutput, CommandError> {
+        let version_probe = invocation
+            .args
+            .last()
+            .is_some_and(|argument| argument == "--version");
+        let is_eval = invocation.args.iter().any(|argument| argument == "eval");
+        let is_screenshot = invocation
+            .args
+            .iter()
+            .any(|argument| argument == "screenshot");
+        if is_screenshot {
+            let path = invocation
+                .args
+                .last()
+                .map(PathBuf::from)
+                .expect("grounding screenshot path");
+            if let Some(parent) = path.parent() {
+                std::fs::create_dir_all(parent).expect("grounding screenshot parent");
+            }
+            std::fs::write(path, png_fixture()).expect("grounding screenshot fixture");
+        }
+        self.invocations.lock().unwrap().push(invocation);
+        let stdout = if version_probe {
+            "agent-browser 0.26.0".to_string()
+        } else if is_eval {
+            let revision = self.revisions.lock().unwrap().remove(0);
+            page_context_response(revision)
+        } else {
+            r#"{"success":true}"#.to_string()
         };
         Ok(CommandOutput {
             exit_code: 0,
@@ -580,6 +634,64 @@ async fn captures_a_typed_testkit_context_at_the_same_stable_revision() {
         a3s_test_core::PageContextLocator::TestId {
             value: "pay".to_string()
         }
+    );
+}
+
+#[tokio::test]
+async fn captures_a_revision_bound_png_for_visual_grounding() {
+    let temp = tempfile::tempdir().expect("tempdir");
+    let executor = Arc::new(GroundingScreenshotExecutor::new(vec![7, 7]));
+    let driver = AgentBrowserDriver::with_executor(
+        standalone_config("grounding-screenshot"),
+        executor.clone(),
+    );
+    let mut session = driver
+        .open(&ScenarioContext {
+            run_id: "run".to_string(),
+            scenario_id: "grounding".to_string(),
+            artifacts_dir: temp.path().join("artifacts"),
+        })
+        .await
+        .expect("session");
+
+    let screenshot = session
+        .capture_grounding_screenshot("grounding/current.png", Some(7))
+        .await
+        .expect("revision-bound screenshot");
+
+    assert_eq!(screenshot.width, 2);
+    assert_eq!(screenshot.height, 3);
+    assert_eq!(screenshot.surface_revision, Some(7));
+    assert!(screenshot.sha256.starts_with("sha256:"));
+    assert_eq!(screenshot.evidence.media_type, "image/png");
+    let invocations = executor.invocations.lock().unwrap();
+    assert_eq!(strip_session_prefix(&invocations[1].args)[0], "eval");
+    assert_eq!(strip_session_prefix(&invocations[2].args)[0], "screenshot");
+    assert_eq!(strip_session_prefix(&invocations[3].args)[0], "eval");
+}
+
+#[tokio::test]
+async fn rejects_grounding_capture_when_the_page_revision_changes() {
+    let temp = tempfile::tempdir().expect("tempdir");
+    let executor = Arc::new(GroundingScreenshotExecutor::new(vec![7, 8]));
+    let driver = AgentBrowserDriver::with_executor(standalone_config("grounding-race"), executor);
+    let mut session = driver
+        .open(&ScenarioContext {
+            run_id: "run".to_string(),
+            scenario_id: "grounding-race".to_string(),
+            artifacts_dir: temp.path().join("artifacts"),
+        })
+        .await
+        .expect("session");
+
+    let error = session
+        .capture_grounding_screenshot("grounding/current.png", Some(7))
+        .await
+        .expect_err("changed page context");
+
+    assert_eq!(
+        error.code(),
+        "test.driver.web.page_context_revision_changed"
     );
 }
 
@@ -1349,6 +1461,17 @@ fn page_context_response(revision: u64) -> String {
         }
     })
     .to_string()
+}
+
+fn png_fixture() -> Vec<u8> {
+    let mut bytes = b"\x89PNG\r\n\x1a\n".to_vec();
+    bytes.extend_from_slice(&[0, 0, 0, 13]);
+    bytes.extend_from_slice(b"IHDR");
+    bytes.extend_from_slice(&2_u32.to_be_bytes());
+    bytes.extend_from_slice(&3_u32.to_be_bytes());
+    bytes.extend_from_slice(&[8, 6, 0, 0, 0]);
+    bytes.extend_from_slice(&[0, 0, 0, 0]);
+    bytes
 }
 
 fn quality_report() -> ContractReport {

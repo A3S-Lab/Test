@@ -1,5 +1,6 @@
 mod args;
 mod events;
+mod grounding;
 mod inspect;
 mod policy;
 mod repair;
@@ -53,6 +54,7 @@ pub(crate) async fn execute(args: AgentArgs) -> Result<ExitCode> {
         AgentCommand::Start(args) => start(args).await,
         AgentCommand::Observe(args) => observe(args).await,
         AgentCommand::Inspect(args) => inspect::execute(args).await,
+        AgentCommand::Ground(args) => grounding::execute(args).await,
         AgentCommand::Act(args) => act(args).await,
         AgentCommand::Click(args) => {
             perform_action(
@@ -452,7 +454,8 @@ async fn observe(args: ObserveArgs) -> Result<ExitCode> {
                 .context("agent observation sequence exhausted")?;
             state.latest_observation = Some(observation_id);
             let bindings = bind_page_context_refs(&mut observation);
-            state.page_context_bindings = (!bindings.is_empty()).then_some(bindings);
+            state.page_context_bindings =
+                (bindings.revision.is_some() || !bindings.is_empty()).then_some(bindings);
             output.page_context = observation.page_context;
             state.active_video_path = browser.active_video_path().map(str::to_string);
             append_success_event(

@@ -831,16 +831,49 @@ node. Both variants include provider/image/observation provenance and
 `authority = advisory`. They are not durable refs, contract evidence, action
 authorization, or Repair Ledger entries.
 
-The stable version 1 wire identifier is
-`a3s.test.visual-grounding-provider/1`. Run
+The stable version 2 wire identifier is
+`a3s.test.visual-grounding-provider/2`. Run
 `a3s-test provider schema visual-grounding` to print its generated JSON Schema
 2020-12 request/response documents and explicit advisory safety invariants.
 Unknown wire fields are rejected, and an incompatible change requires a new
 protocol identifier.
 
 Visual grounding uses the same HTTP projection with protocol
-`a3s.test.visual-grounding-provider/1`. The request envelope preserves the
+`a3s.test.visual-grounding-provider/2`. The request envelope preserves the
 screenshot digest, observation, dimensions, trigger, deadline, and cost
-ceiling. The HTTP adapter checks the configured response identity before
+ceiling. It replaces the client-local screenshot path with `observation.png`
+and carries a Base64 `image/png` attachment bound to the same SHA-256 digest.
+The decoded PNG is limited to 32 MiB, while the JSON request envelope is
+limited to 64 MiB. The HTTP adapter re-reads and rehashes the image immediately
+before serialization, then checks the configured response identity before
 returning; `VisualGroundingService` then independently verifies the full image,
 observation, geometry, usage, and authority binding.
+
+## Visual-grounding CLI configuration
+
+`a3s-test agent ground <query>` operationalizes the advisory provider for the
+latest persistent Web observation. Its ACL root is `visual_grounding` and
+accepts these root attributes:
+
+| Attribute | Rule | Default |
+| --- | --- | --- |
+| `max_cost_microusd` | Required non-negative provider cost ceiling | none |
+| `timeout_ms` | 1 millisecond through 5 minutes | `15000` |
+| `max_candidates` | 1 through 256 | `32` |
+| `max_query_bytes` | 1 through 65536 | `4096` |
+| `max_label_bytes` | 1 through 16384 | `1024` |
+
+Exactly one `provider` block is required. It accepts `name`, `model`,
+`endpoint`, and optional `authorization_env`. The endpoint must use HTTPS or
+explicit loopback HTTP. An authorization variable must start with
+`A3S_TEST_PROVIDER_AUTHORIZATION_`; its value is never stored in session
+metadata or command arguments.
+
+The command requires `--session`, the positive latest `--observation`, and
+`--config`. `--reason` is one of `explicit`, `canvas`, `image-only`,
+`remote-desktop`, `design-reference`, or `no-semantic-match`. ACL, credential,
+provider, limits, and query admission occur before browser connection. The
+page must retain the observation's exact Test Kit revision and `@cN` bindings
+through screenshot capture and provider completion. Failure invalidates that
+observation. Success records an advisory result and PNG evidence but never
+dispatches input, determines a verdict, or authorizes repair.

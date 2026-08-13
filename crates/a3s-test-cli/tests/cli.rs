@@ -71,6 +71,22 @@ fn agent_run_help_exposes_the_acl_driven_embedded_host() {
 }
 
 #[test]
+fn agent_ground_help_exposes_revision_bound_advisory_grounding() {
+    let output = Command::new(binary())
+        .args(["agent", "ground", "--help"])
+        .output()
+        .expect("run visual grounding help");
+
+    assert!(output.status.success(), "{output:?}");
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("target to locate"), "{stdout}");
+    assert!(stdout.contains("--observation"), "{stdout}");
+    assert!(stdout.contains("--config"), "{stdout}");
+    assert!(stdout.contains("--reason"), "{stdout}");
+    assert!(stdout.contains("design-reference"), "{stdout}");
+}
+
+#[test]
 fn check_admits_every_referenced_surface_contract() {
     let temp = tempfile::tempdir().expect("tempdir");
     let contracts = temp.path().join("contracts");
@@ -491,7 +507,7 @@ fn provider_schema_exposes_versioned_wire_contracts() {
         ),
         (
             "visual-grounding",
-            "a3s.test.visual-grounding-provider/1",
+            "a3s.test.visual-grounding-provider/2",
             "advisory",
         ),
     ] {
@@ -1244,6 +1260,212 @@ esac
         .env("A3S_TEST_LOG", &log)
         .output()
         .expect("abort");
+    assert!(abort.status.success(), "{abort:?}");
+}
+
+#[cfg(unix)]
+#[test]
+fn agent_ground_sends_revision_bound_png_and_returns_the_current_context_ref() {
+    use std::io::{BufRead, BufReader, Read, Write};
+    use std::net::TcpListener;
+    use std::os::unix::fs::PermissionsExt;
+
+    let _test_guard = process_test_guard();
+    let temp = tempfile::tempdir().expect("tempdir");
+    let driver = temp.path().join("fake-agent-browser");
+    let log = temp.path().join("driver.log");
+    fs::write(
+        &driver,
+        r#"#!/bin/sh
+case " $* " in
+  *" --version "*)
+    printf 'agent-browser 0.26.0\n'
+    exit 0
+    ;;
+esac
+printf '%s\n' "$*" >> "$A3S_TEST_LOG"
+case " $* " in
+  *" eval "*)
+    revision="${A3S_CONTEXT_REVISION:-42}"
+    printf '{"success":true,"data":{"result":{"present":true,"protocol":"a3s.test.page-context/1","sdkVersion":"0.2.0","revision":%s,"page":{"id":"checkout","url":"https://example.test/","route":"/","title":"Checkout","ready":true,"viewport":{"width":640.0,"height":360.0,"dpr":1.0},"document":{"width":640.0,"height":360.0},"scroll":{"x":0.0,"y":0.0},"language":"en","theme":"light"},"components":[],"nodes":[{"id":"private-pay","tag":"button","role":"button","name":"Pay","text":"Pay","testId":"pay","geometry":{"viewport":{"x":300.0,"y":160.0,"width":100.0,"height":50.0},"document":{"x":300.0,"y":160.0,"width":100.0,"height":50.0},"normalized":{"x":0.46875,"y":0.444444,"width":0.15625,"height":0.138889},"visibleRatio":1.0,"occluded":false,"position":"static","transformed":false},"state":{"visible":true},"locators":[{"type":"test_id","value":"pay"}]}],"facts":{},"removedNodeIds":[],"truncated":false,"nextCursor":null}}}\n' "$revision"
+    ;;
+  *" snapshot "*)
+    printf '{"success":true,"data":{"origin":"https://example.test/","snapshot":"@e1 [button] Pay"}}\n'
+    ;;
+  *" screenshot "*)
+    path=""
+    for argument in "$@"; do path="$argument"; done
+    mkdir -p "$(dirname "$path")"
+    printf '\211PNG\r\n\032\n\000\000\000\015IHDR\000\000\002\200\000\000\001h\010\006\000\000\000\000\000\000\000' > "$path"
+    printf '{"success":true}\n'
+    ;;
+  *)
+    printf '{"success":true}\n'
+    ;;
+esac
+"#,
+    )
+    .expect("driver");
+    fs::set_permissions(&driver, fs::Permissions::from_mode(0o755)).expect("permissions");
+
+    let start = start_agent_session(temp.path(), &driver, &log, "visual-grounding");
+    assert!(start.status.success(), "{start:?}");
+    let observe = Command::new(binary())
+        .args([
+            "agent",
+            "observe",
+            "--session",
+            "visual-grounding",
+            "--interactive",
+            "--json",
+        ])
+        .current_dir(temp.path())
+        .env("A3S_TEST_LOG", &log)
+        .env("A3S_CONTEXT_REVISION", "42")
+        .output()
+        .expect("observe page context");
+    assert!(observe.status.success(), "{observe:?}");
+    let observation: serde_json::Value =
+        serde_json::from_slice(&observe.stdout).expect("observation JSON");
+    assert_eq!(observation["observation_id"], 1);
+    assert_eq!(
+        observation["output"]["page_context"]["snapshot"]["revision"],
+        42
+    );
+
+    let listener = TcpListener::bind("127.0.0.1:0").expect("grounding provider listener");
+    let address = listener.local_addr().expect("provider address");
+    let server = std::thread::spawn(move || {
+        let (stream, _) = listener.accept().expect("grounding provider request");
+        let mut reader = BufReader::new(stream);
+        let mut request_line = String::new();
+        reader.read_line(&mut request_line).expect("request line");
+        let mut content_length = 0usize;
+        loop {
+            let mut line = String::new();
+            reader.read_line(&mut line).expect("request header");
+            if line == "\r\n" {
+                break;
+            }
+            let (name, value) = line.trim_end().split_once(':').expect("header shape");
+            if name.eq_ignore_ascii_case("content-length") {
+                content_length = value.trim().parse().expect("content length");
+            }
+        }
+        let mut body = vec![0; content_length];
+        reader.read_exact(&mut body).expect("provider body");
+        let envelope: serde_json::Value = serde_json::from_slice(&body).expect("provider JSON");
+        assert_eq!(request_line, "POST /ground HTTP/1.1\r\n");
+        assert_eq!(envelope["protocol"], "a3s.test.visual-grounding-provider/2");
+        assert_eq!(envelope["request"]["observation_id"], 1);
+        assert_eq!(envelope["request"]["screenshot_path"], "observation.png");
+        assert_eq!(envelope["request"]["width"], 640);
+        assert_eq!(envelope["request"]["height"], 360);
+        assert!(envelope["image"]["bytes_base64"]
+            .as_str()
+            .is_some_and(|value| !value.is_empty()));
+        assert_eq!(
+            envelope["image"]["screenshot_sha256"],
+            envelope["request"]["screenshot_sha256"]
+        );
+        let response = serde_json::to_vec(&serde_json::json!({
+            "status": "success",
+            "protocol": "a3s.test.visual-grounding-provider/2",
+            "response": {
+                "identity": { "provider": "fixture", "model": "ui-grounder" },
+                "observation_id": 1,
+                "screenshot_sha256": envelope["request"]["screenshot_sha256"],
+                "width": 640,
+                "height": 360,
+                "coordinate_space": "screenshot_pixels",
+                "candidates": [{
+                    "geometry": { "kind": "point", "x": 320.0, "y": 180.0 },
+                    "confidence": 0.98,
+                    "label": "Pay"
+                }],
+                "usage": { "input_units": 1, "output_units": 1, "cost_microusd": 10 },
+                "request_id": "ground-cli-1"
+            }
+        }))
+        .expect("provider response");
+        let stream = reader.get_mut();
+        write!(
+            stream,
+            "HTTP/1.1 200 OK\r\ncontent-type: application/json\r\ncontent-length: {}\r\nconnection: close\r\n\r\n",
+            response.len()
+        )
+        .expect("response head");
+        stream.write_all(&response).expect("response body");
+    });
+    let config = temp.path().join("visual-grounding.acl");
+    fs::write(
+        &config,
+        format!(
+            r#"
+visual_grounding {{
+  max_cost_microusd = 1000
+  provider {{
+    name = "fixture"
+    model = "ui-grounder"
+    endpoint = "http://{address}/ground"
+  }}
+}}
+"#
+        ),
+    )
+    .expect("grounding config");
+
+    let ground = Command::new(binary())
+        .args([
+            "agent",
+            "ground",
+            "Pay button",
+            "--session",
+            "visual-grounding",
+            "--observation",
+            "1",
+            "--config",
+            config.to_str().expect("config path"),
+            "--reason",
+            "no-semantic-match",
+            "--json",
+        ])
+        .current_dir(temp.path())
+        .env("A3S_TEST_LOG", &log)
+        .env("A3S_CONTEXT_REVISION", "42")
+        .output()
+        .expect("ground current observation");
+    server.join().expect("grounding provider server");
+
+    assert!(ground.status.success(), "{ground:?}");
+    let grounded: serde_json::Value =
+        serde_json::from_slice(&ground.stdout).expect("grounding JSON");
+    assert_eq!(grounded["authority"], "advisory");
+    assert_eq!(grounded["observation_id"], 1);
+    assert_eq!(
+        grounded["output"]["data"]["result"]["resolution"],
+        "semantic"
+    );
+    assert_eq!(
+        grounded["output"]["data"]["result"]["matches"][0]["reference"],
+        "@c1"
+    );
+    assert_eq!(
+        grounded["output"]["data"]["result"]["matches"][0]["target"],
+        serde_json::json!({ "type": "ref", "value": "@c1" })
+    );
+    assert_eq!(
+        grounded["output"]["page_context"]["snapshot"]["nodes"][0]["id"],
+        ""
+    );
+    assert!(!String::from_utf8_lossy(&ground.stdout).contains("private-pay"));
+
+    let abort = Command::new(binary())
+        .args(["agent", "abort", "--session", "visual-grounding", "--json"])
+        .current_dir(temp.path())
+        .env("A3S_TEST_LOG", &log)
+        .output()
+        .expect("abort grounding session");
     assert!(abort.status.success(), "{abort:?}");
 }
 

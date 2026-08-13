@@ -1,0 +1,14 @@
+visual_grounding {
+  max_cost_microusd = 10000
+  timeout_ms = 15000
+  max_candidates = 32
+  max_query_bytes = 4096
+  max_label_bytes = 1024
+
+  provider {
+    name = "deployment-gateway"
+    model = "ui-grounding-model"
+    endpoint = "https://inference.example.test/v1/ground"
+    authorization_env = "A3S_TEST_PROVIDER_AUTHORIZATION_GROUNDING"
+  }
+}

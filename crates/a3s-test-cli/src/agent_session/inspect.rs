@@ -66,7 +66,8 @@ pub(super) async fn execute(args: InspectArgs) -> Result<ExitCode> {
                 .checked_add(1)
                 .context("agent observation sequence exhausted")?;
             let bindings = bind_page_context_refs(&mut observation);
-            state.page_context_bindings = (!bindings.is_empty()).then_some(bindings);
+            state.page_context_bindings =
+                (bindings.revision.is_some() || !bindings.is_empty()).then_some(bindings);
             state.latest_observation = Some(observation_id);
             let output = StepOutput::new("scoped page context inspected")
                 .with_page_context(observation.page_context.expect("page context present"));

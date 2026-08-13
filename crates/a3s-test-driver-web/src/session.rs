@@ -1,16 +1,16 @@
 use std::ffi::OsString;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU8, Ordering};
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use a3s_test_core::{
     Action, CaptureOperation, ContractReport, DriverError, DriverSession, Evidence, Expectation,
-    PageContextInspectRequest, PageContextInspectScope, PageContextObservation,
-    PageContextSnapshot, RepairAclProof, RepairEvidenceBundle, RepairEvidencePhase,
-    RepairEvidenceRequest, RepairFinding, RepairHumanAction, RepairStatusEvent, ScenarioContext,
-    StepOutput, Surface, SurfaceDriver, SurfaceObservation, Target, TestStep, TestSuite,
-    VideoOperation, PAGE_CONTEXT_PROTOCOL,
+    GroundingScreenshot, PageContextInspectRequest, PageContextInspectScope,
+    PageContextObservation, PageContextSnapshot, RepairAclProof, RepairEvidenceBundle,
+    RepairEvidencePhase, RepairEvidenceRequest, RepairFinding, RepairHumanAction,
+    RepairStatusEvent, ScenarioContext, StepOutput, Surface, SurfaceDriver, SurfaceObservation,
+    Target, TestStep, TestSuite, VideoOperation, PAGE_CONTEXT_PROTOCOL,
 };
 use async_trait::async_trait;
 use serde_json::Value;
@@ -22,7 +22,8 @@ use crate::actions::{
     upload_args, viewport_args,
 };
 use crate::artifact::{
-    admit_artifact_path, prepare_artifact_path, prepare_artifact_root, validate_artifact_file,
+    admit_artifact_path, prepare_artifact_path, prepare_artifact_root, read_bounded_artifact,
+    validate_artifact_file, MAX_GROUNDING_IMAGE_BYTES,
 };
 use crate::capabilities;
 use crate::process::{create_runtime_directory, terminate_owned_session, SessionRegistration};
@@ -871,6 +872,59 @@ impl DriverSession for AgentBrowserSession {
         Ok(count_collection_entries(&browser_result(value)))
     }
 
+    async fn capture_grounding_screenshot(
+        &mut self,
+        requested_path: &str,
+        expected_surface_revision: Option<u64>,
+    ) -> Result<GroundingScreenshot, DriverError> {
+        self.ensure_open()?;
+        if PathBuf::from(requested_path)
+            .extension()
+            .and_then(|extension| extension.to_str())
+            .is_none_or(|extension| !extension.eq_ignore_ascii_case("png"))
+        {
+            return Err(DriverError::new(
+                "test.driver.web.grounding_screenshot_invalid",
+                "grounding screenshots must use a .png artifact path",
+            ));
+        }
+        let before = self.capture_page_context().await?;
+        validate_grounding_revision(&before, expected_surface_revision)?;
+        let screenshot_output = self.screenshot(requested_path).await?;
+        let after = self.capture_page_context().await?;
+        validate_grounding_revision(&after, expected_surface_revision)?;
+        if !stable_page_context(&before, &after) {
+            return Err(DriverError::new(
+                "test.driver.web.page_context_changed",
+                "page context changed while the grounding screenshot was captured",
+            ));
+        }
+        let evidence = screenshot_output
+            .evidence
+            .into_iter()
+            .next()
+            .ok_or_else(|| {
+                DriverError::new(
+                    "test.driver.web.grounding_screenshot_invalid",
+                    "grounding screenshot did not produce evidence metadata",
+                )
+            })?;
+        let bytes = read_bounded_artifact(
+            &self.artifacts_dir,
+            Path::new(&evidence.path),
+            MAX_GROUNDING_IMAGE_BYTES,
+        )
+        .await?;
+        let (width, height) = png_dimensions(&bytes)?;
+        Ok(GroundingScreenshot {
+            evidence,
+            sha256: format!("sha256:{:x}", Sha256::digest(bytes)),
+            width,
+            height,
+            surface_revision: after.revision,
+        })
+    }
+
     async fn close(&mut self) -> Result<(), DriverError> {
         if self.closed {
             return Ok(());
@@ -1305,6 +1359,44 @@ fn stable_page_context(before: &PageContextObservation, after: &PageContextObser
         (true, true) => before.protocol == after.protocol && before.revision == after.revision,
         _ => false,
     }
+}
+
+fn validate_grounding_revision(
+    context: &PageContextObservation,
+    expected: Option<u64>,
+) -> Result<(), DriverError> {
+    if expected.is_none() && context.present {
+        return Err(DriverError::new(
+            "test.driver.web.page_context_revision_unbound",
+            "grounding requires the revision from the latest page-context observation",
+        ));
+    }
+    if expected.is_some_and(|expected| context.revision != Some(expected)) {
+        return Err(DriverError::new(
+            "test.driver.web.page_context_revision_changed",
+            "page context revision changed before grounding evidence capture",
+        ));
+    }
+    Ok(())
+}
+
+fn png_dimensions(bytes: &[u8]) -> Result<(u32, u32), DriverError> {
+    const PNG_SIGNATURE: &[u8; 8] = b"\x89PNG\r\n\x1a\n";
+    if bytes.len() < 24 || &bytes[..8] != PNG_SIGNATURE || &bytes[12..16] != b"IHDR" {
+        return Err(DriverError::new(
+            "test.driver.web.grounding_screenshot_invalid",
+            "grounding screenshot is not a valid PNG header",
+        ));
+    }
+    let width = u32::from_be_bytes(bytes[16..20].try_into().expect("checked PNG width slice"));
+    let height = u32::from_be_bytes(bytes[20..24].try_into().expect("checked PNG height slice"));
+    if width == 0 || height == 0 {
+        return Err(DriverError::new(
+            "test.driver.web.grounding_screenshot_invalid",
+            "grounding screenshot has zero dimensions",
+        ));
+    }
+    Ok((width, height))
 }
 
 fn unix_ms() -> u64 {

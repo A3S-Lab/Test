@@ -17,7 +17,7 @@ fn provider_protocol_identifiers_and_authority_are_stable() {
     );
     assert_eq!(
         VISUAL_GROUNDING_PROVIDER_PROTOCOL,
-        "a3s.test.visual-grounding-provider/1"
+        "a3s.test.visual-grounding-provider/2"
     );
     assert_eq!(LLM_PROVIDER_PROTOCOL, "a3s.test.llm-provider/1");
 
@@ -214,6 +214,21 @@ fn visual_grounding_schema_exposes_binding_fields_and_geometry_variants() {
         &bundle["http"]["request_envelope_schema"],
         "observation_id"
     ));
+    assert!(contains_string(
+        &bundle["http"]["request_envelope_schema"],
+        "bytes_base64"
+    ));
+    let attachment =
+        &bundle["http"]["request_envelope_schema"]["$defs"]["GroundingImageAttachment"];
+    assert_eq!(attachment["additionalProperties"], false);
+    assert_eq!(
+        attachment["properties"]["media_type"]["pattern"],
+        "^image/png$"
+    );
+    assert_eq!(
+        attachment["properties"]["bytes_base64"]["maxLength"],
+        44_739_244
+    );
     assert!(contains_string(
         &bundle["http"]["request_envelope_schema"],
         VISUAL_GROUNDING_PROVIDER_PROTOCOL

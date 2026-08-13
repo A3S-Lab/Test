@@ -19,7 +19,7 @@
   ACL human-review files with explicit candidate decisions, conflict
   selections, rationales, and complete audit retention.
 - Added stable `a3s.test.contract-generation-provider/1` and
-  `a3s.test.visual-grounding-provider/1` wire identifiers with generated JSON
+  `a3s.test.visual-grounding-provider/2` wire identifiers with generated JSON
   Schema 2020-12 request and response contracts.
 - Added `a3s-test provider schema contract-generation` and `a3s-test provider
   schema visual-grounding` for transport-neutral adapter discovery, including
@@ -27,6 +27,12 @@
 - Added typed HTTP adapters for deployment-owned contract-generation and
   visual-grounding services. Provider discovery now includes their versioned
   request and response envelope schemas.
+- Added `a3s-test agent ground` for explicit, revision-bound visual location
+  in a persistent Web session. It returns advisory semantic or image-bound
+  candidates without dispatching input or authorizing repair.
+- Visual-grounding HTTP version 2 now carries the admitted PNG as a bounded
+  Base64 attachment with its digest and logical name, allowing remote
+  deployment providers to consume evidence without client filesystem access.
 
 ### Safety
 
@@ -61,6 +67,11 @@
   enforce wire and transport deadlines, and redact configured authorization
   values from diagnostics. Service-level evidence and authority admission
   remains mandatory.
+- Grounding ACL, credential, provider, query, and budget admission completes
+  before browser connection. Screenshots are bounded to 32 MiB, rehashed by
+  both the service and HTTP adapter, and bound to the latest stored Test Kit
+  revision before capture and after provider inference. Provider failure,
+  cancellation, ref drift, or revision drift invalidates the observation.
 
 ## 0.8.0 - 2026-08-13
 

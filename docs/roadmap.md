@@ -393,8 +393,9 @@ The completion work intentionally preserves these product boundaries:
 
 ## M15: Versioned provider interoperability
 
-- [x] Assign stable version 1 protocol identifiers to contract-generation and
-      visual-grounding provider boundaries
+- [x] Assign stable protocol identifiers to contract-generation and
+      visual-grounding provider boundaries; advance only the changed visual
+      HTTP envelope to version 2
 - [x] Derive JSON Schema 2020-12 request and response contracts from the same
       strict Serde types used by local admission
 - [x] Expose protocol, authority, safety invariants, and schemas through
@@ -444,3 +445,24 @@ The completion work intentionally preserves these product boundaries:
       overwrites
 - [x] Add real HTTP CLI coverage for digest and environment-authorization
       binding plus fail-closed review and output behavior
+
+## M18: Operational visual grounding
+
+- [x] Add explicit `a3s-test agent ground` for the latest persistent Web
+      observation without dispatching input
+- [x] Admit ACL, authorization, provider identity, query, limits, and cost
+      before browser connection
+- [x] Capture a bounded PNG between matching Test Kit revisions and revalidate
+      the revision after provider inference
+- [x] Keep agent observation IDs independent from Test Kit surface revisions
+      and require current `@cN` bindings to match the stored observation
+- [x] Upgrade the visual-grounding HTTP protocol to version 2 with a
+      digest-bound Base64 PNG attachment and logical image path
+- [x] Rehash the screenshot at service and HTTP dispatch boundaries, reject
+      replacement races, and keep Debug and diagnostics free of image bytes
+- [x] Return a current ref only for one unambiguous semantic hit; preserve zero
+      or multiple hits as image-bound advisory candidates
+- [x] Invalidate the observation on provider, cancellation, binding, or
+      revision failure and retain non-verdict, non-repair authority
+- [x] Add driver, provider, service, schema, CLI help, and fake browser plus
+      real HTTP integration coverage

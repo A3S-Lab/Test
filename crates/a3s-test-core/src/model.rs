@@ -286,6 +286,20 @@ pub struct Evidence {
     pub media_type: String,
 }
 
+/// Screenshot evidence captured without changing the observed surface state.
+///
+/// `surface_revision` is supplied when the surface exposes a revision that can
+/// be revalidated around capture. It is intentionally distinct from an agent
+/// session's observation sequence number.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct GroundingScreenshot {
+    pub evidence: Evidence,
+    pub sha256: String,
+    pub width: u32,
+    pub height: u32,
+    pub surface_revision: Option<u64>,
+}
+
 #[derive(Clone, Debug, Deserialize, JsonSchema, PartialEq, Serialize)]
 pub struct StepOutput {
     pub summary: String,

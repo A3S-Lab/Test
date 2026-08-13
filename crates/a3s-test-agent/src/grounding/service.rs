@@ -3,10 +3,12 @@ use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use sha2::{Digest, Sha256};
+use tokio::io::AsyncReadExt;
 use tokio::time::Instant;
 use tokio_util::sync::CancellationToken;
 
 use super::reconcile::{reconcile_candidate, CandidateResolution};
+use super::MAX_GROUNDING_IMAGE_BYTES;
 use crate::{
     GroundingAuthority, GroundingCandidateGeometry, GroundingCoordinateSpace, GroundingError,
     GroundingOptions, GroundingPageContext, GroundingProvenance, GroundingProviderIdentity,
@@ -121,7 +123,7 @@ impl VisualGroundingService {
                 || context
                     .snapshot
                     .revision
-                    .is_none_or(|revision| revision != request.observation_id)
+                    .is_none_or(|revision| revision != context.surface_revision)
         }) {
             return Err(GroundingError::new(
                 "test.agent.grounding.context_incomplete",
@@ -418,20 +420,44 @@ async fn hash_screenshot(path: &str) -> Result<String, GroundingError> {
             false,
         )
     })?;
-    if !metadata.file_type().is_file() || metadata.file_type().is_symlink() {
+    if !metadata.file_type().is_file()
+        || metadata.file_type().is_symlink()
+        || metadata.len() == 0
+        || metadata.len() > MAX_GROUNDING_IMAGE_BYTES
+    {
         return Err(GroundingError::new(
             "test.agent.grounding.screenshot_invalid",
-            "grounding screenshot must be a regular non-symbolic-link file",
+            format!(
+                "grounding screenshot must be a regular non-symbolic-link file containing 1 to {MAX_GROUNDING_IMAGE_BYTES} bytes"
+            ),
             false,
         ));
     }
-    let bytes = tokio::fs::read(path).await.map_err(|error| {
+    let file = tokio::fs::File::open(path).await.map_err(|error| {
         GroundingError::new(
             "test.agent.grounding.screenshot_invalid",
-            format!("failed to read grounding screenshot: {error}"),
+            format!("failed to open grounding screenshot: {error}"),
             false,
         )
     })?;
+    let mut bytes = Vec::with_capacity(metadata.len() as usize);
+    file.take(MAX_GROUNDING_IMAGE_BYTES + 1)
+        .read_to_end(&mut bytes)
+        .await
+        .map_err(|error| {
+            GroundingError::new(
+                "test.agent.grounding.screenshot_invalid",
+                format!("failed to read grounding screenshot: {error}"),
+                false,
+            )
+        })?;
+    if bytes.is_empty() || bytes.len() as u64 > MAX_GROUNDING_IMAGE_BYTES {
+        return Err(GroundingError::new(
+            "test.agent.grounding.screenshot_invalid",
+            format!("grounding screenshot must contain 1 to {MAX_GROUNDING_IMAGE_BYTES} bytes"),
+            false,
+        ));
+    }
     Ok(format!("sha256:{:x}", Sha256::digest(bytes)))
 }
 
