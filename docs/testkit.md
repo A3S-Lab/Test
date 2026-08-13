@@ -562,6 +562,6 @@ session, database, or model loop owns repair state.
 ## License boundary
 
 The feature set is independently implemented from public behavior and this
-specification. Agentation source code, styles, icons, templates, generated
-markup, and output wording are not copied into the MIT-licensed A3S Test
-implementation.
+specification. Third-party annotation-tool source code, styles, icons,
+templates, generated markup, and output wording are not copied into the
+MIT-licensed A3S Test implementation.

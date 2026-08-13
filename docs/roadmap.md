@@ -270,3 +270,66 @@ snapshot. Pages without the SDK retain the existing Web behavior.
       promotion to ACL
 - [x] Document integration for React/Vite/Next.js, security and redaction,
       coding-agent watch mode, CI behavior, and migration/compatibility rules
+
+## M11: Embedded review workflow completion
+
+This milestone closes the remaining reviewer-facing workflow gaps around the
+existing page-context, annotation, Layout Mode, and repair protocols. The
+capability audit baseline is 2026-08-13. Completion requires direct unit and
+real-browser evidence for every row below; visual similarity to another tool
+is not a requirement.
+
+| Capability family | Existing foundation | Remaining completion work |
+| --- | --- | --- |
+| Autonomous page understanding | Bounded semantic context, component/source boundaries, locator candidates, accessibility state, nearby nodes, and viewport/document/normalized geometry | None; keep the browser accessibility tree and Test Kit context as independent evidence |
+| Human capture | Element, text, multi-element, rectangular area, freehand drawing, draft edit/delete, and single/selected/all submission | Restore page-local drafts safely, add global marker controls, clear-all, and direct spatial draft editing |
+| Layout authoring | Typed non-mutating placement and rearrangement intents, page/wireframe canvases, purpose, pointer regions, keyboard source selection, and explicit target geometry | Add a searchable 65+ component catalog and adjustable wireframe page fade while preserving free-form component types |
+| Review controls | Pause/resume, manual theme, visible auto-send opt-in, focus restoration, named controls, and live announcements | Add documented global shortcuts with editable-target guards, persisted presentation preferences, explicit interaction blocking, movable docking, and hide-until-tab-restart |
+| Integration API | Typed bridge events, structured Markdown/JSON export, repair submission callback, and custom repair endpoint | Add bounded draft add/update/delete/clear/copy callbacks and a host-provided clipboard adapter |
+| Repair transport and proof | Typed MCP/CLI queue, batches, leases, replies, lifecycle replay, owned screenshots, browser errors, verification, and ACL promotion | None; continue using the owning A3S Test agent session as the sole authoritative ledger |
+
+The completion work intentionally preserves these product boundaries:
+
+- Layout Mode emits typed desired geometry and never rearranges or styles the
+  application DOM itself.
+- Framework internals are not traversed automatically. Applications declare
+  stable component and source ownership with `A3STestBoundary`; undeclared
+  props and state remain private.
+- The overlay does not own screenshots, a model loop, a second repair
+  database, or a generic remote-control webhook. A3S Test owns evidence,
+  sessions, policy, MCP/CLI transport, and repair history.
+- Structured repair export stays deterministic and bounded. Agents request
+  `summary`, `scoped`, `diff`, or `forensic` page context explicitly instead
+  of changing the wire contract through a presentation setting.
+
+- [ ] Persist validated drafts per page and route with bounded retention,
+      semantic locator anchors, reload/SPA-route restoration, and fail-closed
+      handling for targets that cannot be resolved uniquely
+- [ ] Add one global keyboard command layer for overlay toggle, Escape,
+      Layout Mode, pause, marker visibility, copy, and clear, and ignore
+      commands originating in inputs, textareas, selects, contenteditable
+      regions, or ARIA text-entry controls
+- [ ] Add global marker visibility, clear-all, direct marker-to-editor access,
+      and deletion from the active editor without making the full marker
+      rectangle intercept normal page input
+- [ ] Persist bounded presentation preferences for theme, marker color,
+      clear-on-copy, interaction blocking, panel dock, wireframe fade, and
+      hide-until-tab-restart; keep auto-send and animation pause non-persistent
+- [ ] Add an independently defined, categorized, searchable catalog of at
+      least 65 common Web component types while retaining an explicit
+      free-form component field
+- [ ] Expose typed draft lifecycle and copy callbacks plus a host clipboard
+      adapter; isolate callback failures from the overlay and never treat
+      callback return values as repair instructions
+- [ ] Split the review overlay by concern before it exceeds the repository
+      file-size limit, retaining Shadow DOM isolation and one source of truth
+      for persisted workflow state
+- [ ] Add React tests for storage corruption and expiry, target rebinding,
+      route isolation, shortcuts and editable guards, preference recovery,
+      callbacks, catalog filtering, marker editing, clear-on-copy, docking,
+      and hide-until-restart
+- [ ] Extend the real Chromium Test Kit suite to prove restored drafts,
+      keyboard-only review controls, host-interaction blocking, searchable
+      Layout authoring, and accessible spatial marker editing
+- [ ] Re-run Test Kit typecheck/tests/build, Rust formatting/tests/clippy, the
+      real Chromium Test Kit suite, and the complete repair lifecycle matrix
