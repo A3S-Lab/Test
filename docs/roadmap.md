@@ -328,8 +328,8 @@ The completion work intentionally preserves these product boundaries:
       route isolation, shortcuts and editable guards, preference recovery,
       callbacks, catalog filtering, marker editing, clear-on-copy, docking,
       and hide-until-restart
-- [ ] Extend the real Chromium Test Kit suite to prove restored drafts,
+- [x] Extend the real Chromium Test Kit suite to prove restored drafts,
       keyboard-only review controls, host-interaction blocking, searchable
       Layout authoring, and accessible spatial marker editing
-- [ ] Re-run Test Kit typecheck/tests/build, Rust formatting/tests/clippy, the
+- [x] Re-run Test Kit typecheck/tests/build, Rust formatting/tests/clippy, the
       real Chromium Test Kit suite, and the complete repair lifecycle matrix

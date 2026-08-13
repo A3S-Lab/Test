@@ -6,6 +6,7 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::time::Duration;
 
+use support::testkit_browser::run_review_workflow;
 use support::web_fixture::{get, start_testkit_fixture, WebFixture};
 
 fn binary() -> PathBuf {
@@ -397,6 +398,8 @@ fn real_agent_browser_runs_the_embedded_testkit_suite() {
         1.0,
         &command,
     );
+
+    run_review_workflow(&command);
 
     let select_keyboard_marking = command(&[
         "eval",

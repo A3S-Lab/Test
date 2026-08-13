@@ -234,7 +234,11 @@ describe("React adapter and review overlay", () => {
     fireEvent.click(shadowButton("Layout"));
     const catalog = shadowQuery(".a3s-catalog");
     expect(Number(catalog.dataset.componentCount)).toBeGreaterThanOrEqual(65);
-    fireEvent.click(shadowQuery(".a3s-catalog summary"));
+    const catalogToggle = shadowButton("Component catalog · 90");
+    expect(catalogToggle.getAttribute("aria-label")).toBe("Component catalog · 90");
+    expect(catalogToggle.getAttribute("aria-expanded")).toBe("false");
+    fireEvent.click(catalogToggle);
+    expect(catalogToggle.getAttribute("aria-expanded")).toBe("true");
     fireEvent.change(shadowQuery("[aria-label='Search component catalog']"), { target: { value: "checkout" } });
     expect(shadowQuery(".a3s-catalog-results").textContent).toContain("Checkout Form");
     expect(shadowQuery(".a3s-catalog-results").textContent).not.toContain("Breadcrumbs");
@@ -392,6 +396,11 @@ describe("React adapter and review overlay", () => {
     const target = document.querySelector<HTMLElement>("#preference-target")!;
     setRect(target, { x: 30, y: 50, width: 150, height: 34 });
 
+    const preferencesToggle = shadowButton("Review preferences");
+    expect(preferencesToggle.getAttribute("aria-label")).toBe("Review preferences");
+    expect(preferencesToggle.getAttribute("aria-expanded")).toBe("false");
+    fireEvent.click(preferencesToggle);
+    expect(preferencesToggle.getAttribute("aria-expanded")).toBe("true");
     fireEvent.change(shadowQuery("[aria-label='Overlay theme']"), { target: { value: "dark" } });
     fireEvent.change(shadowQuery("[aria-label='Marker color']"), { target: { value: "#2563eb" } });
     fireEvent.click(shadowQuery("[aria-label='Clear drafts after copy']"));
@@ -414,6 +423,7 @@ describe("React adapter and review overlay", () => {
     render(<A3STestKit enabled page={{ id: "preferences" }} repairStorage="memory"><button>Reloaded</button><A3SReviewOverlay enabled defaultOpen /></A3STestKit>);
     await waitFor(() => expect(shadowQuery(".a3s-root").dataset.theme).toBe("dark"));
     expect(shadowQuery(".a3s-root").dataset.dock).toBe("left");
+    fireEvent.click(shadowButton("Review preferences"));
     expect((shadowQuery("[aria-label='Clear drafts after copy']") as HTMLInputElement).checked).toBe(true);
     expect(shadowButton("Auto-send · off")).toBeTruthy();
     expect(shadowButton("Pause")).toBeTruthy();
@@ -426,6 +436,7 @@ describe("React adapter and review overlay", () => {
     const action = document.querySelector<HTMLElement>("#host-action")!;
     fireEvent.click(action);
     expect(hostClick).toHaveBeenCalledTimes(1);
+    fireEvent.click(shadowButton("Review preferences"));
     fireEvent.click(shadowQuery("[aria-label='Block page pointer input']"));
     fireEvent.click(action);
     expect(hostClick).toHaveBeenCalledTimes(1);

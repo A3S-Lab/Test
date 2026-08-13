@@ -571,8 +571,11 @@ cargo test -p a3s-test-cli --test repair_e2e --locked -- \
   --ignored --test-threads=1
 ```
 
-The real Test Kit browser suite, including its accessibility-tree and focus
-checks, runs separately:
+The real Test Kit browser suite runs separately. It proves page-local draft
+restoration and semantic rebinding, spatial marker editing, keyboard-only
+review controls, explicit host-interaction blocking, searchable component
+selection, pointer-authored Layout placement, and the accessibility-tree and
+focus contracts:
 
 ```bash
 A3S_TEST_AGENT_BROWSER="$(command -v agent-browser)" \
