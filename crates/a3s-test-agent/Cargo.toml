@@ -5,7 +5,7 @@ edition.workspace = true
 license.workspace = true
 repository.workspace = true
 rust-version.workspace = true
-description = "Schema-constrained model execution and optional visual grounding for A3S Test"
+description = "Schema-constrained model execution, contract generation, and visual grounding for A3S Test"
 
 [dependencies]
 a3s-test-core = { path = "../a3s-test-core" }

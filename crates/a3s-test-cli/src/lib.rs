@@ -517,6 +517,12 @@ async fn read_contracts(suite: &TestSuite, manifest_dir: &Path) -> Result<Contra
     for reference in references {
         let relative = admit_contract_reference(reference)?;
         let requested = manifest_dir.join(relative);
+        let metadata = tokio::fs::symlink_metadata(&requested)
+            .await
+            .with_context(|| format!("failed to inspect contract {}", requested.display()))?;
+        if !metadata.file_type().is_file() || metadata.file_type().is_symlink() {
+            anyhow::bail!("contract reference must resolve to a regular file: '{reference}'");
+        }
         let canonical = tokio::fs::canonicalize(&requested).await.with_context(|| {
             format!(
                 "failed to resolve contract reference '{reference}' from {}",
@@ -527,12 +533,6 @@ async fn read_contracts(suite: &TestSuite, manifest_dir: &Path) -> Result<Contra
             anyhow::bail!(
                 "contract reference must stay inside the test suite directory: '{reference}'"
             );
-        }
-        let metadata = tokio::fs::metadata(&canonical)
-            .await
-            .with_context(|| format!("failed to inspect contract {}", canonical.display()))?;
-        if !metadata.is_file() {
-            anyhow::bail!("contract reference must resolve to a regular file: '{reference}'");
         }
         let source = tokio::fs::read_to_string(&canonical)
             .await
@@ -556,6 +556,7 @@ async fn verify_contract_provenance(
     let contract_dir = contract_path
         .parent()
         .context("surface contract path does not have a parent directory")?;
+    let mut provenance_bytes = std::collections::HashMap::new();
     for entry in draft.provenance() {
         let uri = Path::new(&entry.uri);
         if uri.is_absolute()
@@ -569,6 +570,15 @@ async fn verify_contract_provenance(
             );
         }
         let requested = contract_dir.join(uri);
+        let metadata = tokio::fs::symlink_metadata(&requested)
+            .await
+            .with_context(|| format!("failed to inspect provenance {}", requested.display()))?;
+        if !metadata.file_type().is_file() || metadata.file_type().is_symlink() {
+            anyhow::bail!(
+                "contract provenance must resolve to a regular file: '{}'",
+                entry.uri
+            );
+        }
         let canonical = tokio::fs::canonicalize(&requested).await.with_context(|| {
             format!(
                 "failed to resolve provenance '{}' for contract {}",
@@ -582,24 +592,44 @@ async fn verify_contract_provenance(
                 entry.uri
             );
         }
-        let metadata = tokio::fs::metadata(&canonical)
-            .await
-            .with_context(|| format!("failed to inspect provenance {}", canonical.display()))?;
-        if !metadata.is_file() {
-            anyhow::bail!(
-                "contract provenance must resolve to a regular file: '{}'",
-                entry.uri
-            );
-        }
         let bytes = tokio::fs::read(&canonical)
             .await
             .with_context(|| format!("failed to read provenance {}", canonical.display()))?;
-        let actual = format!("sha256:{:x}", Sha256::digest(bytes));
+        let actual = format!("sha256:{:x}", Sha256::digest(&bytes));
         if entry.digest != actual {
             anyhow::bail!(
                 "test.contract.provenance_digest_mismatch: provenance '{}' does not match its declared SHA-256 digest",
                 entry.id
             );
+        }
+        provenance_bytes.insert(entry.id.as_str(), bytes);
+    }
+    for variant in draft.variants() {
+        for element in &variant.elements {
+            for citation in &element.citations {
+                let bytes = provenance_bytes
+                    .get(citation.provenance_id.as_str())
+                    .with_context(|| {
+                        format!(
+                            "test.contract.citation_provenance_unknown: citation '{}' references unknown provenance '{}'",
+                            citation.id, citation.provenance_id
+                        )
+                    })?;
+                let start = usize::try_from(citation.start)
+                    .context("test.contract.citation_span_mismatch: citation start overflowed")?;
+                let end = usize::try_from(citation.end)
+                    .context("test.contract.citation_span_mismatch: citation end overflowed")?;
+                if start >= end
+                    || end > bytes.len()
+                    || bytes.get(start..end) != Some(citation.quote.as_bytes())
+                {
+                    anyhow::bail!(
+                        "test.contract.citation_span_mismatch: citation '{}' does not match provenance '{}' bytes",
+                        citation.id,
+                        citation.provenance_id
+                    );
+                }
+            }
         }
     }
     Ok(())

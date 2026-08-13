@@ -195,6 +195,7 @@ surface_contract "checkout" {
         }
     }
 }
+
 "#,
     )
     .expect("contract");
@@ -225,6 +226,74 @@ suite "contract-smoke" {
     assert!(
         String::from_utf8_lossy(&output.stderr)
             .contains("test.contract.provenance_digest_mismatch"),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
+
+#[test]
+fn check_rejects_citation_quotes_that_do_not_match_verified_source_bytes() {
+    let temp = tempfile::tempdir().expect("tempdir");
+    fs::write(temp.path().join("requirements.md"), "Place order").expect("provenance");
+    fs::write(
+        temp.path().join("contract.acl"),
+        r#"
+surface_contract "checkout" {
+    context {
+        mode = "operate"
+        audience = ["customer"]
+        primary_outcome = "place_order"
+    }
+    provenance "requirements" {
+        kind = "prd"
+        uri = "./requirements.md"
+        digest = "sha256:17eb518d8561b2c69dbce85ae89b64c20c26c1a8aebef4447a9c48337bb4848c"
+        status = "reviewed"
+        confidence = 100
+    }
+    variant "desktop" {
+        state = "ready"
+        element "submit" {
+            role = "button"
+            severity = "blocking"
+            citation "source-span" {
+                provenance = "requirements"
+                quote = "Wrong quote"
+                start = 0
+                end = 11
+            }
+        }
+    }
+}
+"#,
+    )
+    .expect("contract");
+    let suite = temp.path().join("suite.acl");
+    fs::write(
+        &suite,
+        r#"
+suite "contract-smoke" {
+    scenario "checkout" {
+        surface = "web"
+        verify_contract "ready" {
+            contract = "./contract.acl"
+            variant = "desktop"
+            state = "ready"
+        }
+    }
+}
+"#,
+    )
+    .expect("suite");
+
+    let output = Command::new(binary())
+        .args(["check", suite.to_str().unwrap()])
+        .output()
+        .expect("run contract-aware check");
+
+    assert_eq!(output.status.code(), Some(2), "{output:?}");
+    assert!(
+        String::from_utf8_lossy(&output.stderr).contains("test.contract.citation_span_mismatch"),
         "{}",
         String::from_utf8_lossy(&output.stderr)
     );
@@ -262,6 +331,50 @@ suite "contract-smoke" {
     assert_eq!(output.status.code(), Some(2), "{output:?}");
     assert!(
         String::from_utf8_lossy(&output.stderr).contains("contract reference must stay inside"),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn check_rejects_symbolic_link_contracts() {
+    use std::os::unix::fs::symlink;
+
+    let temp = tempfile::tempdir().expect("tempdir");
+    fs::write(temp.path().join("target.acl"), "not admitted").expect("contract target");
+    symlink(
+        temp.path().join("target.acl"),
+        temp.path().join("contract.acl"),
+    )
+    .expect("contract symlink");
+    let suite = temp.path().join("suite.acl");
+    fs::write(
+        &suite,
+        r#"
+suite "contract-smoke" {
+    scenario "checkout" {
+        surface = "web"
+        verify_contract "ready" {
+            contract = "./contract.acl"
+            variant = "desktop"
+            state = "ready"
+        }
+    }
+}
+"#,
+    )
+    .expect("suite");
+
+    let output = Command::new(binary())
+        .args(["check", suite.to_str().unwrap()])
+        .output()
+        .expect("run contract-aware check");
+
+    assert_eq!(output.status.code(), Some(2), "{output:?}");
+    assert!(
+        String::from_utf8_lossy(&output.stderr)
+            .contains("contract reference must resolve to a regular file"),
         "{}",
         String::from_utf8_lossy(&output.stderr)
     );

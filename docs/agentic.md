@@ -277,6 +277,43 @@ service. A3S Test neither bundles model weights nor selects one by model-name
 string. The deploying host is responsible for credentials, capacity, privacy,
 and license compliance.
 
+## Contract-generation provider
+
+Expected-interface generation is separate from both `LlmProvider` planning and
+visual grounding. An SDK host injects one typed provider:
+
+```rust
+#[async_trait]
+pub trait ContractGenerationProvider: Send + Sync {
+    fn identity(&self) -> ContractGenerationProviderIdentity;
+
+    async fn generate(
+        &self,
+        request: ContractGenerationProviderRequest,
+    ) -> Result<ContractGenerationProviderResponse, ContractGenerationError>;
+}
+```
+
+The request contains a contract name, explicit product context, digest-bound
+PRD or design sources, issue/deadline times, and a cost ceiling. The service
+reads every regular non-link source asynchronously and verifies its digest both
+before and after the provider call. Returned PRD source spans must match exact
+UTF-8 bytes. Returned design regions must match the declared image dimensions,
+coordinate space, and semantic parent hierarchy.
+
+The response proposes bounded candidates with confidence and unresolved
+decisions; it cannot return approved ACL citations. Local validation rejects
+duplicate or cyclic structure, stale identity or provenance, source races,
+invalid evidence, oversized responses, excess cost, timeout, and cancellation.
+Deterministic merge exposes every source disagreement as a conflict. A separate
+human review approves candidates and resolves conflicts with rationale before
+the service constructs a checked ACL Surface Contract draft.
+
+The reviewed result retains the full provider response and review record for
+audit. It does not claim browser observation, cannot pass a test by itself, and
+does not authorize repair. Model transports, credentials, runtimes, weights,
+and license decisions remain deployment-owned.
+
 ## Decisions
 
 The model can return exactly one of:

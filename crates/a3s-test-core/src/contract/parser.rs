@@ -1,10 +1,11 @@
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
-use a3s_acl::{Block, Value};
+use a3s_acl::{Block, Document, Value};
 
 use super::{
-    AdmittedProvenance, ContractContext, ContractElement, ContractMode, ContractProvenanceKind,
-    ContractProvenanceStatus, ContractSeverity, ContractVariant, SurfaceContractDraft,
+    AdmittedProvenance, ContractCitation, ContractContext, ContractElement, ContractMode,
+    ContractProvenanceKind, ContractProvenanceStatus, ContractSeverity, ContractVariant,
+    SurfaceContractDraft,
 };
 use crate::{PageContextTheme, SpecError};
 
@@ -28,18 +29,206 @@ impl SurfaceContractDraft {
     }
 }
 
+pub(super) fn generate_contract(draft: &SurfaceContractDraft) -> String {
+    let root = Block {
+        name: "surface_contract".to_string(),
+        labels: vec![draft.name.clone()],
+        attributes: HashMap::from([("version".to_string(), Value::Number(draft.version.into()))]),
+        blocks: std::iter::once(context_block(&draft.context))
+            .chain(draft.provenance.iter().map(provenance_block))
+            .chain(draft.variants.iter().map(variant_block))
+            .collect(),
+    };
+    a3s_acl::generate(&Document { blocks: vec![root] })
+}
+
+fn context_block(context: &ContractContext) -> Block {
+    Block {
+        name: "context".to_string(),
+        labels: Vec::new(),
+        blocks: Vec::new(),
+        attributes: HashMap::from([
+            (
+                "mode".to_string(),
+                Value::String(
+                    match context.mode {
+                        ContractMode::Persuade => "persuade",
+                        ContractMode::Operate => "operate",
+                        ContractMode::Read => "read",
+                        ContractMode::Experience => "experience",
+                    }
+                    .to_string(),
+                ),
+            ),
+            (
+                "audience".to_string(),
+                Value::List(
+                    context
+                        .audience
+                        .iter()
+                        .cloned()
+                        .map(Value::String)
+                        .collect(),
+                ),
+            ),
+            (
+                "primary_outcome".to_string(),
+                Value::String(context.primary_outcome.clone()),
+            ),
+        ]),
+    }
+}
+
+fn provenance_block(value: &AdmittedProvenance) -> Block {
+    Block {
+        name: "provenance".to_string(),
+        labels: vec![value.id.clone()],
+        blocks: Vec::new(),
+        attributes: HashMap::from([
+            (
+                "kind".to_string(),
+                Value::String(
+                    match value.kind {
+                        ContractProvenanceKind::Prd => "prd",
+                        ContractProvenanceKind::Design => "design",
+                        ContractProvenanceKind::Manual => "manual",
+                        ContractProvenanceKind::OfficialDocs => "official_docs",
+                    }
+                    .to_string(),
+                ),
+            ),
+            ("uri".to_string(), Value::String(value.uri.clone())),
+            ("digest".to_string(), Value::String(value.digest.clone())),
+            (
+                "status".to_string(),
+                Value::String(
+                    match value.status {
+                        ContractProvenanceStatus::Draft => "draft",
+                        ContractProvenanceStatus::Reviewed => "reviewed",
+                    }
+                    .to_string(),
+                ),
+            ),
+            (
+                "confidence".to_string(),
+                Value::Number(value.confidence.into()),
+            ),
+        ]),
+    }
+}
+
+fn variant_block(value: &ContractVariant) -> Block {
+    let mut attributes = HashMap::from([("state".to_string(), Value::String(value.state.clone()))]);
+    insert_optional_number(&mut attributes, "min_width", value.min_width);
+    insert_optional_number(&mut attributes, "max_width", value.max_width);
+    if let Some(theme) = value.theme {
+        attributes.insert(
+            "theme".to_string(),
+            Value::String(
+                match theme {
+                    PageContextTheme::Light => "light",
+                    PageContextTheme::Dark => "dark",
+                    PageContextTheme::Unknown => "unknown",
+                }
+                .to_string(),
+            ),
+        );
+    }
+    insert_optional_string(&mut attributes, "language", value.language.as_ref());
+    Block {
+        name: "variant".to_string(),
+        labels: vec![value.id.clone()],
+        attributes,
+        blocks: value.elements.iter().map(element_block).collect(),
+    }
+}
+
+fn element_block(value: &ContractElement) -> Block {
+    let mut attributes = HashMap::new();
+    insert_optional_string(&mut attributes, "test_id", value.test_id.as_ref());
+    insert_optional_string(&mut attributes, "component_id", value.component_id.as_ref());
+    insert_optional_string(&mut attributes, "role", value.role.as_ref());
+    insert_optional_string(&mut attributes, "name", value.name.as_ref());
+    insert_optional_string(&mut attributes, "description", value.description.as_ref());
+    if !value.required {
+        attributes.insert("required".to_string(), Value::Bool(false));
+    }
+    insert_optional_bool(&mut attributes, "visible", value.visible);
+    insert_optional_bool(&mut attributes, "enabled", value.enabled);
+    insert_optional_bool(&mut attributes, "checked", value.checked);
+    insert_optional_bool(&mut attributes, "selected", value.selected);
+    insert_optional_bool(&mut attributes, "expanded", value.expanded);
+    insert_optional_bool(&mut attributes, "readonly", value.readonly);
+    insert_optional_bool(&mut attributes, "form_required", value.form_required);
+    insert_optional_bool(&mut attributes, "invalid", value.invalid);
+    insert_optional_string(&mut attributes, "parent", value.parent.as_ref());
+    attributes.insert(
+        "severity".to_string(),
+        Value::String(
+            match value.severity {
+                ContractSeverity::Blocking => "blocking",
+                ContractSeverity::Important => "important",
+                ContractSeverity::Suggestion => "suggestion",
+            }
+            .to_string(),
+        ),
+    );
+    Block {
+        name: "element".to_string(),
+        labels: vec![value.id.clone()],
+        attributes,
+        blocks: value.citations.iter().map(citation_block).collect(),
+    }
+}
+
+fn citation_block(value: &ContractCitation) -> Block {
+    Block {
+        name: "citation".to_string(),
+        labels: vec![value.id.clone()],
+        blocks: Vec::new(),
+        attributes: HashMap::from([
+            (
+                "provenance".to_string(),
+                Value::String(value.provenance_id.clone()),
+            ),
+            ("quote".to_string(), Value::String(value.quote.clone())),
+            ("start".to_string(), Value::Number(value.start.into())),
+            ("end".to_string(), Value::Number(value.end.into())),
+        ]),
+    }
+}
+
+fn insert_optional_string(
+    attributes: &mut HashMap<String, Value>,
+    key: &str,
+    value: Option<&String>,
+) {
+    if let Some(value) = value {
+        attributes.insert(key.to_string(), Value::String(value.clone()));
+    }
+}
+
+fn insert_optional_bool(attributes: &mut HashMap<String, Value>, key: &str, value: Option<bool>) {
+    if let Some(value) = value {
+        attributes.insert(key.to_string(), Value::Bool(value));
+    }
+}
+
+fn insert_optional_number(attributes: &mut HashMap<String, Value>, key: &str, value: Option<u32>) {
+    if let Some(value) = value {
+        attributes.insert(key.to_string(), Value::Number(value.into()));
+    }
+}
+
 fn parse_contract(block: &Block) -> Result<SurfaceContractDraft, SpecError> {
     let name = one_label(block, "surface_contract")?.to_string();
-    validate_identifier(&name, "surface_contract")?;
     let path = format!("surface_contract.{name}");
     ensure_attributes(block, &["version"], &path)?;
     let version = optional_u32(block, "version", 1, &path)?;
 
     let mut context = None;
     let mut provenance = Vec::new();
-    let mut provenance_ids = HashSet::new();
     let mut variants = Vec::new();
-    let mut variant_ids = HashSet::new();
     for child in &block.blocks {
         match child.name.as_str() {
             "context" if context.is_none() => context = Some(parse_context(child, &path)?),
@@ -51,26 +240,10 @@ fn parse_contract(block: &Block) -> Result<SurfaceContractDraft, SpecError> {
                 ));
             }
             "provenance" => {
-                let item = parse_provenance(child, &path)?;
-                if !provenance_ids.insert(item.id.clone()) {
-                    return Err(SpecError::new(
-                        "test.contract.provenance_duplicate",
-                        format!("{path}.provenance.{}", item.id),
-                        "provenance identifiers must be unique",
-                    ));
-                }
-                provenance.push(item);
+                provenance.push(parse_provenance(child, &path)?);
             }
             "variant" => {
-                let variant = parse_variant(child, &path)?;
-                if !variant_ids.insert(variant.id.clone()) {
-                    return Err(SpecError::new(
-                        "test.contract.variant_duplicate",
-                        format!("{path}.variant.{}", variant.id),
-                        "variant identifiers must be unique",
-                    ));
-                }
-                variants.push(variant);
+                variants.push(parse_variant(child, &path)?);
             }
             _ => {
                 return Err(SpecError::new(
@@ -82,10 +255,10 @@ fn parse_contract(block: &Block) -> Result<SurfaceContractDraft, SpecError> {
         }
     }
 
-    Ok(SurfaceContractDraft {
+    SurfaceContractDraft::new(
         name,
         version,
-        context: context.ok_or_else(|| {
+        context.ok_or_else(|| {
             SpecError::new(
                 "test.contract.context_required",
                 &path,
@@ -94,7 +267,7 @@ fn parse_contract(block: &Block) -> Result<SurfaceContractDraft, SpecError> {
         })?,
         provenance,
         variants,
-    })
+    )
 }
 
 fn parse_context(block: &Block, parent: &str) -> Result<ContractContext, SpecError> {
@@ -203,7 +376,6 @@ fn parse_variant(block: &Block, parent: &str) -> Result<ContractVariant, SpecErr
         })
         .transpose()?;
     let mut elements = Vec::new();
-    let mut element_ids = HashSet::new();
     for child in &block.blocks {
         if child.name != "element" {
             return Err(SpecError::new(
@@ -212,15 +384,7 @@ fn parse_variant(block: &Block, parent: &str) -> Result<ContractVariant, SpecErr
                 "only element blocks are allowed inside a variant",
             ));
         }
-        let element = parse_element(child, &path)?;
-        if !element_ids.insert(element.id.clone()) {
-            return Err(SpecError::new(
-                "test.contract.element_duplicate",
-                format!("{path}.element.{}", element.id),
-                "element identifiers must be unique inside a variant",
-            ));
-        }
-        elements.push(element);
+        elements.push(parse_element(child, &path)?);
     }
     Ok(ContractVariant {
         id,
@@ -237,7 +401,6 @@ fn parse_element(block: &Block, parent: &str) -> Result<ContractElement, SpecErr
     let id = one_label(block, "element")?.to_string();
     validate_identifier(&id, parent)?;
     let path = format!("{parent}.element.{id}");
-    ensure_no_blocks(block, &path)?;
     ensure_attributes(
         block,
         &[
@@ -272,6 +435,17 @@ fn parse_element(block: &Block, parent: &str) -> Result<ContractElement, SpecErr
             ));
         }
     };
+    let mut citations = Vec::new();
+    for child in &block.blocks {
+        if child.name != "citation" {
+            return Err(SpecError::new(
+                "test.contract.block_unknown",
+                format!("{path}.{}", child.name),
+                "only citation blocks are allowed inside an element",
+            ));
+        }
+        citations.push(parse_citation(child, &path)?);
+    }
     Ok(ContractElement {
         id,
         test_id: optional_nonempty_string(block, "test_id", &path)?,
@@ -290,6 +464,22 @@ fn parse_element(block: &Block, parent: &str) -> Result<ContractElement, SpecErr
         invalid: optional_bool_attribute(block, "invalid", &path)?,
         parent: optional_nonempty_string(block, "parent", &path)?,
         severity,
+        citations,
+    })
+}
+
+fn parse_citation(block: &Block, parent: &str) -> Result<ContractCitation, SpecError> {
+    let id = one_label(block, "citation")?.to_string();
+    validate_identifier(&id, parent)?;
+    let path = format!("{parent}.citation.{id}");
+    ensure_no_blocks(block, &path)?;
+    ensure_attributes(block, &["provenance", "quote", "start", "end"], &path)?;
+    Ok(ContractCitation {
+        id,
+        provenance_id: required_nonempty_string(block, "provenance", &path)?,
+        quote: required_preserved_nonempty_string(block, "quote", &path)?,
+        start: required_u32(block, "start", &path)?,
+        end: required_u32(block, "end", &path)?,
     })
 }
 
@@ -354,6 +544,22 @@ fn required_string<'a>(block: &'a Block, name: &str, path: &str) -> Result<&'a s
 fn required_nonempty_string(block: &Block, name: &str, path: &str) -> Result<String, SpecError> {
     let value = required_string(block, name, path)?.trim();
     if value.is_empty() {
+        return Err(SpecError::new(
+            "test.contract.string_empty",
+            format!("{path}.{name}"),
+            "attribute must not be empty",
+        ));
+    }
+    Ok(value.to_string())
+}
+
+fn required_preserved_nonempty_string(
+    block: &Block,
+    name: &str,
+    path: &str,
+) -> Result<String, SpecError> {
+    let value = required_string(block, name, path)?;
+    if value.trim().is_empty() {
         return Err(SpecError::new(
             "test.contract.string_empty",
             format!("{path}.{name}"),
@@ -511,4 +717,60 @@ fn validate_identifier(value: &str, path: &str) -> Result<(), SpecError> {
         format!("{path}.{value}"),
         "identifier must contain only ASCII letters, digits, hyphens, or underscores",
     ))
+}
+
+pub(super) fn validate_draft_structure(draft: &SurfaceContractDraft) -> Result<(), SpecError> {
+    validate_identifier(&draft.name, "surface_contract")?;
+    let path = format!("surface_contract.{}", draft.name);
+
+    let mut provenance_ids = HashSet::new();
+    for provenance in &draft.provenance {
+        validate_identifier(&provenance.id, &path)?;
+        if !provenance_ids.insert(provenance.id.as_str()) {
+            return Err(SpecError::new(
+                "test.contract.provenance_duplicate",
+                format!("{path}.provenance.{}", provenance.id),
+                "provenance identifiers must be unique",
+            ));
+        }
+    }
+
+    let mut variant_ids = HashSet::new();
+    for variant in &draft.variants {
+        validate_identifier(&variant.id, &path)?;
+        if !variant_ids.insert(variant.id.as_str()) {
+            return Err(SpecError::new(
+                "test.contract.variant_duplicate",
+                format!("{path}.variant.{}", variant.id),
+                "variant identifiers must be unique",
+            ));
+        }
+
+        let variant_path = format!("{path}.variant.{}", variant.id);
+        let mut element_ids = HashSet::new();
+        for element in &variant.elements {
+            validate_identifier(&element.id, &variant_path)?;
+            if !element_ids.insert(element.id.as_str()) {
+                return Err(SpecError::new(
+                    "test.contract.element_duplicate",
+                    format!("{variant_path}.element.{}", element.id),
+                    "element identifiers must be unique inside a variant",
+                ));
+            }
+
+            let element_path = format!("{variant_path}.element.{}", element.id);
+            let mut citation_ids = HashSet::new();
+            for citation in &element.citations {
+                validate_identifier(&citation.id, &element_path)?;
+                if !citation_ids.insert(citation.id.as_str()) {
+                    return Err(SpecError::new(
+                        "test.contract.citation_duplicate",
+                        format!("{element_path}.citation.{}", citation.id),
+                        "citation identifiers must be unique inside an element",
+                    ));
+                }
+            }
+        }
+    }
+    Ok(())
 }

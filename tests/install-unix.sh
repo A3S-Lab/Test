@@ -17,7 +17,7 @@ case "$(uname -s):$(uname -m)" in
         ;;
 esac
 
-VERSION="v0.7.0"
+VERSION="v0.8.0"
 RELEASE_DIR="${TMP_ROOT}/releases/download/${VERSION}"
 PAYLOAD_NAME="a3s-test-${VERSION}-${TARGET}"
 mkdir -p "${RELEASE_DIR}" "${TMP_ROOT}/payload/${PAYLOAD_NAME}" "${TMP_ROOT}/skill/a3s-test"

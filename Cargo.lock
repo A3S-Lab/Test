@@ -14,7 +14,7 @@ dependencies = [
 
 [[package]]
 name = "a3s-test-agent"
-version = "0.7.0"
+version = "0.8.0"
 dependencies = [
  "a3s-test-core",
  "async-trait",
@@ -31,7 +31,7 @@ dependencies = [
 
 [[package]]
 name = "a3s-test-cli"
-version = "0.7.0"
+version = "0.8.0"
 dependencies = [
  "a3s-test-core",
  "a3s-test-driver-gui",
@@ -53,7 +53,7 @@ dependencies = [
 
 [[package]]
 name = "a3s-test-core"
-version = "0.7.0"
+version = "0.8.0"
 dependencies = [
  "a3s-acl",
  "async-trait",
@@ -67,7 +67,7 @@ dependencies = [
 
 [[package]]
 name = "a3s-test-driver-gui"
-version = "0.7.0"
+version = "0.8.0"
 dependencies = [
  "a3s-acl",
  "a3s-test-core",
@@ -85,7 +85,7 @@ dependencies = [
 
 [[package]]
 name = "a3s-test-driver-web"
-version = "0.7.0"
+version = "0.8.0"
 dependencies = [
  "a3s-test-core",
  "async-trait",
@@ -101,7 +101,7 @@ dependencies = [
 
 [[package]]
 name = "a3s-test-runner"
-version = "0.7.0"
+version = "0.8.0"
 dependencies = [
  "a3s-test-core",
  "async-trait",
@@ -114,7 +114,7 @@ dependencies = [
 
 [[package]]
 name = "a3s-test-session"
-version = "0.7.0"
+version = "0.8.0"
 dependencies = [
  "a3s-test-core",
  "async-trait",

@@ -393,6 +393,13 @@ surface_contract "checkout" {
             visible = true
             enabled = true
             severity = "blocking"
+
+            citation "prd-submit" {
+                provenance = "requirements"
+                quote = "Customers can place an order."
+                start = 128
+                end = 157
+            }
         }
     }
 }
@@ -410,6 +417,15 @@ at least one identity field: `test_id`, `component_id`, or `role`. Optional
 expectations are `name`, `description`, `required`, `visible`, `enabled`,
 `checked`, `selected`, `expanded`, `readonly`, `form_required`, `invalid`, and
 `parent`. Parent references stay inside the variant and must be acyclic.
+
+An element may contain zero or more `citation "<id>"` blocks. Citation IDs are
+unique within that element. `provenance` must name a contract provenance entry;
+`quote` is a non-empty string retained without trimming; and `start` plus `end`
+are unsigned UTF-8 byte offsets with `start < end`. This byte interpretation is
+deliberate: leading and trailing whitespace and multibyte characters remain
+part of the evidence. During `a3s-test check`, the CLI verifies that
+`source_bytes[start..end]` exactly equals `quote.as_bytes()` after verifying the
+source digest.
 
 `severity` is `blocking`, `important`, or `suggestion`; the default is
 `important`. Only blocking findings fail the contract. Important and
@@ -429,9 +445,37 @@ verify_contract "checkout-ready" {
 
 Contract and provenance paths must resolve to regular files beneath the suite
 directory. The CLI loads every referenced contract and verifies each declared
-SHA-256 digest before any surface opens. `verify_contract` is legal in closed
-ACL suites only. It is absent from interactive agent and MCP schemas and must
-never reach a surface driver.
+SHA-256 digest and exact citation byte range before any surface opens.
+`verify_contract` is legal in closed ACL suites only. It is absent from
+interactive agent and MCP schemas and must never reach a surface driver.
+
+## Source-to-contract provider contract
+
+`a3s-test-agent` exposes a typed `ContractGenerationProvider` for SDK hosts.
+The provider request binds the contract name and context to one or more PRD or
+design sources, each with a relative URI, local path, kind, and SHA-256 digest.
+Design sources additionally require an image media type and positive bounded
+dimensions. Requests also carry issue/deadline times and a micro-USD ceiling.
+
+The provider response contains provider/model identity, exact source bindings,
+bounded usage, an optional request ID, and candidates. A candidate is not an
+Observed Surface and is not an admitted contract. PRD elements require at least
+one exact source span. Design elements require an in-bounds pixel or normalized
+region whose parent agrees with semantic parentage. Confidence remains
+explicit. Open product questions are typed unresolved decisions, and any
+selected candidate that depends on one blocks review.
+
+Local admission rejects unknown sources, duplicate variants or elements,
+cyclic or missing parents, prefilled citations, mismatched source bytes,
+inconsistent design hierarchy, invalid geometry, unbounded output, provider
+identity or provenance changes, excess cost, timeout, and cancellation. Source
+files are verified both before and after the provider call.
+
+Generation merges candidate evidence without choosing a winner. Differing
+fields become stable explicit conflicts. A human review must approve or reject
+candidates and resolve every applicable conflict with a rationale. The result
+uses the existing `surface_contract` ACL grammar; only approved source spans
+become citation blocks, and only selected sources become reviewed provenance.
 
 Reconciliation matches each element in this order: exact test ID, component
 identity plus optional role/name, exact role and name, then role alone.

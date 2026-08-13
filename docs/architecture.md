@@ -89,6 +89,52 @@ This decomposition keeps the fast path deterministic. Browser facts are used
 before probabilistic perception, and a model can propose expected structure or
 visual candidates without acquiring verdict or mutation authority.
 
+### Source-to-contract generation
+
+Source interpretation is an adapter concern in `a3s-test-agent`, not a Core
+concern. `ContractGenerationService` accepts a typed provider plus explicit
+limits, digest-bound local PRD or design sources, a contract context, deadline,
+cancellation token, and cost ceiling. It verifies every regular source file
+before provider dispatch and reads it again after the call. A concurrent edit,
+stale provider identity, provenance mismatch, invalid span or region, excess
+cost, timeout, or cancellation fails closed.
+
+The provider returns candidates rather than a contract. PRD candidates require
+exact UTF-8 byte spans and may carry confidence and unresolved product
+decisions. Design candidates require image dimensions, coordinate space,
+in-bounds regions, semantic hierarchy, and matching geometric hierarchy.
+Provider responses cannot contain pre-approved citations. Candidate and
+variant identifiers, hierarchy, sizes, and counts are locally admitted before
+merge.
+
+```text
+digest-bound PRD / design evidence
+                 |
+                 v
+     injected generation provider
+                 |
+                 v
+ typed candidates + uncertainty + evidence
+                 |
+        deterministic conflict set
+                 |
+                 v
+     explicit human review decisions
+                 |
+                 v
+ checked ACL Surface Contract draft
+```
+
+Merge is lossless and deterministic: disagreements become stable, explicit
+conflicts instead of an implicit source preference. Review must select one
+candidate for each approved variant/element, resolve every relevant conflict,
+and reject candidates that depend on an unresolved product decision. The
+reviewed artifact retains the complete generated draft, provider identity,
+usage, request ID, rejected candidates, conflicts, resolutions, and reviewer
+decisions for audit. Only selected sources become reviewed provenance, and
+source spans become ACL citations. Browser observation still happens later and
+independently.
+
 ### Understanding during rendering
 
 The browser already computes DOM structure, accessibility semantics, CSS

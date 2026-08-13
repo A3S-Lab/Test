@@ -115,6 +115,14 @@ review candidate, where a human can confirm the target and authorize one or a
 batch of repairs. Report projection is optional and can never change the
 runner verdict.
 
+SDK hosts can inject a typed contract-generation provider from
+`a3s-test-agent`. PRD candidates retain exact UTF-8 byte spans, confidence, and
+unresolved product decisions; design candidates retain the source image digest,
+coordinate space, regions, hierarchy, and confidence. Conflicting sources stay
+explicit until a reviewer selects candidates. Only that reviewed selection is
+rendered as the existing ACL Surface Contract, with no parallel DSL and no
+claim that source-derived expectations were browser-observed.
+
 For canvas, image-only controls, remote desktops, and design references, SDK
 hosts can inject a typed visual-grounding provider from `a3s-test-agent`. It
 accepts an observation- and SHA-256-bound screenshot plus an explicit deadline
@@ -211,7 +219,7 @@ tagged Rust package:
 
 ```bash
 cargo install --git https://github.com/A3S-Lab/Test \
-  --tag v0.7.0 --locked a3s-test-cli
+  --tag v0.8.0 --locked a3s-test-cli
 ```
 
 ## Turn a proven path into a regression
@@ -294,6 +302,13 @@ surface_contract "checkout" {
             role = "button"
             name = "Place order"
             severity = "blocking"
+
+            citation "prd-submit" {
+                provenance = "requirements"
+                quote = "Customers can place an order."
+                start = 128
+                end = 157
+            }
         }
     }
 }
@@ -309,10 +324,11 @@ verify_contract "checkout-ready" {
 }
 ```
 
-The CLI loads every referenced contract and verifies its local provenance
-before opening a browser. Reconciliation prefers test ID, component identity,
-role plus accessible name, and finally role. Missing or truncated Test Kit
-context is inconclusive and fails closed. See the [ACL specification](docs/specification.md)
+The CLI loads every referenced contract, verifies its local provenance digest,
+and checks each citation against the exact source byte range before opening a
+browser. Reconciliation prefers test ID, component identity, role plus
+accessible name, and finally role. Missing or truncated Test Kit context is
+inconclusive and fails closed. See the [ACL specification](docs/specification.md)
 for the complete grammar and verdict rules.
 
 ## One engine, two primary workflows
@@ -414,7 +430,7 @@ crates/
 ├── a3s-test-session/     # Surface-neutral long-lived session application layer
 ├── a3s-test-driver-gui/  # Locked MCP adapter boundary for A3S CUA
 ├── a3s-test-driver-web/  # A3S Browser / agent-browser adapter
-└── a3s-test-agent/       # Optional embedded model loop and visual grounding
+└── a3s-test-agent/       # Embedded model loop, contract generation, and visual grounding
 
 skills/
 └── a3s-test/             # Portable Coding Agent Skill

@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.8.0 - 2026-08-13
+
 ### Added
 
 - Added a typed optional visual-grounding provider boundary in
@@ -14,6 +16,19 @@
   visual-viewport mapping, and deterministic hit-testing against current Test
   Kit geometry. Only a unique hit upgrades to a semantic target; ambiguous and
   unmapped candidates stay image-bound.
+- Added a typed source-to-contract provider boundary in `a3s-test-agent` for
+  digest-bound PRD and design evidence. PRD candidates preserve exact UTF-8
+  byte spans, confidence, and unresolved product decisions; design candidates
+  preserve image dimensions, coordinate space, bounded regions, hierarchy, and
+  confidence.
+- Added deterministic PRD/design merge with explicit stable conflicts, human
+  candidate approval and conflict resolution, complete provider/review audit
+  retention, and checked generation into the existing ACL Surface Contract
+  rather than a second DSL.
+- Added optional per-element ACL citations and CLI verification that every
+  citation quote exactly matches its provenance byte range after SHA-256
+  verification. The same admitted contract retains stable finding IDs before
+  and after repair.
 
 ### Safety
 
@@ -22,6 +37,17 @@
   mismatch, invalid geometry, timeout, cancellation, oversized output, and cost
   overrun fail closed. Model weights, transports, credentials, and licenses
   remain deployment-owned and are not bundled with A3S Test.
+- Source-derived candidates are never browser observations, test verdicts, or
+  repair authorization. Sources are re-read after provider execution, and
+  stale identity or provenance, concurrent edits, invalid or cyclic structure,
+  prefilled citations, mismatched spans, inconsistent design hierarchy,
+  unresolved selected decisions, timeout, cancellation, oversized output, and
+  cost overrun fail closed.
+
+### Changed
+
+- Raised the Rust workspace release to `0.8.0`. The unchanged Test Kit remains
+  `0.2.0`.
 
 ## 0.7.0 - 2026-08-13
 

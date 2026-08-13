@@ -53,6 +53,15 @@ pub enum ContractSeverity {
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct ContractCitation {
+    pub id: String,
+    pub provenance_id: String,
+    pub quote: String,
+    pub start: u32,
+    pub end: u32,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct ContractElement {
     pub id: String,
     pub test_id: Option<String>,
@@ -71,6 +80,8 @@ pub struct ContractElement {
     pub invalid: Option<bool>,
     pub parent: Option<String>,
     pub severity: ContractSeverity,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub citations: Vec<ContractCitation>,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -94,6 +105,24 @@ pub struct SurfaceContractDraft {
 }
 
 impl SurfaceContractDraft {
+    pub fn new(
+        name: impl Into<String>,
+        version: u32,
+        context: ContractContext,
+        provenance: Vec<AdmittedProvenance>,
+        variants: Vec<ContractVariant>,
+    ) -> Result<Self, SpecError> {
+        let draft = Self {
+            name: name.into(),
+            version,
+            context,
+            provenance,
+            variants,
+        };
+        super::parser::validate_draft_structure(&draft)?;
+        Ok(draft)
+    }
+
     #[must_use]
     pub fn name(&self) -> &str {
         &self.name
@@ -107,6 +136,16 @@ impl SurfaceContractDraft {
     #[must_use]
     pub fn variants(&self) -> &[ContractVariant] {
         &self.variants
+    }
+
+    #[must_use]
+    pub fn context(&self) -> &ContractContext {
+        &self.context
+    }
+
+    #[must_use]
+    pub fn to_acl(&self) -> String {
+        super::parser::generate_contract(self)
     }
 }
 

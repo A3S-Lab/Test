@@ -66,8 +66,13 @@ impl SurfaceContractDraft {
                 "blocking contract checks require at least one reviewed provenance entry with 100 confidence",
             ));
         }
+        let provenance_ids = self
+            .provenance
+            .iter()
+            .map(|entry| entry.id.as_str())
+            .collect::<HashSet<_>>();
         for variant in &self.variants {
-            admit_variant(variant, &path)?;
+            admit_variant(variant, &path, &provenance_ids)?;
         }
         Ok(SurfaceContract {
             name: self.name,
@@ -79,7 +84,11 @@ impl SurfaceContractDraft {
     }
 }
 
-fn admit_variant(variant: &ContractVariant, parent: &str) -> Result<(), SpecError> {
+fn admit_variant(
+    variant: &ContractVariant,
+    parent: &str,
+    provenance_ids: &HashSet<&str>,
+) -> Result<(), SpecError> {
     let path = format!("{parent}.variant.{}", variant.id);
     if variant.elements.is_empty() {
         return Err(SpecError::new(
@@ -119,6 +128,23 @@ fn admit_variant(variant: &ContractVariant, parent: &str) -> Result<(), SpecErro
                     "test.contract.element_reference_unknown",
                     format!("{element_path}.parent"),
                     "element parent must reference another element in the same variant",
+                ));
+            }
+        }
+        for citation in &element.citations {
+            let citation_path = format!("{element_path}.citation.{}", citation.id);
+            if !provenance_ids.contains(citation.provenance_id.as_str()) {
+                return Err(SpecError::new(
+                    "test.contract.citation_provenance_unknown",
+                    format!("{citation_path}.provenance"),
+                    "citation provenance must reference a contract provenance entry",
+                ));
+            }
+            if citation.start >= citation.end || citation.quote.trim().is_empty() {
+                return Err(SpecError::new(
+                    "test.contract.citation_span_invalid",
+                    &citation_path,
+                    "citation source span must be non-empty and ordered",
                 ));
             }
         }

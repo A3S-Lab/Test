@@ -363,15 +363,15 @@ The completion work intentionally preserves these product boundaries:
 
 ## M13: Source-to-contract generation
 
-- [ ] Generate an Expected Surface Contract draft from a PRD while preserving
+- [x] Generate an Expected Surface Contract draft from a PRD while preserving
       quoted source spans, uncertainty, and unresolved product decisions
-- [ ] Generate an Expected Surface Contract draft from a design image with
+- [x] Generate an Expected Surface Contract draft from a design image with
       image digest, coordinate space, candidate hierarchy, and uncertainty
-- [ ] Provide a review workflow that promotes selected draft expectations to
+- [x] Provide a review workflow that promotes selected draft expectations to
       `reviewed` without claiming that either source was browser-observed
-- [ ] Merge PRD and design drafts through explicit conflicts and provenance,
+- [x] Merge PRD and design drafts through explicit conflicts and provenance,
       never by silently choosing one source
-- [ ] Re-run the same admitted contract after repair and correlate findings by
+- [x] Re-run the same admitted contract after repair and correlate findings by
       stable finding ID
 
 ## M14: Optional visual grounding providers

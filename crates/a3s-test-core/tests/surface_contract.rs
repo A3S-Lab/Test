@@ -1,5 +1,5 @@
 use a3s_test_core::{
-    ContractOutcome, ContractSeverity, PageContextNode, PageContextNodeState,
+    ContractCitation, ContractOutcome, ContractSeverity, PageContextNode, PageContextNodeState,
     PageContextObservation, PageContextPage, PageContextPoint, PageContextSize,
     PageContextSnapshot, PageContextTheme, PageContextViewport, SurfaceContractDraft,
     SurfaceObservation,
@@ -54,6 +54,125 @@ surface_contract "checkout" {
     }
 }
 "#;
+
+#[test]
+fn round_trips_optional_source_citations_without_changing_acl_authority() {
+    let source = CONTRACT.replace(
+        "severity = \"blocking\"",
+        r#"severity = "blocking"
+
+            citation "prd-place-order" {
+                provenance = "product-requirements"
+                quote = "The customer can place the order."
+                start = 128
+                end = 161
+            }"#,
+    );
+    let draft = SurfaceContractDraft::from_acl(&source).expect("citation syntax");
+    let element = &draft.variants()[0].elements[1];
+    assert_eq!(
+        element.citations,
+        [ContractCitation {
+            id: "prd-place-order".to_string(),
+            provenance_id: "product-requirements".to_string(),
+            quote: "The customer can place the order.".to_string(),
+            start: 128,
+            end: 161,
+        }]
+    );
+
+    let generated = draft.to_acl();
+    let reparsed = SurfaceContractDraft::from_acl(&generated).expect("generated citation ACL");
+    assert_eq!(reparsed, draft);
+    assert_eq!(reparsed.to_acl(), generated);
+
+    let contract = reparsed.admit().expect("reviewed cited contract");
+    assert_eq!(contract.variants[0].elements[1].citations.len(), 1);
+}
+
+#[test]
+fn preserves_citation_quote_utf8_bytes_including_edge_whitespace() {
+    let quote = " é ";
+    let source = CONTRACT.replace(
+        "severity = \"blocking\"",
+        &format!(
+            r#"severity = "blocking"
+
+            citation "prd-whitespace" {{
+                provenance = "product-requirements"
+                quote = "{quote}"
+                start = 0
+                end = {}
+            }}"#,
+            quote.len()
+        ),
+    );
+
+    let draft = SurfaceContractDraft::from_acl(&source).expect("citation syntax");
+    let citation = &draft.variants()[0].elements[1].citations[0];
+    assert_eq!(citation.quote, quote);
+    assert_eq!(citation.quote.as_bytes(), quote.as_bytes());
+
+    let generated = draft.to_acl();
+    let reparsed = SurfaceContractDraft::from_acl(&generated).expect("generated citation ACL");
+    assert_eq!(reparsed.variants()[0].elements[1].citations[0].quote, quote);
+}
+
+#[test]
+fn checked_constructor_rejects_invalid_and_duplicate_identifiers() {
+    let parsed = SurfaceContractDraft::from_acl(CONTRACT).expect("contract syntax");
+    let invalid = SurfaceContractDraft::new(
+        "checkout invalid",
+        1,
+        parsed.context().clone(),
+        parsed.provenance().to_vec(),
+        parsed.variants().to_vec(),
+    )
+    .expect_err("invalid contract identifier");
+    assert_eq!(invalid.code(), "test.contract.identifier_invalid");
+
+    let variant = parsed.variants()[0].clone();
+    let duplicate = SurfaceContractDraft::new(
+        "checkout",
+        1,
+        parsed.context().clone(),
+        parsed.provenance().to_vec(),
+        vec![variant.clone(), variant],
+    )
+    .expect_err("duplicate variant identifier");
+    assert_eq!(duplicate.code(), "test.contract.variant_duplicate");
+}
+
+#[test]
+fn rejects_citations_with_unknown_provenance_or_invalid_spans() {
+    for citation in [
+        r#"citation "unknown" {
+                provenance = "missing"
+                quote = "Place order"
+                start = 0
+                end = 11
+            }"#,
+        r#"citation "invalid-span" {
+                provenance = "product-requirements"
+                quote = "Place order"
+                start = 11
+                end = 11
+            }"#,
+    ] {
+        let source = CONTRACT.replace(
+            "severity = \"blocking\"",
+            &format!("severity = \"blocking\"\n\n            {citation}"),
+        );
+        let error = SurfaceContractDraft::from_acl(&source)
+            .expect("citation syntax")
+            .admit()
+            .expect_err("invalid citation must fail admission");
+        assert!(matches!(
+            error.code(),
+            "test.contract.citation_provenance_unknown" | "test.contract.citation_span_invalid"
+        ));
+    }
+}
 
 #[test]
 fn parses_and_admits_a_reviewed_surface_contract() {

@@ -8,9 +8,9 @@ mod model;
 mod reconcile;
 
 pub use contract::{
-    AdmittedProvenance, ContractContext, ContractElement, ContractMode, ContractProvenanceKind,
-    ContractProvenanceStatus, ContractSeverity, ContractVariant, SurfaceContract,
-    SurfaceContractDraft,
+    AdmittedProvenance, ContractCitation, ContractContext, ContractElement, ContractMode,
+    ContractProvenanceKind, ContractProvenanceStatus, ContractSeverity, ContractVariant,
+    SurfaceContract, SurfaceContractDraft,
 };
 
 pub use driver::{
