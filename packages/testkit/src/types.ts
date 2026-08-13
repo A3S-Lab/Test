@@ -1,5 +1,6 @@
 export const PAGE_CONTEXT_PROTOCOL = "a3s.test.page-context/1" as const;
 export const PAGE_CONTEXT_SYMBOL = Symbol.for("a3s.test.page-context");
+export const QUALITY_REPORT_PROTOCOL = "a3s.test.quality-report/1" as const;
 
 export type ContextDetail = "summary" | "scoped" | "diff" | "forensic";
 
@@ -292,8 +293,46 @@ export type RepairSubmission = {
   findings: RepairDraft[];
 };
 
+export type QualityOutcome = "passed" | "failed" | "inconclusive";
+export type QualitySeverity = "blocking" | "important" | "suggestion";
+
+export type QualityFinding = {
+  id: string;
+  dimension: string;
+  rule_id: string;
+  severity: QualitySeverity;
+  message: string;
+  expected: JsonValue;
+  actual: JsonValue;
+  element_id?: string;
+  observed_node_id?: string;
+  confidence: number;
+};
+
+export type QualityReport = {
+  contract: string;
+  variant: string;
+  state: string;
+  outcome: QualityOutcome;
+  observation_revision?: number | null;
+  matches: Array<{
+    element_id: string;
+    node_id: string;
+    strategy: "test_id" | "component" | "role_and_name" | "role";
+  }>;
+  findings: QualityFinding[];
+};
+
+export type QualityReportRecord = QualityReport & {
+  id: string;
+  protocol: typeof QUALITY_REPORT_PROTOCOL;
+  reportedAt: string;
+};
+
 export type TestKitEvent =
   | { type: "context.revision"; revision: number }
+  | { type: "quality.reported"; report: QualityReportRecord }
+  | { type: "quality.dismissed"; reportId: string; findingId?: string }
   | { type: "repair.submitted"; repairs: SubmittedRepair[] }
   | { type: "repair.action_submitted"; action: RepairHumanAction }
   | { type: "repair.updated"; repair: SubmittedRepair; event: RepairEvent };
@@ -322,6 +361,10 @@ export type PageContextBridge = {
   takeRepairActions(limit?: number): RepairHumanAction[];
   addRepairReply(reply: RepairThreadMessage): boolean;
   listRepairReplies(findingId: string): RepairThreadMessage[];
+  reportQuality(report: QualityReport): boolean;
+  listQualityReports(): QualityReportRecord[];
+  dismissQualityFinding(reportId: string, findingId: string): boolean;
+  dismissQualityReport(reportId: string): boolean;
   setAnimationsPaused(paused: boolean): void;
   animationsPaused(): boolean;
   dispose(): void;
@@ -347,6 +390,7 @@ export type TestKitOptions = {
   maxEncodedBytes?: number;
   repairEndpoint?: string;
   repairStorage?: "local" | "session" | "memory";
+  maxQualityReports?: number;
 };
 
 export type TestKitRuntime = PageContextBridge & {

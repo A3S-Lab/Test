@@ -8,8 +8,13 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import { getPageContextBridge } from "./runtime";
-import { PAGE_CONTEXT_PROTOCOL } from "./types";
 import { OVERLAY_CSS } from "./overlay-style";
+import {
+  QualityCandidates,
+  resolveQualityCandidate,
+  type QualityCandidate,
+  type QualitySelection,
+} from "./quality-candidates";
 import {
   loadReviewDrafts,
   reviewScope,
@@ -28,9 +33,20 @@ export {
 import {
   invokeCallback,
   isEditableEvent,
+  useLatest,
   writeClipboard,
-  type ReviewCallback,
 } from "./review-integration";
+import {
+  bridgeIsCompatible,
+  deepActiveElement,
+  isOverlayElement,
+  isOverlayEvent,
+  nodeForElement,
+  selectionElement,
+  targetElement,
+} from "./review-dom";
+import type { A3SReviewOverlayProps } from "./review-overlay-types";
+export type { A3SReviewCopyEvent, A3SReviewOverlayProps } from "./review-overlay-types";
 import {
   DEFAULT_REVIEW_PREFERENCES,
   loadReviewPreferences,
@@ -49,7 +65,6 @@ import {
 import {
   appendDrawingPoint,
   drawingBounds,
-  markerRects,
   normalizedArea,
   rectStyle,
   rectValue,
@@ -60,8 +75,11 @@ import {
   targetSummary,
   validLayoutRect,
 } from "./review-utils";
+import { ReviewMarkers } from "./review-markers";
 import type {
   PageContextBridge,
+  QualityFinding,
+  QualityReportRecord,
   RepairDraft,
   RepairIntent,
   RepairSeverity,
@@ -71,25 +89,6 @@ import type {
 } from "./types";
 
 type DraftItem = ReviewDraftItem;
-
-export type A3SReviewCopyEvent = {
-  format: "markdown" | "json";
-  text: string;
-  drafts: RepairDraft[];
-};
-
-export type A3SReviewOverlayProps = {
-  enabled?: boolean;
-  defaultOpen?: boolean;
-  autoSend?: boolean;
-  copyToClipboard?: (text: string) => void | Promise<void>;
-  onCopied?: ReviewCallback<A3SReviewCopyEvent>;
-  onDraftAdded?: ReviewCallback<RepairDraft>;
-  onDraftUpdated?: ReviewCallback<RepairDraft>;
-  onDraftDeleted?: ReviewCallback<RepairDraft>;
-  onDraftsCleared?: ReviewCallback<RepairDraft[]>;
-  onSubmitted?: ReviewCallback<SubmittedRepair[]>;
-};
 
 export function A3SReviewOverlay({
   enabled = false,
@@ -141,6 +140,9 @@ export function A3SReviewOverlay({
   const [layoutTarget, setLayoutTarget] = useState<Rect>({ x: 40, y: 120, width: 640, height: 240 });
   const [drafts, setDrafts] = useState<DraftItem[]>([]);
   const [repairs, setRepairs] = useState<SubmittedRepair[]>([]);
+  const [qualityReports, setQualityReports] = useState<QualityReportRecord[]>([]);
+  const [pendingQualityFinding, setPendingQualityFinding] = useState<QualitySelection | null>(null);
+  const [candidateQualityFinding, setCandidateQualityFinding] = useState<QualitySelection | null>(null);
   const [candidate, setCandidate] = useState<RepairTarget | null>(null);
   const [editingDraftId, setEditingDraftId] = useState<string | null>(null);
   const [candidateLabel, setCandidateLabel] = useState("");
@@ -185,8 +187,10 @@ export function A3SReviewOverlay({
     queueMicrotask(() => panelRef.current?.focus());
   }
 
-  function startMarking(value: SelectionMode) {
+  function startMarking(value: SelectionMode, qualityFinding: QualitySelection | null = null) {
     restoreFocusRef.current = lastApplicationFocusRef.current;
+    setPendingQualityFinding(qualityFinding);
+    setCandidateQualityFinding(null);
     setEditingDraftId(null);
     setMode(value);
     setMarking(true);
@@ -252,6 +256,7 @@ export function A3SReviewOverlay({
     updateDrawing(null);
     setHighlight(null);
     setKeyboardNodeIds([]);
+    setPendingQualityFinding(null);
     if (restoreFocus) queueMicrotask(() => restoreFocusRef.current?.focus());
   }
 
@@ -279,6 +284,7 @@ export function A3SReviewOverlay({
   useEffect(() => {
     if (!bridge) return;
     setRepairs(bridge.listRepairs());
+    setQualityReports(bridge.listQualityReports());
     return bridge.subscribe((event) => {
       if (event.type === "context.revision" && restoredScopeRef.current !== null) {
         const scope = reviewScope(bridge);
@@ -298,6 +304,15 @@ export function A3SReviewOverlay({
       }
       if (event.type === "repair.submitted" || event.type === "repair.updated") {
         setRepairs(bridge.listRepairs());
+      }
+      if (event.type === "quality.reported") {
+        setQualityReports(bridge.listQualityReports());
+        announce(event.report.findings.length > 0
+          ? `${event.report.findings.length} contract finding${event.report.findings.length === 1 ? "" : "s"} available for review`
+          : `Contract ${event.report.contract} passed; prior findings cleared`);
+      }
+      if (event.type === "quality.dismissed") {
+        setQualityReports(bridge.listQualityReports());
       }
       if (event.type === "repair.updated") announce(repairAnnouncement(event.repair));
     });
@@ -397,6 +412,7 @@ export function A3SReviewOverlay({
         if (marking) stopMarking();
         else if (candidate) {
           setCandidate(null);
+          setCandidateQualityFinding(null);
           setEditingDraftId(null);
           setConflictingDraftIds([]);
           focusPanel();
@@ -553,7 +569,12 @@ export function A3SReviewOverlay({
         }));
         setCandidateLabel((current) => current ? `${Number.parseInt(current, 10) + 1 || 2} selected elements` : "1 selected element");
       } else {
-        stageCandidate({ kind: "node", nodeIds: [node.id] }, node.name ?? node.text ?? `<${node.tag}>`);
+        if (pendingQualityFinding) {
+          const resolved = resolveQualityCandidate(bridge, pendingQualityFinding, node.id);
+          if (resolved) stageQualityCandidate(resolved);
+        } else {
+          stageCandidate({ kind: "node", nodeIds: [node.id] }, node.name ?? node.text ?? `<${node.tag}>`);
+        }
         setMarking(false);
       }
     };
@@ -593,7 +614,12 @@ export function A3SReviewOverlay({
         setCandidate({ kind: "node", nodeIds: next });
         setCandidateLabel(`${next.length} selected element${next.length === 1 ? "" : "s"}`);
       } else {
-        stageCandidate({ kind: "node", nodeIds: [node.id] }, node.name ?? node.text ?? `<${node.tag}>`);
+        if (pendingQualityFinding) {
+          const resolved = resolveQualityCandidate(bridge, pendingQualityFinding, node.id);
+          if (resolved) stageQualityCandidate(resolved);
+        } else {
+          stageCandidate({ kind: "node", nodeIds: [node.id] }, node.name ?? node.text ?? `<${node.tag}>`);
+        }
         setMarking(false);
       }
     };
@@ -607,23 +633,21 @@ export function A3SReviewOverlay({
       document.removeEventListener("pointerup", onPointerUp, true);
       document.removeEventListener("keydown", onKeyDown, true);
     };
-  }, [bridge, host, keyboardNodeIds, layoutCanvas, layoutComponentType, layoutPurpose, marking, mode]);
+  }, [bridge, host, keyboardNodeIds, layoutCanvas, layoutComponentType, layoutPurpose, marking, mode, pendingQualityFinding]);
 
   if (!enabled || !bridge || !mount || tabHidden) return null;
 
   const selectedCount = drafts.filter((item) => item.selected).length;
   const areaRect = area ? normalizedArea(area.startX, area.startY, area.currentX, area.currentY) : null;
   const drawingPath = drawing && drawing.length > 1 ? drawing.map((point, index) => `${index === 0 ? "M" : "L"}${point.x} ${point.y}`).join(" ") : null;
-  const markers = [
-    ...drafts.filter((item) => !item.hidden).map((item) => ({ id: item.draft.id, target: item.draft.target, status: "draft" as const })),
-    ...repairs.map((repair) => ({ id: repair.id, target: repair.target, status: repair.status })),
-  ];
-
   function stageCandidate(
     target: RepairTarget,
     label: string,
     defaults: { instruction?: string; successCriteria?: string; intent?: RepairIntent } = {},
+    qualityFinding: QualitySelection | null = null,
   ) {
+    setPendingQualityFinding(null);
+    setCandidateQualityFinding(qualityFinding);
     setEditingDraftId(null);
     setCandidate(target);
     setCandidateLabel(label);
@@ -631,6 +655,32 @@ export function A3SReviewOverlay({
     setSuccessCriteria(defaults.successCriteria ?? "");
     if (defaults.intent) setIntent(defaults.intent);
     openOverlay();
+  }
+
+  function reviewQualityFinding(reportId: string, finding: QualityFinding) {
+    if (!bridge) return;
+    const selection = { reportId, finding };
+    const resolved = resolveQualityCandidate(bridge, selection);
+    if (!resolved) {
+      announce("Choose the page element that should satisfy this contract finding");
+      startMarking("element", selection);
+      return;
+    }
+    stageQualityCandidate(resolved);
+  }
+
+  function stageQualityCandidate(resolved: QualityCandidate) {
+    stageCandidate(
+      resolved.target,
+      resolved.label,
+      {
+        instruction: resolved.instruction,
+        successCriteria: resolved.successCriteria,
+        intent: resolved.intent,
+      },
+      resolved.selection,
+    );
+    setSeverity(resolved.severity);
   }
 
   function selectLayoutSource(element: Element, node: { id: string; name?: string; text?: string; tag: string }) {
@@ -692,6 +742,8 @@ export function A3SReviewOverlay({
       createdAt: new Date().toISOString(),
     };
     setCandidate(null);
+    const qualityFinding = candidateQualityFinding;
+    setCandidateQualityFinding(null);
     setEditingDraftId(null);
     setMarking(false);
     setHighlight(null);
@@ -699,7 +751,8 @@ export function A3SReviewOverlay({
     setInstruction("");
     setConflictingDraftIds([]);
     if (send || autoSendEnabled) {
-      submit([draft]);
+      const submitted = submit([draft]);
+      if (submitted.some((repair) => repair.id === draft.id)) dismissQualitySelection(qualityFinding);
     } else {
       setDrafts((current) => {
       const index = current.findIndex((item) => item.draft.id === draft.id);
@@ -707,6 +760,7 @@ export function A3SReviewOverlay({
       return current.map((item, itemIndex) => itemIndex === index ? { ...item, draft } : item);
       });
       invokeCallback(wasEditing ? callbacks.current.onDraftUpdated : callbacks.current.onDraftAdded, structuredClone(draft));
+      dismissQualitySelection(qualityFinding);
       announce(`${wasEditing ? "Draft updated" : "Draft added"}: ${draft.instruction}`);
       focusPanel();
     }
@@ -792,8 +846,8 @@ export function A3SReviewOverlay({
     openOverlay();
   }
 
-  function submit(items: RepairDraft[]) {
-    if (!bridge || items.length === 0) return;
+  function submit(items: RepairDraft[]): SubmittedRepair[] {
+    if (!bridge || items.length === 0) return [];
     const submitted = bridge.submitRepair({ findings: items });
     const submittedIds = new Set(submitted.map((repair) => repair.id));
     setDrafts((current) => current.filter((item) => !submittedIds.has(item.draft.id)));
@@ -803,6 +857,13 @@ export function A3SReviewOverlay({
       announce(`${submitted.length} finding${submitted.length === 1 ? "" : "s"} sent for repair`);
       focusPanel();
     }
+    return submitted;
+  }
+
+  function dismissQualitySelection(selection: QualitySelection | null) {
+    if (!bridge || !selection) return;
+    bridge.dismissQualityFinding(selection.reportId, selection.finding.id);
+    setQualityReports(bridge.listQualityReports());
   }
 
   function submitHumanAction(
@@ -855,15 +916,13 @@ export function A3SReviewOverlay({
       {(highlight || areaRect) && <div className="a3s-highlight" style={rectStyle(areaRect ?? highlight!)} aria-hidden="true" />}
       {layoutMode && layoutSource && !candidate && <div className="a3s-layout-target-preview" style={rectStyle(layoutTarget)} aria-hidden="true" />}
       {drawingPath && <svg className="a3s-drawing" aria-hidden="true"><path d={drawingPath} /></svg>}
-      <div className="a3s-markers">{markersVisible && markers.flatMap((marker) => markerRects(marker.target, bridge).map((rect, index) => marker.status === "draft"
-        ? <span key={`${marker.id}-${index}`} className="a3s-marker status-draft" style={rectStyle(rect)}><button type="button" className="a3s-marker-action" aria-label={`Edit draft marker: ${drafts.find((item) => item.draft.id === marker.id)?.draft.instruction ?? marker.id}`} onClick={() => { const item = drafts.find((candidate) => candidate.draft.id === marker.id); if (item) editDraft(item); }}><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 11.8 3.5 9l6.7-6.7a1.4 1.4 0 0 1 2 0l1.5 1.5a1.4 1.4 0 0 1 0 2L7 12.5l-2.8.5Z" /><path d="m9.3 3.2 3.5 3.5" /></svg></button></span>
-        : <span key={`${marker.id}-${index}`} className={`a3s-marker status-${marker.status}`} style={rectStyle(rect)} aria-hidden="true" />))}</div>
+      <ReviewMarkers visible={markersVisible} bridge={bridge} drafts={drafts} repairs={repairs} qualityReports={qualityReports} onEditDraft={editDraft} />
       <button ref={launchRef} className={`a3s-launch ${marking ? "is-active" : ""}`} type="button" title="Toggle review overlay (Ctrl/Command+Shift+F)" onClick={() => open ? closeOverlay() : openOverlay(true)} aria-expanded={open} aria-controls={`${idPrefix}-review-panel`}>
         A3S Review{drafts.length + repairs.length > 0 ? ` · ${drafts.length + repairs.length}` : ""}
       </button>
       <div className="a3s-announcer" role="status" aria-live="polite" aria-atomic="true">{announcement}</div>
       {open && <aside ref={panelRef} id={`${idPrefix}-review-panel`} className="a3s-panel" aria-labelledby={`${idPrefix}-review-title`} aria-describedby={`${idPrefix}-review-description`} role="dialog" aria-modal="false" tabIndex={-1}>
-        <header><div><strong id={`${idPrefix}-review-title`} className="a3s-panel-title">Review & repair</strong><small id={`${idPrefix}-review-description`} className="a3s-panel-description">Send bounded findings to the active A3S Test agent</small></div><button type="button" onClick={closeOverlay} aria-label="Close review overlay">×</button></header>
+        <header><strong id={`${idPrefix}-review-title`} className="a3s-panel-title">Review</strong><small id={`${idPrefix}-review-description`} className="a3s-panel-description">Local until sent</small><button type="button" className="a3s-close" onClick={closeOverlay} aria-label="Close review overlay"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3.5 3.5 12.5 12.5M12.5 3.5 3.5 12.5" /></svg></button></header>
         <section className="a3s-tools" aria-label="Mark page">
           {(["element", "text", "multi", "area", "draw"] as SelectionMode[]).map((value) => <button key={value} type="button" aria-label={`Mark ${MODE_LABEL[value].toLowerCase()}`} aria-pressed={marking && mode === value} className={marking && mode === value ? "selected" : ""} onClick={() => startMarking(value)}>{MODE_LABEL[value]}</button>)}
           <button type="button" title="Toggle Layout Mode (L)" aria-pressed={layoutMode} className={layoutMode ? "selected" : ""} onClick={toggleLayoutMode}>Layout</button>
@@ -913,11 +972,12 @@ export function A3SReviewOverlay({
             ? [...new Set([...current, findingId])]
             : current.filter((candidate) => candidate !== findingId))}
           editing={Boolean(editingDraftId)}
-          onCancel={() => { setCandidate(null); setEditingDraftId(null); setConflictingDraftIds([]); }}
+          onCancel={() => { setCandidate(null); setCandidateQualityFinding(null); setEditingDraftId(null); setConflictingDraftIds([]); }}
           {...(editingDraftId ? { onDelete: () => { const item = drafts.find((candidate) => candidate.draft.id === editingDraftId); if (item) deleteDraft(item.draft); } } : {})}
           onSave={() => saveDraft(false)}
           onSend={() => saveDraft(true)}
         />}
+        <QualityCandidates reports={qualityReports} onReview={reviewQualityFinding} onDismiss={(reportId, findingId) => bridge.dismissQualityFinding(reportId, findingId)} />
         <section className="a3s-list" aria-label="Draft and submitted findings">
           {drafts.map((item) => <article key={item.draft.id} className={`a3s-item${item.hidden ? " is-hidden" : ""}`}>
             <label><input type="checkbox" aria-label={`Select draft: ${item.draft.instruction}`} checked={item.selected} onChange={(event) => setDrafts((current) => current.map((candidate) => candidate.draft.id === item.draft.id ? { ...candidate, selected: event.target.checked } : candidate))} /><span><strong>{item.draft.instruction}</strong><small>{targetSummary(item.draft.target)} · draft</small></span></label>
@@ -927,55 +987,11 @@ export function A3SReviewOverlay({
             const replies = bridge.listRepairReplies(repair.id);
             return <article key={repair.id} className="a3s-item submitted"><span className={`a3s-status status-${repair.status}`}>{statusLabel(repair.status)}</span><strong>{repair.instruction}</strong><small>{targetSummary(repair.target)} · revision {repair.contextRevision}</small>{replies.length > 0 && <ol className="a3s-thread" aria-label={`Repair conversation: ${repair.instruction}`}>{replies.map((reply) => <li key={reply.requestId}><span>{reply.actor}</span><p>{reply.message}</p></li>)}</ol>}{repair.status === "needs_input" && <div className="a3s-human-actions">{replyFindingId === repair.id ? <><label className="a3s-reply-label">Reply to the coding agent<textarea aria-label={`Reply to coding agent about: ${repair.instruction}`} autoFocus maxLength={8192} value={replyMessage} onChange={(event) => setReplyMessage(event.target.value)} /></label><button type="button" disabled={!replyMessage.trim()} onClick={() => submitHumanAction(repair.id, "reply", replyMessage)}>Send reply</button><button type="button" className="quiet" onClick={() => { setRestoreReplyFocusId(repair.id); setReplyFindingId(null); setReplyMessage(""); }}>Cancel reply</button></> : <button ref={(element) => { if (element) replyTriggerRefs.current.set(repair.id, element); else replyTriggerRefs.current.delete(repair.id); }} type="button" aria-label={`Reply about repair: ${repair.instruction}`} onClick={() => setReplyFindingId(repair.id)}>Reply</button>}</div>}{repair.status === "review_ready" && <div className="a3s-human-actions" aria-label={`Review repair: ${repair.instruction}`}><button type="button" aria-label={`Accept repair: ${repair.instruction}`} onClick={() => submitHumanAction(repair.id, "accept")}>Accept repair</button><button type="button" className="quiet" aria-label={`Reject repair: ${repair.instruction}`} onClick={() => submitHumanAction(repair.id, "dismiss")}>Reject</button><button type="button" className="quiet" aria-label={`Reopen repair: ${repair.instruction}`} onClick={() => submitHumanAction(repair.id, "reopen")}>Reopen</button></div>}{["resolved", "dismissed", "cancelled", "failed", "verification_failed"].includes(repair.status) && <div className="a3s-human-actions"><button type="button" className="quiet" aria-label={`Reopen repair: ${repair.instruction}`} onClick={() => submitHumanAction(repair.id, "reopen")}>Reopen</button></div>}</article>;
           })}
-          {drafts.length === 0 && repairs.length === 0 && !candidate && <p className="a3s-empty">Choose a marking mode, select the page context, then describe the desired fix.</p>}
+          {drafts.length === 0 && repairs.length === 0 && qualityReports.length === 0 && !candidate && <p className="a3s-empty">Mark an element to describe a fix. Contract findings appear here when a deterministic check runs.</p>}
         </section>
         {drafts.length > 0 && <footer><button type="button" className="quiet" title="Clear all local drafts (X)" onClick={clearDrafts}>Clear drafts</button><button type="button" className="quiet" title="Copy selected drafts as Markdown (C)" onClick={() => void copyDraftsMarkdown()}>Copy Markdown</button><button type="button" className="quiet" onClick={() => void copyDrafts()}>Copy JSON</button><button type="button" disabled={selectedCount === 0} onClick={() => submit(drafts.filter((item) => item.selected).map((item) => item.draft))}>Send selected ({selectedCount})</button><button type="button" onClick={() => submit(drafts.map((item) => item.draft))}>Send all</button></footer>}
       </aside>}
     </div>
   );
   return createPortal(content, mount);
-}
-
-function useLatest<T>(value: T) {
-  const ref = useRef(value);
-  ref.current = value;
-  return ref;
-}
-
-function bridgeIsCompatible(bridge: PageContextBridge | null): bridge is PageContextBridge {
-  if (!bridge) return false;
-  try {
-    return bridge.probe().protocol === PAGE_CONTEXT_PROTOCOL;
-  } catch {
-    return false;
-  }
-}
-
-function isOverlayEvent(event: Event, host: HTMLElement | null): boolean {
-  return Boolean(host && event.composedPath().includes(host));
-}
-
-function isOverlayElement(element: Element, host: HTMLElement | null): boolean {
-  return Boolean(host && (element === host || element.getRootNode() === host.shadowRoot));
-}
-
-function targetElement(event: PointerEvent, host: HTMLElement | null): Element | null {
-  if (isOverlayEvent(event, host)) return null;
-  return event.composedPath().find((item): item is Element => item instanceof Element && !item.closest("[data-a3s-testkit-overlay]")) ?? null;
-}
-
-function selectionElement(selection: Selection | null): Element | null {
-  const node = selection?.anchorNode;
-  return node instanceof Element ? node : node?.parentElement ?? null;
-}
-
-function deepActiveElement(): HTMLElement | null {
-  let active: Element | null = document.activeElement;
-  while (active?.shadowRoot?.activeElement) active = active.shadowRoot.activeElement;
-  return active instanceof HTMLElement ? active : null;
-}
-
-function nodeForElement(bridge: PageContextBridge, element: Element) {
-  const snapshot = bridge.snapshot({ detail: "forensic", limits: { nodes: 5_000 } });
-  return snapshot.nodes.find((node) => bridge.resolve(node.id) === element) ?? null;
 }

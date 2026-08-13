@@ -55,7 +55,7 @@ export function A3STestKit({ children, ...options }: A3STestKitProps) {
       installed.dispose();
       setBridge((current) => current === installed ? null : current);
     };
-  }, [options.enabled, options.maxEncodedBytes, options.maxNodes, options.maxStringBytes, options.page.id, options.repairEndpoint, options.repairStorage, stableList(options.redact)]);
+  }, [options.enabled, options.maxEncodedBytes, options.maxNodes, options.maxQualityReports, options.maxStringBytes, options.page.id, options.repairEndpoint, options.repairStorage, stableList(options.redact)]);
 
   const value = useMemo(
     () => ({ bridge, providerConfigured: true }),

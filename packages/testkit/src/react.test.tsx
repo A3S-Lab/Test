@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 import { getPageContextBridge, installTestKit } from "./runtime";
 import { A3SReviewOverlay, A3STestBoundary, A3STestKit } from "./react";
 import { setRect } from "./test-setup";
+import type { QualityReport } from "./types";
 
 function shadowQuery(selector: string): HTMLElement {
   const host = document.querySelector<HTMLElement>("[data-a3s-testkit-overlay]");
@@ -52,6 +53,75 @@ describe("React adapter and review overlay", () => {
     const repair = onSubmitted.mock.calls[0]![0][0];
     expect(repair).toMatchObject({ instruction: "Make this action work", status: "queued", target: { kind: "node" }, context: { untrusted: true } });
     expect(getPageContextBridge()?.snapshot({ detail: "forensic" }).nodes.some((node) => node.text?.includes("Review & repair"))).toBe(false);
+  });
+
+  it("requires an explicit save or send before removing each contract finding", async () => {
+    render(<A3STestKit enabled page={{ id: "quality-review" }} repairStorage="memory"><button data-testid="quality-target">Checkout action</button><A3SReviewOverlay enabled defaultOpen /></A3STestKit>);
+    await waitFor(() => expect(shadowQuery(".a3s-panel")).toBeTruthy());
+    const bridge = getPageContextBridge()!;
+    const target = document.querySelector<HTMLElement>("[data-testid=quality-target]")!;
+    setRect(target, { x: 40, y: 60, width: 160, height: 36 });
+    const nodeId = bridge.snapshot().nodes.find((node) => node.testId === "quality-target")!.id;
+    const report: QualityReport = {
+      contract: "checkout",
+      variant: "desktop",
+      state: "ready",
+      outcome: "failed",
+      observation_revision: 1,
+      matches: [],
+      findings: [
+        {
+          id: "finding:located",
+          dimension: "design_conformance",
+          rule_id: "contract.element.role",
+          severity: "blocking",
+          message: "Use the contracted role",
+          expected: "button",
+          actual: "link",
+          element_id: "checkout-action",
+          observed_node_id: nodeId,
+          confidence: 100,
+        },
+        {
+          id: "finding:missing",
+          dimension: "design_conformance",
+          rule_id: "contract.element.required",
+          severity: "important",
+          message: "Add the required checkout action",
+          expected: true,
+          actual: false,
+          element_id: "missing-action",
+          confidence: 100,
+        },
+      ],
+    };
+
+    expect(bridge.reportQuality(report)).toBe(true);
+    await waitFor(() => expect(shadowQuery(".a3s-quality").textContent).toContain("Use the contracted role"));
+    fireEvent.click(shadowButton("Review finding"));
+    await waitFor(() => expect(shadowQuery(".a3s-editor").textContent).toContain("checkout-action"));
+    expect(bridge.listQualityReports()[0]!.findings).toHaveLength(2);
+    fireEvent.click(shadowButton("Cancel"));
+    expect(bridge.listQualityReports()[0]!.findings).toHaveLength(2);
+
+    fireEvent.click(shadowButton("Review finding"));
+    fireEvent.click(shadowButton("Add draft"));
+    await waitFor(() => expect(bridge.listQualityReports()[0]!.findings.map((finding) => finding.id)).toEqual(["finding:missing"]));
+    expect(bridge.listRepairs()).toEqual([]);
+
+    fireEvent.click(shadowButton("Choose target"));
+    fireEvent.click(shadowButton("Cancel"));
+    expect(bridge.listQualityReports()[0]!.findings[0]!.id).toBe("finding:missing");
+    fireEvent.click(shadowButton("Choose target"));
+    target.dispatchEvent(pointerEventWithPath(target, 60, 70));
+    await waitFor(() => expect(shadowQuery(".a3s-editor").textContent).toContain("missing-action"));
+    fireEvent.click(shadowButton("Send and auto-fix"));
+    await waitFor(() => expect(bridge.listQualityReports()).toEqual([]));
+    expect(bridge.listRepairs()).toHaveLength(1);
+    expect(bridge.listRepairs()[0]).toMatchObject({
+      instruction: "Add the required checkout action",
+      status: "queued",
+    });
   });
 
   it("submits selected drafts in visible order as one batch", async () => {

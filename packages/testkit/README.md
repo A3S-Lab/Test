@@ -36,6 +36,32 @@ the provider, component boundary, and optional Shadow DOM review overlay.
 `installTestKit` also requires `enabled: true`; omitted or false-like runtime
 configuration fails closed.
 
+The runtime derives context after browser rendering. It reads semantic DOM,
+open Shadow DOM, form state, layout, and viewport facts without adding test
+attributes to application elements. Observer and navigation signals advance a
+versioned snapshot; an unchanged page is not polled.
+
+## Deterministic quality findings
+
+When a deterministic Surface Contract runs, the Web driver can project its
+bounded report through `reportQuality`. The Test Kit keeps these reports in a
+separate in-memory Quality Store, never in the Repair Ledger. The overlay shows
+each finding with an explicit `blocking`, `important`, or `suggestion` label
+and asks the reviewer to confirm or choose a current target.
+
+Viewing a finding, opening its editor, or cancelling target selection grants
+no repair authority. A finding leaves the Quality Store only when it is
+dismissed, saved as a local review draft, successfully submitted to the owning
+A3S Test session, or replaced by a newer report for the same
+contract/variant/state. A passed report clears earlier candidates in that
+scope. Other findings in the report remain independently reviewable.
+
+Reports are bounded to 500 findings, 5,000 matches, 1 MiB encoded JSON, and a
+maximum JSON depth of 32. `maxQualityReports` defaults to five and is clamped
+from one through twenty. Projection is one-way and advisory: a missing bridge,
+an incompatible page, or a rejected report never changes the Runner's report
+or verdict.
+
 Geometry remains in CSS pixels at every browser zoom level. The page snapshot
 separates the layout viewport and DPR from an optional visual viewport with its
 current offset, visible size, and scale, allowing A3S Test to reason about

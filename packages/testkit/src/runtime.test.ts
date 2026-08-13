@@ -1,9 +1,118 @@
 import { describe, expect, it } from "vitest";
 import { installTestKit, registerBoundary } from "./runtime";
-import type { RepairDraft, RepairEvent } from "./types";
+import type { QualityReport, RepairDraft, RepairEvent } from "./types";
 import { setRect } from "./test-setup";
 
 describe("page context runtime", () => {
+  it("keeps bounded quality reports separate from the repair ledger", () => {
+    document.body.innerHTML = `<button data-testid="pay">Pay now</button>`;
+    const bridge = installTestKit({ enabled: true, page: { id: "quality" }, repairStorage: "memory", maxQualityReports: 1 });
+    const nodeId = bridge.snapshot().nodes.find((node) => node.testId === "pay")!.id;
+    const report: QualityReport = {
+      contract: "checkout",
+      variant: "desktop",
+      state: "ready",
+      outcome: "failed",
+      observation_revision: 1,
+      matches: [{ element_id: "submit", node_id: nodeId, strategy: "test_id" }],
+      findings: [{
+        id: "finding:role",
+        dimension: "design_conformance",
+        rule_id: "contract.element.role",
+        severity: "blocking",
+        message: "the observed role does not match",
+        expected: "button",
+        actual: "link",
+        element_id: "submit",
+        observed_node_id: nodeId,
+        confidence: 100,
+      }],
+    };
+
+    expect(bridge.reportQuality(report)).toBe(true);
+    expect(bridge.listQualityReports()).toHaveLength(1);
+    expect(bridge.listRepairs()).toEqual([]);
+    expect(bridge.takeRepairBatch()).toEqual([]);
+
+    expect(bridge.reportQuality({ ...report, outcome: "passed", findings: [] })).toBe(true);
+    expect(bridge.listQualityReports()).toEqual([]);
+  });
+
+  it("replaces quality scopes atomically and dismisses one stable finding at a time", () => {
+    const bridge = installTestKit({
+      enabled: true,
+      page: { id: "quality-sync" },
+      repairStorage: "memory",
+      maxQualityReports: 2,
+    });
+    const events: string[] = [];
+    bridge.subscribe((event) => events.push(event.type));
+    const base: QualityReport = {
+      contract: "checkout",
+      variant: "desktop",
+      state: "ready",
+      outcome: "failed",
+      observation_revision: 1,
+      matches: [],
+      findings: [
+        {
+          id: "finding:role",
+          dimension: "design_conformance",
+          rule_id: "contract.element.role",
+          severity: "blocking",
+          message: "Role mismatch",
+          expected: "button",
+          actual: "link",
+          element_id: "submit",
+          confidence: 100,
+        },
+        {
+          id: "finding:name",
+          dimension: "design_conformance",
+          rule_id: "contract.element.name",
+          severity: "important",
+          message: "Name mismatch",
+          expected: "Place order",
+          actual: "Submit",
+          element_id: "submit",
+          confidence: 100,
+        },
+      ],
+    };
+
+    expect(bridge.reportQuality(base)).toBe(true);
+    const reportId = bridge.listQualityReports()[0]!.id;
+    expect(bridge.dismissQualityFinding(reportId, "finding:role")).toBe(true);
+    expect(bridge.dismissQualityFinding(reportId, "finding:missing")).toBe(false);
+    expect(bridge.listQualityReports()[0]!.findings.map((finding) => finding.id)).toEqual(["finding:name"]);
+
+    expect(bridge.reportQuality({
+      ...base,
+      observation_revision: 2,
+      outcome: "passed",
+      findings: [{ ...base.findings[1]!, actual: "Confirm order" }],
+    })).toBe(true);
+    const replacement = bridge.listQualityReports();
+    expect(replacement).toHaveLength(1);
+    expect(replacement[0]!.observation_revision).toBe(2);
+    expect(replacement[0]!.findings[0]!.actual).toBe("Confirm order");
+
+    expect(bridge.reportQuality({
+      ...base,
+      observation_revision: 3,
+      outcome: "passed",
+      findings: [],
+    })).toBe(true);
+    expect(bridge.listQualityReports()).toEqual([]);
+    expect(events).toEqual([
+      "quality.reported",
+      "quality.dismissed",
+      "quality.reported",
+      "quality.reported",
+    ]);
+    expect(bridge.listRepairs()).toEqual([]);
+  });
+
   it("captures semantic context, component ownership, source hints, and geometry", () => {
     document.body.innerHTML = `<main><section id="checkout"><label for="email">Email</label><input id="email" placeholder="you@example.test"><button data-testid="pay">Pay now</button></section></main>`;
     const boundary = document.querySelector("#checkout")!;

@@ -1,4 +1,12 @@
+import { useRef } from "react";
+
 export type ReviewCallback<T> = (value: T) => void | Promise<void>;
+
+export function useLatest<T>(value: T) {
+  const ref = useRef(value);
+  ref.current = value;
+  return ref;
+}
 
 export function isEditableEvent(event: KeyboardEvent): boolean {
   const target = event.composedPath()[0];

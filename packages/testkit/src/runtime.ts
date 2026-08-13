@@ -1,4 +1,5 @@
 import { describeElement, overlaps, visualViewportInfo, walkElements, type NodeIdentity } from "./dom";
+import { QualityStore } from "./quality-store";
 import { RepairStore } from "./repair-store";
 import { safeCallback, sanitizeFacts } from "./sanitize";
 import {
@@ -14,6 +15,7 @@ import {
   type JsonValue,
   type PageContextBridge,
   type PageContextSnapshot,
+  type QualityReport,
   type RepairEvent,
   type RepairHumanAction,
   type RepairHumanActionInput,
@@ -28,11 +30,11 @@ import {
   type TestKitRuntime,
 } from "./types";
 
-const SDK_VERSION = "0.1.0";
+const SDK_VERSION = "0.2.0";
 const DEFAULT_LIMITS: ContextLimits = { nodes: 500, stringBytes: 4_096, encodedBytes: 1_048_576 };
 const MAX_LIMITS: ContextLimits = { nodes: 5_000, stringBytes: 16_384, encodedBytes: 8_388_608 };
 
-type NormalizedOptions = Required<Pick<TestKitOptions, "enabled" | "redact" | "maxNodes" | "maxStringBytes" | "maxEncodedBytes" | "repairStorage">> & {
+type NormalizedOptions = Required<Pick<TestKitOptions, "enabled" | "redact" | "maxNodes" | "maxStringBytes" | "maxEncodedBytes" | "repairStorage" | "maxQualityReports">> & {
   page: TestKitOptions["page"];
   repairEndpoint: string | undefined;
   ready: (() => boolean) | undefined;
@@ -51,6 +53,7 @@ class Runtime implements TestKitRuntime, NodeIdentity {
   readonly #history = new Map<number, RevisionState>();
   readonly #cleanup: Array<() => void> = [];
   readonly #repairStore: RepairStore;
+  readonly #qualityStore: QualityStore;
   #nodeSequence = 0;
   #revision = 1;
   #disposed = false;
@@ -70,6 +73,7 @@ class Runtime implements TestKitRuntime, NodeIdentity {
       emit: (event) => this.#emit(event),
       ...(options.repairEndpoint ? { repairEndpoint: options.repairEndpoint } : {}),
     });
+    this.#qualityStore = new QualityStore(options.maxQualityReports);
     this.#observePage();
   }
 
@@ -84,6 +88,7 @@ class Runtime implements TestKitRuntime, NodeIdentity {
         "geometry",
         "layout_intents",
         "open_shadow_dom",
+        "quality_reports",
         "repair_queue",
         "revision_wait",
         "scoped_inspection",
@@ -247,6 +252,32 @@ class Runtime implements TestKitRuntime, NodeIdentity {
     return this.#repairStore.replies(findingId);
   }
 
+  reportQuality(report: QualityReport): boolean {
+    this.#ensureActive();
+    const record = this.#qualityStore.report(report);
+    if (!record) return false;
+    this.#emit({ type: "quality.reported", report: record });
+    return true;
+  }
+
+  listQualityReports() {
+    return this.#qualityStore.list();
+  }
+
+  dismissQualityFinding(reportId: string, findingId: string): boolean {
+    this.#ensureActive();
+    const dismissed = this.#qualityStore.dismissFinding(reportId, findingId);
+    if (dismissed) this.#emit({ type: "quality.dismissed", reportId, findingId });
+    return dismissed;
+  }
+
+  dismissQualityReport(reportId: string): boolean {
+    this.#ensureActive();
+    const dismissed = this.#qualityStore.dismissReport(reportId);
+    if (dismissed) this.#emit({ type: "quality.dismissed", reportId });
+    return dismissed;
+  }
+
   setAnimationsPaused(paused: boolean): void {
     this.#ensureActive();
     if (this.#animationsPaused === paused) return;
@@ -303,6 +334,7 @@ class Runtime implements TestKitRuntime, NodeIdentity {
     this.#waiters.clear();
     this.#listeners.clear();
     this.#boundaries.clear();
+    this.#qualityStore.clear();
     const host = window as unknown as Record<PropertyKey, unknown>;
     if (host[PAGE_CONTEXT_SYMBOL] === this) delete host[PAGE_CONTEXT_SYMBOL];
     if (currentRuntime === this) currentRuntime = null;
@@ -573,6 +605,7 @@ export function installTestKit(options: TestKitOptions): TestKitRuntime {
     maxStringBytes: clamp(options.maxStringBytes ?? DEFAULT_LIMITS.stringBytes, 32, MAX_LIMITS.stringBytes),
     maxEncodedBytes: clamp(options.maxEncodedBytes ?? DEFAULT_LIMITS.encodedBytes, 1_024, MAX_LIMITS.encodedBytes),
     repairStorage: options.repairStorage ?? "session",
+    maxQualityReports: clamp(options.maxQualityReports ?? 5, 1, 20),
     repairEndpoint: options.repairEndpoint,
   });
   currentRuntime = runtime;
@@ -610,6 +643,10 @@ function disabledBridge(): TestKitRuntime {
     takeRepairActions: () => [],
     addRepairReply: () => false,
     listRepairReplies: () => [],
+    reportQuality: () => false,
+    listQualityReports: () => [],
+    dismissQualityFinding: () => false,
+    dismissQualityReport: () => false,
     setAnimationsPaused: () => undefined,
     animationsPaused: () => false,
     registerBoundary: () => () => undefined,
