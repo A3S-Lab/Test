@@ -4,6 +4,7 @@ use std::process::{Command, Output};
 use serde_json::Value;
 use tempfile::TempDir;
 
+use super::browser_process::bounded_output;
 use super::testkit_bundle::bundle_browser_fixture;
 use super::web_fixture::{start_testkit_fixture, TestKitFixture};
 
@@ -124,7 +125,8 @@ impl RepairSession {
             .map(|domain| domain.as_str().expect("allowed domain"))
             .collect::<Vec<_>>()
             .join(",");
-        Command::new(&self.browser)
+        let mut command = Command::new(&self.browser);
+        command
             .env("AGENT_BROWSER_NAMESPACE", namespace)
             .env("AGENT_BROWSER_SOCKET_DIR", runtime_dir)
             .env("AGENT_BROWSER_IDLE_TIMEOUT_MS", "60000")
@@ -141,9 +143,8 @@ impl RepairSession {
                 "--engine",
                 "chrome",
             ])
-            .args(arguments)
-            .output()
-            .expect("run command against the owned repair browser")
+            .args(arguments);
+        bounded_output(&mut command, "run command against the owned repair browser")
     }
 
     pub fn watch(&self) -> Value {

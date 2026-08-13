@@ -6,6 +6,7 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::time::Duration;
 
+use support::browser_process::bounded_output;
 use support::testkit_browser::run_review_workflow;
 use support::testkit_bundle::bundle_browser_fixture;
 use support::web_fixture::{get, start_testkit_fixture, WebFixture};
@@ -206,12 +207,9 @@ fn real_agent_browser_runs_the_embedded_testkit_suite() {
     let session = format!("a3s-testkit-e2e-{}", std::process::id());
     let mut cleanup = StandaloneBrowserSessionCleanup::new(&browser, &session);
     let command = |arguments: &[&str]| {
-        Command::new(&browser)
-            .arg("--session")
-            .arg(&session)
-            .args(arguments)
-            .output()
-            .expect("run standalone browser command")
+        let mut command = Command::new(&browser);
+        command.arg("--session").arg(&session).args(arguments);
+        bounded_output(&mut command, "run standalone browser command")
     };
     let opened = command(&["open", &fixture.origin()]);
     cleanup.arm();
@@ -621,10 +619,9 @@ impl Drop for StandaloneBrowserSessionCleanup {
 }
 
 fn close_standalone_browser_session(browser: &Path, session: &str) -> std::process::Output {
-    Command::new(browser)
-        .args(["--session", session, "close"])
-        .output()
-        .expect("close standalone browser session")
+    let mut command = Command::new(browser);
+    command.args(["--session", session, "close"]);
+    bounded_output(&mut command, "close standalone browser session")
 }
 
 impl AgentSessionCleanup {
