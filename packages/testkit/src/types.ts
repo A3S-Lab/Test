@@ -37,6 +37,17 @@ export type Rect = {
   height: number;
 };
 
+export type VisualViewportInfo = Rect & {
+  scale: number;
+};
+
+export type PageViewport = {
+  width: number;
+  height: number;
+  dpr: number;
+  visual?: VisualViewportInfo;
+};
+
 export type NodeGeometry = {
   viewport: Rect;
   document: Rect;
@@ -107,7 +118,7 @@ export type PageContextSnapshot = {
     route: string;
     title: string;
     ready: boolean;
-    viewport: { width: number; height: number; dpr: number };
+    viewport: PageViewport;
     document: { width: number; height: number };
     scroll: { x: number; y: number };
     language: string;
@@ -158,7 +169,7 @@ export type StructuredRepairExport = {
     url: string;
     route: string;
     revision: number;
-    viewport: { width: number; height: number; dpr: number };
+    viewport: PageViewport;
   };
   findings: Array<{
     id: string;
@@ -175,7 +186,7 @@ export type StructuredRepairExport = {
 export type RepairContext = {
   route: string;
   title: string;
-  viewport: { width: number; height: number; dpr: number };
+  viewport: PageViewport;
   component?: ContextComponent;
   nodes: ContextNode[];
   nearbyNodes: ContextNode[];

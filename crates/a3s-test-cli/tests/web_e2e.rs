@@ -272,6 +272,98 @@ fn real_agent_browser_runs_the_embedded_testkit_suite() {
         "sticky geometry missing: {stdout}"
     );
 
+    assert_process_success(
+        "set TestKit browser viewport and DPR",
+        &command(&["set", "viewport", "1280", "720", "2"]),
+    );
+    let before_zoom = capture_testkit_zoom_geometry(&command, "before browser zoom");
+    assert_approx(
+        before_zoom.pointer("/page/viewport/width"),
+        1280.0,
+        0.01,
+        "layout viewport width before zoom",
+    );
+    assert_approx(
+        before_zoom.pointer("/page/viewport/dpr"),
+        2.0,
+        0.01,
+        "DPR before zoom",
+    );
+    assert_approx(
+        before_zoom.pointer("/page/viewport/visual/scale"),
+        1.0,
+        0.01,
+        "visual scale before zoom",
+    );
+    assert_approx(
+        before_zoom.pointer("/target/geometry/visibleRatio"),
+        1.0,
+        0.01,
+        "edge target visibility before zoom",
+    );
+
+    let cdp_url = command(&["get", "cdp-url"]);
+    assert_process_success("read TestKit browser CDP URL", &cdp_url);
+    set_browser_page_scale(
+        String::from_utf8_lossy(&cdp_url.stdout).trim(),
+        1.5,
+        &command,
+    );
+    let after_zoom = capture_testkit_zoom_geometry(&command, "after browser zoom");
+    assert_approx(
+        after_zoom.pointer("/page/viewport/width"),
+        1280.0,
+        0.01,
+        "layout viewport width after zoom",
+    );
+    assert_approx(
+        after_zoom.pointer("/page/viewport/dpr"),
+        2.0,
+        0.01,
+        "DPR after zoom",
+    );
+    assert_approx(
+        after_zoom.pointer("/page/viewport/visual/width"),
+        853.333,
+        0.1,
+        "visual viewport width after zoom",
+    );
+    assert_approx(
+        after_zoom.pointer("/page/viewport/visual/scale"),
+        1.5,
+        0.01,
+        "visual scale after zoom",
+    );
+    assert_approx(
+        after_zoom.pointer("/target/geometry/viewport/x"),
+        1000.0,
+        0.01,
+        "CSS-pixel target position after zoom",
+    );
+    assert_approx(
+        after_zoom.pointer("/target/geometry/viewport/width"),
+        180.0,
+        0.01,
+        "CSS-pixel target width after zoom",
+    );
+    assert_approx(
+        after_zoom.pointer("/target/geometry/visibleRatio"),
+        0.0,
+        0.01,
+        "edge target visibility after zoom",
+    );
+    assert_approx(
+        after_zoom.pointer("/target/geometry/normalized/x"),
+        1.171875,
+        0.001,
+        "visual-viewport normalized target position after zoom",
+    );
+    set_browser_page_scale(
+        String::from_utf8_lossy(&cdp_url.stdout).trim(),
+        1.0,
+        &command,
+    );
+
     let select_keyboard_marking = command(&[
         "eval",
         "(()=>{const host=document.querySelector('[data-a3s-testkit-overlay]'); [...host.shadowRoot.querySelectorAll('button')].find(button=>button.textContent==='Element').click(); return true})()",
@@ -964,6 +1056,89 @@ fn assert_process_success(context: &str, output: &std::process::Output) {
         String::from_utf8_lossy(&output.stderr)
     );
 }
+
+fn capture_testkit_zoom_geometry(
+    command: &impl Fn(&[&str]) -> std::process::Output,
+    context: &str,
+) -> serde_json::Value {
+    let output = command(&[
+        "eval",
+        "(()=>{const snapshot=window[Symbol.for('a3s.test.page-context')].snapshot({detail:'forensic'});const target=snapshot.nodes.find(node=>node.testId==='zoom-edge');return JSON.stringify({page:snapshot.page,target});})()",
+    ]);
+    assert_process_success(context, &output);
+    let encoded: String = serde_json::from_slice(&output.stdout)
+        .unwrap_or_else(|error| panic!("{context} did not return an encoded JSON string: {error}"));
+    serde_json::from_str(&encoded)
+        .unwrap_or_else(|error| panic!("{context} returned invalid TestKit JSON: {error}"))
+}
+
+fn set_browser_page_scale(
+    cdp_url: &str,
+    factor: f64,
+    command: &impl Fn(&[&str]) -> std::process::Output,
+) {
+    let port = cdp_url
+        .split_once("://")
+        .and_then(|(_, rest)| rest.split('/').next())
+        .and_then(|authority| authority.rsplit_once(':'))
+        .map(|(_, port)| port)
+        .unwrap_or_else(|| panic!("browser returned an invalid CDP URL: {cdp_url}"));
+    let output = Command::new("node")
+        .args([
+            "--input-type=module",
+            "-e",
+            CDP_PAGE_SCALE_SCRIPT,
+            port,
+            &factor.to_string(),
+        ])
+        .output()
+        .expect("run bounded CDP page-scale helper");
+    assert_process_success("set browser page scale", &output);
+    let expected = format!("visualViewport.scale==={factor}");
+    let wait = command(&["wait", "--fn", &expected]);
+    assert_process_success("wait for browser page scale", &wait);
+}
+
+fn assert_approx(actual: Option<&serde_json::Value>, expected: f64, epsilon: f64, label: &str) {
+    let actual = actual
+        .and_then(serde_json::Value::as_f64)
+        .unwrap_or_else(|| panic!("{label} was not a number"));
+    assert!(
+        (actual - expected).abs() <= epsilon,
+        "{label}: expected {expected} ± {epsilon}, got {actual}"
+    );
+}
+
+const CDP_PAGE_SCALE_SCRIPT: &str = r#"
+const port = process.argv[1];
+const factor = Number(process.argv[2]);
+if (!/^\d{1,5}$/.test(port) || !Number.isFinite(factor) || factor < 0.25 || factor > 5) {
+  throw new Error("invalid bounded page-scale arguments");
+}
+const response = await fetch(`http://127.0.0.1:${port}/json/list`);
+if (!response.ok) throw new Error(`CDP target discovery returned ${response.status}`);
+const targets = await response.json();
+const page = targets.find((target) => target.type === "page");
+if (!page?.webSocketDebuggerUrl) throw new Error("CDP page target missing");
+await new Promise((resolve, reject) => {
+  const socket = new WebSocket(page.webSocketDebuggerUrl);
+  const timer = setTimeout(() => reject(new Error("CDP page-scale command timed out")), 5_000);
+  socket.onopen = () => socket.send(JSON.stringify({
+    id: 1,
+    method: "Emulation.setPageScaleFactor",
+    params: { pageScaleFactor: factor },
+  }));
+  socket.onmessage = (event) => {
+    const message = JSON.parse(event.data);
+    if (message.id !== 1) return;
+    clearTimeout(timer);
+    socket.close();
+    if (message.error) reject(new Error(JSON.stringify(message.error)));
+    else resolve();
+  };
+  socket.onerror = () => reject(new Error("CDP WebSocket failed"));
+});
+"#;
 
 fn suite(origin: &str) -> String {
     format!(

@@ -54,6 +54,7 @@ function Fixture() {
     >
       <h1>Embedded TestKit E2E</h1>
       <button id="sticky" data-testid="repair-target">{repaired ? "Repaired action" : "Broken action"}</button>
+      <button id="zoom-edge" data-testid="zoom-edge">Zoom edge target</button>
       <div id="nested"><div className="virtual-space"><button id="virtual-row">{row}</button></div></div>
       <div id="shadow-host" />
     </A3STestBoundary>

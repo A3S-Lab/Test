@@ -147,9 +147,9 @@ snapshot. Pages without the SDK retain the existing Web behavior.
 - [x] Cover SSR/hydration, route changes, portals, transforms, fixed/sticky
       content, nested scroll containers, open Shadow DOM, virtualized lists,
       dialogs, and teardown in unit and real-browser tests
-- [ ] Add an explicit browser-zoom geometry regression; DPR-aware CSS-pixel
-      coordinate modeling is implemented, but zoom is not yet independently
-      proven by the Test Kit E2E suite
+- [x] Add an explicit browser-zoom geometry regression covering layout and
+      visual viewports, DPR, CSS-pixel element rectangles, visible ratio, and
+      normalized coordinates in the real Test Kit browser suite
 
 ## M7: Page-context observation and targeting
 

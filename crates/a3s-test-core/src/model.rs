@@ -377,6 +377,18 @@ pub struct PageContextViewport {
     pub width: f64,
     pub height: f64,
     pub dpr: f64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub visual: Option<PageContextVisualViewport>,
+}
+
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct PageContextVisualViewport {
+    pub x: f64,
+    pub y: f64,
+    pub width: f64,
+    pub height: f64,
+    pub scale: f64,
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]

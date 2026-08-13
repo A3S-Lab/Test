@@ -174,17 +174,32 @@ function rectValue(rect: DOMRect | DOMRectReadOnly): Rect {
   return { x: rect.x, y: rect.y, width: rect.width, height: rect.height };
 }
 
+export function visualViewportInfo(): import("./types").VisualViewportInfo {
+  const viewport = window.visualViewport;
+  const width = viewport?.width && Number.isFinite(viewport.width) ? viewport.width : window.innerWidth;
+  const height = viewport?.height && Number.isFinite(viewport.height) ? viewport.height : window.innerHeight;
+  return {
+    x: viewport && Number.isFinite(viewport.offsetLeft) ? viewport.offsetLeft : 0,
+    y: viewport && Number.isFinite(viewport.offsetTop) ? viewport.offsetTop : 0,
+    width: Math.max(0, width),
+    height: Math.max(0, height),
+    scale: viewport?.scale && Number.isFinite(viewport.scale) ? viewport.scale : 1,
+  };
+}
+
 function intersectionRatio(rect: DOMRect): number {
   if (rect.width <= 0 || rect.height <= 0) return 0;
-  const width = Math.max(0, Math.min(rect.right, window.innerWidth) - Math.max(rect.left, 0));
-  const height = Math.max(0, Math.min(rect.bottom, window.innerHeight) - Math.max(rect.top, 0));
+  const viewport = visualViewportInfo();
+  const width = Math.max(0, Math.min(rect.right, viewport.x + viewport.width) - Math.max(rect.left, viewport.x));
+  const height = Math.max(0, Math.min(rect.bottom, viewport.y + viewport.height) - Math.max(rect.top, viewport.y));
   return Math.max(0, Math.min(1, (width * height) / (rect.width * rect.height)));
 }
 
 function isOccluded(element: Element, rect: DOMRect): boolean {
   if (rect.width <= 0 || rect.height <= 0 || typeof document.elementsFromPoint !== "function") return false;
-  const x = Math.max(0, Math.min(window.innerWidth - 1, rect.left + rect.width / 2));
-  const y = Math.max(0, Math.min(window.innerHeight - 1, rect.top + rect.height / 2));
+  const viewport = visualViewportInfo();
+  const x = Math.max(viewport.x, Math.min(viewport.x + viewport.width - 1, rect.left + rect.width / 2));
+  const y = Math.max(viewport.y, Math.min(viewport.y + viewport.height - 1, rect.top + rect.height / 2));
   const top = document.elementsFromPoint(x, y)[0];
   return Boolean(top && top !== element && !element.contains(top) && !top.contains(element));
 }
@@ -192,6 +207,7 @@ function isOccluded(element: Element, rect: DOMRect): boolean {
 function geometryFor(element: Element, identity: NodeIdentity): NodeGeometry | undefined {
   const rect = element.getBoundingClientRect();
   if (rect.width <= 0 && rect.height <= 0) return undefined;
+  const viewport = visualViewportInfo();
   const computed = getComputedStyle(element);
   const declaredPosition = (element as HTMLElement).style.position;
   const position = declaredPosition || computed.position;
@@ -205,10 +221,10 @@ function geometryFor(element: Element, identity: NodeIdentity): NodeGeometry | u
     viewport: rectValue(rect),
     document: { x: rect.x + window.scrollX, y: rect.y + window.scrollY, width: rect.width, height: rect.height },
     normalized: {
-      x: window.innerWidth ? rect.x / window.innerWidth : 0,
-      y: window.innerHeight ? rect.y / window.innerHeight : 0,
-      width: window.innerWidth ? rect.width / window.innerWidth : 0,
-      height: window.innerHeight ? rect.height / window.innerHeight : 0,
+      x: viewport.width ? (rect.x - viewport.x) / viewport.width : 0,
+      y: viewport.height ? (rect.y - viewport.y) / viewport.height : 0,
+      width: viewport.width ? rect.width / viewport.width : 0,
+      height: viewport.height ? rect.height / viewport.height : 0,
     },
     visibleRatio: intersectionRatio(rect),
     occluded: isOccluded(element, rect),

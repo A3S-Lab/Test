@@ -19,6 +19,8 @@ beforeEach(() => {
   Object.defineProperty(globalThis, "ResizeObserver", { value: ResizeObserverStub, configurable: true });
   Object.defineProperty(window, "innerWidth", { value: 1000, configurable: true });
   Object.defineProperty(window, "innerHeight", { value: 800, configurable: true });
+  Object.defineProperty(window, "devicePixelRatio", { value: 1, configurable: true });
+  Object.defineProperty(window, "visualViewport", { value: undefined, configurable: true });
   Object.defineProperty(window, "scrollX", { value: 0, configurable: true });
   Object.defineProperty(window, "scrollY", { value: 0, configurable: true });
   Object.defineProperty(document, "elementsFromPoint", { value: () => [], configurable: true });

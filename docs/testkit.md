@@ -92,7 +92,12 @@ revision and scope.
     "route": "/checkout",
     "title": "Checkout",
     "ready": true,
-    "viewport": { "width": 1440, "height": 900, "dpr": 2 },
+    "viewport": {
+      "width": 1440,
+      "height": 900,
+      "dpr": 2,
+      "visual": { "x": 0, "y": 0, "width": 960, "height": 600, "scale": 1.5 }
+    },
     "document": { "width": 1440, "height": 2210 },
     "scroll": { "x": 0, "y": 800 },
     "language": "en",
@@ -117,12 +122,21 @@ rendered box:
 
 - viewport CSS pixels from `getBoundingClientRect()`;
 - document CSS pixels after current scroll offsets;
-- viewport-normalized values in `[0, 1]` where possible.
+- current visual-viewport-normalized values. Values may be outside `[0, 1]`
+  when a rendered box is outside the currently visible zoomed region.
 
 Geometry also records visible ratio, topmost-point occlusion, fixed/sticky
 positioning, transform presence, and the nearest scroll container. Device
 pixels are not mixed with CSS pixels. Multi-root components expose `boxes`
 instead of inventing one inaccurate rectangle.
+
+`page.viewport.width` and `height` describe the layout viewport in CSS pixels,
+and `dpr` describes the current device-pixel ratio. Compatible browsers also
+publish an additive `visual` object containing its CSS-pixel offset, visible
+size, and page scale. Browser zoom therefore changes `visual`, `dpr`, or both,
+but never multiplies `getBoundingClientRect()` values into device pixels.
+Visible ratio, occlusion sampling, and normalized geometry use the visual
+viewport so targets outside a zoomed view are not reported as visible.
 
 Geometry is evidence and a last-resort target. Semantic role, label, test ID,
 placeholder, and stable text locators remain preferred.

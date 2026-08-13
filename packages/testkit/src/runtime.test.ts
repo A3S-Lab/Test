@@ -38,6 +38,41 @@ describe("page context runtime", () => {
     expect(described?.locators[0]).toEqual({ type: "test_id", value: "pay" });
   });
 
+  it("models browser visual zoom without converting CSS-pixel element rectangles", () => {
+    document.body.innerHTML = `<button data-testid="zoom-edge">Zoom edge</button>`;
+    const button = document.querySelector("button")!;
+    setRect(button, { x: 400, y: 100, width: 200, height: 40 });
+    Object.defineProperty(window, "devicePixelRatio", { value: 1.5, configurable: true });
+    Object.defineProperty(window, "visualViewport", {
+      configurable: true,
+      value: {
+        width: 500,
+        height: 400,
+        offsetLeft: 0,
+        offsetTop: 0,
+        scale: 2,
+        addEventListener() {},
+        removeEventListener() {},
+      },
+    });
+    const bridge = installTestKit({ enabled: true, page: { id: "zoom" }, repairStorage: "memory" });
+
+    const snapshot = bridge.snapshot();
+    const described = snapshot.nodes.find((node) => node.testId === "zoom-edge");
+    expect(snapshot.page.viewport).toEqual({
+      width: 1000,
+      height: 800,
+      dpr: 1.5,
+      visual: { x: 0, y: 0, width: 500, height: 400, scale: 2 },
+    });
+    expect(described?.geometry).toMatchObject({
+      viewport: { x: 400, y: 100, width: 200, height: 40 },
+      document: { x: 400, y: 100, width: 200, height: 40 },
+      normalized: { x: 0.8, y: 0.25, width: 0.4, height: 0.1 },
+      visibleRatio: 0.5,
+    });
+  });
+
   it("redacts sensitive subtrees, hidden/password fields, and application facts", () => {
     document.body.innerHTML = `<div id="parent">Public <span data-private>private value</span></div><input type="password" value="hunter2"><input type="hidden" value="secret">`;
     for (const element of document.body.querySelectorAll("*")) setRect(element, { x: 1, y: 1, width: 20, height: 20 });

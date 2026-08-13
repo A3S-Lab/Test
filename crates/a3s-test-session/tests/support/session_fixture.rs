@@ -315,6 +315,7 @@ pub(crate) fn ready_page_context(revision: u64) -> PageContextObservation {
             width: 1280.0,
             height: 720.0,
             dpr: 1.0,
+            visual: None,
         },
         document: PageContextSize {
             width: 1280.0,

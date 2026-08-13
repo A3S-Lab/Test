@@ -282,6 +282,7 @@ mod tests {
                     width: 100.0,
                     height: 100.0,
                     dpr: 1.0,
+                    visual: None,
                 },
                 document: PageContextSize {
                     width: 100.0,

@@ -32,6 +32,11 @@ the provider, component boundary, and optional Shadow DOM review overlay.
 `installTestKit` also requires `enabled: true`; omitted or false-like runtime
 configuration fails closed.
 
+Geometry remains in CSS pixels at every browser zoom level. The page snapshot
+separates the layout viewport and DPR from an optional visual viewport with its
+current offset, visible size, and scale, allowing A3S Test to reason about
+zoomed and panned content without double-scaling coordinates.
+
 The SDK never receives workspace, shell, MCP, or source-editing credentials.
 Submitted DOM context is explicitly marked as untrusted evidence. A same-origin
 `repairEndpoint` is optional; without one A3S Test can pick queued repairs up

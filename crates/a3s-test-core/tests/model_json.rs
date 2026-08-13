@@ -161,3 +161,39 @@ fn repair_conflict_relation_has_a_typed_non_keyword_wire_contract() {
     }))
     .is_err());
 }
+
+#[test]
+fn visual_viewport_is_additive_and_preserves_css_pixel_geometry() {
+    use a3s_test_core::{PageContextViewport, PageContextVisualViewport};
+
+    let viewport = PageContextViewport {
+        width: 1280.0,
+        height: 720.0,
+        dpr: 2.0,
+        visual: Some(PageContextVisualViewport {
+            x: 0.0,
+            y: 0.0,
+            width: 853.333,
+            height: 480.0,
+            scale: 1.5,
+        }),
+    };
+    let encoded = serde_json::to_value(&viewport).expect("serialize visual viewport");
+    assert_eq!(encoded["width"], 1280.0);
+    assert_eq!(encoded["dpr"], 2.0);
+    assert_eq!(encoded["visual"]["width"], 853.333);
+    assert_eq!(encoded["visual"]["scale"], 1.5);
+    assert_eq!(
+        serde_json::from_value::<PageContextViewport>(encoded)
+            .expect("deserialize visual viewport"),
+        viewport
+    );
+
+    let legacy: PageContextViewport = serde_json::from_value(serde_json::json!({
+        "width": 1280.0,
+        "height": 720.0,
+        "dpr": 1.0
+    }))
+    .expect("deserialize legacy viewport without visual metadata");
+    assert!(legacy.visual.is_none());
+}

@@ -1,4 +1,4 @@
-import { describeElement, overlaps, walkElements, type NodeIdentity } from "./dom";
+import { describeElement, overlaps, visualViewportInfo, walkElements, type NodeIdentity } from "./dom";
 import { RepairStore } from "./repair-store";
 import { safeCallback, sanitizeFacts } from "./sanitize";
 import {
@@ -338,6 +338,12 @@ class Runtime implements TestKitRuntime, NodeIdentity {
       window.addEventListener(event, changed, { capture: true, passive: true });
       this.#cleanup.push(() => window.removeEventListener(event, changed, true));
     }
+    if (window.visualViewport) {
+      for (const event of ["resize", "scroll"] as const) {
+        window.visualViewport.addEventListener(event, changed, { passive: true });
+        this.#cleanup.push(() => window.visualViewport?.removeEventListener(event, changed));
+      }
+    }
 
     for (const method of ["pushState", "replaceState"] as const) {
       const original = history[method];
@@ -478,7 +484,12 @@ class Runtime implements TestKitRuntime, NodeIdentity {
         route: `${location.pathname}${location.search}${location.hash}`,
         title: document.title,
         ready: safeCallback(this.#options.ready, document.readyState !== "loading"),
-        viewport: { width: innerWidth, height: innerHeight, dpr: devicePixelRatio || 1 },
+        viewport: {
+          width: innerWidth,
+          height: innerHeight,
+          dpr: devicePixelRatio || 1,
+          visual: visualViewportInfo(),
+        },
         document: { width: root.scrollWidth, height: root.scrollHeight },
         scroll: { x: scrollX, y: scrollY },
         language: document.documentElement.lang || navigator.language || "unknown",
