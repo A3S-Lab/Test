@@ -525,6 +525,62 @@ candidates and resolve every applicable conflict with a rationale. The result
 uses the existing `surface_contract` ACL grammar; only approved source spans
 become citation blocks, and only selected sources become reviewed provenance.
 
+### Source-to-contract CLI workflow
+
+`a3s-test contract generate --config <acl> --output <json>` operationalizes the
+provider contract. Its ACL root is `contract_generation "<name>"`. Required
+fields are `max_cost_microusd`, one `context`, one `provider`, and at least one
+labeled `source`. Context uses the same `mode`, `audience`, and
+`primary_outcome` values as a Surface Contract. Provider requires `name`,
+`model`, and `endpoint`; optional `authorization_env` must start with
+`A3S_TEST_PROVIDER_AUTHORIZATION_` and contain only uppercase ASCII letters,
+digits, or underscores after that prefix.
+
+Each source requires `kind = "prd" | "design"`, a config-directory-contained
+regular `path`, and an optional contract-relative `uri`. Design sources also
+require an image `media_type`, `width`, and `height`; PRD sources reject those
+fields. The CLI computes SHA-256 rather than accepting it from configuration.
+Optional generation limits are `timeout_ms`, `max_sources`,
+`max_source_bytes`, `max_candidates`, `max_elements`, and `max_string_bytes`.
+All are additionally bounded by `ContractGenerationOptions` admission.
+
+The output is strict JSON protocol `a3s.test.contract-workflow/1` with stage
+`generated`, its full-payload `integrity_sha256`, the original sources and
+admission limits, the complete admitted `GeneratedContractDraft`, and no review
+or contract ACL. Unknown fields, incompatible protocol versions, oversized
+files, symbolic links, source-directory escapes, altered payloads, stale source
+bytes, or derived conflicts and decisions that no longer match candidates are
+rejected. `integrity_sha256` is a canonical payload checksum for mutation
+detection, not a signature or proof of authorship.
+
+`a3s-test contract review --draft <json> --review <acl> --output <acl>
+--audit <json>` accepts only a `generated` artifact. Review ACL has this form:
+
+```acl
+contract_review {
+    reviewer = "product-owner@example.test"
+
+    candidate "source:variant:element" {
+        action = "approve"
+    }
+
+    conflict "conflict:stable-digest" {
+        select = "source:variant:element"
+        rationale = "Approved source and terminology"
+    }
+}
+```
+
+Candidate decisions must be explicit and unique. Each applicable conflict
+requires one resolution that selects an approved candidate with non-empty
+rationale. An approved candidate depending on an unresolved product decision
+is rejected. On success the command publishes canonical Surface Contract ACL
+and a `reviewed` workflow audit containing the complete generated artifact,
+review, and exact ACL. Validation regenerates that ACL from the recorded review,
+and replays source and provider-response admission under the recorded limits,
+so altering any member fails closed. Existing files require `--force`; ACL and
+audit paths must be distinct and neither may be a symbolic link.
+
 Reconciliation matches each element in this order: exact test ID, component
 identity plus optional role/name, exact role and name, then role alone.
 Ambiguity is a finding rather than an arbitrary selection. Reports preserve

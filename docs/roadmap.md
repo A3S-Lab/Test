@@ -422,3 +422,23 @@ The completion work intentionally preserves these product boundaries:
 - [x] Add real TCP conformance fixtures for both provider capabilities,
       endpoint policy, tagged envelopes, request/streamed-response limits,
       protocol mismatch, timeout, and error handling
+
+## M17: Operational source-to-contract workflow
+
+- [x] Add an ACL-configured CLI path from contained PRD/design files through a
+      deployment-owned HTTP provider to a versioned candidate-only artifact
+- [x] Calculate and verify source digests locally, bind provider/model identity,
+      deadline, cost, and limits, and inject authorization only from a named
+      environment variable
+- [x] Add a separate ACL human-review document with explicit candidate actions,
+      conflict selection, and rationale
+- [x] Regenerate and admit the canonical Surface Contract locally without
+      letting the provider approve expectations or claim browser observation
+- [x] Persist generated and reviewed workflow stages with strict versioning,
+      full-payload SHA-256, source rehash and admission replay, bounded reads,
+      atomic writes, tamper detection, and complete audit data
+- [x] Publish reviewed ACL and audit as a recoverable output pair while
+      rejecting symlinks, path aliasing, unsafe source paths, and accidental
+      overwrites
+- [x] Add real HTTP CLI coverage for digest and environment-authorization
+      binding plus fail-closed review and output behavior

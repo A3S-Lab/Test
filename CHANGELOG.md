@@ -4,6 +4,12 @@
 
 ### Added
 
+- Added `a3s-test contract generate` and `a3s-test contract review` for an
+  operational, two-stage path from contained PRD/design sources through a
+  deployment-owned HTTP provider to reviewed ACL Surface Contracts.
+- Added strict `a3s.test.contract-workflow/1` generated/reviewed artifacts and
+  ACL human-review files with explicit candidate decisions, conflict
+  selections, rationales, and complete audit retention.
 - Added stable `a3s.test.contract-generation-provider/1` and
   `a3s.test.visual-grounding-provider/1` wire identifiers with generated JSON
   Schema 2020-12 request and response contracts.
@@ -16,6 +22,16 @@
 
 ### Safety
 
+- Source paths are contained beneath the workflow config, file digests are
+  calculated locally, provider credentials come only from explicitly named
+  environment variables, and generated artifacts contain no executable ACL.
+- Saved artifacts bind their full payload with SHA-256 and retain the source
+  manifest, cost ceiling, and generation limits so review can rehash evidence
+  and replay response, conflict, and open-decision admission. The digest is a
+  mutation checksum, not an authenticity signature.
+- Review regenerates and admits the contract locally, rejects unresolved or
+  tampered decisions, and publishes canonical ACL plus audit with bounded,
+  symlink-safe, overwrite-explicit storage.
 - Provider wire fixtures reject unknown fields and retain digest, deadline,
   cost, identity, hierarchy, coordinate-space, and geometry bindings. Schema
   conformance does not grant verdict, browser-observation, or repair authority.

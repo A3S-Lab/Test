@@ -176,6 +176,93 @@ wire deadlines, and redacts configured authorization values from remote error
 messages. The surrounding service still rehashes evidence and independently
 admits identity, provenance, geometry, usage, and authority.
 
+### Generate a reviewed contract from sources
+
+The CLI provides an operational two-stage workflow for a deployment-owned
+contract-generation endpoint. Generation writes a versioned JSON artifact that
+contains candidates, conflicts, open decisions, provider usage, and source
+digests, but no executable contract:
+
+```acl
+contract_generation "checkout" {
+    max_cost_microusd = 50000
+
+    context {
+        mode = "operate"
+        audience = ["customer"]
+        primary_outcome = "place_order"
+    }
+
+    provider {
+        name = "deployment-gateway"
+        model = "interface-contract-model"
+        endpoint = "https://inference.example.test/v1/contracts"
+        authorization_env = "A3S_TEST_PROVIDER_AUTHORIZATION_CONTRACTS"
+    }
+
+    source "requirements" {
+        kind = "prd"
+        path = "./checkout.md"
+        uri = "./checkout.md"
+    }
+
+    source "desktop-design" {
+        kind = "design"
+        path = "./checkout.png"
+        uri = "./checkout.png"
+        media_type = "image/png"
+        width = 1440
+        height = 900
+    }
+}
+```
+
+```bash
+export A3S_TEST_PROVIDER_AUTHORIZATION_CONTRACTS='Bearer ...'
+a3s-test contract generate \
+  --config tests/contracts/checkout.generate.acl \
+  --output tests/contracts/checkout.draft.json
+```
+
+Inspect the draft, then author explicit candidate and conflict decisions in
+ACL. Candidate IDs and stable conflict IDs come from the generated artifact:
+
+```acl
+contract_review {
+    reviewer = "product-owner@example.test"
+
+    candidate "requirements:desktop:place-order" {
+        action = "approve"
+    }
+
+    conflict "conflict:0123456789abcdef" {
+        select = "requirements:desktop:place-order"
+        rationale = "Approved product terminology"
+    }
+}
+```
+
+```bash
+a3s-test contract review \
+  --draft tests/contracts/checkout.draft.json \
+  --review tests/contracts/checkout.review.acl \
+  --output tests/contracts/checkout.acl \
+  --audit tests/contracts/checkout.reviewed.json
+```
+
+The review command regenerates the contract locally, admits the canonical ACL,
+and publishes it with the complete audit artifact. Missing decisions,
+unresolved applicable conflicts or product questions, altered workflow data,
+unsafe source paths, stale source bytes, or existing outputs fail closed.
+Workflow artifacts carry a full-payload SHA-256 checksum for accidental or
+unreviewed mutation detection, retain the generation limits and local source
+manifest, and rehash every source before review. The checksum is not a digital
+signature; repository review and normal access controls remain authoritative.
+Credentials are accepted only through a named
+`A3S_TEST_PROVIDER_AUTHORIZATION_*` environment variable and are never stored
+in ACL or workflow artifacts. Source-derived expectations remain distinct from
+the browser-observed accessibility and layout projection.
+
 Install the package tarball published with every GitHub Release:
 
 ```bash

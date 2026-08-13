@@ -34,6 +34,7 @@ dependencies = [
 name = "a3s-test-cli"
 version = "0.8.0"
 dependencies = [
+ "a3s-acl",
  "a3s-test-agent",
  "a3s-test-core",
  "a3s-test-driver-gui",

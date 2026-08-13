@@ -22,6 +22,7 @@ use tokio_util::sync::CancellationToken;
 
 mod action_schema;
 mod agent_session;
+mod contract_workflow;
 mod gui_certification;
 mod mcp;
 mod mcp_web;
@@ -46,6 +47,8 @@ enum Commands {
     Check(CheckArgs),
     /// Discover and verify the installed Web driver protocol.
     Capabilities(CapabilitiesArgs),
+    /// Generate and explicitly review source-bound Expected Surface Contracts.
+    Contract(contract_workflow::ContractArgs),
     /// Print the locked GUI platform and endpoint certification matrix.
     GuiCertification(gui_certification::GuiCertificationArgs),
     /// Exercise one real GUI profile and verify observation plus owned cleanup.
@@ -220,6 +223,7 @@ pub async fn execute(cli: Cli) -> Result<ExitCode> {
         Commands::Agent(args) => agent_session::execute(args).await,
         Commands::Check(args) => check(args).await,
         Commands::Capabilities(args) => capabilities(args).await,
+        Commands::Contract(args) => contract_workflow::execute(args).await,
         Commands::GuiCertification(args) => gui_certification::print_matrix(args),
         Commands::GuiCertify(args) => gui_certification::certify(args).await,
         Commands::Mcp(args) => serve_mcp(args).await,

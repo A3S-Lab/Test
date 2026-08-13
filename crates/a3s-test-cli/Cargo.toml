@@ -12,6 +12,7 @@ name = "a3s-test"
 path = "src/main.rs"
 
 [dependencies]
+a3s-acl.workspace = true
 a3s-test-agent = { path = "../a3s-test-agent" }
 a3s-test-core = { path = "../a3s-test-core" }
 a3s-test-driver-gui = { path = "../a3s-test-driver-gui" }

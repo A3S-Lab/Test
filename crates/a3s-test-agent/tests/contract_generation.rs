@@ -9,7 +9,8 @@ use a3s_test_agent::{
     ContractGenerationProviderIdentity, ContractGenerationProviderRequest,
     ContractGenerationProviderResponse, ContractGenerationReview, ContractGenerationService,
     ContractGenerationUsage, ContractReviewAction, ContractReviewDecision, ContractSource,
-    ContractSourceKind, ContractSourceSpan, DesignCoordinateSpace, DesignElementRegion,
+    ContractSourceKind, ContractSourceSpan, ContractWorkflowAdmission, ContractWorkflowArtifact,
+    ContractWorkflowStage, DesignCoordinateSpace, DesignElementRegion, GeneratedContractDraft,
     GeneratedContractProvenance, ProductDecision, ProductDecisionStatus,
 };
 use a3s_test_core::{
@@ -240,6 +241,174 @@ async fn review_promotes_only_selected_candidates_and_keeps_sources_non_observed
         entry.kind,
         a3s_test_core::ContractProvenanceKind::Prd | a3s_test_core::ContractProvenanceKind::Design
     )));
+}
+
+#[tokio::test]
+async fn reviewed_workflow_artifact_round_trips_without_losing_audit_or_acl() {
+    let files = SourceFiles::new();
+    let prd = files.prd_source();
+    let provider = Arc::new(FakeProvider::new(response(vec![prd_candidate(&prd)])));
+    let service = service(provider);
+    let generated = service
+        .generate(
+            "checkout",
+            context(),
+            vec![prd.clone()],
+            1_000,
+            CancellationToken::new(),
+        )
+        .await
+        .expect("generated draft");
+    let reviewed = service
+        .review(
+            generated,
+            ContractGenerationReview {
+                reviewer: "product-owner@example.test".to_string(),
+                decisions: vec![ContractReviewDecision {
+                    candidate_id: "prd:desktop:place-order".to_string(),
+                    action: ContractReviewAction::Approve,
+                }],
+                conflict_resolutions: Vec::new(),
+            },
+        )
+        .expect("reviewed workflow artifact");
+
+    let workflow = ContractWorkflowArtifact::reviewed(reviewed, workflow_admission(vec![prd]))
+        .expect("reviewed workflow");
+    let encoded = serde_json::to_vec_pretty(&workflow).expect("workflow JSON");
+    let decoded: ContractWorkflowArtifact =
+        serde_json::from_slice(&encoded).expect("restored workflow artifact");
+
+    decoded.validate().expect("valid restored workflow");
+    decoded
+        .validate_evidence()
+        .await
+        .expect("valid restored workflow evidence");
+    assert_eq!(decoded, workflow);
+    assert_eq!(decoded.stage, ContractWorkflowStage::Reviewed);
+    assert_eq!(decoded.generated.provider, identity());
+    assert!(decoded
+        .contract_acl
+        .as_deref()
+        .is_some_and(|acl| { a3s_test_core::SurfaceContractDraft::from_acl(acl).is_ok() }));
+}
+
+#[tokio::test]
+async fn workflow_artifact_rehashes_retained_source_manifest() {
+    let files = SourceFiles::new();
+    let prd = files.prd_source();
+    let provider = Arc::new(FakeProvider::new(response(vec![prd_candidate(&prd)])));
+    let generated = service(provider)
+        .generate(
+            "checkout",
+            context(),
+            vec![prd.clone()],
+            1_000,
+            CancellationToken::new(),
+        )
+        .await
+        .expect("generated draft");
+    let workflow =
+        ContractWorkflowArtifact::generated(generated, workflow_admission(vec![prd.clone()]))
+            .expect("generated workflow");
+    std::fs::write(&prd.path, "changed after workflow persistence").expect("change source");
+
+    let error = workflow
+        .validate_evidence()
+        .await
+        .expect_err("stale workflow source");
+    assert_eq!(
+        error.code(),
+        "test.agent.contract_generation.source_mismatch"
+    );
+}
+
+#[test]
+fn workflow_artifact_rejects_inconsistent_stage_payloads() {
+    let files = SourceFiles::new();
+    let prd = files.prd_source();
+    let candidate = prd_candidate(&prd);
+    let mut value = serde_json::to_value(
+        ContractWorkflowArtifact::generated(
+            GeneratedContractDraft {
+                name: "checkout".to_string(),
+                version: 1,
+                context: context(),
+                provenance: vec![GeneratedContractProvenance {
+                    source_id: prd.id.clone(),
+                    kind: prd.kind,
+                    uri: prd.uri.clone(),
+                    sha256: prd.sha256.clone(),
+                }],
+                candidates: vec![candidate],
+                conflicts: Vec::new(),
+                unresolved_decisions: vec![ProductDecision {
+                    id: "receipt-format".to_string(),
+                    question: "Should the receipt be PDF or HTML?".to_string(),
+                    status: ProductDecisionStatus::Unresolved,
+                    source_spans: Vec::new(),
+                }],
+                usage: ContractGenerationUsage::default(),
+                provider: identity(),
+                request_id: None,
+            },
+            workflow_admission(vec![prd]),
+        )
+        .expect("generated workflow"),
+    )
+    .expect("workflow value");
+    value["stage"] = serde_json::json!("reviewed");
+    let artifact: ContractWorkflowArtifact =
+        serde_json::from_value(value).expect("workflow wire shape");
+    let error = artifact
+        .validate()
+        .expect_err("inconsistent workflow stage");
+    assert_eq!(
+        error.code(),
+        "test.agent.contract_generation.workflow_invalid"
+    );
+}
+
+#[tokio::test]
+async fn workflow_artifact_rejects_acl_that_was_not_produced_by_its_review() {
+    let files = SourceFiles::new();
+    let prd = files.prd_source();
+    let provider = Arc::new(FakeProvider::new(response(vec![prd_candidate(&prd)])));
+    let service = service(provider);
+    let generated = service
+        .generate(
+            "checkout",
+            context(),
+            vec![prd.clone()],
+            1_000,
+            CancellationToken::new(),
+        )
+        .await
+        .expect("generated draft");
+    let reviewed = service
+        .review(
+            generated,
+            ContractGenerationReview {
+                reviewer: "reviewer".to_string(),
+                decisions: vec![ContractReviewDecision {
+                    candidate_id: "prd:desktop:place-order".to_string(),
+                    action: ContractReviewAction::Approve,
+                }],
+                conflict_resolutions: Vec::new(),
+            },
+        )
+        .expect("reviewed draft");
+    let mut artifact = ContractWorkflowArtifact::reviewed(reviewed, workflow_admission(vec![prd]))
+        .expect("reviewed workflow");
+    artifact.review.as_mut().expect("review").decisions[0].action = ContractReviewAction::Reject;
+
+    let error = artifact
+        .validate()
+        .expect_err("tampered reviewed workflow must fail");
+    assert_eq!(
+        error.code(),
+        "test.agent.contract_generation.workflow_invalid"
+    );
 }
 
 #[tokio::test]
@@ -559,18 +728,24 @@ async fn assert_invalid_response(source: ContractSource, candidate: ContractCand
 }
 
 fn service(provider: Arc<FakeProvider>) -> ContractGenerationService {
-    ContractGenerationService::new(
-        provider,
-        ContractGenerationOptions {
-            timeout: Duration::from_millis(200),
-            max_sources: 4,
-            max_source_bytes: 1_024 * 1_024,
-            max_candidates: 16,
-            max_elements: 64,
-            max_string_bytes: 4_096,
-        },
-    )
-    .expect("valid generation service")
+    ContractGenerationService::new(provider, generation_options())
+        .expect("valid generation service")
+}
+
+fn generation_options() -> ContractGenerationOptions {
+    ContractGenerationOptions {
+        timeout: Duration::from_millis(200),
+        max_sources: 4,
+        max_source_bytes: 1_024 * 1_024,
+        max_candidates: 16,
+        max_elements: 64,
+        max_string_bytes: 4_096,
+    }
+}
+
+fn workflow_admission(sources: Vec<ContractSource>) -> ContractWorkflowAdmission {
+    ContractWorkflowAdmission::new(sources, 1_000, &generation_options())
+        .expect("workflow admission")
 }
 
 fn response(candidates: Vec<ContractCandidate>) -> ContractGenerationProviderResponse {

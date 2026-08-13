@@ -151,6 +151,28 @@ required except for explicit loopback HTTP used by a local inference service.
 The adapter cannot choose a model, read source evidence, approve candidates, or
 replace `ContractGenerationService` validation.
 
+The CLI composes these existing boundaries without moving model or transport
+concerns into Core. `a3s-test contract generate` parses one ACL workflow config,
+resolves regular source files beneath that config directory, calculates their
+digests locally, injects authorization from an explicitly named environment
+variable, and calls the typed HTTP adapter. It atomically persists protocol
+`a3s.test.contract-workflow/1` at the `generated` stage. That artifact has no
+ACL contract and therefore cannot become a Runner expectation.
+
+`a3s-test contract review` accepts that immutable candidate record plus a
+separate ACL review document. It replays deterministic review admission,
+requires explicit candidate decisions and applicable conflict resolutions,
+round-trips and admits the canonical `surface_contract`, then publishes the ACL
+and a `reviewed` audit artifact as one recoverable output pair. Loading a
+saved artifact verifies its full-payload SHA-256 checksum, rehashes the retained local
+source manifest under the original admission limits, recomputes conflicts and
+open decisions, and replays the review again. A contract that is not the
+deterministic result is rejected. The workflow artifact retains source paths
+for local rehash and audit; it must be handled as workspace evidence, not as a
+portable provider request or a browser observation. The checksum detects
+accidental or unreviewed edits but is not a signature or an authenticity root;
+repository review and workspace access controls remain authoritative.
+
 ### Understanding during rendering
 
 The browser already computes DOM structure, accessibility semantics, CSS

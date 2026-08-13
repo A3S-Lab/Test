@@ -356,6 +356,30 @@ HTTP 200, and map bounded typed remote errors without exposing configured
 authorization values. HTTP conformance never bypasses the service-level
 source, identity, cost, evidence, review, or authority checks.
 
+The CLI exposes this path without embedding an inference runtime:
+
+```bash
+a3s-test contract generate \
+  --config tests/contracts/checkout.generate.acl \
+  --output tests/contracts/checkout.draft.json
+
+a3s-test contract review \
+  --draft tests/contracts/checkout.draft.json \
+  --review tests/contracts/checkout.review.acl \
+  --output tests/contracts/checkout.acl \
+  --audit tests/contracts/checkout.reviewed.json
+```
+
+The generation config is ACL and names the contract context, contained PRD or
+design files, HTTP endpoint, provider/model identity, limits, cost ceiling,
+and optionally an `A3S_TEST_PROVIDER_AUTHORIZATION_*` environment variable.
+Authorization values are read only from the environment. The generated JSON
+artifact is candidate-only. The review ACL contains the reviewer identity,
+one `candidate` block per explicit approval or rejection, and one `conflict`
+block per resolution with the selected candidate and rationale. Review locally
+reconstructs and admits the Surface Contract; it never asks the provider to
+approve its own proposal.
+
 ## Decisions
 
 The model can return exactly one of:

@@ -4,6 +4,7 @@ mod provider;
 mod review;
 mod service;
 mod validation;
+mod workflow;
 
 pub use model::{
     ContractCandidate, ContractCandidateElement, ContractCandidateVariant, ContractConflict,
@@ -16,3 +17,7 @@ pub use model::{
 };
 pub use provider::ContractGenerationProvider;
 pub use service::ContractGenerationService;
+pub use workflow::{
+    ContractWorkflowAdmission, ContractWorkflowArtifact, ContractWorkflowStage,
+    CONTRACT_WORKFLOW_PROTOCOL,
+};
