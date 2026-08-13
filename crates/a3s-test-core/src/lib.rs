@@ -1,9 +1,17 @@
 //! Typed test specifications and surface-driver contracts for A3S Test.
 
+mod contract;
 mod driver;
 mod error;
 mod manifest;
 mod model;
+mod reconcile;
+
+pub use contract::{
+    AdmittedProvenance, ContractContext, ContractElement, ContractMode, ContractProvenanceKind,
+    ContractProvenanceStatus, ContractSeverity, ContractVariant, SurfaceContract,
+    SurfaceContractDraft,
+};
 
 pub use driver::{
     DriverSession, PageContextInspectRequest, PageContextInspectScope, ScenarioContext,
@@ -24,4 +32,7 @@ pub use model::{
     RepairThreadMessage, RepairVerification, StepOutput, Surface, SurfaceObservation, TabOperation,
     Target, TestScenario, TestStep, TestSuite, VideoOperation, WaitCondition,
     ACTION_PROTOCOL_REVISION, PAGE_CONTEXT_PROTOCOL, REPAIR_PROTOCOL,
+};
+pub use reconcile::{
+    ContractFinding, ContractMatch, ContractMatchStrategy, ContractOutcome, ContractReport,
 };

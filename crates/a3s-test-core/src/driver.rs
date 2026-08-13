@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use async_trait::async_trait;
 
 use crate::{
-    DriverError, PageContextObservation, RepairAclProof, RepairEvidenceBundle,
+    ContractReport, DriverError, PageContextObservation, RepairAclProof, RepairEvidenceBundle,
     RepairEvidenceRequest, RepairFinding, RepairHumanAction, RepairStatusEvent, StepOutput,
     Surface, SurfaceObservation, TestStep,
 };
@@ -72,6 +72,17 @@ pub trait DriverSession: Send {
             "test.driver.repair_unsupported",
             "this surface driver does not project repair status",
         ))
+    }
+
+    /// Project a deterministic quality report into an optional human-review UI.
+    ///
+    /// This advisory projection must never change the runner verdict. Drivers
+    /// without a compatible embedded surface return `Ok(false)`.
+    async fn project_quality_report(
+        &mut self,
+        _report: &ContractReport,
+    ) -> Result<bool, DriverError> {
+        Ok(false)
     }
 
     async fn take_repair_actions(

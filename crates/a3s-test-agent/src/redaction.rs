@@ -119,6 +119,15 @@ impl ProvenanceRedactor {
         match action {
             Action::Navigate { url } => self.redact_url(url),
             Action::Snapshot { .. } | Action::Viewport { .. } => {}
+            Action::VerifyContract {
+                contract,
+                variant,
+                state,
+            } => {
+                self.redact_text(contract);
+                self.redact_text(variant);
+                self.redact_text(state);
+            }
             Action::Click { target }
             | Action::Hover { target }
             | Action::Focus { target }

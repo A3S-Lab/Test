@@ -270,6 +270,10 @@ impl DriverSession for GuiSession {
             }
             Action::Assert { expectation } => self.assert(expectation).await,
             Action::Screenshot { path } => self.screenshot(path).await,
+            Action::VerifyContract { .. } => Err(DriverError::new(
+                "test.driver.gui.runner_action_unsupported",
+                "verify_contract is executed by the A3S Test runner and must not reach a surface driver",
+            )),
             _ => Err(DriverError::new(
                 "test.driver.gui.action_unsupported",
                 "this action is not implemented by the GUI semantic profile",

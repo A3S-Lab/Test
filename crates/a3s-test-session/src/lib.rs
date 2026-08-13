@@ -259,6 +259,12 @@ impl AgentSessionManager {
         let managed = self.get(&request.session).await?;
         let mut managed = managed.lock().await;
         ensure_active(&managed)?;
+        if matches!(request.action, a3s_test_core::Action::VerifyContract { .. }) {
+            return Err(SessionError::new(
+                "test.session.runner_action_denied",
+                "verify_contract belongs to deterministic ACL runs and is not available in an interactive agent session",
+            ));
+        }
         if action_uses_observation_target(&request.action) {
             let latest = managed.latest_observation.ok_or_else(|| {
                 SessionError::new(

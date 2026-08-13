@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use a3s_test_core::{
-    Action, PageContextInspectRequest, PageContextInspectScope, RepairActor, RepairStatus,
+    PageContextInspectRequest, PageContextInspectScope, RepairActor, RepairStatus,
     ACTION_PROTOCOL_REVISION,
 };
 use a3s_test_session::{
@@ -18,6 +18,7 @@ use tokio::io::{
 
 const MCP_PROTOCOL: &str = "2025-06-18";
 const MAX_REQUEST_BYTES: usize = 8 * 1_024 * 1_024;
+use crate::action_schema::interactive_action_schema;
 
 pub(super) async fn serve(manager: Arc<AgentSessionManager>) -> Result<()> {
     serve_io(tokio::io::stdin(), tokio::io::stdout(), manager).await
@@ -299,7 +300,11 @@ async fn call_tool(
             json!({
                 "protocol_revision": ACTION_PROTOCOL_REVISION,
                 "supported_surfaces": manager.surfaces(),
-                "action_schema": schemars::schema_for!(Action),
+                "action_ownership": {
+                    "interactive": "actions listed in action_schema",
+                    "deterministic_runner": ["verify_contract"]
+                },
+                "action_schema": interactive_action_schema(),
             }),
         )),
         _ => {
@@ -395,8 +400,7 @@ fn tool_failure(error: SessionError) -> Value {
 }
 
 fn tool_definitions(surfaces: &[a3s_test_core::Surface]) -> Vec<Value> {
-    let action_schema = serde_json::to_value(schemars::schema_for!(Action))
-        .unwrap_or_else(|_| json!({ "type": "object" }));
+    let action_schema = interactive_action_schema();
     let surfaces = serde_json::to_value(surfaces).unwrap_or_else(|_| json!([]));
     vec![
         tool_definition(

@@ -1,10 +1,11 @@
+use std::collections::BTreeSet;
 use std::num::NonZeroU32;
-use std::path::{Path, PathBuf};
+use std::path::{Component, Path, PathBuf};
 use std::process::ExitCode;
 use std::sync::Arc;
 use std::time::Duration;
 
-use a3s_test_core::{Surface, SurfaceDriver, TestSuite};
+use a3s_test_core::{Action, Surface, SurfaceContractDraft, SurfaceDriver, TestSuite};
 use a3s_test_driver_gui::{
     terminate_active_cua_processes, ApplicationIdentity, AttachSpec, CuaEndpoint, GuiAppTarget,
     GuiCaptureScope, GuiDriver, GuiDriverConfig, GuiProfile, LaunchSpec, WindowSelector,
@@ -13,11 +14,13 @@ use a3s_test_driver_web::{
     terminate_active_commands, AgentBrowserConfig, AgentBrowserDriver, BrowserCapabilities,
     BrowserCommand,
 };
-use a3s_test_runner::{RetryPolicy, RunResult, RunStatus, Runner, RunnerOptions};
+use a3s_test_runner::{ContractRegistry, RetryPolicy, RunResult, RunStatus, Runner, RunnerOptions};
 use anyhow::{Context, Result};
 use clap::{Args, Parser, Subcommand, ValueEnum};
+use sha2::{Digest, Sha256};
 use tokio_util::sync::CancellationToken;
 
+mod action_schema;
 mod agent_session;
 mod gui_certification;
 mod mcp;
@@ -222,7 +225,8 @@ pub async fn execute(cli: Cli) -> Result<ExitCode> {
 }
 
 async fn check(args: CheckArgs) -> Result<ExitCode> {
-    let suite = read_suite(&args.manifest).await?;
+    let admitted = read_suite(&args.manifest).await?;
+    let suite = admitted.suite;
     if args.json {
         println!("{}", serde_json::to_string_pretty(&suite)?);
     } else {
@@ -266,7 +270,8 @@ async fn run(args: RunArgs) -> Result<ExitCode> {
         anyhow::bail!("parallel scenario limit must be between 1 and 64");
     }
 
-    let suite = read_suite(&args.manifest).await?;
+    let admitted = read_suite(&args.manifest).await?;
+    let suite = admitted.suite;
     let has_gui = suite
         .scenarios
         .iter()
@@ -292,6 +297,7 @@ async fn run(args: RunArgs) -> Result<ExitCode> {
         drivers,
         RunnerOptions {
             cleanup_timeout: Duration::from_millis(args.cleanup_timeout_ms),
+            quality_projection_timeout: RunnerOptions::default().quality_projection_timeout,
             retry_policy: RetryPolicy {
                 max_retries: args.infrastructure_retries,
                 backoff: Duration::from_millis(args.retry_backoff_ms),
@@ -299,7 +305,8 @@ async fn run(args: RunArgs) -> Result<ExitCode> {
             max_parallel_scenarios: args.max_parallel_scenarios,
         },
     )
-    .map_err(anyhow::Error::msg)?;
+    .map_err(anyhow::Error::msg)?
+    .with_contracts(admitted.contracts);
 
     let cancellation = CancellationToken::new();
     let signal_task = install_interrupt_handler(cancellation.clone());
@@ -466,11 +473,153 @@ async fn gui_driver(args: &GuiRunArgs, command_timeout: Duration) -> Result<GuiD
     Ok(GuiDriver::new(config))
 }
 
-async fn read_suite(path: &Path) -> Result<TestSuite> {
-    let source = tokio::fs::read_to_string(path)
+struct AdmittedSuite {
+    suite: TestSuite,
+    contracts: ContractRegistry,
+}
+
+async fn read_suite(path: &Path) -> Result<AdmittedSuite> {
+    let canonical_manifest = tokio::fs::canonicalize(path)
         .await
-        .with_context(|| format!("failed to read {}", path.display()))?;
-    TestSuite::from_acl(&source).with_context(|| format!("invalid test suite {}", path.display()))
+        .with_context(|| format!("failed to resolve {}", path.display()))?;
+    let metadata = tokio::fs::metadata(&canonical_manifest)
+        .await
+        .with_context(|| format!("failed to inspect {}", canonical_manifest.display()))?;
+    if !metadata.is_file() {
+        anyhow::bail!(
+            "test suite must be a regular file: {}",
+            canonical_manifest.display()
+        );
+    }
+    let manifest_dir = canonical_manifest
+        .parent()
+        .context("test suite path does not have a parent directory")?;
+    let source = tokio::fs::read_to_string(&canonical_manifest)
+        .await
+        .with_context(|| format!("failed to read {}", canonical_manifest.display()))?;
+    let suite = TestSuite::from_acl(&source)
+        .with_context(|| format!("invalid test suite {}", canonical_manifest.display()))?;
+    let contracts = read_contracts(&suite, manifest_dir).await?;
+    Ok(AdmittedSuite { suite, contracts })
+}
+
+async fn read_contracts(suite: &TestSuite, manifest_dir: &Path) -> Result<ContractRegistry> {
+    let references = suite
+        .scenarios
+        .iter()
+        .flat_map(|scenario| &scenario.steps)
+        .filter_map(|step| match &step.action {
+            Action::VerifyContract { contract, .. } => Some(contract.as_str()),
+            _ => None,
+        })
+        .collect::<BTreeSet<_>>();
+    let mut admitted = Vec::with_capacity(references.len());
+    for reference in references {
+        let relative = admit_contract_reference(reference)?;
+        let requested = manifest_dir.join(relative);
+        let canonical = tokio::fs::canonicalize(&requested).await.with_context(|| {
+            format!(
+                "failed to resolve contract reference '{reference}' from {}",
+                manifest_dir.display()
+            )
+        })?;
+        if !canonical.starts_with(manifest_dir) {
+            anyhow::bail!(
+                "contract reference must stay inside the test suite directory: '{reference}'"
+            );
+        }
+        let metadata = tokio::fs::metadata(&canonical)
+            .await
+            .with_context(|| format!("failed to inspect contract {}", canonical.display()))?;
+        if !metadata.is_file() {
+            anyhow::bail!("contract reference must resolve to a regular file: '{reference}'");
+        }
+        let source = tokio::fs::read_to_string(&canonical)
+            .await
+            .with_context(|| format!("failed to read contract {}", canonical.display()))?;
+        let draft = SurfaceContractDraft::from_acl(&source)
+            .with_context(|| format!("invalid surface contract {}", canonical.display()))?;
+        verify_contract_provenance(&draft, &canonical, manifest_dir).await?;
+        let contract = draft.admit().with_context(|| {
+            format!("surface contract was not admitted: {}", canonical.display())
+        })?;
+        admitted.push((reference.to_string(), contract));
+    }
+    ContractRegistry::new(admitted).map_err(anyhow::Error::msg)
+}
+
+async fn verify_contract_provenance(
+    draft: &SurfaceContractDraft,
+    contract_path: &Path,
+    trust_root: &Path,
+) -> Result<()> {
+    let contract_dir = contract_path
+        .parent()
+        .context("surface contract path does not have a parent directory")?;
+    for entry in draft.provenance() {
+        let uri = Path::new(&entry.uri);
+        if uri.is_absolute()
+            || uri
+                .components()
+                .any(|component| !matches!(component, Component::Normal(_) | Component::CurDir))
+        {
+            anyhow::bail!(
+                "contract provenance must stay inside the test suite directory: '{}'",
+                entry.uri
+            );
+        }
+        let requested = contract_dir.join(uri);
+        let canonical = tokio::fs::canonicalize(&requested).await.with_context(|| {
+            format!(
+                "failed to resolve provenance '{}' for contract {}",
+                entry.uri,
+                contract_path.display()
+            )
+        })?;
+        if !canonical.starts_with(trust_root) {
+            anyhow::bail!(
+                "contract provenance must stay inside the test suite directory: '{}'",
+                entry.uri
+            );
+        }
+        let metadata = tokio::fs::metadata(&canonical)
+            .await
+            .with_context(|| format!("failed to inspect provenance {}", canonical.display()))?;
+        if !metadata.is_file() {
+            anyhow::bail!(
+                "contract provenance must resolve to a regular file: '{}'",
+                entry.uri
+            );
+        }
+        let bytes = tokio::fs::read(&canonical)
+            .await
+            .with_context(|| format!("failed to read provenance {}", canonical.display()))?;
+        let actual = format!("sha256:{:x}", Sha256::digest(bytes));
+        if entry.digest != actual {
+            anyhow::bail!(
+                "test.contract.provenance_digest_mismatch: provenance '{}' does not match its declared SHA-256 digest",
+                entry.id
+            );
+        }
+    }
+    Ok(())
+}
+
+fn admit_contract_reference(reference: &str) -> Result<&Path> {
+    if reference.trim().is_empty() || reference.len() > 1_024 {
+        anyhow::bail!("contract reference must be bounded and non-empty");
+    }
+    let path = Path::new(reference);
+    if path.is_absolute()
+        || path
+            .components()
+            .any(|component| !matches!(component, Component::Normal(_) | Component::CurDir))
+    {
+        anyhow::bail!(
+            "contract reference must stay inside the test suite directory: '{reference}'"
+        );
+    }
+    Ok(path)
 }
 
 fn browser_command(kind: BrowserDriverKind, executable: Option<PathBuf>) -> BrowserCommand {

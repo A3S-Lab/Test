@@ -93,6 +93,34 @@ fn parses_ordered_typed_web_scenario() {
 }
 
 #[test]
+fn parses_runner_owned_surface_contract_verification() {
+    let suite = TestSuite::from_acl(
+        r#"
+suite "contract-smoke" {
+    scenario "checkout" {
+        surface = "web"
+        verify_contract "ready" {
+            contract = "./contracts/checkout.acl"
+            variant = "desktop"
+            state = "ready"
+        }
+    }
+}
+"#,
+    )
+    .expect("contract verification action");
+
+    assert_eq!(
+        suite.scenarios[0].steps[0].action,
+        Action::VerifyContract {
+            contract: "./contracts/checkout.acl".to_string(),
+            variant: "desktop".to_string(),
+            state: "ready".to_string(),
+        }
+    );
+}
+
+#[test]
 fn parses_gui_automation_id_target() {
     let suite = TestSuite::from_acl(
         r#"

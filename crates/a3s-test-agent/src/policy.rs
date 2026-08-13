@@ -39,6 +39,7 @@ pub enum ActionKind {
     Accessibility,
     Console,
     PageErrors,
+    VerifyContract,
 }
 
 impl From<&Action> for ActionKind {
@@ -76,6 +77,7 @@ impl From<&Action> for ActionKind {
             Action::Accessibility { .. } => Self::Accessibility,
             Action::Console { .. } => Self::Console,
             Action::PageErrors { .. } => Self::PageErrors,
+            Action::VerifyContract { .. } => Self::VerifyContract,
         }
     }
 }
@@ -115,6 +117,12 @@ impl CapabilityPolicy {
 
 impl ActionPolicy for CapabilityPolicy {
     fn validate(&self, _context: &PolicyContext<'_>, action: &Action) -> Result<(), AgentError> {
+        if matches!(action, Action::VerifyContract { .. }) {
+            return Err(AgentError::new(
+                "test.agent.policy.runner_action_denied",
+                "verify_contract belongs to deterministic ACL runs and cannot be proposed by an interactive agent",
+            ));
+        }
         let kind = ActionKind::from(action);
         if !self.allowed.contains(&kind) {
             return Err(AgentError::new(

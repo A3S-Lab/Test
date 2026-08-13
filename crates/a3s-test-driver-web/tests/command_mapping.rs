@@ -6,8 +6,9 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use a3s_test_core::{
-    Action, CaptureOperation, DialogOperation, FrameTarget, NetworkRoute, ScenarioContext,
-    SurfaceDriver, TabOperation, Target, TestStep, VideoOperation, WaitCondition,
+    Action, CaptureOperation, ContractFinding, ContractOutcome, ContractReport, ContractSeverity,
+    DialogOperation, FrameTarget, NetworkRoute, ScenarioContext, SurfaceDriver, TabOperation,
+    Target, TestStep, VideoOperation, WaitCondition,
 };
 use a3s_test_driver_web::{
     AgentBrowserConfig, AgentBrowserConnectionConfig, AgentBrowserDriver, BrowserCommand,
@@ -33,6 +34,11 @@ struct PageContextExecutor {
     revisions: Mutex<Vec<u64>>,
 }
 
+struct QualityProjectionExecutor {
+    invocations: Mutex<Vec<CommandInvocation>>,
+    accepted: bool,
+}
+
 impl RecordingExecutor {
     fn with_version(version: impl Into<String>) -> Self {
         Self {
@@ -54,6 +60,15 @@ impl PageContextExecutor {
         Self {
             invocations: Mutex::new(Vec::new()),
             revisions: Mutex::new(vec![1, 2, 3, 4]),
+        }
+    }
+}
+
+impl QualityProjectionExecutor {
+    fn new(accepted: bool) -> Self {
+        Self {
+            invocations: Mutex::new(Vec::new()),
+            accepted,
         }
     }
 }
@@ -182,6 +197,30 @@ impl CommandExecutor for PageContextExecutor {
         Ok(CommandOutput {
             exit_code: 0,
             stdout,
+            stderr: String::new(),
+        })
+    }
+}
+
+#[async_trait]
+impl CommandExecutor for QualityProjectionExecutor {
+    async fn run(&self, invocation: CommandInvocation) -> Result<CommandOutput, CommandError> {
+        let version_probe = invocation
+            .args
+            .last()
+            .is_some_and(|argument| argument == "--version");
+        self.invocations.lock().unwrap().push(invocation);
+        Ok(CommandOutput {
+            exit_code: 0,
+            stdout: if version_probe {
+                "agent-browser 0.26.0".to_string()
+            } else {
+                serde_json::json!({
+                    "success": true,
+                    "data": { "result": self.accepted }
+                })
+                .to_string()
+            },
             stderr: String::new(),
         })
     }
@@ -545,6 +584,77 @@ async fn captures_a_typed_testkit_context_at_the_same_stable_revision() {
 }
 
 #[tokio::test]
+async fn projects_a_bounded_quality_report_through_the_testkit_bridge() {
+    let temp = tempfile::tempdir().expect("tempdir");
+    let executor = Arc::new(QualityProjectionExecutor::new(true));
+    let driver =
+        AgentBrowserDriver::with_executor(standalone_config("quality-report"), executor.clone());
+    let mut session = driver
+        .open(&ScenarioContext {
+            run_id: "run".to_string(),
+            scenario_id: "quality".to_string(),
+            artifacts_dir: temp.path().join("artifacts"),
+        })
+        .await
+        .expect("session");
+
+    let accepted = session
+        .project_quality_report(&quality_report())
+        .await
+        .expect("quality projection");
+
+    assert!(accepted);
+    let invocations = executor.invocations.lock().unwrap();
+    assert_eq!(invocations.len(), 2);
+    let args = strip_session_prefix(&invocations[1].args);
+    assert_eq!(args[0], "eval");
+    let script = args[1].to_string_lossy();
+    assert!(
+        script.contains("Symbol.for(\"a3s.test.page-context\")"),
+        "{script}"
+    );
+    assert!(
+        script.contains("typeof bridge.reportQuality !== \"function\""),
+        "{script}"
+    );
+    assert!(
+        script.contains("bridge.reportQuality(report) === true"),
+        "{script}"
+    );
+    assert!(
+        script.contains("finding:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"),
+        "{script}"
+    );
+    assert!(script.contains("contract.element.role"), "{script}");
+}
+
+#[tokio::test]
+async fn missing_testkit_bridge_declines_quality_projection_without_an_error() {
+    let temp = tempfile::tempdir().expect("tempdir");
+    let executor = Arc::new(QualityProjectionExecutor::new(false));
+    let driver = AgentBrowserDriver::with_executor(
+        standalone_config("quality-report-missing"),
+        executor.clone(),
+    );
+    let mut session = driver
+        .open(&ScenarioContext {
+            run_id: "run".to_string(),
+            scenario_id: "quality-missing".to_string(),
+            artifacts_dir: temp.path().join("artifacts"),
+        })
+        .await
+        .expect("session");
+
+    let accepted = session
+        .project_quality_report(&quality_report())
+        .await
+        .expect("missing bridge is optional");
+
+    assert!(!accepted);
+    assert_eq!(executor.invocations.lock().unwrap().len(), 2);
+}
+
+#[tokio::test]
 async fn bounds_repair_watch_below_the_browser_command_deadline() {
     let temp = tempfile::tempdir().expect("tempdir");
     let executor = Arc::new(RecordingExecutor::with_version("agent-browser 0.26.0"));
@@ -615,7 +725,7 @@ async fn discovers_and_admits_the_typed_browser_protocol() {
     let capabilities = driver.capabilities().await.expect("capabilities");
     assert_eq!(capabilities.integration, BrowserIntegration::Standalone);
     assert_eq!(capabilities.version, "0.26.0");
-    assert_eq!(capabilities.protocol_revision, 5);
+    assert_eq!(capabilities.protocol_revision, 6);
     assert_eq!(capabilities.page_context_protocol, None);
     assert!(capabilities.features.contains(&WebCapability::Tabs));
     assert!(capabilities.features.contains(&WebCapability::Har));
@@ -1239,6 +1349,30 @@ fn page_context_response(revision: u64) -> String {
         }
     })
     .to_string()
+}
+
+fn quality_report() -> ContractReport {
+    ContractReport {
+        contract: "checkout".to_string(),
+        variant: "desktop".to_string(),
+        state: "ready".to_string(),
+        outcome: ContractOutcome::Failed,
+        observation_revision: Some(7),
+        matches: Vec::new(),
+        findings: vec![ContractFinding {
+            id: "finding:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+                .to_string(),
+            dimension: "semantics".to_string(),
+            rule_id: "contract.element.role".to_string(),
+            severity: ContractSeverity::Blocking,
+            message: "the observed role does not match the contract".to_string(),
+            expected: serde_json::json!("button"),
+            actual: serde_json::json!("link"),
+            element_id: Some("submit".to_string()),
+            observed_node_id: Some("n1".to_string()),
+            confidence: 100,
+        }],
+    }
 }
 
 fn strip_session_prefix(args: &[OsString]) -> Vec<OsString> {

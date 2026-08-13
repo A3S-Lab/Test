@@ -8,8 +8,8 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use a3s_test_core::{
-    DriverError, DriverSession, ScenarioContext, StepOutput, Surface, SurfaceDriver, TestScenario,
-    TestStep, TestSuite,
+    Action, ContractOutcome, DriverError, DriverSession, ScenarioContext, StepOutput, Surface,
+    SurfaceContract, SurfaceDriver, TestScenario, TestStep, TestSuite,
 };
 use futures::{stream, StreamExt};
 use serde::{Deserialize, Serialize};
@@ -35,6 +35,7 @@ impl Default for RetryPolicy {
 #[derive(Clone, Copy, Debug)]
 pub struct RunnerOptions {
     pub cleanup_timeout: Duration,
+    pub quality_projection_timeout: Duration,
     pub retry_policy: RetryPolicy,
     pub max_parallel_scenarios: usize,
 }
@@ -43,6 +44,7 @@ impl Default for RunnerOptions {
     fn default() -> Self {
         Self {
             cleanup_timeout: Duration::from_secs(10),
+            quality_projection_timeout: Duration::from_secs(2),
             retry_policy: RetryPolicy::default(),
             max_parallel_scenarios: 1,
         }
@@ -51,7 +53,43 @@ impl Default for RunnerOptions {
 
 pub struct Runner {
     drivers: HashMap<Surface, Arc<dyn SurfaceDriver>>,
+    contracts: ContractRegistry,
     options: RunnerOptions,
+}
+
+#[derive(Clone, Default)]
+pub struct ContractRegistry {
+    contracts: HashMap<String, Arc<SurfaceContract>>,
+}
+
+impl ContractRegistry {
+    pub fn new<K>(contracts: impl IntoIterator<Item = (K, SurfaceContract)>) -> Result<Self, String>
+    where
+        K: Into<String>,
+    {
+        let mut by_reference = HashMap::new();
+        for (reference, contract) in contracts {
+            let reference = reference.into();
+            if reference.trim().is_empty() {
+                return Err("contract references must not be empty".to_string());
+            }
+            if by_reference
+                .insert(reference.clone(), Arc::new(contract))
+                .is_some()
+            {
+                return Err(format!(
+                    "duplicate admitted contract reference '{reference}'"
+                ));
+            }
+        }
+        Ok(Self {
+            contracts: by_reference,
+        })
+    }
+
+    fn get(&self, reference: &str) -> Option<&SurfaceContract> {
+        self.contracts.get(reference).map(AsRef::as_ref)
+    }
 }
 
 impl Runner {
@@ -61,6 +99,9 @@ impl Runner {
     ) -> Result<Self, String> {
         if options.cleanup_timeout.is_zero() {
             return Err("cleanup timeout must be greater than zero".to_string());
+        }
+        if options.quality_projection_timeout.is_zero() {
+            return Err("quality projection timeout must be greater than zero".to_string());
         }
         if options.retry_policy.max_retries > 10 {
             return Err("infrastructure retries cannot exceed 10".to_string());
@@ -79,8 +120,15 @@ impl Runner {
 
         Ok(Self {
             drivers: by_surface,
+            contracts: ContractRegistry::default(),
             options,
         })
+    }
+
+    #[must_use]
+    pub fn with_contracts(mut self, contracts: ContractRegistry) -> Self {
+        self.contracts = contracts;
+        self
     }
 
     pub async fn run(&self, suite: &TestSuite, cancellation: CancellationToken) -> RunResult {
@@ -130,7 +178,8 @@ impl Runner {
         };
 
         let started = Instant::now();
-        let deadline = started + Duration::from_millis(scenario.timeout_ms);
+        let mut deadline = started + Duration::from_millis(scenario.timeout_ms);
+        let mut quality_projection_budget = self.options.quality_projection_timeout;
         let context = ScenarioContext {
             run_id: run_id.to_string(),
             scenario_id: scenario.id.clone(),
@@ -211,40 +260,73 @@ impl Runner {
                 .execute_step(session.as_mut(), step, deadline, cancellation.clone())
                 .await;
 
-            let step_result = match execution {
-                StepExecution::Completed(result) => match *result {
-                    Ok(output) => {
-                        StepResult::passed(&step.id, step_started.elapsed(), attempts, output)
-                    }
-                    Err(error) => {
-                        status = RunStatus::Failed;
-                        StepResult::failed(&step.id, step_started.elapsed(), attempts, error)
-                    }
-                },
+            let (step_result, quality_report) = match execution {
+                StepExecution::Completed(result) => {
+                    let StepAttempt {
+                        verdict,
+                        quality_report,
+                    } = *result;
+                    let step_result = match verdict {
+                        StepVerdict::Passed(output) => {
+                            StepResult::passed(&step.id, step_started.elapsed(), attempts, output)
+                        }
+                        StepVerdict::Failed { error, output } => {
+                            status = RunStatus::Failed;
+                            StepResult::failed(
+                                &step.id,
+                                step_started.elapsed(),
+                                attempts,
+                                error,
+                                output,
+                            )
+                        }
+                    };
+                    (step_result, quality_report)
+                }
                 StepExecution::TimedOut => {
                     status = RunStatus::TimedOut;
-                    StepResult::terminal(
-                        &step.id,
-                        RunStatus::TimedOut,
-                        step_started.elapsed(),
-                        attempts,
-                        "test.run.timeout",
-                        "scenario deadline exceeded",
+                    (
+                        StepResult::terminal(
+                            &step.id,
+                            RunStatus::TimedOut,
+                            step_started.elapsed(),
+                            attempts,
+                            "test.run.timeout",
+                            "scenario deadline exceeded",
+                        ),
+                        None,
                     )
                 }
                 StepExecution::Cancelled => {
                     status = RunStatus::Cancelled;
-                    StepResult::terminal(
-                        &step.id,
-                        RunStatus::Cancelled,
-                        step_started.elapsed(),
-                        attempts,
-                        "test.run.cancelled",
-                        "run cancelled",
+                    (
+                        StepResult::terminal(
+                            &step.id,
+                            RunStatus::Cancelled,
+                            step_started.elapsed(),
+                            attempts,
+                            "test.run.cancelled",
+                            "run cancelled",
+                        ),
+                        None,
                     )
                 }
             };
             steps.push(step_result);
+
+            if let Some(report) = quality_report.as_ref() {
+                let projection_started = Instant::now();
+                self.project_quality_report(
+                    session.as_mut(),
+                    report,
+                    quality_projection_budget,
+                    &cancellation,
+                )
+                .await;
+                let elapsed = projection_started.elapsed().min(quality_projection_budget);
+                quality_projection_budget = quality_projection_budget.saturating_sub(elapsed);
+                deadline = deadline.checked_add(elapsed).unwrap_or(deadline);
+            }
 
             if status != RunStatus::Passed {
                 break;
@@ -289,7 +371,7 @@ impl Runner {
             let execution = tokio::select! {
                 biased;
                 () = cancellation.cancelled() => StepExecution::Cancelled,
-                result = tokio::time::timeout_at(deadline.into(), session.execute(step)) => {
+                result = tokio::time::timeout_at(deadline.into(), self.execute_once(session, step)) => {
                     match result {
                         Ok(result) => StepExecution::Completed(Box::new(result)),
                         Err(_) => StepExecution::TimedOut,
@@ -299,7 +381,7 @@ impl Runner {
             let retryable = matches!(
                 &execution,
                 StepExecution::Completed(result)
-                    if matches!(result.as_ref(), Err(error) if error.retryable())
+                    if matches!(&result.verdict, StepVerdict::Failed { error, .. } if error.retryable())
             );
             if !retryable || attempts > self.options.retry_policy.max_retries {
                 return (execution, attempts);
@@ -310,6 +392,105 @@ impl Runner {
                 RetryWait::Cancelled => return (StepExecution::Cancelled, attempts),
                 RetryWait::TimedOut => return (StepExecution::TimedOut, attempts),
             }
+        }
+    }
+
+    async fn execute_once(&self, session: &mut dyn DriverSession, step: &TestStep) -> StepAttempt {
+        let Action::VerifyContract {
+            contract,
+            variant,
+            state,
+        } = &step.action
+        else {
+            return match session.execute(step).await {
+                Ok(output) => StepAttempt::passed(output),
+                Err(error) => StepAttempt::failed(error, None),
+            };
+        };
+        let Some(admitted) = self.contracts.get(contract) else {
+            return StepAttempt::failed(
+                DriverError::new(
+                    "test.run.contract_missing",
+                    format!("contract reference '{contract}' was not admitted before the run"),
+                ),
+                None,
+            );
+        };
+        let observation = match session.observe().await {
+            Ok(observation) => observation,
+            Err(error) => {
+                return StepAttempt::failed(error, None);
+            }
+        };
+        let report = match admitted.reconcile(variant, state, &observation) {
+            Ok(report) => report,
+            Err(error) => {
+                return StepAttempt::failed(DriverError::new(error.code(), error.message()), None);
+            }
+        };
+        let data = match serde_json::to_value(&report) {
+            Ok(data) => data,
+            Err(error) => {
+                return StepAttempt::failed(
+                    DriverError::new(
+                        "test.run.contract_report_invalid",
+                        format!("failed to encode the contract report: {error}"),
+                    ),
+                    None,
+                );
+            }
+        };
+        let output = StepOutput::new(match report.outcome {
+            ContractOutcome::Passed if report.findings.is_empty() => "surface contract passed",
+            ContractOutcome::Passed => "surface contract passed with advisory findings",
+            ContractOutcome::Failed => "surface contract failed",
+            ContractOutcome::Inconclusive => "surface contract was inconclusive",
+        })
+        .with_data(data);
+        let verdict = match report.outcome {
+            ContractOutcome::Passed => StepVerdict::Passed(output),
+            ContractOutcome::Failed => StepVerdict::Failed {
+                error: DriverError::new(
+                    "test.contract.mismatch",
+                    format!(
+                        "surface contract '{}' reported {} finding(s)",
+                        report.contract,
+                        report.findings.len()
+                    ),
+                ),
+                output: Some(output),
+            },
+            ContractOutcome::Inconclusive => StepVerdict::Failed {
+                error: DriverError::new(
+                    "test.contract.inconclusive",
+                    format!(
+                        "surface contract '{}' could not be proven from the bounded observation",
+                        report.contract
+                    ),
+                ),
+                output: Some(output),
+            },
+        };
+        StepAttempt {
+            verdict,
+            quality_report: Some(report),
+        }
+    }
+
+    async fn project_quality_report(
+        &self,
+        session: &mut dyn DriverSession,
+        report: &a3s_test_core::ContractReport,
+        budget: Duration,
+        cancellation: &CancellationToken,
+    ) {
+        if budget.is_zero() {
+            return;
+        }
+        tokio::select! {
+            biased;
+            () = cancellation.cancelled() => {}
+            _ = tokio::time::timeout(budget, session.project_quality_report(report)) => {}
         }
     }
 }
@@ -339,9 +520,38 @@ async fn wait_for_retry(
 }
 
 enum StepExecution {
-    Completed(Box<Result<StepOutput, DriverError>>),
+    Completed(Box<StepAttempt>),
     TimedOut,
     Cancelled,
+}
+
+struct StepAttempt {
+    verdict: StepVerdict,
+    quality_report: Option<a3s_test_core::ContractReport>,
+}
+
+impl StepAttempt {
+    fn passed(output: StepOutput) -> Self {
+        Self {
+            verdict: StepVerdict::Passed(output),
+            quality_report: None,
+        }
+    }
+
+    fn failed(error: DriverError, output: Option<StepOutput>) -> Self {
+        Self {
+            verdict: StepVerdict::Failed { error, output },
+            quality_report: None,
+        }
+    }
+}
+
+enum StepVerdict {
+    Passed(StepOutput),
+    Failed {
+        error: DriverError,
+        output: Option<StepOutput>,
+    },
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -423,13 +633,19 @@ impl StepResult {
         }
     }
 
-    fn failed(id: &str, duration: Duration, attempts: u32, error: DriverError) -> Self {
+    fn failed(
+        id: &str,
+        duration: Duration,
+        attempts: u32,
+        error: DriverError,
+        output: Option<StepOutput>,
+    ) -> Self {
         Self {
             id: id.to_string(),
             status: RunStatus::Failed,
             duration_ms: millis(duration),
             attempts,
-            output: None,
+            output,
             error: Some(RunError::from_driver(error)),
         }
     }

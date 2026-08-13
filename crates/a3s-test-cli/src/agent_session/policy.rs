@@ -11,6 +11,11 @@ pub(super) fn validate_action(
     action: &Action,
     observation: Option<u64>,
 ) -> Result<()> {
+    if matches!(action, Action::VerifyContract { .. }) {
+        anyhow::bail!(
+            "verify_contract belongs to deterministic ACL runs; use `a3s-test run <suite.acl>`"
+        );
+    }
     if action_uses_observation_target(action) {
         let latest = state.latest_observation.ok_or_else(|| {
             anyhow::anyhow!("ref targets require a fresh `a3s-test agent observe` result")

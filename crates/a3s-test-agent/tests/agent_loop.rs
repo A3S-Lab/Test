@@ -159,6 +159,7 @@ async fn executes_schema_constrained_llm_decisions_until_success() {
     assert!(schema.contains("\"act\""));
     assert!(schema.contains("\"finish\""));
     assert!(schema.contains("\"navigate\""));
+    assert!(!schema.contains("verify_contract"));
     assert_eq!(requests[0].prompt_version, "a3s-test-agent/v2");
     assert!(requests[0].image_attachments.is_empty());
     assert!(requests[0].context.history.is_empty());
@@ -166,6 +167,42 @@ async fn executes_schema_constrained_llm_decisions_until_success() {
     assert_eq!(requests[1].context.remaining.turns, 3);
     assert_eq!(requests[1].context.remaining.tokens, 975);
     assert_eq!(requests[1].context.remaining.cost_microusd, 960);
+}
+
+#[tokio::test]
+async fn denies_runner_owned_contract_actions_even_when_a_policy_lists_them() {
+    let provider = Arc::new(ScriptedProvider::new([response(
+        AgentDecision::Act {
+            action: Action::VerifyContract {
+                contract: "./contract.acl".to_string(),
+                variant: "desktop".to_string(),
+                state: "ready".to_string(),
+            },
+        },
+        usage(5, 3, 8),
+    )]));
+    let policy = Arc::new(CapabilityPolicy::new(
+        [ActionKind::VerifyContract],
+        NavigationScope::Denied,
+    ));
+    let agent = AgentLoop::new(provider, policy, options()).expect("valid agent");
+    let mut session = FakeSession::new([SurfaceObservation::new("Page is ready")]);
+
+    let result = agent
+        .run(
+            &goal(),
+            Surface::Web,
+            &mut session,
+            CancellationToken::new(),
+        )
+        .await;
+
+    assert_eq!(result.status, AgentStatus::PolicyDenied);
+    assert_eq!(
+        result.error.as_ref().map(|error| error.code.as_str()),
+        Some("test.agent.policy.runner_action_denied")
+    );
+    assert!(session.actions.is_empty());
 }
 
 #[tokio::test]

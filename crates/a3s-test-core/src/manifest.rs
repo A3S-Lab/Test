@@ -458,6 +458,14 @@ fn parse_step(block: &Block, scenario_path: &str) -> Result<TestStep, SpecError>
                 clear: optional_bool(block, "clear", false, &path)?,
             }
         }
+        "verify_contract" => {
+            ensure_attributes(block, &["contract", "variant", "state"], &path)?;
+            Action::VerifyContract {
+                contract: required_string(block, "contract", &path)?.to_string(),
+                variant: required_string(block, "variant", &path)?.to_string(),
+                state: required_string(block, "state", &path)?.to_string(),
+            }
+        }
         _ => {
             return Err(SpecError::new(
                 "test.spec.action_unknown",

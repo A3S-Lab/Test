@@ -2,7 +2,7 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-pub const ACTION_PROTOCOL_REVISION: u32 = 5;
+pub const ACTION_PROTOCOL_REVISION: u32 = 6;
 pub const PAGE_CONTEXT_PROTOCOL: &str = "a3s.test.page-context/1";
 pub const REPAIR_PROTOCOL: &str = "a3s.test.repair/1";
 
@@ -149,6 +149,12 @@ pub enum Action {
     PageErrors {
         path: String,
         clear: bool,
+    },
+    #[schemars(skip)]
+    VerifyContract {
+        contract: String,
+        variant: String,
+        state: String,
     },
 }
 

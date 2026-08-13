@@ -304,6 +304,39 @@ async fn rejects_refs_not_bound_to_the_latest_observation() {
 }
 
 #[tokio::test]
+async fn rejects_runner_owned_contract_actions_before_driver_dispatch() {
+    let state = Arc::new(Mutex::new(FakeState::default()));
+    let manager = manager(Arc::clone(&state));
+    manager
+        .start(StartSessionRequest {
+            session: "contract-action".to_string(),
+            surface: Surface::Gui,
+            goal: "Verify the surface".to_string(),
+            success_criteria: vec!["Contract passes".to_string()],
+            auto_resolve_repairs: false,
+        })
+        .await
+        .expect("start");
+
+    let error = manager
+        .act(ActSessionRequest {
+            session: "contract-action".to_string(),
+            observation_id: None,
+            action: Action::VerifyContract {
+                contract: "./contract.acl".to_string(),
+                variant: "desktop".to_string(),
+                state: "ready".to_string(),
+            },
+        })
+        .await
+        .expect_err("runner action must be denied");
+
+    assert_eq!(error.code(), "test.session.runner_action_denied");
+    assert!(state.lock().await.actions.is_empty());
+    manager.abort("contract-action").await.expect("abort");
+}
+
+#[tokio::test]
 async fn visual_points_require_the_latest_observation_id() {
     let state = Arc::new(Mutex::new(FakeState::default()));
     let manager = manager(state);

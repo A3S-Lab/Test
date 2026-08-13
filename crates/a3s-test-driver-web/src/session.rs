@@ -5,7 +5,7 @@ use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use a3s_test_core::{
-    Action, CaptureOperation, DriverError, DriverSession, Evidence, Expectation,
+    Action, CaptureOperation, ContractReport, DriverError, DriverSession, Evidence, Expectation,
     PageContextInspectRequest, PageContextInspectScope, PageContextObservation,
     PageContextSnapshot, RepairAclProof, RepairEvidenceBundle, RepairEvidencePhase,
     RepairEvidenceRequest, RepairFinding, RepairHumanAction, RepairStatusEvent, ScenarioContext,
@@ -89,6 +89,11 @@ const WAIT_REPAIRS_SCRIPT: &str = r#"(async ({ limit, timeoutMs, batchWindowMs }
   });
   return bridge.takeRepairBatch(limit);
 })({ limit: 50, timeoutMs: 0, batchWindowMs: 0 })"#;
+const REPORT_QUALITY_SCRIPT: &str = r#"((report) => {
+  const bridge = window[Symbol.for("a3s.test.page-context")];
+  if (!bridge || typeof bridge.reportQuality !== "function") return false;
+  return bridge.reportQuality(report) === true;
+})(null)"#;
 
 #[derive(Clone, Debug)]
 pub struct AgentBrowserConnectionConfig {
@@ -307,6 +312,13 @@ impl AgentBrowserSession {
         event: &RepairStatusEvent,
     ) -> Result<(), DriverError> {
         <Self as DriverSession>::apply_repair_event(self, event).await
+    }
+
+    pub async fn project_quality_report(
+        &mut self,
+        report: &ContractReport,
+    ) -> Result<bool, DriverError> {
+        <Self as DriverSession>::project_quality_report(self, report).await
     }
 
     pub async fn take_human_repair_actions(
@@ -537,6 +549,10 @@ impl DriverSession for AgentBrowserSession {
                 }
                 self.capture_json(args, path, "page errors captured").await
             }
+            Action::VerifyContract { .. } => Err(DriverError::new(
+                "test.driver.web.runner_action_unsupported",
+                "verify_contract is executed by the A3S Test runner and must not reach a surface driver",
+            )),
         }
     }
 
@@ -601,6 +617,24 @@ impl DriverSession for AgentBrowserSession {
         self.execute_command(vec!["eval".into(), script.into()])
             .await
             .map(drop)
+    }
+
+    async fn project_quality_report(
+        &mut self,
+        report: &ContractReport,
+    ) -> Result<bool, DriverError> {
+        self.ensure_open()?;
+        let report = serde_json::to_string(report).map_err(|error| {
+            DriverError::new(
+                "test.driver.web.quality_report_invalid",
+                format!("failed to encode the quality report: {error}"),
+            )
+        })?;
+        let script = REPORT_QUALITY_SCRIPT.replace("(null)", &format!("({report})"));
+        let value = self
+            .execute_command(vec!["eval".into(), script.into()])
+            .await?;
+        Ok(browser_result(value).as_bool().unwrap_or(false))
     }
 
     async fn take_repair_actions(

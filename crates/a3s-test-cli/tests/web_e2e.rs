@@ -245,7 +245,7 @@ fn real_agent_browser_runs_the_embedded_testkit_suite() {
     assert_process_success("capture TestKit accessibility tree", &accessibility);
     let accessibility = String::from_utf8_lossy(&accessibility.stdout);
     for expected in [
-        "dialog \"Review & repair\"",
+        "dialog \"Review\"",
         "button \"Pause page animations\"",
         "button \"Turn auto-send on\"",
         "button \"Change overlay theme; current theme is system\"",

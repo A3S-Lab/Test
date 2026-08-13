@@ -1,6 +1,5 @@
 #[cfg(unix)]
 use std::collections::HashSet;
-#[cfg(unix)]
 use std::fs;
 use std::path::PathBuf;
 use std::process::Command;
@@ -41,6 +40,234 @@ fn check_returns_machine_readable_suite() {
 }
 
 #[test]
+fn check_admits_every_referenced_surface_contract() {
+    let temp = tempfile::tempdir().expect("tempdir");
+    let contracts = temp.path().join("contracts");
+    fs::create_dir(&contracts).expect("contracts directory");
+    fs::write(contracts.join("checkout.md"), "checkout requirements").expect("provenance");
+    fs::write(
+        contracts.join("checkout.acl"),
+        r#"
+surface_contract "checkout" {
+    context {
+        mode = "operate"
+        audience = ["customer"]
+        primary_outcome = "place_order"
+    }
+    provenance "requirements" {
+        kind = "prd"
+        uri = "./checkout.md"
+        digest = "sha256:16bf7b0ab1d7e92ebaa48d76f3bb68e803daab51ac5abcd43a9dc215680814a3"
+        status = "reviewed"
+        confidence = 100
+    }
+    variant "desktop" {
+        state = "ready"
+        element "submit" {
+            test_id = "place-order"
+            role = "button"
+            severity = "blocking"
+        }
+    }
+}
+"#,
+    )
+    .expect("contract");
+    let suite = temp.path().join("suite.acl");
+    fs::write(
+        &suite,
+        r#"
+suite "contract-smoke" {
+    scenario "checkout" {
+        surface = "web"
+        verify_contract "ready" {
+            contract = "./contracts/checkout.acl"
+            variant = "desktop"
+            state = "ready"
+        }
+    }
+}
+"#,
+    )
+    .expect("suite");
+
+    let output = Command::new(binary())
+        .args(["check", suite.to_str().unwrap(), "--json"])
+        .output()
+        .expect("run contract-aware check");
+
+    assert!(output.status.success(), "{output:?}");
+    let value: serde_json::Value = serde_json::from_slice(&output.stdout).expect("JSON output");
+    assert_eq!(value["name"], "contract-smoke");
+    assert_eq!(
+        value["scenarios"][0]["steps"][0]["action"]["type"],
+        "verify_contract"
+    );
+}
+
+#[test]
+fn check_rejects_unreviewed_blocking_contracts_before_surface_startup() {
+    let temp = tempfile::tempdir().expect("tempdir");
+    fs::write(temp.path().join("checkout.md"), "checkout requirements").expect("provenance");
+    fs::write(
+        temp.path().join("contract.acl"),
+        r#"
+surface_contract "checkout" {
+    context {
+        mode = "operate"
+        audience = ["customer"]
+        primary_outcome = "place_order"
+    }
+    provenance "generated" {
+        kind = "prd"
+        uri = "./checkout.md"
+        digest = "sha256:16bf7b0ab1d7e92ebaa48d76f3bb68e803daab51ac5abcd43a9dc215680814a3"
+        status = "draft"
+        confidence = 80
+    }
+    variant "desktop" {
+        state = "ready"
+        element "submit" {
+            role = "button"
+            severity = "blocking"
+        }
+    }
+}
+"#,
+    )
+    .expect("contract");
+    let suite = temp.path().join("suite.acl");
+    fs::write(
+        &suite,
+        r#"
+suite "contract-smoke" {
+    scenario "checkout" {
+        surface = "web"
+        verify_contract "ready" {
+            contract = "./contract.acl"
+            variant = "desktop"
+            state = "ready"
+        }
+    }
+}
+"#,
+    )
+    .expect("suite");
+
+    let output = Command::new(binary())
+        .args(["check", suite.to_str().unwrap()])
+        .output()
+        .expect("run contract-aware check");
+
+    assert_eq!(output.status.code(), Some(2), "{output:?}");
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("test.contract.provenance_unreviewed"),
+        "{stderr}"
+    );
+}
+
+#[test]
+fn check_rejects_stale_contract_provenance() {
+    let temp = tempfile::tempdir().expect("tempdir");
+    fs::write(temp.path().join("requirements.md"), "changed requirements").expect("provenance");
+    fs::write(
+        temp.path().join("contract.acl"),
+        r#"
+surface_contract "checkout" {
+    context {
+        mode = "operate"
+        audience = ["customer"]
+        primary_outcome = "place_order"
+    }
+    provenance "requirements" {
+        kind = "prd"
+        uri = "./requirements.md"
+        digest = "sha256:56ea72bad66743f4dadee9515096bb39a200bf9ca8d5669293f41912c55ec14e"
+        status = "reviewed"
+        confidence = 100
+    }
+    variant "desktop" {
+        state = "ready"
+        element "submit" {
+            role = "button"
+            severity = "blocking"
+        }
+    }
+}
+"#,
+    )
+    .expect("contract");
+    let suite = temp.path().join("suite.acl");
+    fs::write(
+        &suite,
+        r#"
+suite "contract-smoke" {
+    scenario "checkout" {
+        surface = "web"
+        verify_contract "ready" {
+            contract = "./contract.acl"
+            variant = "desktop"
+            state = "ready"
+        }
+    }
+}
+"#,
+    )
+    .expect("suite");
+
+    let output = Command::new(binary())
+        .args(["check", suite.to_str().unwrap()])
+        .output()
+        .expect("run contract-aware check");
+
+    assert_eq!(output.status.code(), Some(2), "{output:?}");
+    assert!(
+        String::from_utf8_lossy(&output.stderr)
+            .contains("test.contract.provenance_digest_mismatch"),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
+
+#[test]
+fn check_rejects_contract_paths_that_escape_the_suite_directory() {
+    let temp = tempfile::tempdir().expect("tempdir");
+    let suite_dir = temp.path().join("suite");
+    fs::create_dir(&suite_dir).expect("suite directory");
+    fs::write(temp.path().join("outside.acl"), "not admitted").expect("outside contract");
+    let suite = suite_dir.join("suite.acl");
+    fs::write(
+        &suite,
+        r#"
+suite "contract-smoke" {
+    scenario "checkout" {
+        surface = "web"
+        verify_contract "ready" {
+            contract = "../outside.acl"
+            variant = "desktop"
+            state = "ready"
+        }
+    }
+}
+"#,
+    )
+    .expect("suite");
+
+    let output = Command::new(binary())
+        .args(["check", suite.to_str().unwrap()])
+        .output()
+        .expect("run contract-aware check");
+
+    assert_eq!(output.status.code(), Some(2), "{output:?}");
+    assert!(
+        String::from_utf8_lossy(&output.stderr).contains("contract reference must stay inside"),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
+
+#[test]
 fn agent_schema_exposes_values_for_semantic_targets() {
     let output = Command::new(binary())
         .args(["agent", "schema"])
@@ -50,7 +277,7 @@ fn agent_schema_exposes_values_for_semantic_targets() {
     assert!(output.status.success(), "{output:?}");
     let value: serde_json::Value = serde_json::from_slice(&output.stdout).expect("JSON output");
     assert_eq!(value["planner"], "external_coding_agent");
-    assert_eq!(value["protocol_revision"], 5);
+    assert_eq!(value["protocol_revision"], 6);
     assert!(value["page_context_protocol"].is_null());
     assert_eq!(value["repair_resolution"]["default"], "human_review");
     assert_eq!(
@@ -68,6 +295,13 @@ fn agent_schema_exposes_values_for_semantic_targets() {
     let action_types = value["action_schema"]["oneOf"]
         .as_array()
         .expect("action variants");
+    assert!(action_types
+        .iter()
+        .all(|action| { action["properties"]["type"]["const"] != "verify_contract" }));
+    assert_eq!(
+        value["action_ownership"]["deterministic_runner"],
+        serde_json::json!(["verify_contract"])
+    );
     for kind in [
         "hover",
         "focus",
@@ -129,7 +363,7 @@ fn capabilities_returns_the_admitted_web_protocol() {
     let value: serde_json::Value = serde_json::from_slice(&output.stdout).expect("JSON output");
     assert_eq!(value["integration"], "standalone");
     assert_eq!(value["version"], "0.26.0");
-    assert_eq!(value["protocol_revision"], 5);
+    assert_eq!(value["protocol_revision"], 6);
     assert!(value["features"].as_array().is_some_and(|features| {
         features
             .iter()

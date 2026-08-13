@@ -66,6 +66,21 @@ fn navigation_is_limited_to_admitted_origins() {
 }
 
 #[test]
+fn runner_owned_contract_actions_are_not_interactive_turns() {
+    let error = validate_action(
+        &test_state(None),
+        &Action::VerifyContract {
+            contract: "./contract.acl".to_string(),
+            variant: "desktop".to_string(),
+            state: "ready".to_string(),
+        },
+        None,
+    )
+    .expect_err("runner action must be denied");
+    assert!(error.to_string().contains("deterministic ACL runs"));
+}
+
+#[test]
 fn browser_network_policy_combines_origin_hosts_and_network_only_domains() {
     let policy = browser_network_policy(
         &[

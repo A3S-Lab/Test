@@ -1,10 +1,11 @@
 use std::process::ExitCode;
 
-use a3s_test_core::{Action, ACTION_PROTOCOL_REVISION};
+use a3s_test_core::ACTION_PROTOCOL_REVISION;
 use anyhow::Result;
 use serde_json::json;
 
 use super::args::SchemaArgs;
+use crate::action_schema::interactive_action_schema;
 
 pub(super) fn execute(args: SchemaArgs) -> Result<ExitCode> {
     let schema = json!({
@@ -34,7 +35,11 @@ pub(super) fn execute(args: SchemaArgs) -> Result<ExitCode> {
             "session_option": "--auto-resolve-repairs",
             "verified_transition_order": ["review_ready", "resolved"]
         },
-        "action_schema": schemars::schema_for!(Action),
+        "action_ownership": {
+            "interactive": "actions listed in action_schema",
+            "deterministic_runner": ["verify_contract"]
+        },
+        "action_schema": interactive_action_schema(),
     });
     if args.compact {
         println!("{}", serde_json::to_string(&schema)?);

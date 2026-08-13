@@ -11,6 +11,7 @@ description = "Cancellation-safe test orchestration for A3S Test"
 a3s-test-core = { path = "../a3s-test-core" }
 futures.workspace = true
 serde.workspace = true
+serde_json.workspace = true
 tokio.workspace = true
 tokio-util.workspace = true
 
