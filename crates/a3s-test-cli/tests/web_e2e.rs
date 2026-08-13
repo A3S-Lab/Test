@@ -7,6 +7,7 @@ use std::process::Command;
 use std::time::Duration;
 
 use support::testkit_browser::run_review_workflow;
+use support::testkit_bundle::bundle_browser_fixture;
 use support::web_fixture::{get, start_testkit_fixture, WebFixture};
 
 fn binary() -> PathBuf {
@@ -200,39 +201,8 @@ fn real_agent_browser_runs_the_embedded_testkit_suite() {
         browser.is_file(),
         "browser executable does not exist: {browser:?}"
     );
-    let crate_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .and_then(Path::parent)
-        .expect("crate workspace root")
-        .to_path_buf();
-    let esbuild = crate_root.join("packages/testkit/node_modules/.bin/esbuild");
-    assert!(
-        esbuild.is_file(),
-        "run `npm install` in packages/testkit before this E2E"
-    );
-    let temp = tempfile::tempdir().expect("temporary TestKit browser fixture");
-    let bundle_path = temp.path().join("testkit.js");
-    let bundle = Command::new(&esbuild)
-        .args([
-            crate_root
-                .join("packages/testkit/src/browser-fixture.tsx")
-                .to_str()
-                .expect("UTF-8 entry"),
-            "--bundle",
-            "--format=esm",
-            "--platform=browser",
-            "--target=es2022",
-            &format!("--outfile={}", bundle_path.display()),
-        ])
-        .output()
-        .expect("bundle TestKit fixture");
-    assert!(
-        bundle.status.success(),
-        "TestKit fixture bundle failed: {}",
-        String::from_utf8_lossy(&bundle.stderr)
-    );
-    let fixture = start_testkit_fixture(std::fs::read(&bundle_path).expect("read TestKit bundle"))
-        .expect("start TestKit fixture");
+    let (_bundle_workspace, bundle) = bundle_browser_fixture("bundle TestKit fixture");
+    let fixture = start_testkit_fixture(bundle).expect("start TestKit fixture");
     let session = format!("a3s-testkit-e2e-{}", std::process::id());
     let mut cleanup = StandaloneBrowserSessionCleanup::new(&browser, &session);
     let command = |arguments: &[&str]| {
@@ -312,6 +282,11 @@ fn real_agent_browser_runs_the_embedded_testkit_suite() {
         &command(&["set", "viewport", "1280", "720", "2"]),
     );
     let before_zoom = capture_testkit_zoom_geometry(&command, "before browser zoom");
+    let before_visual_width = json_number(
+        &before_zoom,
+        "/page/viewport/visual/width",
+        "visual viewport width before zoom",
+    );
     assert_approx(
         before_zoom.pointer("/page/viewport/width"),
         1280.0,
@@ -345,6 +320,11 @@ fn real_agent_browser_runs_the_embedded_testkit_suite() {
         &command,
     );
     let after_zoom = capture_testkit_zoom_geometry(&command, "after browser zoom");
+    let after_visual_width = json_number(
+        &after_zoom,
+        "/page/viewport/visual/width",
+        "visual viewport width after zoom",
+    );
     assert_approx(
         after_zoom.pointer("/page/viewport/width"),
         1280.0,
@@ -359,7 +339,7 @@ fn real_agent_browser_runs_the_embedded_testkit_suite() {
     );
     assert_approx(
         after_zoom.pointer("/page/viewport/visual/width"),
-        853.333,
+        before_visual_width / 1.5,
         0.1,
         "visual viewport width after zoom",
     );
@@ -389,7 +369,7 @@ fn real_agent_browser_runs_the_embedded_testkit_suite() {
     );
     assert_approx(
         after_zoom.pointer("/target/geometry/normalized/x"),
-        1.171875,
+        1000.0 / after_visual_width,
         0.001,
         "visual-viewport normalized target position after zoom",
     );
@@ -744,6 +724,13 @@ fn assert_approx(actual: Option<&serde_json::Value>, expected: f64, epsilon: f64
         (actual - expected).abs() <= epsilon,
         "{label}: expected {expected} ± {epsilon}, got {actual}"
     );
+}
+
+fn json_number(value: &serde_json::Value, pointer: &str, label: &str) -> f64 {
+    value
+        .pointer(pointer)
+        .and_then(serde_json::Value::as_f64)
+        .unwrap_or_else(|| panic!("{label} was not a number"))
 }
 
 const CDP_PAGE_SCALE_SCRIPT: &str = r#"

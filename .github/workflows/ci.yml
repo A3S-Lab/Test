@@ -197,7 +197,14 @@ jobs:
         env:
           AGENT_BROWSER_HEADED: "1"
         run: |
-          $env:A3S_TEST_AGENT_BROWSER = (Get-Command agent-browser.cmd).Source
+          $npmRoot = (& npm root --global).Trim()
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $architecture = if ([System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture -eq [System.Runtime.InteropServices.Architecture]::Arm64) { 'arm64' } else { 'x64' }
+          $browser = Join-Path $npmRoot "agent-browser\bin\agent-browser-win32-$architecture.exe"
+          if (!(Test-Path -LiteralPath $browser -PathType Leaf)) {
+            throw "Installed standalone browser executable not found: $browser"
+          }
+          $env:A3S_TEST_AGENT_BROWSER = $browser
           cargo test -p a3s-test-cli --test web_e2e `
             real_agent_browser_runs_the_hermetic_web_suite `
             --locked -- --ignored --exact --nocapture

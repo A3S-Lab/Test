@@ -4,6 +4,7 @@ use std::process::{Command, Output};
 use serde_json::Value;
 use tempfile::TempDir;
 
+use super::testkit_bundle::bundle_browser_fixture;
 use super::web_fixture::{start_testkit_fixture, TestKitFixture};
 
 pub fn binary() -> PathBuf {
@@ -30,37 +31,8 @@ pub fn admitted_browser() -> Option<PathBuf> {
 }
 
 pub fn start_fixture() -> (TempDir, TestKitFixture) {
-    let crate_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .and_then(Path::parent)
-        .expect("crate workspace root")
-        .to_path_buf();
-    let esbuild = crate_root.join("packages/testkit/node_modules/.bin/esbuild");
-    assert!(
-        esbuild.is_file(),
-        "run `npm install` in packages/testkit before this E2E"
-    );
-    let bundle_workspace = tempfile::tempdir().expect("temporary TestKit bundle workspace");
-    let bundle_path = bundle_workspace.path().join("testkit.js");
-    let bundle = Command::new(&esbuild)
-        .args([
-            crate_root
-                .join("packages/testkit/src/browser-fixture.tsx")
-                .to_str()
-                .expect("UTF-8 entry"),
-            "--bundle",
-            "--format=esm",
-            "--platform=browser",
-            "--target=es2022",
-            &format!("--outfile={}", bundle_path.display()),
-        ])
-        .output()
-        .expect("bundle repair lifecycle fixture");
-    assert_process_success("bundle repair lifecycle fixture", &bundle);
-    let fixture = start_testkit_fixture(
-        std::fs::read(&bundle_path).expect("read bundled repair lifecycle fixture"),
-    )
-    .expect("start repair lifecycle fixture");
+    let (bundle_workspace, bundle) = bundle_browser_fixture("bundle repair lifecycle fixture");
+    let fixture = start_testkit_fixture(bundle).expect("start repair lifecycle fixture");
     (bundle_workspace, fixture)
 }
 
