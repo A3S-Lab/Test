@@ -227,6 +227,27 @@ describe("React adapter and review overlay", () => {
     expect(hero.getAttribute("style")).toBeNull();
   });
 
+  it("filters a categorized component catalog and retains free-form Layout input", async () => {
+    render(<A3STestKit enabled page={{ id: "layout-catalog" }} repairStorage="memory"><A3SReviewOverlay enabled defaultOpen /></A3STestKit>);
+    await waitFor(() => expect(shadowQuery(".a3s-panel")).toBeTruthy());
+
+    fireEvent.click(shadowButton("Layout"));
+    const catalog = shadowQuery(".a3s-catalog");
+    expect(Number(catalog.dataset.componentCount)).toBeGreaterThanOrEqual(65);
+    fireEvent.click(shadowQuery(".a3s-catalog summary"));
+    fireEvent.change(shadowQuery("[aria-label='Search component catalog']"), { target: { value: "checkout" } });
+    expect(shadowQuery(".a3s-catalog-results").textContent).toContain("Checkout Form");
+    expect(shadowQuery(".a3s-catalog-results").textContent).not.toContain("Breadcrumbs");
+    fireEvent.click(shadowButton("Checkout Form"));
+    expect((shadowQuery("[aria-label='Layout component type']") as HTMLInputElement).value).toBe("Checkout Form");
+
+    fireEvent.change(shadowQuery("[aria-label='Search component catalog']"), { target: { value: "no-such-component" } });
+    expect(shadowQuery(".a3s-catalog-empty").textContent).toContain("No catalog matches");
+    fireEvent.change(shadowQuery("[aria-label='Layout component type']"), { target: { value: "Custom orbit panel" } });
+    expect((shadowQuery("[aria-label='Layout component type']") as HTMLInputElement).value).toBe("Custom orbit panel");
+    expect(shadowButton("Draw placement").disabled).toBe(false);
+  });
+
   it("copies bounded Markdown and JSON repair exports", async () => {
     const writeText = vi.fn().mockResolvedValue(undefined);
     Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } });

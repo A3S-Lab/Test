@@ -263,8 +263,18 @@ source selection supports pointer input and the same focus-and-Enter keyboard
 path as element marking. Layout drafts can be edited, selected, and submitted
 in the same stable batch order as other findings.
 
-All layout rectangles use viewport CSS pixels. The wireframe grid, selected
-region, and destination preview are pointer-transparent overlay evidence; they
+For placement, the component catalog provides 90 independently defined common
+Web component types in ten purpose-based categories. Search matches category,
+component name, and bounded local synonyms such as `one-time code`; every
+result is a native keyboard-operable button. Catalog selection fills the
+explicit component-type field. Reviewers can always ignore the catalog and
+enter a free-form component type, including a project-specific component that
+is not listed. Search terms and catalog entries are presentation data only and
+never become hidden repair instructions.
+
+All layout rectangles use viewport CSS pixels. The wireframe grid and its
+adjustable page fade, selected region, and destination preview are
+pointer-transparent overlay evidence; they
 never add inline styles, move nodes, or otherwise mutate application layout.
 The coding agent remains responsible for editing authorized source files, and
 A3S Test re-observes the result before review.

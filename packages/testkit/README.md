@@ -67,10 +67,12 @@ click/drag multi-selection, rectangular and freehand findings, persistent
 markers, draft editing/hiding, animation pause, system/light/dark themes,
 bounded structured copy, and typed Layout Mode. Layout Mode can draw the
 viewport region for a new component or select an existing section and describe
-its destination. It emits `placement` or `rearrange` intent for A3S Test and
-does not move or style application DOM itself. Submitted findings support
-human/agent replies, accept/reject/reopen review actions, and per-finding
-lifecycle projection.
+its destination. Its searchable catalog contains 90 component types across ten
+categories, while the component field remains free-form for project-specific
+types. It emits `placement` or `rearrange` intent for A3S Test and does not move
+or style application DOM itself. Submitted findings support human/agent
+replies, accept/reject/reopen review actions, and per-finding lifecycle
+projection.
 
 The review preferences section persists only bounded presentation choices:
 theme, marker color, clear-after-copy, explicit host pointer blocking, panel

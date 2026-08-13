@@ -315,7 +315,7 @@ The completion work intentionally preserves these product boundaries:
 - [x] Persist bounded presentation preferences for theme, marker color,
       clear-on-copy, interaction blocking, panel dock, wireframe fade, and
       hide-until-tab-restart; keep auto-send and animation pause non-persistent
-- [ ] Add an independently defined, categorized, searchable catalog of at
+- [x] Add an independently defined, categorized, searchable catalog of at
       least 65 common Web component types while retaining an explicit
       free-form component field
 - [x] Expose typed draft lifecycle and copy callbacks plus a host clipboard
@@ -324,7 +324,7 @@ The completion work intentionally preserves these product boundaries:
 - [x] Split the review overlay by concern before it exceeds the repository
       file-size limit, retaining Shadow DOM isolation and one source of truth
       for persisted workflow state
-- [ ] Add React tests for storage corruption and expiry, target rebinding,
+- [x] Add React tests for storage corruption and expiry, target rebinding,
       route isolation, shortcuts and editable guards, preference recovery,
       callbacks, catalog filtering, marker editing, clear-on-copy, docking,
       and hide-until-restart

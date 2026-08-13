@@ -1,6 +1,7 @@
 import type { RepairIntent, RepairSeverity, Rect } from "./types";
 import type { LayoutCanvas, LayoutSource, SelectionMode } from "./review-model";
 import { validLayoutRect } from "./review-utils";
+import { ComponentCatalogView } from "./component-catalog-view";
 
 export type FindingEditorProps = {
   label: string;
@@ -62,6 +63,7 @@ export function LayoutComposer(props: LayoutComposerProps) {
       <label>Canvas<select aria-label="Layout canvas" value={props.canvas} onChange={(event) => props.onCanvas(event.target.value as LayoutCanvas)}><option value="page">Current page</option><option value="wireframe">Wireframe</option></select></label>
       <label>Component<input type="text" aria-label="Layout component type" maxLength={256} value={props.componentType} onChange={(event) => props.onComponentType(event.target.value)} placeholder="Section" /></label>
     </div>
+    <ComponentCatalogView selected={props.componentType} onSelect={props.onComponentType} />
     <button type="button" aria-pressed={props.markingMode === "layout_place"} className={props.markingMode === "layout_place" ? "selected" : ""} disabled={!props.componentType.trim()} onClick={props.onPlace}>Draw placement</button>
     <div className="a3s-layout-source">
       <span>Section to rearrange</span>
