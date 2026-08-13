@@ -67,3 +67,9 @@ click/drag multi-selection, rectangular and freehand findings, persistent
 markers, draft editing/hiding, animation pause, system/light/dark themes, and
 bounded structured copy. Submitted findings support human/agent replies,
 accept/reject/reopen review actions, and per-finding lifecycle projection.
+
+The overlay exposes a named non-modal dialog, finding-specific action names,
+one polite status announcer, visible keyboard focus, and focus restoration when
+controls disappear. Unit and real-Chromium accessibility-tree checks protect
+these semantics. A separate hands-on screen-reader audit of every workflow is
+still required before claiming complete assistive-technology coverage.

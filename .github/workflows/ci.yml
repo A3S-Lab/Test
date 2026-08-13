@@ -126,6 +126,9 @@ jobs:
         with:
           node-version: 22
 
+      - name: Install Test Kit dependencies
+        run: npm ci --prefix packages/testkit
+
       - name: Install the admitted standalone browser
         run: |
           npm install --global agent-browser@0.26.0
@@ -183,6 +186,10 @@ jobs:
             cargo test -p a3s-test-cli --test web_e2e \
             real_agent_browser_runs_the_hermetic_web_suite \
             --locked -- --ignored --exact --nocapture
+          bash .github/scripts/run-cargo-test.sh \
+            cargo test -p a3s-test-cli --test web_e2e \
+            real_agent_browser_runs_the_embedded_testkit_suite \
+            --locked -- --ignored --exact --nocapture
 
       - name: Run the real browser suite on Windows
         if: runner.os == 'Windows'
@@ -193,6 +200,9 @@ jobs:
           $env:A3S_TEST_AGENT_BROWSER = (Get-Command agent-browser.cmd).Source
           cargo test -p a3s-test-cli --test web_e2e `
             real_agent_browser_runs_the_hermetic_web_suite `
+            --locked -- --ignored --exact --nocapture
+          cargo test -p a3s-test-cli --test web_e2e `
+            real_agent_browser_runs_the_embedded_testkit_suite `
             --locked -- --ignored --exact --nocapture
 
       - name: Assert Unix browser cleanup

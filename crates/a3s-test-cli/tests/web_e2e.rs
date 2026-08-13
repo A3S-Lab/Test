@@ -272,6 +272,39 @@ fn real_agent_browser_runs_the_embedded_testkit_suite() {
         "sticky geometry missing: {stdout}"
     );
 
+    let accessibility = command(&["snapshot"]);
+    assert_process_success("capture TestKit accessibility tree", &accessibility);
+    let accessibility = String::from_utf8_lossy(&accessibility.stdout);
+    for expected in [
+        "dialog \"Review & repair\"",
+        "button \"Pause page animations\"",
+        "button \"Turn auto-send on\"",
+        "button \"Change overlay theme; current theme is system\"",
+        "button \"Close review overlay\"",
+    ] {
+        assert!(
+            accessibility.contains(expected),
+            "TestKit accessibility tree missing {expected:?}: {accessibility}"
+        );
+    }
+
+    let focus_round_trip = command(&[
+        "eval",
+        "(async()=>{let host=null;for(let frame=0;frame<120;frame+=1){const candidate=document.querySelector('[data-a3s-testkit-overlay]');if(candidate?.isConnected&&candidate.shadowRoot?.querySelector('[aria-label=\"Close review overlay\"]')){await new Promise(resolve=>requestAnimationFrame(resolve));if(candidate.isConnected&&candidate.shadowRoot?.querySelector('[aria-label=\"Close review overlay\"]')){host=candidate;break}}await new Promise(resolve=>requestAnimationFrame(resolve))}if(!host)throw new Error('stable TestKit overlay host not found');const shadow=host.shadowRoot;shadow.querySelector('[aria-label=\"Close review overlay\"]').click();await new Promise(resolve=>requestAnimationFrame(resolve));const closeFocus=shadow.activeElement?.classList.contains('a3s-launch')===true;shadow.querySelector('.a3s-launch').click();await new Promise(resolve=>requestAnimationFrame(resolve));const openFocus=shadow.activeElement?.classList.contains('a3s-panel')===true;return JSON.stringify({closeFocus,openFocus})})()",
+    ]);
+    assert_process_success(
+        "exercise TestKit overlay focus round trip",
+        &focus_round_trip,
+    );
+    let focus_round_trip: String = serde_json::from_slice(&focus_round_trip.stdout)
+        .expect("TestKit overlay focus round trip JSON string");
+    let focus_round_trip: serde_json::Value =
+        serde_json::from_str(&focus_round_trip).expect("TestKit overlay focus round trip JSON");
+    assert!(
+        focus_round_trip["closeFocus"] == true && focus_round_trip["openFocus"] == true,
+        "TestKit overlay focus round trip failed: {focus_round_trip}"
+    );
+
     assert_process_success(
         "set TestKit browser viewport and DPR",
         &command(&["set", "viewport", "1280", "720", "2"]),

@@ -200,6 +200,9 @@ snapshot. Pages without the SDK retain the existing Web behavior.
       evidence; they must never become hidden agent instructions
 - [x] Provide keyboard element marking, Escape focus restoration, and explicit
       fail-closed production enablement for both runtime and overlay
+- [x] Expose a named non-modal review dialog, finding-specific control names,
+      focused live announcements, visible focus indicators, and durable focus
+      restoration, with React and real-Chromium accessibility-tree regressions
 - [ ] Complete and independently audit every review workflow with a screen
       reader
 

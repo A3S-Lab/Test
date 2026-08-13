@@ -253,6 +253,25 @@ Auto-send can be enabled only for the current browser session through the
 visible overlay toggle (or the initial `autoSend` prop). It does not persist
 across restart.
 
+### Accessibility and audit boundary
+
+The review surface is a named, non-modal dialog inside an open Shadow DOM.
+Every repeated draft and repair action includes the finding instruction in its
+accessible name. Pause, auto-send, and theme controls expose stable state-aware
+names, and keyboard focus returns to a durable control when closing the dialog,
+sending or deleting a draft, or completing a clarification reply. Repair state
+changes and submission results use one visually hidden polite live region so a
+screen reader does not announce the entire finding list again.
+
+Automated React tests cover dialog naming, control names, live-region messages,
+and Shadow DOM focus restoration. The ignored real Chromium Test Kit suite also
+captures the browser accessibility tree and checks the launcher-to-dialog focus
+round trip. These checks are regression evidence for DOM and accessibility-tree
+semantics; they are not a substitute for completing every workflow with an
+actual screen reader. M8 remains open until an independent reviewer audits the
+full review lifecycle with VoiceOver, NVDA, or an equivalent supported screen
+reader in an environment that permits assistive-technology inspection.
+
 At submission time, the Test Kit enriches a repair with a fresh context
 revision and bounded page context. A submitted target contains current private
 node IDs, component/source hints, semantic locator candidates, geometry,
@@ -420,6 +439,16 @@ and its Chromium path configured:
 ```bash
 cargo test -p a3s-test-cli --test repair_e2e --locked -- \
   --ignored --test-threads=1
+```
+
+The real Test Kit browser suite, including its accessibility-tree and focus
+checks, runs separately:
+
+```bash
+A3S_TEST_AGENT_BROWSER="$(command -v agent-browser)" \
+  cargo test -p a3s-test-cli --test web_e2e \
+  real_agent_browser_runs_the_embedded_testkit_suite --locked -- \
+  --ignored --exact --nocapture
 ```
 
 ## CI and compatibility
