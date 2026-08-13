@@ -569,3 +569,42 @@ An eventual retryable close failure restores the same driver session in
 `cleanup_required` state. Observation and action operations then fail with
 `test.session.cleanup_required`; only `finish` or `abort` may retry cleanup.
 Success or a non-retryable cleanup failure releases the session identifier.
+
+## Optional visual grounding
+
+Visual grounding is a typed SDK-host capability in `a3s-test-agent`; it is not
+an ACL action and does not change action protocol revision 6. Deterministic Web
+targeting remains role, label, test ID, placeholder, text, current ref, and CSS
+in that order of preference. A host may invoke visual grounding only through
+`GroundingTrigger::ExplicitRequest` or `GroundingTrigger::SemanticFallback`
+with one of the enumerated surface reasons.
+
+The admitted request consists of:
+
+| Field | Rule |
+| --- | --- |
+| `screenshot_path` | Non-empty bounded path to a regular non-link evidence file |
+| `screenshot_sha256` | `sha256:` plus 64 lowercase hexadecimal characters |
+| `width`, `height` | Positive bounded screenshot-pixel dimensions |
+| `query` | Non-empty bounded natural-language locator query |
+| `observation_id` | Positive identifier for the current observation |
+| `trigger` | Typed explicit request or semantic-fallback reason |
+| `max_cost_microusd` | Provider-reported cost ceiling |
+
+The service rehashes the screenshot before dispatch and adds
+`issued_at_unix_ms` and `deadline_unix_ms`. A provider response
+must exactly repeat its admitted identity, observation ID, digest, and image
+dimensions. It declares either `screenshot_pixels` or `normalized` coordinates
+and returns a bounded list of finite, in-bounds points or positive-sized boxes,
+each with confidence in `[0, 1]`. The service rejects response mismatch,
+page-context observation/revision mismatch or truncation, oversized output,
+missing or changed screenshot bytes, timeout, cancellation, or cost overrun
+before reconciliation.
+
+Reconciliation uses the center of each box, maps it to current visual-viewport
+CSS pixels, and considers only visible, non-occluded nodes with usable semantic
+targets. Exactly one hit may yield a semantic result. Zero or multiple hits
+yield an image-bound result and preserve ambiguity rather than selecting a
+node. Both variants include provider/image/observation provenance and
+`authority = advisory`. They are not durable refs, contract evidence, action
+authorization, or Repair Ledger entries.

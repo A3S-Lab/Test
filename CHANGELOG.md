@@ -2,6 +2,27 @@
 
 ## Unreleased
 
+### Added
+
+- Added a typed optional visual-grounding provider boundary in
+  `a3s-test-agent` for explicit requests and semantic fallback on canvas,
+  image-only, remote-desktop, and design-reference surfaces. Requests bind a
+  verified screenshot digest and dimensions to the current observation,
+  deadline, trigger, query, and cost ceiling.
+- Added strict response admission, provider provenance, screenshot-pixel and
+  normalized coordinate support, pre-dispatch screenshot rehashing,
+  visual-viewport mapping, and deterministic hit-testing against current Test
+  Kit geometry. Only a unique hit upgrades to a semantic target; ambiguous and
+  unmapped candidates stay image-bound.
+
+### Safety
+
+- Visual-grounding results are always advisory and observation-scoped. Stale
+  provenance, truncated or mismatched page context, identity or dimension
+  mismatch, invalid geometry, timeout, cancellation, oversized output, and cost
+  overrun fail closed. Model weights, transports, credentials, and licenses
+  remain deployment-owned and are not bundled with A3S Test.
+
 ## 0.7.0 - 2026-08-13
 
 ### Added

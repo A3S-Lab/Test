@@ -120,18 +120,49 @@ that competes with the surface under review.
 Some surfaces have no useful DOM or accessibility semantics: canvas, WebGL,
 remote desktops, image-only controls, and design references. These may use an
 injected visual-grounding provider after deterministic targeting fails or when
-the caller explicitly requests visual grounding. The provider boundary should
-accept a digest-bound screenshot, dimensions, natural-language query, current
-observation ID, and explicit budget, then return bounded point or box
-candidates with provider/model identity and confidence.
+the caller explicitly requests visual grounding. The provider boundary
+accepts a digest-bound screenshot, dimensions, natural-language query, current
+observation ID, typed trigger, deadline, and cost budget, then returns bounded
+point or box candidates with provider/model identity, confidence, coordinate
+space, usage, and an optional request ID.
 
-Provider output is never a durable element identity. The adapter first
-hit-tests a candidate against current Test Kit nodes and semantic evidence. A
-candidate that cannot be mapped remains an image-bound visual target and
-expires with the observation or screenshot digest. It cannot independently
-pass a blocking surface contract. Model weights, runtimes, and licenses stay
-outside `a3s-test-core`; research-only models are not bundled with the MIT
-distribution.
+`a3s-test-agent::VisualGroundingService` independently validates the configured
+and returned provider identity, rehashes the regular screenshot file against
+its `sha256:<64 lowercase hex>` digest, and validates the
+observation ID, dimensions, finite in-bounds geometry, confidence, strings,
+candidate count, deadline, cancellation, and provider-reported cost. Screenshot
+pixels or normalized coordinates are converted to current visual-viewport CSS
+pixels before hit-testing visible, unobscured Test Kit nodes. Exactly one hit
+can be upgraded to that node's current ref or preferred semantic locator.
+Multiple hits are reported as ambiguous and never guessed.
+
+Provider output is never a durable element identity. An unmapped or ambiguous
+candidate remains image-bound and expires with the observation and screenshot
+digest. Every result is explicitly `advisory`; it cannot independently pass a
+blocking surface contract, authorize a repair, or mutate a surface. Model
+transports, weights, runtimes, credentials, and licenses stay outside
+`a3s-test-core` and the distribution. A deployment may implement the trait for
+an externally hosted GUI-grounding model, but must perform its own license and
+operational review. Research-only weights are not bundled or downloaded by A3S
+Test.
+
+```text
+DOM / AX / Test Kit semantic target ──success──> current semantic action
+                 |
+                 └─unrepresentable or explicit request
+                                  |
+                     verified screenshot + typed budget
+                                  |
+                     injected grounding provider
+                                  |
+                      admitted points / boxes
+                                  |
+              current geometry hit-test ──unique──> semantic target
+                                  |
+                         ambiguous / no hit
+                                  |
+                  observation-bound advisory candidate
+```
 
 Quality projection has its own bounded best-effort budget outside deterministic
 step execution. A rejected, failed, cancelled, or hanging projection cannot

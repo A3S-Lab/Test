@@ -115,6 +115,16 @@ review candidate, where a human can confirm the target and authorize one or a
 batch of repairs. Report projection is optional and can never change the
 runner verdict.
 
+For canvas, image-only controls, remote desktops, and design references, SDK
+hosts can inject a typed visual-grounding provider from `a3s-test-agent`. It
+accepts an observation- and SHA-256-bound screenshot plus an explicit deadline
+and cost ceiling. Screenshot bytes are rehashed before dispatch. Returned
+points or boxes are strictly admitted and hit-tested
+against current Test Kit geometry. A unique hit can become a current semantic
+target; ambiguous or unmapped results remain advisory, image-bound candidates.
+This path is an explicit request or semantic fallback, never the default Web
+locator.
+
 Install the package tarball published with every GitHub Release:
 
 ```bash
@@ -404,7 +414,7 @@ crates/
 ├── a3s-test-session/     # Surface-neutral long-lived session application layer
 ├── a3s-test-driver-gui/  # Locked MCP adapter boundary for A3S CUA
 ├── a3s-test-driver-web/  # A3S Browser / agent-browser adapter
-└── a3s-test-agent/       # Optional schema-constrained embedded LLM loop
+└── a3s-test-agent/       # Optional embedded model loop and visual grounding
 
 skills/
 └── a3s-test/             # Portable Coding Agent Skill

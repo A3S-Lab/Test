@@ -376,15 +376,15 @@ The completion work intentionally preserves these product boundaries:
 
 ## M14: Optional visual grounding providers
 
-- [ ] Define a typed provider boundary for a digest-bound screenshot,
+- [x] Define a typed provider boundary for a digest-bound screenshot,
       dimensions, query, observation ID, deadline, and cost budget
-- [ ] Return bounded boxes or points with provider/model identity, confidence,
+- [x] Return bounded boxes or points with provider/model identity, confidence,
       and coordinate-space metadata
-- [ ] Hit-test candidates against current Test Kit nodes and accessibility
+- [x] Hit-test candidates against current Test Kit nodes and accessibility
       evidence before issuing any image-bound fallback target
-- [ ] Trigger visual grounding only for explicit requests or when deterministic
+- [x] Trigger visual grounding only for explicit requests or when deterministic
       semantic targeting cannot represent the surface
-- [ ] Keep provider output advisory and observation-scoped; it must not pass a
+- [x] Keep provider output advisory and observation-scoped; it must not pass a
       blocking contract or become a durable ref by itself
-- [ ] Add provider conformance fixtures for canvas, image-only, remote-desktop,
+- [x] Add provider conformance fixtures for canvas, image-only, remote-desktop,
       and design-reference cases without bundling model weights

@@ -5,7 +5,7 @@ edition.workspace = true
 license.workspace = true
 repository.workspace = true
 rust-version.workspace = true
-description = "Schema-constrained LLM execution loop for A3S Test"
+description = "Schema-constrained model execution and optional visual grounding for A3S Test"
 
 [dependencies]
 a3s-test-core = { path = "../a3s-test-core" }
@@ -20,4 +20,5 @@ tokio-util.workspace = true
 url.workspace = true
 
 [dev-dependencies]
+tempfile = "3"
 tokio.workspace = true

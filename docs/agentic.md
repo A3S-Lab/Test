@@ -232,6 +232,51 @@ provider returns it. A provider claiming structured output does not bypass
 local validation. Prompt contract `a3s-test-agent/v2` tells multimodal hosts to
 ground pixel actions only in the attached observation image.
 
+## Optional visual-grounding provider
+
+Visual grounding is a separate typed facility from `LlmProvider` and the
+observe-decide-act loop. It is intended only for an explicit request or a typed
+semantic-fallback reason: `canvas`, `image_only`, `remote_desktop`,
+`design_reference`, or `no_semantic_match`. Natural-language keyword routing
+cannot activate it.
+
+```rust
+#[async_trait]
+pub trait VisualGroundingProvider: Send + Sync {
+    fn identity(&self) -> GroundingProviderIdentity;
+
+    async fn locate(
+        &self,
+        request: GroundingProviderRequest,
+    ) -> Result<GroundingProviderResponse, GroundingError>;
+}
+```
+
+The caller supplies a screenshot path owned by its surface adapter, a
+`sha256:` digest, positive dimensions, query, current observation ID, typed
+trigger, and micro-USD ceiling. The service requires a regular non-link file,
+rehashes its bytes before provider dispatch, adds issue/deadline times, and
+applies its own timeout and cancellation token. The provider returns point or
+box candidates in screenshot pixels or normalized coordinates, confidence,
+identity, complete image/observation binding, bounded usage, and an optional
+request ID.
+
+Admission fails closed for stale provenance, identity or dimension mismatch,
+page-context observation, revision, completeness, or node-bound mismatch,
+missing or changed screenshot bytes, non-finite or out-of-bounds geometry,
+invalid confidence, oversized fields or candidate sets, timeout, cancellation,
+and reported cost above the request ceiling. After admission, the service maps candidates into visual-viewport CSS
+pixels and hit-tests the current Test Kit snapshot. A unique hit returns a
+current semantic target. An ambiguous or unmapped candidate stays image-bound
+with the matching node IDs, observation ID, and screenshot digest. All
+outcomes carry `authority = advisory`; callers must not use them to satisfy
+blocking contracts or bypass repair authorization.
+
+A deployment-specific adapter may call a local process or remote inference
+service. A3S Test neither bundles model weights nor selects one by model-name
+string. The deploying host is responsible for credentials, capacity, privacy,
+and license compliance.
+
 ## Decisions
 
 The model can return exactly one of:

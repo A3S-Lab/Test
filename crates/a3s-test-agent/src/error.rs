@@ -59,3 +59,37 @@ impl LlmError {
         self.retryable
     }
 }
+
+#[derive(Clone, Debug, Deserialize, Eq, Error, PartialEq, Serialize)]
+#[error("{code}: {message}")]
+pub struct GroundingError {
+    code: String,
+    message: String,
+    retryable: bool,
+}
+
+impl GroundingError {
+    #[must_use]
+    pub fn new(code: impl Into<String>, message: impl Into<String>, retryable: bool) -> Self {
+        Self {
+            code: code.into(),
+            message: message.into(),
+            retryable,
+        }
+    }
+
+    #[must_use]
+    pub fn code(&self) -> &str {
+        &self.code
+    }
+
+    #[must_use]
+    pub fn message(&self) -> &str {
+        &self.message
+    }
+
+    #[must_use]
+    pub fn retryable(&self) -> bool {
+        self.retryable
+    }
+}
