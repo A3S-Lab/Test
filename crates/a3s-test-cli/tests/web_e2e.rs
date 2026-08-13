@@ -280,6 +280,7 @@ fn real_agent_browser_runs_the_embedded_testkit_suite() {
         "button \"Pause page animations\"",
         "button \"Turn auto-send on\"",
         "button \"Change overlay theme; current theme is system\"",
+        "button \"Layout\"",
         "button \"Close review overlay\"",
     ] {
         assert!(

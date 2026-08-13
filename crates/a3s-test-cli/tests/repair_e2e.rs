@@ -2,10 +2,12 @@ mod support;
 
 use std::path::PathBuf;
 
+use a3s_test_core::{RepairLayoutCanvas, RepairLayoutIntent, RepairStatus, RepairTargetKind};
+use a3s_test_session::RepairRecord;
 use serde_json::{json, Value};
 use support::repair_fixture::{
     admitted_browser, assert_process_success, json_output, start_fixture, submit_findings,
-    target_node_ids, RepairSession, Transition,
+    submit_layout_findings_from_overlay, target_node_ids, RepairSession, Transition,
 };
 
 #[test]
@@ -120,6 +122,91 @@ fn single_repair_restart_recovery_and_acl_promotion_are_end_to_end() {
 
     let abort = session.abort();
     assert!(abort["cleanup_error"].is_null());
+}
+
+#[test]
+#[ignore = "requires Node esbuild and the exact standalone agent-browser 0.26.x runtime"]
+fn layout_overlay_batch_reaches_a3s_test_as_typed_non_mutating_intent() {
+    let Some(browser) = admitted_browser() else {
+        eprintln!("A3S_TEST_AGENT_BROWSER is not set; skipping layout handoff E2E");
+        return;
+    };
+    let (_bundle_workspace, fixture) = start_fixture();
+    let mut session = RepairSession::start(&browser, &fixture, "repair-layout-overlay");
+
+    let page_result = submit_layout_findings_from_overlay(&session);
+    assert_eq!(
+        page_result["layoutKinds"],
+        json!(["placement", "rearrange"])
+    );
+    assert_eq!(page_result["sourceStyleBefore"], Value::Null);
+    assert_eq!(page_result["sourceStyleAfter"], Value::Null);
+    assert_eq!(page_result["batchIds"][0], page_result["batchIds"][1]);
+
+    let watch = session.watch();
+    let repairs: Vec<RepairRecord> = serde_json::from_value(watch["repairs"].clone())
+        .expect("A3S Test repair-watch must return typed layout records");
+    assert_eq!(repairs.len(), 2, "{watch:#}");
+    assert_eq!(
+        repairs[0].finding.batch_id, repairs[1].finding.batch_id,
+        "the overlay batch order must survive A3S Test ingestion"
+    );
+    assert!(repairs.iter().all(|repair| {
+        repair.status == RepairStatus::Queued && repair.before_evidence.is_some()
+    }));
+
+    let placement = &repairs[0].finding.target;
+    assert_eq!(placement.kind, RepairTargetKind::Region);
+    assert!(placement.node_ids.is_empty());
+    let placement_region = placement.region.as_ref().expect("placement region");
+    assert_eq!(
+        (
+            placement_region.x,
+            placement_region.y,
+            placement_region.width,
+            placement_region.height,
+        ),
+        (700.0, 320.0, 300.0, 160.0)
+    );
+    match placement.layout.as_ref().expect("typed placement intent") {
+        RepairLayoutIntent::Placement {
+            component_type,
+            canvas,
+            purpose,
+        } => {
+            assert_eq!(component_type, "Pricing section");
+            assert_eq!(*canvas, RepairLayoutCanvas::Wireframe);
+            assert_eq!(purpose.as_deref(), Some("Developer tool landing page"));
+        }
+        other => panic!("expected placement intent, got {other:?}"),
+    }
+
+    let rearrange = &repairs[1].finding.target;
+    assert_eq!(rearrange.kind, RepairTargetKind::Node);
+    assert_eq!(rearrange.node_ids.len(), 1);
+    let destination = rearrange.region.as_ref().expect("rearrange destination");
+    assert_eq!(
+        (
+            destination.x,
+            destination.y,
+            destination.width,
+            destination.height,
+        ),
+        (40.0, 420.0, 560.0, 180.0)
+    );
+    match rearrange.layout.as_ref().expect("typed rearrange intent") {
+        RepairLayoutIntent::Rearrange {
+            original_region,
+            purpose,
+        } => {
+            assert_eq!(original_region.width, 560.0);
+            assert_eq!(original_region.height, 180.0);
+            assert_eq!(purpose.as_deref(), Some("Developer tool landing page"));
+        }
+        other => panic!("expected rearrange intent, got {other:?}"),
+    }
+
+    assert!(session.abort()["cleanup_error"].is_null());
 }
 
 #[test]

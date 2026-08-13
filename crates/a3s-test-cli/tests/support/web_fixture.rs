@@ -322,11 +322,12 @@ const TESTKIT_HTML: &str = r#"<!doctype html>
       .virtual-space { height: 400px; }
       #sticky { position: sticky; top: 0; transform: scale(1); }
       #zoom-edge { position: absolute; left: 1000px; top: 140px; width: 180px; height: 40px; }
+      #layout-section { width: 560px; height: 180px; }
       #portal { position: fixed; right: 24px; top: 24px; }
     </style>
   </head>
   <body>
-    <div id="root"><main><h1>Embedded TestKit E2E</h1><button id="sticky" data-testid="repair-target">__ACTION_LABEL__</button><button id="zoom-edge" data-testid="zoom-edge">Zoom edge target</button><div id="nested"><div class="virtual-space"><button id="virtual-row">Virtual row 1</button></div></div><div id="shadow-host"></div></main></div>
+    <div id="root"><main><h1>Embedded TestKit E2E</h1><button id="sticky" data-testid="repair-target">__ACTION_LABEL__</button><button id="zoom-edge" data-testid="zoom-edge">Zoom edge target</button><section id="layout-section" data-testid="layout-section" tabindex="-1">Layout source section</section><div id="nested"><div class="virtual-space"><button id="virtual-row">Virtual row 1</button></div></div><div id="shadow-host"></div></main></div>
     <div id="portal"></div>
     <script>window.testkitInitialRepaired = __INITIAL_REPAIRED__;</script>
     <script type="module" src="/testkit.js"></script>

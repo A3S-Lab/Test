@@ -261,6 +261,16 @@ pub fn submit_findings(session: &RepairSession, findings_json: &str) -> Vec<Valu
     serde_json::from_str(&encoded).expect("browser repair submission JSON")
 }
 
+pub fn submit_layout_findings_from_overlay(session: &RepairSession) -> Value {
+    let output = session.browser(&["eval", LAYOUT_OVERLAY_SUBMISSION_SCRIPT]);
+    assert_process_success(
+        "submit typed layout findings through the review overlay",
+        &output,
+    );
+    let encoded = browser_eval_result(&output);
+    serde_json::from_str(&encoded).expect("browser layout overlay result JSON")
+}
+
 pub fn target_node_ids(session: &RepairSession, test_ids: &[&str]) -> Vec<String> {
     let test_ids = serde_json::to_string(test_ids).expect("test IDs JSON");
     let script = format!(
@@ -296,6 +306,106 @@ fn browser_eval_result(output: &Output) -> String {
         .expect("browser eval encoded JSON string")
         .to_string()
 }
+
+const LAYOUT_OVERLAY_SUBMISSION_SCRIPT: &str = r##"
+(async () => {
+  const nextFrame = () => new Promise((resolve) =>
+    requestAnimationFrame(() => requestAnimationFrame(resolve))
+  );
+  const waitFor = async (predicate, label) => {
+    for (let frame = 0; frame < 120; frame += 1) {
+      if (predicate()) return;
+      await nextFrame();
+    }
+    throw new Error(`timed out waiting for ${label}`);
+  };
+  await waitFor(
+    () => document.querySelector("[data-a3s-testkit-overlay]")?.shadowRoot?.querySelector(".a3s-panel"),
+    "the Test Kit review panel",
+  );
+  const host = document.querySelector("[data-a3s-testkit-overlay]");
+  const shadow = host.shadowRoot;
+  const source = document.querySelector("#layout-section");
+  const bridge = window[Symbol.for("a3s.test.page-context")];
+  if (!source || !bridge) throw new Error("layout fixture is incomplete");
+  const sourceStyleBefore = source.getAttribute("style");
+  const button = (label) => [...shadow.querySelectorAll("button")]
+    .find((candidate) => candidate.textContent.trim() === label);
+  const click = (label) => {
+    const target = button(label);
+    if (!target || target.disabled) throw new Error(`button is unavailable: ${label}`);
+    target.click();
+  };
+  const setInput = (label, value) => {
+    const input = shadow.querySelector(`[aria-label="${label}"]`);
+    if (!(input instanceof HTMLInputElement)) throw new Error(`input is unavailable: ${label}`);
+    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
+    setter.call(input, String(value));
+    input.dispatchEvent(new Event("input", { bubbles: true, composed: true }));
+  };
+  const setSelect = (label, value) => {
+    const select = shadow.querySelector(`[aria-label="${label}"]`);
+    if (!(select instanceof HTMLSelectElement)) throw new Error(`select is unavailable: ${label}`);
+    const setter = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value")?.set;
+    setter.call(select, value);
+    select.dispatchEvent(new Event("change", { bubbles: true, composed: true }));
+  };
+  const pointer = (type, x, y, buttons) => document.body.dispatchEvent(new PointerEvent(type, {
+    bubbles: true,
+    composed: true,
+    button: 0,
+    buttons,
+    clientX: x,
+    clientY: y,
+    pointerId: 1,
+    pointerType: "mouse",
+    isPrimary: true,
+  }));
+
+  click("Layout");
+  await nextFrame();
+  setInput("Layout purpose", "Developer tool landing page");
+  setSelect("Layout canvas", "wireframe");
+  setInput("Layout component type", "Pricing section");
+  await nextFrame();
+  click("Draw placement");
+  await nextFrame();
+  pointer("pointerdown", 700, 320, 1);
+  pointer("pointermove", 1000, 480, 1);
+  pointer("pointerup", 1000, 480, 0);
+  await waitFor(() => button("Add draft") && !button("Add draft").disabled, "the placement editor");
+  click("Add draft");
+  await waitFor(() => shadow.querySelector(".a3s-list")?.textContent.includes("Place Pricing section"), "the placement draft");
+
+  source.focus();
+  await nextFrame();
+  click("Select section on page");
+  await waitFor(() => document.activeElement === source, "layout source focus restoration");
+  source.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true, composed: true }));
+  await waitFor(() => shadow.querySelector(".a3s-layout-source")?.textContent.includes("Layout source section"), "the selected layout source");
+  for (const [label, value] of [
+    ["Layout x", 40],
+    ["Layout y", 420],
+    ["Layout width", 560],
+    ["Layout height", 180],
+  ]) setInput(label, value);
+  await waitFor(() => button("Create rearrange draft") && !button("Create rearrange draft").disabled, "the rearrange action");
+  click("Create rearrange draft");
+  await waitFor(() => button("Add draft") && !button("Add draft").disabled, "the rearrange editor");
+  click("Add draft");
+  await waitFor(() => button("Send selected (2)") && !button("Send selected (2)").disabled, "the layout batch action");
+  click("Send selected (2)");
+  await waitFor(() => bridge.listRepairs().length === 2, "the submitted layout batch");
+
+  const repairs = bridge.listRepairs();
+  return JSON.stringify({
+    sourceStyleBefore,
+    sourceStyleAfter: source.getAttribute("style"),
+    batchIds: repairs.map((repair) => repair.batchId),
+    layoutKinds: repairs.map((repair) => repair.target.layout?.kind),
+  });
+})()
+"##;
 
 fn session_root(workspace: &Path, session: &str) -> PathBuf {
     workspace
