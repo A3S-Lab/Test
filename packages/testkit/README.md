@@ -72,6 +72,12 @@ does not move or style application DOM itself. Submitted findings support
 human/agent replies, accept/reject/reopen review actions, and per-finding
 lifecycle projection.
 
+The review preferences section persists only bounded presentation choices:
+theme, marker color, clear-after-copy, explicit host pointer blocking, panel
+dock, and wireframe page fade. Auto-send and animation pause reset on mount.
+`Hide until tab restart` is tab-scoped and does not disable the headless page
+context bridge. Clipboard failure never clears local drafts.
+
 The overlay exposes a named non-modal dialog, finding-specific action names,
 one polite status announcer, visible keyboard focus, and focus restoration when
 controls disappear. Unit and real-Chromium accessibility-tree checks protect

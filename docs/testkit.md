@@ -314,6 +314,21 @@ Auto-send can be enabled only for the current browser session through the
 visible overlay toggle (or the initial `autoSend` prop). It does not persist
 across restart.
 
+The review preferences section stores only presentation and local interaction
+choices in `localStorage`: system/light/dark theme, marker color,
+clear-after-copy, page pointer blocking, left/right dock, and wireframe page
+fade. Records are schema-checked, limited to 2 KiB, and discarded atomically
+when corrupt or unknown. Auto-send and animation pause are deliberately absent
+from that record. `Hide until tab restart` uses `sessionStorage`, removes only
+the overlay UI, and leaves the headless page-context bridge active.
+
+Page pointer blocking is an explicit reviewer choice. When enabled, the Test
+Kit cancels pointer, mouse, touch, wheel, and context-menu input headed for the
+host page while continuing to accept input within its Shadow DOM. It does not
+block keyboard input. Clear-after-copy removes only the drafts included in the
+copy, and only after the browser or host clipboard adapter confirms success;
+failed clipboard writes retain every draft.
+
 The overlay also exposes global review commands. `Ctrl/Command+Shift+F`
 toggles the panel from anywhere outside an editable target. While the panel is
 open, `L` toggles Layout Mode, `P` pauses or resumes page motion, `H` hides or

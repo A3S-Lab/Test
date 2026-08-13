@@ -1,20 +1,13 @@
 import {
-  createContext,
-  useContext,
   useEffect,
   useId,
   useLayoutEffect,
-  useMemo,
   useRef,
   useState,
   type CSSProperties,
-  type PropsWithChildren,
 } from "react";
 import { createPortal } from "react-dom";
-import {
-  getPageContextBridge,
-  installTestKit,
-} from "./runtime";
+import { getPageContextBridge } from "./runtime";
 import { PAGE_CONTEXT_PROTOCOL } from "./types";
 import { OVERLAY_CSS } from "./overlay-style";
 import {
@@ -24,6 +17,14 @@ import {
   type ReviewDraftItem,
 } from "./review-storage";
 import { FindingEditor, LayoutComposer } from "./review-components";
+import { ReviewSettings } from "./review-settings";
+import { useTestKitContext } from "./react-provider";
+export {
+  A3STestBoundary,
+  A3STestKit,
+  type A3STestBoundaryProps,
+  type A3STestKitProps,
+} from "./react-provider";
 import {
   invokeCallback,
   isEditableEvent,
@@ -31,11 +32,18 @@ import {
   type ReviewCallback,
 } from "./review-integration";
 import {
+  DEFAULT_REVIEW_PREFERENCES,
+  loadReviewPreferences,
+  loadReviewTabHidden,
+  saveReviewPreferences,
+  saveReviewTabHidden,
+  type ReviewPreferences,
+} from "./review-preferences";
+import {
   MODE_HINT,
   MODE_LABEL,
   type LayoutCanvas,
   type LayoutSource,
-  type OverlayTheme,
   type SelectionMode,
 } from "./review-model";
 import {
@@ -48,7 +56,6 @@ import {
   removeDraft,
   repairAnnouncement,
   repairId,
-  stableList,
   statusLabel,
   targetSummary,
   validLayoutRect,
@@ -61,95 +68,7 @@ import type {
   RepairTarget,
   Rect,
   SubmittedRepair,
-  TestKitOptions,
-  TestKitRuntime,
 } from "./types";
-
-type TestKitContextValue = {
-  bridge: PageContextBridge | null;
-  providerConfigured: boolean;
-};
-
-const TestKitContext = createContext<TestKitContextValue>({
-  bridge: null,
-  providerConfigured: false,
-});
-
-export type A3STestKitProps = PropsWithChildren<
-  Omit<TestKitOptions, "enabled"> & { enabled: boolean }
->;
-
-export function A3STestKit({ children, ...options }: A3STestKitProps) {
-  const latest = useLatest(options);
-  const [bridge, setBridge] = useState<PageContextBridge | null>(null);
-
-  useEffect(() => {
-    if (options.enabled !== true) {
-      setBridge(null);
-      return;
-    }
-    const installed = installTestKit({
-      ...options,
-      enabled: true,
-      ready: () => latest.current.ready?.() ?? document.readyState !== "loading",
-      facts: () => latest.current.facts?.() ?? {},
-    });
-    setBridge(installed);
-    return () => {
-      installed.dispose();
-      setBridge((current) => current === installed ? null : current);
-    };
-  }, [options.enabled, options.maxEncodedBytes, options.maxNodes, options.maxStringBytes, options.page.id, options.repairEndpoint, options.repairStorage, stableList(options.redact)]);
-
-  const value = useMemo(
-    () => ({ bridge, providerConfigured: true }),
-    [bridge],
-  );
-  return <TestKitContext.Provider value={value}>{children}</TestKitContext.Provider>;
-}
-
-export type A3STestBoundaryProps = PropsWithChildren<{
-  id: string;
-  name: string;
-  source?: { file: string; line?: number; column?: number };
-  ready?: () => boolean;
-  facts?: () => Record<string, unknown>;
-  roots?: () => readonly Element[];
-  as?: "div" | "section" | "main" | "nav" | "article" | "aside" | "header" | "footer" | "span";
-  className?: string;
-  style?: CSSProperties;
-}>;
-
-export function A3STestBoundary({
-  id,
-  name,
-  source,
-  ready,
-  facts,
-  roots,
-  as: Tag = "div",
-  children,
-  className,
-  style,
-}: A3STestBoundaryProps) {
-  const { bridge } = useContext(TestKitContext);
-  const ref = useRef<HTMLElement | null>(null);
-  const latest = useLatest({ ready, facts, roots });
-  useLayoutEffect(() => {
-    const element = ref.current;
-    if (!element || !bridge) return;
-    if (!("registerBoundary" in bridge)) return;
-    return (bridge as TestKitRuntime).registerBoundary({
-      id,
-      name,
-      elements: () => [element, ...(latest.current.roots?.() ?? [])],
-      ...(source ? { source } : {}),
-      ready: () => latest.current.ready?.() ?? true,
-      facts: () => latest.current.facts?.() ?? {},
-    });
-  }, [bridge, id, name, source?.file, source?.line, source?.column]);
-  return <Tag ref={ref as never} className={className} style={style}>{children}</Tag>;
-}
 
 type DraftItem = ReviewDraftItem;
 
@@ -193,7 +112,7 @@ export function A3SReviewOverlay({
     onDraftsCleared,
     onSubmitted,
   });
-  const context = useContext(TestKitContext);
+  const context = useTestKitContext();
   const candidateBridge = context.providerConfigured
     ? context.bridge
     : getPageContextBridge();
@@ -206,7 +125,14 @@ export function A3SReviewOverlay({
   const [markersVisible, setMarkersVisible] = useState(true);
   const [autoSendEnabled, setAutoSendEnabled] = useState(autoSend);
   const [mode, setMode] = useState<SelectionMode>("element");
-  const [theme, setTheme] = useState<OverlayTheme>("system");
+  const [preferences, setPreferences] = useState<ReviewPreferences>(() => (
+    typeof window === "undefined"
+      ? { ...DEFAULT_REVIEW_PREFERENCES }
+      : loadReviewPreferences()
+  ));
+  const [tabHidden, setTabHidden] = useState(() => (
+    typeof window !== "undefined" && loadReviewTabHidden()
+  ));
   const [layoutMode, setLayoutMode] = useState(false);
   const [layoutPurpose, setLayoutPurpose] = useState("");
   const [layoutCanvas, setLayoutCanvas] = useState<LayoutCanvas>("page");
@@ -296,6 +222,30 @@ export function A3SReviewOverlay({
     announce(next ? "Finding markers shown" : "Finding markers hidden");
   }
 
+  function changePreferences(value: ReviewPreferences) {
+    setPreferences(value);
+    if (typeof window !== "undefined") {
+      saveReviewPreferences(value);
+    }
+  }
+
+  function cycleTheme() {
+    const theme = preferences.theme === "system"
+      ? "light"
+      : preferences.theme === "light" ? "dark" : "system";
+    changePreferences({ ...preferences, theme });
+  }
+
+  function hideUntilTabRestart() {
+    if (typeof window !== "undefined") {
+      saveReviewTabHidden(true);
+    }
+    stopMarking(false);
+    bridge?.setAnimationsPaused(false);
+    setPaused(false);
+    setTabHidden(true);
+  }
+
   function stopMarking(restoreFocus = true) {
     setMarking(false);
     updateArea(null);
@@ -306,7 +256,7 @@ export function A3SReviewOverlay({
   }
 
   useEffect(() => {
-    if (!enabled || !bridge || !document.body) return;
+    if (!enabled || !bridge || tabHidden || !document.body) return;
     const element = document.createElement("div");
     element.dataset.a3sTestkitOverlay = "";
     element.setAttribute("aria-label", "A3S Test review overlay");
@@ -324,7 +274,7 @@ export function A3SReviewOverlay({
       setHost(null);
       element.remove();
     };
-  }, [bridge, enabled]);
+  }, [bridge, enabled, tabHidden]);
 
   useEffect(() => {
     if (!bridge) return;
@@ -397,7 +347,40 @@ export function A3SReviewOverlay({
   }, [enabled, host]);
 
   useEffect(() => {
-    if (!enabled || !bridge) return;
+    if (!enabled || !bridge || !host || tabHidden || !preferences.blockInteractions) return;
+    const blockHostPointerInput = (event: Event) => {
+      if (isOverlayEvent(event, host)) return;
+      if (event.cancelable) event.preventDefault();
+      event.stopPropagation();
+    };
+    const eventTypes = [
+      "pointerdown",
+      "pointermove",
+      "pointerup",
+      "mousedown",
+      "mouseup",
+      "click",
+      "dblclick",
+      "auxclick",
+      "contextmenu",
+      "touchstart",
+      "touchmove",
+      "touchend",
+      "wheel",
+    ];
+    const options: AddEventListenerOptions = { capture: true, passive: false };
+    for (const type of eventTypes) {
+      document.addEventListener(type, blockHostPointerInput, options);
+    }
+    return () => {
+      for (const type of eventTypes) {
+        document.removeEventListener(type, blockHostPointerInput, options);
+      }
+    };
+  }, [bridge, enabled, host, preferences.blockInteractions, tabHidden]);
+
+  useEffect(() => {
+    if (!enabled || !bridge || tabHidden) return;
     const onGlobalKeyDown = (event: KeyboardEvent) => {
       if (event.defaultPrevented || isEditableEvent(event)) return;
       const key = event.key.toLowerCase();
@@ -435,7 +418,7 @@ export function A3SReviewOverlay({
     };
     document.addEventListener("keydown", onGlobalKeyDown, true);
     return () => document.removeEventListener("keydown", onGlobalKeyDown, true);
-  }, [bridge, candidate, drafts, enabled, marking, open, paused, markersVisible, layoutMode]);
+  }, [bridge, candidate, drafts, enabled, marking, open, paused, markersVisible, layoutMode, preferences.clearOnCopy, tabHidden]);
 
   useEffect(() => {
     if (!marking || !bridge) return;
@@ -626,7 +609,7 @@ export function A3SReviewOverlay({
     };
   }, [bridge, host, keyboardNodeIds, layoutCanvas, layoutComponentType, layoutPurpose, marking, mode]);
 
-  if (!enabled || !bridge || !mount) return null;
+  if (!enabled || !bridge || !mount || tabHidden) return null;
 
   const selectedCount = drafts.filter((item) => item.selected).length;
   const areaRect = area ? normalizedArea(area.startX, area.startY, area.currentX, area.currentY) : null;
@@ -753,6 +736,23 @@ export function A3SReviewOverlay({
     focusPanel();
   }
 
+  function clearCopiedDrafts(copied: RepairDraft[]) {
+    if (copied.length === 0) return;
+    const copiedIds = new Set(copied.map((draft) => draft.id));
+    setDrafts((current) => current.filter((item) => !copiedIds.has(item.draft.id)));
+    if (editingDraftId && copiedIds.has(editingDraftId)) {
+      setCandidate(null);
+      setEditingDraftId(null);
+      setConflictingDraftIds([]);
+    }
+    invokeCallback(
+      callbacks.current.onDraftsCleared,
+      copied.map((draft) => structuredClone(draft)),
+    );
+    announce(`${copied.length} copied draft${copied.length === 1 ? "" : "s"} cleared`);
+    focusPanel();
+  }
+
   function editDraft(item: DraftItem) {
     const layout = item.draft.target.layout;
     if (layout) {
@@ -832,6 +832,7 @@ export function A3SReviewOverlay({
     const text = JSON.stringify(bridge.exportRepairs(copied), null, 2);
     if (!await writeClipboard(text, callbacks.current.copyToClipboard)) return;
     invokeCallback(callbacks.current.onCopied, { format: "json", text, drafts: structuredClone(copied) });
+    if (preferences.clearOnCopy) clearCopiedDrafts(copied);
   }
 
   async function copyDraftsMarkdown() {
@@ -841,10 +842,15 @@ export function A3SReviewOverlay({
     const text = bridge.exportRepairsMarkdown(copied);
     if (!await writeClipboard(text, callbacks.current.copyToClipboard)) return;
     invokeCallback(callbacks.current.onCopied, { format: "markdown", text, drafts: structuredClone(copied) });
+    if (preferences.clearOnCopy) clearCopiedDrafts(copied);
   }
 
+  const rootStyle = {
+    "--a3s-marker-color": preferences.markerColor,
+    "--a3s-wireframe-fade": String(preferences.wireframeFade),
+  } as CSSProperties;
   const content = (
-    <div className="a3s-root" data-a3s-testkit-overlay="" data-theme={theme}>
+    <div className="a3s-root" data-a3s-testkit-overlay="" data-theme={preferences.theme} data-dock={preferences.dock} style={rootStyle}>
       {layoutMode && layoutCanvas === "wireframe" && <div className="a3s-wireframe" aria-hidden="true" />}
       {(highlight || areaRect) && <div className="a3s-highlight" style={rectStyle(areaRect ?? highlight!)} aria-hidden="true" />}
       {layoutMode && layoutSource && !candidate && <div className="a3s-layout-target-preview" style={rectStyle(layoutTarget)} aria-hidden="true" />}
@@ -864,9 +870,10 @@ export function A3SReviewOverlay({
           <button type="button" title="Pause or resume page motion (P)" aria-label={paused ? "Resume page animations" : "Pause page animations"} aria-pressed={paused} className={paused ? "selected" : ""} onClick={togglePause}>{paused ? "Resume" : "Pause"}</button>
           <button type="button" title="Show or hide finding markers (H)" aria-label={markersVisible ? "Hide markers" : "Show markers"} aria-pressed={markersVisible} className={markersVisible ? "selected" : ""} onClick={toggleMarkers}>{markersVisible ? "Hide markers" : "Show markers"}</button>
           <button type="button" aria-label={`Turn auto-send ${autoSendEnabled ? "off" : "on"}`} aria-pressed={autoSendEnabled} className={autoSendEnabled ? "selected" : ""} onClick={() => setAutoSendEnabled((current) => !current)}>Auto-send · {autoSendEnabled ? "on" : "off"}</button>
-          <button type="button" aria-label={`Change overlay theme; current theme is ${theme}`} onClick={() => setTheme((current) => current === "system" ? "light" : current === "light" ? "dark" : "system")}>Theme · {theme}</button>
+          <button type="button" aria-label={`Change overlay theme; current theme is ${preferences.theme}`} onClick={cycleTheme}>Theme · {preferences.theme}</button>
           {marking && <button type="button" className="danger" onClick={() => stopMarking()}>Cancel</button>}
         </section>
+        <ReviewSettings preferences={preferences} onChange={changePreferences} onHideUntilRestart={hideUntilTabRestart} />
         {layoutMode && <LayoutComposer
           idPrefix={idPrefix}
           purpose={layoutPurpose}

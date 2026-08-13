@@ -362,6 +362,70 @@ describe("React adapter and review overlay", () => {
     expect(shadowQuery(".a3s-list").textContent).toContain("Submit callback draft");
   });
 
+  it("persists bounded presentation preferences and clears drafts after a successful copy", async () => {
+    const copyToClipboard = vi.fn()
+      .mockRejectedValueOnce(new Error("clipboard unavailable"))
+      .mockResolvedValue(undefined);
+    const first = render(<A3STestKit enabled page={{ id: "preferences" }} repairStorage="memory"><button id="preference-target">Preference target</button><A3SReviewOverlay enabled defaultOpen copyToClipboard={copyToClipboard} /></A3STestKit>);
+    await waitFor(() => expect(shadowQuery(".a3s-panel")).toBeTruthy());
+    const target = document.querySelector<HTMLElement>("#preference-target")!;
+    setRect(target, { x: 30, y: 50, width: 150, height: 34 });
+
+    fireEvent.change(shadowQuery("[aria-label='Overlay theme']"), { target: { value: "dark" } });
+    fireEvent.change(shadowQuery("[aria-label='Marker color']"), { target: { value: "#2563eb" } });
+    fireEvent.click(shadowQuery("[aria-label='Clear drafts after copy']"));
+    fireEvent.change(shadowQuery("[aria-label='Panel dock']"), { target: { value: "left" } });
+    fireEvent.change(shadowQuery("[aria-label='Wireframe page fade']"), { target: { value: "0.42" } });
+    await waitFor(() => expect(shadowQuery(".a3s-root").dataset.theme).toBe("dark"));
+    expect(shadowQuery(".a3s-root").dataset.dock).toBe("left");
+    expect(shadowQuery(".a3s-root").style.getPropertyValue("--a3s-marker-color")).toBe("#2563eb");
+    expect(shadowQuery(".a3s-root").style.getPropertyValue("--a3s-wireframe-fade")).toBe("0.42");
+
+    await addElementDraft(target, "Clear after copy");
+    fireEvent.click(shadowButton("Copy Markdown"));
+    await waitFor(() => expect(copyToClipboard).toHaveBeenCalledTimes(1));
+    expect(shadowQuery(".a3s-list").textContent).toContain("Clear after copy");
+    fireEvent.click(shadowButton("Copy Markdown"));
+    await waitFor(() => expect(copyToClipboard).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(shadowQuery(".a3s-list").textContent).not.toContain("Clear after copy"));
+    first.unmount();
+
+    render(<A3STestKit enabled page={{ id: "preferences" }} repairStorage="memory"><button>Reloaded</button><A3SReviewOverlay enabled defaultOpen /></A3STestKit>);
+    await waitFor(() => expect(shadowQuery(".a3s-root").dataset.theme).toBe("dark"));
+    expect(shadowQuery(".a3s-root").dataset.dock).toBe("left");
+    expect((shadowQuery("[aria-label='Clear drafts after copy']") as HTMLInputElement).checked).toBe(true);
+    expect(shadowButton("Auto-send · off")).toBeTruthy();
+    expect(shadowButton("Pause")).toBeTruthy();
+  });
+
+  it("blocks host pointer input explicitly and can hide the overlay until tab restart", async () => {
+    const hostClick = vi.fn();
+    const first = render(<A3STestKit enabled page={{ id: "interaction-policy" }} repairStorage="memory"><button id="host-action" onClick={hostClick}>Host action</button><A3SReviewOverlay enabled defaultOpen /></A3STestKit>);
+    await waitFor(() => expect(shadowQuery(".a3s-panel")).toBeTruthy());
+    const action = document.querySelector<HTMLElement>("#host-action")!;
+    fireEvent.click(action);
+    expect(hostClick).toHaveBeenCalledTimes(1);
+    fireEvent.click(shadowQuery("[aria-label='Block page pointer input']"));
+    fireEvent.click(action);
+    expect(hostClick).toHaveBeenCalledTimes(1);
+    fireEvent.click(shadowButton("Pause"));
+    fireEvent.click(shadowButton("Element"));
+    fireEvent.click(shadowButton("Hide until tab restart"));
+    await waitFor(() => expect(document.querySelector("[data-a3s-testkit-overlay]")).toBeNull());
+    expect(getPageContextBridge()?.animationsPaused()).toBe(false);
+    fireEvent.click(action);
+    expect(hostClick).toHaveBeenCalledTimes(2);
+    first.unmount();
+
+    const hidden = render(<A3STestKit enabled page={{ id: "interaction-policy" }} repairStorage="memory"><A3SReviewOverlay enabled defaultOpen /></A3STestKit>);
+    await waitFor(() => expect(getPageContextBridge()).not.toBeNull());
+    expect(document.querySelector("[data-a3s-testkit-overlay]")).toBeNull();
+    hidden.unmount();
+    window.sessionStorage.clear();
+    render(<A3STestKit enabled page={{ id: "interaction-policy" }} repairStorage="memory"><A3SReviewOverlay enabled defaultOpen /></A3STestKit>);
+    await waitFor(() => expect(shadowQuery(".a3s-panel")).toBeTruthy());
+  });
+
   it("marks a focused application element with Enter and restores focus on Escape", async () => {
     render(<A3STestKit enabled page={{ id: "keyboard" }} repairStorage="memory"><button id="keyboard-target">Keyboard target</button><A3SReviewOverlay enabled defaultOpen /></A3STestKit>);
     await waitFor(() => expect(shadowQuery(".a3s-panel")).toBeTruthy());

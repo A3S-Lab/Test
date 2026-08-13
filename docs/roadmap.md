@@ -312,7 +312,7 @@ The completion work intentionally preserves these product boundaries:
 - [x] Add global marker visibility, clear-all, direct marker-to-editor access,
       and deletion from the active editor without making the full marker
       rectangle intercept normal page input
-- [ ] Persist bounded presentation preferences for theme, marker color,
+- [x] Persist bounded presentation preferences for theme, marker color,
       clear-on-copy, interaction blocking, panel dock, wireframe fade, and
       hide-until-tab-restart; keep auto-send and animation pause non-persistent
 - [ ] Add an independently defined, categorized, searchable catalog of at
