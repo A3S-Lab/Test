@@ -395,6 +395,33 @@ single Web scenario in a fresh browser session using the owning network policy.
 Only a passing proof can reach `review_ready`; the candidate is not committed
 to the application repository automatically.
 
+### Real-browser lifecycle matrix
+
+The ignored `a3s-test-cli` integration suite in
+`crates/a3s-test-cli/tests/repair_e2e.rs` exercises the repair protocol against
+the bundled Test Kit fixture and an admitted standalone Chromium runtime. Its
+independent scenarios prove:
+
+| Scenario | Direct evidence |
+| --- | --- |
+| Single repair | page submission, owned before evidence, claim, progress, completion, verification, and human acceptance |
+| Ordered batch | stable finding order, an isolated first-item failure, continued second-item processing, and typed per-item results |
+| Clarification | agent question, page-local human reply, authoritative ingestion, and return to the queue |
+| Cancellation | cancellation from both queued and claimed states |
+| Agent disconnect | a pre-edit claim returns to the queue, while possible editing is quarantined in `needs_input` |
+| Hot reload | an observation-bound `@cN` ref is rejected after the page revision changes, then a fresh inspection succeeds |
+| Verification failure | explicit failed criteria and project checks produce `verification_failed`, never `resolved`, and permit human retry |
+| Restart recovery | independent CLI processes replay the append-only ledger without duplicating events |
+| ACL promotion | a generated candidate is persisted and passes in a fresh same-origin browser before `review_ready` |
+
+Run the matrix from the crate workspace with the admitted browser executable
+and its Chromium path configured:
+
+```bash
+cargo test -p a3s-test-cli --test repair_e2e --locked -- \
+  --ignored --test-threads=1
+```
+
 ## CI and compatibility
 
 CI should enable `A3STestKit` but omit `A3SReviewOverlay`. Pages without the

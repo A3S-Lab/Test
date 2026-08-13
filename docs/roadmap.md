@@ -252,7 +252,7 @@ snapshot. Pages without the SDK retain the existing Web behavior.
 - [x] Generate and persist the smallest admitted ACL candidate from a stable
       locator and explicit text criterion, then prove its single same-origin Web
       scenario in a fresh browser before `review_ready`
-- [ ] Validate end-to-end flows for single repair, ordered batch repair,
+- [x] Validate end-to-end flows for single repair, ordered batch repair,
       clarification, cancellation, agent disconnect, hot-reload ref expiry,
       verification failure, restart recovery, and promotion to ACL
 - [x] Document integration for React/Vite/Next.js, security and redaction,

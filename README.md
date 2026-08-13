@@ -112,6 +112,11 @@ session-scoped automatic resolution must be enabled explicitly. See the
 [Test Kit design and security contract](docs/testkit.md) and
 [roadmap](docs/roadmap.md).
 
+The real-browser repair matrix independently covers single and ordered batch
+work, clarification, cancellation, disconnect recovery, stale refs after hot
+reload, verification failure, process restart, and fresh-browser ACL
+promotion.
+
 Human-marked repairs use the owning session's append-only ledger through MCP
 or the equivalent `agent repair-*` commands. One persistent mutation slot
 prevents concurrent sessions or processes from editing the workspace, while
