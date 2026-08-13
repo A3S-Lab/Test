@@ -183,6 +183,9 @@ snapshot. Pages without the SDK retain the existing Web behavior.
 - [x] Add an optional `A3SReviewOverlay` that supports element click, selected
       text, explicit multi-select, rectangular area selection, and freehand
       drawing while keeping normal application interaction blocking explicit
+- [x] Add a non-mutating Layout Mode for typed component placement and section
+      rearrangement, with page/wireframe canvases, viewport CSS-pixel regions,
+      purpose metadata, pointer drawing, and keyboard source selection
 - [x] Let reviewers create, edit, delete, hide, and reopen local draft findings
       with instruction, optional success criteria, severity, and intent
 - [x] Support single `Send and auto-fix`, `Send selected (N)`, and `Send all`
@@ -232,6 +235,9 @@ snapshot. Pages without the SDK retain the existing Web behavior.
       the affected findings to `needs_input` rather than guessing order
 - [x] Add a typed, non-keyword mechanism for declaring semantically
       contradictory requests across otherwise disjoint targets
+- [x] Preserve typed `placement` and `rearrange` intents through the page
+      bridge, Web driver, queue, append-only ledger, MCP/CLI projection, and
+      ordered batch handoff without converting metadata into hidden prompts
 - [x] Record exactly which changed files and checks the coding agent reports in
       each stored verification; preserving unrelated dirty-worktree changes
       remains a coding-agent safety requirement
@@ -248,6 +254,9 @@ snapshot. Pages without the SDK retain the existing Web behavior.
       focused project-check results before a repair can become `review_ready`
 - [x] Require human acceptance by default; allow session-scoped automatic
       resolution only when all declared verification gates pass
+- [x] Require explicit success evidence for layout repairs and verify that a
+      rearranged target overlaps its requested region instead of passing only
+      because the original node still exists
 - [x] Let a human reject or reopen a repair while retaining every attempt,
       reply, evidence digest, and verification result
 - [x] Continue independent findings after an isolated failure while preserving
@@ -257,6 +266,7 @@ snapshot. Pages without the SDK retain the existing Web behavior.
       scenario in a fresh browser before `review_ready`
 - [x] Validate end-to-end flows for single repair, ordered batch repair,
       clarification, cancellation, agent disconnect, hot-reload ref expiry,
-      verification failure, restart recovery, and promotion to ACL
+      verification failure, restart recovery, Layout Mode handoff, and
+      promotion to ACL
 - [x] Document integration for React/Vite/Next.js, security and redaction,
       coding-agent watch mode, CI behavior, and migration/compatibility rules

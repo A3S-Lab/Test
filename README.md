@@ -104,6 +104,8 @@ publish bounded component/source hints, semantic locators, and element geometry
 in viewport, document, and normalized coordinates. Its Shadow DOM overlay lets
 reviewers mark one element or an ordered batch, add repair instructions, and
 send the findings to the coding agent through the owning A3S Test session.
+Layout Mode adds typed component placement and section rearrangement with
+viewport CSS-pixel targets while leaving the host DOM unchanged.
 
 A3S Test captures owned before/after evidence, serializes workspace mutation
 across sessions and processes, and proves an admitted ACL candidate in a fresh
@@ -114,8 +116,8 @@ session-scoped automatic resolution must be enabled explicitly. See the
 
 The real-browser repair matrix independently covers single and ordered batch
 work, clarification, cancellation, disconnect recovery, stale refs after hot
-reload, verification failure, process restart, and fresh-browser ACL
-promotion.
+reload, verification failure, process restart, typed Layout Mode handoff, and
+fresh-browser ACL promotion.
 
 Human-marked repairs use the owning session's append-only ledger through MCP
 or the equivalent `agent repair-*` commands. One persistent mutation slot

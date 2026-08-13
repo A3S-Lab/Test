@@ -64,9 +64,13 @@ For CI, keep `A3STestKit` enabled and omit `A3SReviewOverlay`. For Next.js,
 mount both from a client component and gate them with
 `process.env.NODE_ENV !== "production"`. The overlay supports element, text,
 click/drag multi-selection, rectangular and freehand findings, persistent
-markers, draft editing/hiding, animation pause, system/light/dark themes, and
-bounded structured copy. Submitted findings support human/agent replies,
-accept/reject/reopen review actions, and per-finding lifecycle projection.
+markers, draft editing/hiding, animation pause, system/light/dark themes,
+bounded structured copy, and typed Layout Mode. Layout Mode can draw the
+viewport region for a new component or select an existing section and describe
+its destination. It emits `placement` or `rearrange` intent for A3S Test and
+does not move or style application DOM itself. Submitted findings support
+human/agent replies, accept/reject/reopen review actions, and per-finding
+lifecycle projection.
 
 The overlay exposes a named non-modal dialog, finding-specific action names,
 one polite status announcer, visible keyboard focus, and focus restoration when

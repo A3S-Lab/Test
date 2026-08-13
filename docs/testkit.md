@@ -243,6 +243,67 @@ text, explicit multi-select, a rectangular region, or freehand drawing. A
 draft includes a human instruction and may include success criteria, intent,
 and severity.
 
+### Layout Mode
+
+Layout Mode adds two typed repair intents without turning the overlay into a
+page builder:
+
+- **Placement** records the requested component type, `page` or `wireframe`
+  canvas, optional purpose, and a target region. The target has kind `region`
+  and may have no current node because the requested component does not exist
+  yet.
+- **Rearrange** selects a current section by private node ID, captures its
+  original viewport rectangle, and records a target region plus an optional
+  purpose.
+
+The normal workflow is to open **Layout**, describe the page purpose, then use
+**Draw placement** for a new component or **Select section on page** followed
+by destination coordinates or **Draw destination** for a rearrangement. The
+source selection supports pointer input and the same focus-and-Enter keyboard
+path as element marking. Layout drafts can be edited, selected, and submitted
+in the same stable batch order as other findings.
+
+All layout rectangles use viewport CSS pixels. The wireframe grid, selected
+region, and destination preview are pointer-transparent overlay evidence; they
+never add inline styles, move nodes, or otherwise mutate application layout.
+The coding agent remains responsible for editing authorized source files, and
+A3S Test re-observes the result before review.
+
+The `a3s.test.repair/1` target carries the intent as structured data:
+
+```json
+{
+  "kind": "region",
+  "nodeIds": [],
+  "region": { "x": 700, "y": 320, "width": 300, "height": 160 },
+  "layout": {
+    "kind": "placement",
+    "componentType": "Pricing section",
+    "canvas": "wireframe",
+    "purpose": "Developer tool landing page"
+  }
+}
+```
+
+```json
+{
+  "kind": "node",
+  "nodeIds": ["private-current-node-id"],
+  "region": { "x": 40, "y": 420, "width": 560, "height": 180 },
+  "layout": {
+    "kind": "rearrange",
+    "originalRegion": { "x": 24, "y": 140, "width": 560, "height": 180 },
+    "purpose": "Developer tool landing page"
+  }
+}
+```
+
+Unknown layout fields, empty component types, invalid canvases, non-finite
+rectangles, placement without a region, and rearrangement without a current
+node or destination are rejected at the page boundary. Instructions and page
+text remain separate untrusted evidence; layout metadata is never converted
+into a hidden prompt.
+
 Submission is always explicit by default:
 
 - `Send and auto-fix` submits one draft.
@@ -397,6 +458,12 @@ unbounded sleep:
 5. capture and hash an A3S Test-owned after screenshot and bounded context;
 6. attach the coding agent's changed-file and focused-check report.
 
+Layout intent always requires an explicit success-criteria result. Placement
+also requires an addressable target region within the current viewport;
+rearrangement requires the selected node, or a stable locator replacement, to
+overlap the requested destination. The continued existence of the source node
+alone is not treated as a successful layout repair.
+
 Human acceptance is the default. The overlay can accept, reject, reply to, or
 reopen a finding, and the append-only ledger retains every attempt, reply,
 evidence bundle, and verification result. A session started with
@@ -424,6 +491,7 @@ independent scenarios prove:
 | Scenario | Direct evidence |
 | --- | --- |
 | Single repair | page submission, owned before evidence, claim, progress, completion, verification, and human acceptance |
+| Layout overlay batch | pointer placement plus keyboard source selection, typed `placement` and `rearrange` ingestion through `repair-watch`, stable batch order, owned before evidence, and no overlay mutation of the source element |
 | Ordered batch | stable finding order, an isolated first-item failure, continued second-item processing, and typed per-item results |
 | Clarification | agent question, page-local human reply, authoritative ingestion, and return to the queue |
 | Cancellation | cancellation from both queued and claimed states |
