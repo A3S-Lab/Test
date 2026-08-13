@@ -1,6 +1,8 @@
 use std::collections::BTreeSet;
+use std::future::Future;
 use std::num::NonZeroU32;
 use std::path::{Component, Path, PathBuf};
+use std::pin::Pin;
 use std::process::ExitCode;
 use std::sync::Arc;
 use std::time::Duration;
@@ -218,17 +220,24 @@ struct GuiRunArgs {
     gui_window_automation_id: Option<String>,
 }
 
-pub async fn execute(cli: Cli) -> Result<ExitCode> {
+/// Dispatch one command without storing every async branch in one stack future.
+///
+/// Windows gives the process main thread a smaller default stack than Unix.
+/// Keeping the selected branch behind a type-erased allocation prevents an
+/// unrelated large command future from exhausting that stack.
+pub fn execute(cli: Cli) -> Pin<Box<dyn Future<Output = Result<ExitCode>>>> {
     match cli.command {
-        Commands::Agent(args) => agent_session::execute(args).await,
-        Commands::Check(args) => check(args).await,
-        Commands::Capabilities(args) => capabilities(args).await,
-        Commands::Contract(args) => Box::pin(contract_workflow::execute(args)).await,
-        Commands::GuiCertification(args) => gui_certification::print_matrix(args),
-        Commands::GuiCertify(args) => gui_certification::certify(args).await,
-        Commands::Mcp(args) => serve_mcp(args).await,
-        Commands::Provider(args) => provider_schema::execute(args),
-        Commands::Run(args) => run(args).await,
+        Commands::Agent(args) => Box::pin(agent_session::execute(args)),
+        Commands::Check(args) => Box::pin(check(args)),
+        Commands::Capabilities(args) => Box::pin(capabilities(args)),
+        Commands::Contract(args) => Box::pin(contract_workflow::execute(args)),
+        Commands::GuiCertification(args) => {
+            Box::pin(async move { gui_certification::print_matrix(args) })
+        }
+        Commands::GuiCertify(args) => Box::pin(gui_certification::certify(args)),
+        Commands::Mcp(args) => Box::pin(serve_mcp(args)),
+        Commands::Provider(args) => Box::pin(async move { provider_schema::execute(args) }),
+        Commands::Run(args) => Box::pin(run(args)),
     }
 }
 
@@ -751,16 +760,15 @@ fn plural(count: usize) -> &'static str {
 mod tests {
     use super::*;
 
-    const MAX_DISPATCH_FUTURE_BYTES: usize = 512 * 1024;
-
     #[test]
     fn command_dispatch_future_stays_below_the_windows_stack_budget() {
         let cli = Cli::try_parse_from(["a3s-test", "gui-certification", "--json"])
             .expect("GUI certification command");
         let future = execute(cli);
+        let pointer_pair_bytes = 2 * std::mem::size_of::<usize>();
 
         assert!(
-            std::mem::size_of_val(&future) <= MAX_DISPATCH_FUTURE_BYTES,
+            std::mem::size_of_val(&future) <= pointer_pair_bytes,
             "command dispatch future is {} bytes",
             std::mem::size_of_val(&future)
         );

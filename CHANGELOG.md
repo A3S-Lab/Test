@@ -22,6 +22,9 @@
 
 ### Safety
 
+- CLI commands run on an explicitly sized async worker stack, and command
+  futures are type-erased at dispatch so large unrelated branches cannot
+  exhaust the smaller Windows process-entry stack.
 - Source paths are contained beneath the workflow config, file digests are
   calculated locally, provider credentials come only from explicitly named
   environment variables, and generated artifacts contain no executable ACL.
