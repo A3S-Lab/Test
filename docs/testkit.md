@@ -52,6 +52,10 @@ are:
   through the browser-bound repair channel.
 - `applyRepairEvent(event)` projects queue and agent state back into the
   overlay.
+- `reportQuality(report)` accepts a bounded deterministic Contract Report for
+  optional human review.
+- `listQualityReports()`, `dismissQualityFinding(...)`, and
+  `dismissQualityReport(...)` manage only local review candidates.
 - `dispose()` removes SDK observers, portals, listeners, and private state.
 
 The bridge does not expose `eval`, filesystem access, cookies, arbitrary
@@ -84,7 +88,7 @@ revision and scope.
 ```json
 {
   "protocol": "a3s.test.page-context/1",
-  "sdkVersion": "0.1.0",
+  "sdkVersion": "0.2.0",
   "revision": 42,
   "page": {
     "id": "checkout",
@@ -162,6 +166,11 @@ The runtime never serializes:
 
 Application facts are an explicit callback result and pass through the same
 depth, key, string, and encoded-size bounds.
+
+Node IDs are held in a private `WeakMap` side table. The runtime does not add
+IDs, coordinates, component ownership, or source paths as attributes on the
+host application's DOM. It derives that metadata after layout and invalidates
+the projection through mutation, resize, route, viewport, and scroll signals.
 
 ## React adapter
 
@@ -242,6 +251,50 @@ The optional overlay creates local draft findings from element click, selected
 text, explicit multi-select, a rectangular region, or freehand drawing. A
 draft includes a human instruction and may include success criteria, intent,
 and severity.
+
+The overlay is an operate-mode instrument panel, not a second application
+shell. Its header stays one line, explanatory copy truncates, findings use
+compact separators instead of nested cards, and the host page remains the
+visual authority. Severity always has a text label. Quality markers use a
+distinct dashed treatment so color is not the sole distinction.
+
+### Deterministic quality candidates
+
+A closed ACL suite can reconcile an admitted Expected Surface Contract against
+the current atomic observation. Core owns matching, rules, severity, stable
+finding IDs, and the `passed`, `failed`, or `inconclusive` outcome. The Web
+driver may then project the resulting report into a compatible Test Kit:
+
+```text
+Runner report --optional one-way projection--> Quality Store
+                                                   |
+                                             reviewer confirms target
+                                                   |
+                                    local draft or explicit submission
+                                                   |
+                                                   v
+                                          authoritative Repair Ledger
+```
+
+Quality candidates and submitted repairs are deliberately separate stores.
+Projection never authorizes workspace changes and never changes the Runner
+verdict. Viewing a finding, opening its editor, cancelling the editor, or
+cancelling manual target selection leaves the candidate intact. The candidate
+is removed only when a reviewer explicitly dismisses it, saves it as a local
+draft, or successfully submits a repair. These operations affect one finding,
+not its siblings.
+
+If `observed_node_id` still resolves at the current page revision, the overlay
+can stage that node for review. A missing or stale node requires the reviewer
+to choose a target manually. The private observed node ID is never treated as
+durable identity across a route change or hot reload.
+
+The in-memory Quality Store retains at most five reports by default, with a
+configurable bound from one through twenty. Each report is limited to 500
+findings, 5,000 matches, 1 MiB of encoded JSON, finite numbers, bounded strings,
+unique finding IDs, and JSON depth 32. A newer report atomically replaces the
+same contract/variant/state scope. A passed report or one with no findings
+clears earlier candidates in that scope while still emitting a refresh event.
 
 ### Layout Mode
 
@@ -593,10 +646,11 @@ unknown; bridge presence and protocol are discovered independently from the
 loaded page. Unsupported or malformed bridges fail closed for scoped context
 operations without exposing arbitrary browser evaluation to the agent.
 
-Treat `a3s.test.page-context/1` and `a3s.test.repair/1` as versioned contracts.
-Additive SDK releases may add optional fields or capabilities but must retain
-the hard payload bounds, private node-ID handling, redaction behavior, and
-latest-observation ref expiry.
+Treat `a3s.test.page-context/1`, `a3s.test.quality-report/1`, and
+`a3s.test.repair/1` as versioned contracts. Additive SDK releases may add
+optional fields or capabilities but must retain the hard payload bounds,
+private node-ID handling, redaction behavior, latest-observation ref expiry,
+and the separation between quality candidates and repair authorization.
 
 ## Storage and recovery
 
@@ -638,7 +692,7 @@ session, database, or model loop owns repair state.
 
 ## License boundary
 
-The feature set is independently implemented from public behavior and this
-specification. Third-party annotation-tool source code, styles, icons,
-templates, generated markup, and output wording are not copied into the
-MIT-licensed A3S Test implementation.
+Optional perception providers remain separate typed integrations. Model
+weights, serving code, and model-specific licenses are not redistributed with
+the MIT-licensed Test Kit. Applications must admit each provider and its input
+data under their own deployment and license policy.

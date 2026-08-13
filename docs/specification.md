@@ -352,6 +352,103 @@ page_errors "javascript-errors" {
 Every evidence path must be non-empty, relative, and free of parent traversal.
 The Web driver resolves it beneath the scenario artifact directory.
 
+## Expected Surface Contracts
+
+A Surface Contract is a versioned ACL document that describes expected
+semantic structure for one or more product variants and states. It extends the
+same A3S ACL configuration language as suites; it is not a parallel DSL and it
+is not a serialized browser accessibility tree.
+
+Inputs such as a PRD or design reference may produce a draft contract. The
+generator must retain source provenance and uncertainty. It must not claim
+that expected elements were observed in a browser. Blocking rules require at
+least one provenance entry with `status = "reviewed"` and `confidence = 100`.
+
+```acl
+surface_contract "checkout" {
+    version = 1
+
+    context {
+        mode = "operate"
+        audience = ["customer"]
+        primary_outcome = "place_order"
+    }
+
+    provenance "requirements" {
+        kind = "prd"
+        uri = "./checkout.md"
+        digest = "sha256:56ea72bad66743f4dadee9515096bb39a200bf9ca8d5669293f41912c55ec14e"
+        status = "reviewed"
+        confidence = 100
+    }
+
+    variant "desktop" {
+        state = "ready"
+        min_width = 1024
+
+        element "submit" {
+            test_id = "place-order"
+            role = "button"
+            name = "Place order"
+            visible = true
+            enabled = true
+            severity = "blocking"
+        }
+    }
+}
+```
+
+The root accepts exactly one `context`, one or more `provenance` blocks, and
+one or more `variant` blocks. Supported context modes are `persuade`,
+`operate`, `read`, and `experience`. Provenance kind is `prd`, `design`,
+`manual`, or `official_docs`; status is `draft` or `reviewed`; every digest is
+`sha256:` followed by 64 lowercase hexadecimal characters.
+
+A variant selects one named application state and may constrain `min_width`,
+`max_width`, `theme`, and `language`. Each element has a stable contract ID and
+at least one identity field: `test_id`, `component_id`, or `role`. Optional
+expectations are `name`, `description`, `required`, `visible`, `enabled`,
+`checked`, `selected`, `expanded`, `readonly`, `form_required`, `invalid`, and
+`parent`. Parent references stay inside the variant and must be acyclic.
+
+`severity` is `blocking`, `important`, or `suggestion`; the default is
+`important`. Only blocking findings fail the contract. Important and
+suggestion findings remain in a passed report as advisory evidence. Missing,
+absent, or truncated Test Kit context cannot prove completeness and produces
+an `inconclusive` report, which fails closed at the runner boundary.
+
+The suite invokes an admitted contract with a runner-owned action:
+
+```acl
+verify_contract "checkout-ready" {
+    contract = "./contracts/checkout.acl"
+    variant = "desktop"
+    state = "ready"
+}
+```
+
+Contract and provenance paths must resolve to regular files beneath the suite
+directory. The CLI loads every referenced contract and verifies each declared
+SHA-256 digest before any surface opens. `verify_contract` is legal in closed
+ACL suites only. It is absent from interactive agent and MCP schemas and must
+never reach a surface driver.
+
+Reconciliation matches each element in this order: exact test ID, component
+identity plus optional role/name, exact role and name, then role alone.
+Ambiguity is a finding rather than an arbitrary selection. Reports preserve
+matches, expected and actual values, severity, confidence, observation
+revision, and a stable `finding:<sha256>` identifier. The finding ID is derived
+from the contract, variant, state, rule, and contract element, so DOM-private
+node IDs and changing actual values do not break human review continuity.
+
+After reconciliation, the Runner may project the bounded report into a
+compatible Test Kit overlay. This projection is optional, one-way, and
+non-authoritative. Missing Test Kit support, rejection, or projection failure
+does not change the report or verdict. Projection runs with a separate bounded
+best-effort budget, so a hanging page bridge cannot consume the deterministic
+scenario deadline. The page may turn a projected finding into a draft, but
+only explicit submission creates repair authorization.
+
 ## Typed targets
 
 ```acl
@@ -403,7 +500,7 @@ code and path to repair manifests.
 ## Browser admission and runner bounds
 
 `a3s-test capabilities --json` probes the configured executable before any
-browser session launches. Action protocol revision 5 admits A3S Browser
+browser session launches. Action protocol revision 6 admits A3S Browser
 `>= 0.1.1, < 0.2.0` and standalone agent-browser `>= 0.26.0, < 0.27.0`.
 Unverified versions fail with `test.driver.web.version_unsupported`.
 

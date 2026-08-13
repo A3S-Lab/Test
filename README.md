@@ -107,6 +107,14 @@ send the findings to the coding agent through the owning A3S Test session.
 Layout Mode adds typed component placement and section rearrangement with
 viewport CSS-pixel targets while leaving the host DOM unchanged.
 
+Deterministic Surface Contracts compare that observed context with reviewed
+expectations derived from a PRD, design reference, manual decision, or official
+documentation. Blocking differences fail the suite; advisory differences stay
+in the report without blocking. A compatible overlay receives the report as a
+review candidate, where a human can confirm the target and authorize one or a
+batch of repairs. Report projection is optional and can never change the
+runner verdict.
+
 Install the package tarball published with every GitHub Release:
 
 ```bash
@@ -193,7 +201,7 @@ tagged Rust package:
 
 ```bash
 cargo install --git https://github.com/A3S-Lab/Test \
-  --tag v0.6.0 --locked a3s-test-cli
+  --tag v0.7.0 --locked a3s-test-cli
 ```
 
 ## Turn a proven path into a regression
@@ -242,6 +250,60 @@ ambiguous conditions, invalid locators, and unsafe artifact paths before a
 browser launches. Runs retry only explicitly retryable infrastructure failures
 that occurred before dispatch; assertions, timeouts, and ambiguous dispatched
 actions are never replayed automatically.
+
+### Verify reviewed interface expectations
+
+Expected interface structure uses the same ACL language rather than a second
+DSL. A PRD or design reference can generate a Surface Contract draft, but it
+cannot claim to be a browser accessibility tree. Blocking expectations become
+admissible only after authoritative human review and source digest verification.
+
+```acl
+surface_contract "checkout" {
+    version = 1
+
+    context {
+        mode = "operate"
+        audience = ["customer"]
+        primary_outcome = "place_order"
+    }
+
+    provenance "requirements" {
+        kind = "prd"
+        uri = "./checkout.md"
+        digest = "sha256:56ea72bad66743f4dadee9515096bb39a200bf9ca8d5669293f41912c55ec14e"
+        status = "reviewed"
+        confidence = 100
+    }
+
+    variant "desktop" {
+        state = "ready"
+
+        element "submit" {
+            test_id = "place-order"
+            role = "button"
+            name = "Place order"
+            severity = "blocking"
+        }
+    }
+}
+```
+
+Reference it from a deterministic suite:
+
+```acl
+verify_contract "checkout-ready" {
+    contract = "./contracts/checkout.acl"
+    variant = "desktop"
+    state = "ready"
+}
+```
+
+The CLI loads every referenced contract and verifies its local provenance
+before opening a browser. Reconciliation prefers test ID, component identity,
+role plus accessible name, and finally role. Missing or truncated Test Kit
+context is inconclusive and fails closed. See the [ACL specification](docs/specification.md)
+for the complete grammar and verdict rules.
 
 ## One engine, two primary workflows
 

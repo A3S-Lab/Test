@@ -37,6 +37,107 @@ Those capabilities are injected through typed interfaces:
 The runner never branches on backend names. Each backend is a typed
 `SurfaceDriver` object registered for one `Surface`.
 
+## Surface understanding from first principles
+
+A3S Test separates four artifacts that answer different questions:
+
+| Artifact | Question | Authority |
+| --- | --- | --- |
+| Observed Surface | What did this exact browser revision render? | Browser accessibility snapshot plus bounded Test Kit context |
+| Expected Surface Contract | What should this product state expose? | Reviewed PRD, design, manual decision, or official documentation |
+| Contract Report | Where does the observation differ from the expectation? | Deterministic Core reconciliation |
+| Repair Authorization | Which reported problem may a coding agent change? | Explicit human submission through the repair ledger |
+
+None of these artifacts may impersonate another. A design image or PRD can
+generate an Expected Surface Contract draft, but it cannot generate a browser
+accessibility tree because no browser rendered it. Test Kit context is
+evidence, not an instruction. A report is a diagnosis, not permission to edit.
+Opening or inspecting a finding is also not permission; only a submitted
+repair enters the authoritative ledger.
+
+The complete Web path is:
+
+```text
+PRD / design / reviewed decision
+              |
+              v
+    Surface Contract draft --human review + digest--> admitted contract
+              |                                           |
+              |                                           v
+              |                              deterministic Core rules
+              |                                           ^
+              v                                           |
+browser DOM + accessibility + layout ----atomic observation
+                                                          |
+                                                          v
+                                               Contract Report
+                                                  |       |
+                             optional projection--+       +--runner verdict
+                                                  |
+                                            human selection
+                                                  |
+                                                  v
+                                     authoritative Repair Ledger
+                                                  |
+                                      agent edit + owned evidence
+                                                  |
+                                                  v
+                                      verify the same contract again
+```
+
+This decomposition keeps the fast path deterministic. Browser facts are used
+before probabilistic perception, and a model can propose expected structure or
+visual candidates without acquiring verdict or mutation authority.
+
+### Understanding during rendering
+
+The browser already computes DOM structure, accessibility semantics, CSS
+layout, paint order, scrolling, and viewports. Replacing that engine would
+duplicate a less accurate renderer. The embedded Test Kit instead derives a
+versioned semantic projection after a stable browser frame:
+
+- DOM and open Shadow DOM supply structure, roles, names, states, and locator
+  candidates;
+- `getBoundingClientRect()` and the visual viewport supply CSS-pixel geometry,
+  visibility, occlusion, transforms, and scroll-container relationships;
+- explicit component boundaries add stable ownership, source hints, readiness,
+  and application facts without annotating every element;
+- `MutationObserver`, `ResizeObserver`, route, viewport, and scroll signals
+  invalidate the cached projection, while unchanged pages are never polled;
+- private node IDs remain in a `WeakMap` side table. The runtime does not write
+  testing metadata into application DOM attributes;
+- the Web adapter captures the accessibility snapshot and Test Kit revision as
+  one stable observation or rejects the race.
+
+The overlay is optional and subordinate to the host page. Its default form is
+a compact, non-modal instrument panel with a single-line header, dense
+separated findings, explicit severity text, and named controls. It must not
+introduce an application-style navigation shell, decorative header, or motion
+that competes with the surface under review.
+
+### Optional visual grounding
+
+Some surfaces have no useful DOM or accessibility semantics: canvas, WebGL,
+remote desktops, image-only controls, and design references. These may use an
+injected visual-grounding provider after deterministic targeting fails or when
+the caller explicitly requests visual grounding. The provider boundary should
+accept a digest-bound screenshot, dimensions, natural-language query, current
+observation ID, and explicit budget, then return bounded point or box
+candidates with provider/model identity and confidence.
+
+Provider output is never a durable element identity. The adapter first
+hit-tests a candidate against current Test Kit nodes and semantic evidence. A
+candidate that cannot be mapped remains an image-bound visual target and
+expires with the observation or screenshot digest. It cannot independently
+pass a blocking surface contract. Model weights, runtimes, and licenses stay
+outside `a3s-test-core`; research-only models are not bundled with the MIT
+distribution.
+
+Quality projection has its own bounded best-effort budget outside deterministic
+step execution. A rejected, failed, cancelled, or hanging projection cannot
+turn a completed contract verdict into a failure, cancellation, or scenario
+timeout.
+
 ## Runtime layers
 
 ```text
@@ -92,6 +193,7 @@ SurfaceDriver
 └── open(ScenarioContext) -> DriverSession
     ├── observe() -> SurfaceObservation
     ├── execute(TestStep) -> StepOutput
+    ├── project_quality_report(ContractReport) -> optional review projection
     └── close()
 ```
 
@@ -265,9 +367,11 @@ movement plus a cancelable page `contextmenu` event, avoiding an unobservable
 browser-native menu; drag scrolls both endpoints into view; wheel owns modifier
 press/release cleanup.
 
-Revision 5 is the current cross-surface contract. Revision 4 adds GUI
-automation-ID targets; revision 5 adds observation-scoped visual points. Web
-adapters reject GUI-only targets instead of silently translating them.
+Revision 6 is the current cross-surface contract. Revision 4 adds GUI
+automation-ID targets, revision 5 adds observation-scoped visual points, and
+revision 6 reserves `verify_contract` for deterministic runner execution. Web,
+GUI, interactive-agent, and MCP action paths reject or omit that runner-owned
+action instead of silently dispatching it to a surface.
 
 The adapter keeps configuration, command execution, protocol mapping, session
 behavior, and host-process supervision in separate modules. The public crate

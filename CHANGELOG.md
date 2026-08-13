@@ -2,6 +2,38 @@
 
 ## Unreleased
 
+## 0.7.0 - 2026-08-13
+
+### Added
+
+- Added versioned Expected Surface Contracts to A3S ACL with reviewed PRD,
+  design, manual-decision, and official-document provenance, digest admission,
+  named variants and states, stable element identity, accessibility semantics,
+  and deterministic reconciliation against bounded Test Kit observations.
+- Added runner-owned `verify_contract` in action protocol revision 6. Blocking
+  findings fail, advisory findings remain in passed reports, and missing or
+  truncated page context fails closed as inconclusive while retaining the full
+  contract report.
+- Added stable finding identifiers and optional one-way projection into the
+  Test Kit Quality Store. Reviewers can inspect, target, dismiss, save, and
+  submit individual findings without granting repair authority merely by
+  viewing or editing a candidate.
+- Updated `@a3s-lab/testkit` to 0.2.0 with bounded quality-report admission,
+  contract-finding markers, compact review controls, and explicit single or
+  batch submission into the existing repair ledger.
+- Documented source-to-contract generation and typed visual-grounding provider
+  boundaries as future work. Visual candidates remain observation-scoped,
+  advisory, and subordinate to browser semantics.
+
+### Safety
+
+- Contract and provenance files must be regular files beneath the suite
+  directory, and every provenance digest is verified before a browser opens.
+- Interactive agents, MCP tools, sessions, and surface drivers reject or omit
+  runner-owned contract verification. Optional report projection cannot change
+  the deterministic runner verdict and has a separate bounded best-effort
+  budget, including when a page bridge hangs.
+
 ## 0.6.0 - 2026-08-13
 
 ### Added

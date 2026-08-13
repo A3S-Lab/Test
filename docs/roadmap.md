@@ -333,3 +333,58 @@ The completion work intentionally preserves these product boundaries:
       Layout authoring, and accessible spatial marker editing
 - [x] Re-run Test Kit typecheck/tests/build, Rust formatting/tests/clippy, the
       real Chromium Test Kit suite, and the complete repair lifecycle matrix
+
+## M12: Expected Surface Contracts and repair authorization
+
+- [x] Extend A3S ACL with a versioned `surface_contract` document instead of
+      introducing a parallel design DSL
+- [x] Preserve PRD, design, manual, and official-document provenance with
+      SHA-256 digests, review status, and confidence
+- [x] Require reviewed 100-confidence provenance before admitting any blocking
+      expectation
+- [x] Add variants, named states, viewport/theme/language constraints, stable
+      element identity, accessibility semantics, state, and parent structure
+- [x] Add deterministic matching in test ID, component, role/name, and role
+      order, with ambiguity reported instead of guessed
+- [x] Keep advisory findings in passed reports and reserve failed outcomes for
+      blocking findings; fail closed as inconclusive when bounded context is
+      absent or truncated
+- [x] Generate stable finding IDs independent of observation revision,
+      temporary DOM node IDs, and actual values
+- [x] Add runner-owned `verify_contract`, provenance digest verification before
+      browser startup, retained failed reports, and action protocol revision 6
+- [x] Keep `verify_contract` out of interactive agent and MCP action schemas
+- [x] Project bounded reports into a separate Test Kit Quality Store without
+      allowing projection failure to change the Runner verdict
+- [x] Require human target confirmation and explicit draft save or submission
+      before a projected finding enters the Repair Ledger
+- [x] Support finding-level dismissal and preserve sibling findings when one
+      candidate is drafted, submitted, cancelled, or dismissed
+
+## M13: Source-to-contract generation
+
+- [ ] Generate an Expected Surface Contract draft from a PRD while preserving
+      quoted source spans, uncertainty, and unresolved product decisions
+- [ ] Generate an Expected Surface Contract draft from a design image with
+      image digest, coordinate space, candidate hierarchy, and uncertainty
+- [ ] Provide a review workflow that promotes selected draft expectations to
+      `reviewed` without claiming that either source was browser-observed
+- [ ] Merge PRD and design drafts through explicit conflicts and provenance,
+      never by silently choosing one source
+- [ ] Re-run the same admitted contract after repair and correlate findings by
+      stable finding ID
+
+## M14: Optional visual grounding providers
+
+- [ ] Define a typed provider boundary for a digest-bound screenshot,
+      dimensions, query, observation ID, deadline, and cost budget
+- [ ] Return bounded boxes or points with provider/model identity, confidence,
+      and coordinate-space metadata
+- [ ] Hit-test candidates against current Test Kit nodes and accessibility
+      evidence before issuing any image-bound fallback target
+- [ ] Trigger visual grounding only for explicit requests or when deterministic
+      semantic targeting cannot represent the surface
+- [ ] Keep provider output advisory and observation-scoped; it must not pass a
+      blocking contract or become a durable ref by itself
+- [ ] Add provider conformance fixtures for canvas, image-only, remote-desktop,
+      and design-reference cases without bundling model weights
