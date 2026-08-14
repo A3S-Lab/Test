@@ -95,7 +95,7 @@ with the selected driver returns `test.session.browser_containment_mismatch`;
 non-canonical or drifted policy lists return
 `test.session.browser_network_policy_mismatch`.
 
-Action protocol revision 6 is the current cross-surface schema. Revision 2
+Action protocol revision 7 is the current cross-surface schema. Revision 2
 introduced the browser interactions needed to inspect document-style
 applications: click, hover, focus, double-click, context-click,
 fill, incremental type, check/uncheck, multi-value select, drag, key press,
@@ -106,7 +106,10 @@ second protocol. Revision 4 adds GUI automation-ID targets, revision 5 adds
 image-bound visual points, and revision 6 adds runner-owned deterministic
 surface-contract verification. Interactive action schemas omit
 `verify_contract`; a planner cannot use it to bypass suite admission,
-provenance digest verification, or the Runner's verdict semantics.
+provenance digest verification, or the Runner's verdict semantics. Revision 7
+adds terminal paste, resize, VT recording, and regex waits for deterministic
+TUI suites. Persistent external-planner sessions do not yet register a TUI
+host, so those terminal actions remain unavailable there.
 
 Semantic role, text, test-ID, label, and placeholder targets are used whenever
 the underlying browser command supports the requested subaction. Focus,
@@ -132,7 +135,7 @@ tools:
 | `test_act` | Execute exactly one typed action |
 | `test_finish` | Record a result and close the exact owned surface |
 | `test_abort` | Abort and close the exact owned surface |
-| `test_schema` | Return action protocol revision 6 and its interactive JSON Schema |
+| `test_schema` | Return action protocol revision 7 and its interactive JSON Schema |
 
 The server serializes turns within each session, bounds active sessions and
 request size, advertises only registered surfaces, and closes independent

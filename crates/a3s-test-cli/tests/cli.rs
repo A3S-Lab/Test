@@ -39,6 +39,66 @@ fn check_returns_machine_readable_suite() {
     assert_eq!(value["scenarios"][0]["surface"], "web");
 }
 
+#[cfg(unix)]
+#[test]
+fn run_executes_a_typed_tui_suite_without_starting_a_browser() {
+    let temp = tempfile::tempdir().expect("tempdir");
+    let suite = temp.path().join("tui.acl");
+    fs::write(
+        &suite,
+        r#"
+suite "tui-cli" {
+    scenario "shell" {
+        surface = "tui"
+        timeout_ms = 5000
+
+        wait "ready" {
+            text = "ready"
+        }
+        terminal_paste "input" {
+            text = "hello"
+        }
+        press "submit" {
+            key = "Enter"
+        }
+        wait "echoed" {
+            regex = "input:hello"
+        }
+        terminal_recording "record" {
+            path = "terminal/session.vt"
+        }
+    }
+}
+"#,
+    )
+    .expect("suite");
+
+    let output = Command::new(binary())
+        .args([
+            "run",
+            suite.to_str().unwrap(),
+            "--tui-executable",
+            "/bin/sh",
+            "--tui-arg",
+            "-c",
+            "--tui-arg",
+            "stty -echo; printf 'ready\\n'; IFS= read -r line; printf 'input:%s\\n' \"$line\"; sleep 30",
+            "--json",
+        ])
+        .current_dir(temp.path())
+        .output()
+        .expect("run TUI suite");
+
+    assert!(output.status.success(), "{output:?}");
+    let value: serde_json::Value = serde_json::from_slice(&output.stdout).expect("JSON output");
+    assert_eq!(value["status"], "passed");
+    assert_eq!(value["scenarios"][0]["surface"], "tui");
+    let evidence = value["scenarios"][0]["steps"][4]["output"]["evidence"][0]["path"]
+        .as_str()
+        .expect("recording path");
+    assert!(PathBuf::from(evidence).is_file(), "{evidence}");
+}
+
 #[test]
 fn provider_schema_discovers_the_llm_planner_wire_contract() {
     let output = Command::new(binary())
@@ -437,7 +497,7 @@ fn agent_schema_exposes_values_for_semantic_targets() {
     assert!(output.status.success(), "{output:?}");
     let value: serde_json::Value = serde_json::from_slice(&output.stdout).expect("JSON output");
     assert_eq!(value["planner"], "external_coding_agent");
-    assert_eq!(value["protocol_revision"], 6);
+    assert_eq!(value["protocol_revision"], 7);
     assert!(value["page_context_protocol"].is_null());
     assert_eq!(value["repair_resolution"]["default"], "human_review");
     assert_eq!(
@@ -565,7 +625,7 @@ fn capabilities_returns_the_admitted_web_protocol() {
     let value: serde_json::Value = serde_json::from_slice(&output.stdout).expect("JSON output");
     assert_eq!(value["integration"], "standalone");
     assert_eq!(value["version"], "0.26.0");
-    assert_eq!(value["protocol_revision"], 6);
+    assert_eq!(value["protocol_revision"], 7);
     assert!(value["features"].as_array().is_some_and(|features| {
         features
             .iter()

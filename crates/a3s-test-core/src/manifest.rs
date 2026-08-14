@@ -330,6 +330,25 @@ fn parse_step(block: &Block, scenario_path: &str) -> Result<TestStep, SpecError>
                 key: required_string(block, "key", &path)?.to_string(),
             }
         }
+        "terminal_paste" => {
+            ensure_attributes(block, &["text"], &path)?;
+            Action::TerminalPaste {
+                text: required_string(block, "text", &path)?.to_string(),
+            }
+        }
+        "terminal_resize" => {
+            ensure_attributes(block, &["columns", "rows"], &path)?;
+            Action::TerminalResize {
+                columns: required_u16(block, "columns", &path)?,
+                rows: required_u16(block, "rows", &path)?,
+            }
+        }
+        "terminal_recording" => {
+            ensure_attributes(block, &["path"], &path)?;
+            Action::TerminalRecording {
+                path: required_string(block, "path", &path)?.to_string(),
+            }
+        }
         "wheel" => {
             ensure_attributes(block, &["target", "delta_x", "delta_y", "modifiers"], &path)?;
             let delta_x = optional_signed_integer(block, "delta_x", 0, &path)?;
@@ -357,7 +376,7 @@ fn parse_step(block: &Block, scenario_path: &str) -> Result<TestStep, SpecError>
             }
         }
         "wait" => {
-            ensure_attributes(block, &["load", "text", "url", "visible"], &path)?;
+            ensure_attributes(block, &["load", "text", "regex", "url", "visible"], &path)?;
             Action::Wait {
                 condition: parse_wait(block, &path)?,
             }
@@ -620,7 +639,7 @@ fn parse_video_operation(block: &Block, path: &str) -> Result<VideoOperation, Sp
 }
 
 fn parse_wait(block: &Block, path: &str) -> Result<WaitCondition, SpecError> {
-    let count = ["load", "text", "url", "visible"]
+    let count = ["load", "text", "regex", "url", "visible"]
         .iter()
         .filter(|name| block.attributes.contains_key(**name))
         .count();
@@ -646,6 +665,12 @@ fn parse_wait(block: &Block, path: &str) -> Result<WaitCondition, SpecError> {
         return Ok(WaitCondition::Text(value_string(
             value,
             format!("{path}.text"),
+        )?));
+    }
+    if let Some(value) = block.attributes.get("regex") {
+        return Ok(WaitCondition::Regex(value_string(
+            value,
+            format!("{path}.regex"),
         )?));
     }
     if let Some(value) = block.attributes.get("url") {
@@ -1018,6 +1043,24 @@ fn required_u32(block: &Block, name: &str, path: &str) -> Result<u32, SpecError>
     })?;
     let value = positive_integer(value, &format!("{path}.{name}"))?;
     u32::try_from(value).map_err(|_| {
+        SpecError::new(
+            "test.spec.number_range",
+            format!("{path}.{name}"),
+            "integer is outside the supported range",
+        )
+    })
+}
+
+fn required_u16(block: &Block, name: &str, path: &str) -> Result<u16, SpecError> {
+    let value = block.attributes.get(name).ok_or_else(|| {
+        SpecError::new(
+            "test.spec.attribute_required",
+            format!("{path}.{name}"),
+            "required positive integer is missing",
+        )
+    })?;
+    let value = positive_integer(value, &format!("{path}.{name}"))?;
+    u16::try_from(value).map_err(|_| {
         SpecError::new(
             "test.spec.number_range",
             format!("{path}.{name}"),

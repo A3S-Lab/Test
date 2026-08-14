@@ -2,7 +2,7 @@
      width="1200" height="650" viewBox="0 0 1200 650"
      role="img" aria-labelledby="title desc">
   <title id="title">A3S Test unified execution architecture</title>
-  <desc id="desc">Coding-agent exploration and deterministic ACL regressions enter one typed A3S Test core, dispatch through Web, GUI, or planned TUI drivers, and finish in the same evidence and owned-cleanup boundary.</desc>
+  <desc id="desc">Coding-agent exploration and deterministic ACL regressions enter one typed A3S Test core, dispatch through Web, GUI, or TUI drivers, and finish in the same evidence and owned-cleanup boundary.</desc>
 
   <rect width="1200" height="650" rx="24" fill="#080A0D"/>
 
@@ -67,10 +67,10 @@
     </g>
 
     <g id="tui-driver" transform="translate(824 454)">
-      <rect width="320" height="96" rx="14" fill="#0F1318" stroke="#303844" stroke-width="1.5"/>
-      <circle cx="26" cy="27" r="6" fill="#697584"/>
+      <rect width="320" height="96" rx="14" fill="#10161A" stroke="#557063" stroke-width="1.5"/>
+      <circle cx="26" cy="27" r="6" fill="#93C9AD"/>
       <text x="46" y="34" fill="#F6F8F7" font-size="23" font-weight="750">TUI</text>
-      <text x="22" y="70" fill="#929DAA" font-size="19">Planned · PTY model</text>
+      <text x="22" y="70" fill="#B1C8BC" font-size="19">Available · PTY / ConPTY</text>
     </g>
   </g>
 

@@ -36,7 +36,7 @@ HTTP LLM provider, and deterministic local verification.
 Web testing is available through
 [A3S Browser](https://github.com/A3S-Lab/Browser) or a compatible standalone
 `agent-browser`. GUI testing is contract-tested on macOS through A3S CUA. The
-TUI driver remains planned.
+deterministic runner also owns native PTY/ConPTY sessions for TUI suites.
 
 ## From a goal to inspectable evidence
 
@@ -405,7 +405,7 @@ tagged Rust package:
 
 ```bash
 cargo install --git https://github.com/A3S-Lab/Test \
-  --tag v0.8.0 --locked a3s-test-cli
+  --tag v0.9.0 --locked a3s-test-cli
 ```
 
 ## Turn a proven path into a regression
@@ -561,7 +561,7 @@ and cleanup invariants.
 | --- | --- | --- | --- |
 | Web | Available | Persistent agent CLI, direct embedded-planner CLI, and ACL suites | A3S Browser or compatible standalone `agent-browser` |
 | GUI | Contract-tested on macOS | Surface-neutral MCP agent sessions and ACL runner boundary | Locked A3S CUA `0.10.0` semantic and window-vision profiles |
-| TUI | Planned | Driver contract reserved | PTY and semantic terminal model |
+| TUI | Available | Deterministic ACL suites | Owned PTY/ConPTY process tree and bounded VT semantic viewport |
 
 Inspect the reviewed GUI platform matrix without starting CUA:
 
@@ -576,6 +576,21 @@ observation, evidence, and owned cleanup before enabling a worker. The `mcp`
 command exposes `test_session_start`, `test_observe`, `test_act`,
 `test_finish`, `test_abort`, and `test_schema` after the exact MCP `2025-06-18`
 handshake.
+
+Run a terminal suite by fixing the executable and its arguments at the CLI
+host boundary:
+
+```bash
+a3s-test run tests/tui/editor.acl \
+  --tui-executable ./target/debug/editor \
+  --tui-arg --fixture-mode \
+  --json
+```
+
+TUI ACL uses shared `snapshot`, `press`, `wait`, and `expect` actions plus
+`terminal_paste`, `terminal_resize`, and `terminal_recording`. Text and regex
+waits search the bounded semantic viewport and retained scrollback. Raw VT
+recordings are confined to the scenario artifact root.
 
 ## Web testing depth
 
@@ -620,6 +635,7 @@ crates/
 ├── a3s-test-runner/      # Deadlines, cancellation, retries, and reports
 ├── a3s-test-session/     # Surface-neutral long-lived session application layer
 ├── a3s-test-driver-gui/  # Locked MCP adapter boundary for A3S CUA
+├── a3s-test-driver-tui/  # Owned PTY/ConPTY and bounded VT semantics
 ├── a3s-test-driver-web/  # A3S Browser / agent-browser adapter
 └── a3s-test-agent/       # Embedded model loop, contract generation, and visual grounding
 
@@ -643,7 +659,7 @@ Process exit codes are stable:
 
 For deterministic runs, the first `Ctrl+C` requests cancellation and bounded
 surface cleanup. A second `Ctrl+C` terminates only browser and CUA process
-boundaries owned by the current process.
+boundaries and TUI process trees owned by the current process.
 
 ## Documentation
 
@@ -653,7 +669,7 @@ boundaries owned by the current process.
   MCP tools, action provenance, policy, and embedded LLM budgets.
 - [ACL specification](docs/specification.md) — the complete typed manifest
   grammar and validation rules.
-- [Roadmap](docs/roadmap.md) — shipped milestones and planned TUI/distributed
+- [Roadmap](docs/roadmap.md) — shipped milestones and planned distributed
   execution work.
 - [Changelog](CHANGELOG.md) — release-by-release behavior and safety changes.
 

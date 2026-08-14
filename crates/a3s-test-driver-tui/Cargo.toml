@@ -1,0 +1,32 @@
+[package]
+name = "a3s-test-driver-tui"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+description = "Owned PTY and semantic terminal surface driver for A3S Test"
+
+[dependencies]
+a3s-test-core = { path = "../a3s-test-core" }
+async-trait.workspace = true
+serde_json.workspace = true
+tokio.workspace = true
+vt100.workspace = true
+regex.workspace = true
+
+[target.'cfg(unix)'.dependencies]
+nix = { version = "0.30", features = ["process", "signal"] }
+portable-pty = "0.9.0"
+
+[target.'cfg(windows)'.dependencies]
+conpty-oxide = { version = "0.1.2", default-features = false, features = ["blocking"] }
+
+[dev-dependencies]
+tempfile = "3"
+
+[target.'cfg(windows)'.dev-dependencies]
+windows-sys = { version = "0.61", features = [
+    "Win32_Foundation",
+    "Win32_System_Threading",
+] }

@@ -187,6 +187,177 @@ suite "interrupt-twice" {
 }
 
 #[test]
+fn first_sigint_cancels_and_reaps_the_tui_process_group() {
+    let _test_guard = process_test_lock().lock().unwrap();
+    let runtimes_before = runtime_directories();
+    let temp = tempfile::tempdir().expect("tempdir");
+    let root_pid = temp.path().join("tui-root.pid");
+    let descendant_pid = temp.path().join("tui-descendant.pid");
+    let suite = temp.path().join("suite.acl");
+    let script = format!(
+        ": a3s-test-tui-interrupt-fixture; trap '' HUP; sleep 30 & descendant=$!; printf '%s\\n' \"$$\" > {}; printf '%s\\n' \"$descendant\" > {}; printf 'ready\\n'; wait",
+        shell_quote(&root_pid),
+        shell_quote(&descendant_pid),
+    );
+    write_blocking_tui_suite(&suite, "tui-interrupt");
+
+    let mut child = Command::new(binary())
+        .args([
+            "run",
+            suite.to_str().unwrap(),
+            "--tui-executable",
+            "/bin/sh",
+            "--tui-arg",
+            "-c",
+            "--tui-arg",
+            &script,
+            "--command-timeout-ms",
+            "60000",
+            "--cleanup-timeout-ms",
+            "2000",
+            "--json",
+        ])
+        .current_dir(temp.path())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("spawn TUI run");
+
+    wait_for_file(&root_pid, Duration::from_secs(5));
+    wait_for_file(&descendant_pid, Duration::from_secs(5));
+    let watchdog =
+        wait_for_child_command(child.id(), "a3s-test-tui-watchdog", Duration::from_secs(5));
+    send_sigint(child.id());
+
+    wait_for_exit(&mut child, Duration::from_secs(5));
+    let output = child.wait_with_output().expect("collect TUI output");
+    assert_eq!(output.status.code(), Some(130), "{output:?}");
+    let result: serde_json::Value =
+        serde_json::from_slice(&output.stdout).expect("cancelled run JSON");
+    assert_eq!(result["status"], "cancelled", "{result}");
+
+    let root = read_pid(&root_pid);
+    let descendant = read_pid(&descendant_pid);
+    assert_processes_stop_or_terminate(&[&root, &descendant, &watchdog.to_string()]);
+    assert_no_new_runtimes(&runtimes_before);
+}
+
+#[test]
+fn second_sigint_forces_exit_and_reaps_the_tui_process_group() {
+    let _test_guard = process_test_lock().lock().unwrap();
+    let runtimes_before = runtime_directories();
+    let temp = tempfile::tempdir().expect("tempdir");
+    let root_pid = temp.path().join("tui-root.pid");
+    let descendant_pids = temp.path().join("tui-descendants.pid");
+    let suite = temp.path().join("suite.acl");
+    let script = format!(
+        ": a3s-test-tui-second-interrupt-fixture; trap '' HUP; : > {}; i=0; while [ $i -lt 64 ]; do sleep 30 & printf '%s\\n' \"$!\" >> {}; i=$((i + 1)); done; printf '%s\\n' \"$$\" > {}; printf 'ready\\n'; wait",
+        shell_quote(&descendant_pids),
+        shell_quote(&descendant_pids),
+        shell_quote(&root_pid),
+    );
+    write_blocking_tui_suite(&suite, "tui-interrupt-twice");
+
+    let mut child = Command::new(binary())
+        .args([
+            "run",
+            suite.to_str().unwrap(),
+            "--tui-executable",
+            "/bin/sh",
+            "--tui-arg",
+            "-c",
+            "--tui-arg",
+            &script,
+            "--command-timeout-ms",
+            "60000",
+            "--cleanup-timeout-ms",
+            "60000",
+            "--json",
+        ])
+        .current_dir(temp.path())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("spawn TUI run");
+
+    wait_for_file(&root_pid, Duration::from_secs(5));
+    wait_for_file(&descendant_pids, Duration::from_secs(5));
+    wait_for_child_command(child.id(), "a3s-test-tui-watchdog", Duration::from_secs(5));
+    send_sigint(child.id());
+    send_sigint(child.id());
+
+    wait_for_exit(&mut child, Duration::from_secs(5));
+    let output = child.wait_with_output().expect("collect TUI output");
+    assert_eq!(output.status.code(), Some(130), "{output:?}");
+    assert!(
+        String::from_utf8_lossy(&output.stderr)
+            .contains("second interrupt received; forcing owned process cleanup"),
+        "{output:?}"
+    );
+
+    let mut processes = read_pids(&descendant_pids);
+    assert_eq!(processes.len(), 64, "all TUI descendants must be observed");
+    processes.push(read_pid(&root_pid));
+    let process_refs = processes.iter().map(String::as_str).collect::<Vec<_>>();
+    assert_processes_stop_or_terminate(&process_refs);
+    assert_no_new_runtimes(&runtimes_before);
+}
+
+#[test]
+fn sigkill_during_tui_run_triggers_the_process_group_watchdog() {
+    let _test_guard = process_test_lock().lock().unwrap();
+    let runtimes_before = runtime_directories();
+    let temp = tempfile::tempdir().expect("tempdir");
+    let root_pid = temp.path().join("tui-root.pid");
+    let descendant_pid = temp.path().join("tui-descendant.pid");
+    let suite = temp.path().join("suite.acl");
+    let script = format!(
+        ": a3s-test-tui-host-crash-fixture; trap '' HUP; sleep 30 & descendant=$!; printf '%s\\n' \"$$\" > {}; printf '%s\\n' \"$descendant\" > {}; printf 'ready\\n'; wait",
+        shell_quote(&root_pid),
+        shell_quote(&descendant_pid),
+    );
+    write_blocking_tui_suite(&suite, "tui-host-crash");
+
+    let mut child = Command::new(binary())
+        .args([
+            "run",
+            suite.to_str().unwrap(),
+            "--tui-executable",
+            "/bin/sh",
+            "--tui-arg",
+            "-c",
+            "--tui-arg",
+            &script,
+            "--command-timeout-ms",
+            "60000",
+            "--cleanup-timeout-ms",
+            "60000",
+            "--json",
+        ])
+        .current_dir(temp.path())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .expect("spawn TUI run");
+
+    wait_for_file(&root_pid, Duration::from_secs(5));
+    wait_for_file(&descendant_pid, Duration::from_secs(5));
+    let watchdog =
+        wait_for_child_command(child.id(), "a3s-test-tui-watchdog", Duration::from_secs(5));
+    let signal = Command::new("kill")
+        .args(["-KILL", &child.id().to_string()])
+        .status()
+        .expect("kill TUI host");
+    assert!(signal.success());
+    let _ = child.wait();
+
+    let root = read_pid(&root_pid);
+    let descendant = read_pid(&descendant_pid);
+    assert_processes_stop_or_terminate(&[&root, &descendant, &watchdog.to_string()]);
+    assert_no_new_runtimes(&runtimes_before);
+}
+
+#[test]
 fn sigkill_during_agent_start_triggers_watchdog_and_retains_cleanup_metadata() {
     let _test_guard = process_test_lock().lock().unwrap();
     let runtimes_before = runtime_directories();
@@ -305,6 +476,63 @@ fn send_sigint(pid: u32) {
     assert!(signal.success());
 }
 
+fn write_blocking_tui_suite(path: &std::path::Path, name: &str) {
+    fs::write(
+        path,
+        format!(
+            r#"
+suite "{name}" {{
+    scenario "terminal" {{
+        surface = "tui"
+        timeout_ms = 60000
+        wait "block" {{
+            text = "never-arrives"
+        }}
+    }}
+}}
+"#,
+        ),
+    )
+    .expect("TUI suite");
+}
+
+fn shell_quote(path: &std::path::Path) -> String {
+    format!("'{}'", path.display().to_string().replace('\'', "'\\''"))
+}
+
+fn read_pid(path: &std::path::Path) -> String {
+    fs::read_to_string(path)
+        .expect("process PID")
+        .trim()
+        .to_string()
+}
+
+fn read_pids(path: &std::path::Path) -> Vec<String> {
+    fs::read_to_string(path)
+        .expect("process PIDs")
+        .lines()
+        .map(str::trim)
+        .filter(|process| !process.is_empty())
+        .map(str::to_string)
+        .collect()
+}
+
+fn assert_processes_stop_or_terminate(processes: &[&str]) {
+    let stopped = processes
+        .iter()
+        .map(|process| wait_until_not_alive_result(process, Duration::from_secs(3)))
+        .collect::<Vec<_>>();
+    for (process, stopped) in processes.iter().zip(&stopped) {
+        if !stopped {
+            let _ = Command::new("kill").args(["-KILL", process]).status();
+        }
+    }
+    assert!(
+        stopped.iter().all(|stopped| *stopped),
+        "owned processes survived cleanup: {processes:?}"
+    );
+}
+
 fn wait_for_file(path: &std::path::Path, timeout: Duration) {
     let deadline = Instant::now() + timeout;
     while Instant::now() < deadline {
@@ -330,25 +558,28 @@ fn wait_for_log_line(path: &std::path::Path, suffix: &str, timeout: Duration) {
     panic!("timed out waiting for {suffix:?} in {}", path.display());
 }
 
-fn wait_for_child_command(parent_pid: u32, marker: &str, timeout: Duration) {
+fn wait_for_child_command(parent_pid: u32, marker: &str, timeout: Duration) -> u32 {
     let deadline = Instant::now() + timeout;
     while Instant::now() < deadline {
         let found = Command::new("ps")
-            .args(["-axo", "ppid=,command="])
+            .args(["-axo", "pid=,ppid=,command="])
             .output()
             .ok()
             .filter(|output| output.status.success())
-            .is_some_and(|output| {
-                String::from_utf8_lossy(&output.stdout).lines().any(|line| {
-                    let mut fields = line.trim_start().splitn(2, char::is_whitespace);
-                    fields.next().and_then(|value| value.parse::<u32>().ok()) == Some(parent_pid)
-                        && fields
-                            .next()
-                            .is_some_and(|command| command.contains(marker))
-                })
+            .and_then(|output| {
+                String::from_utf8_lossy(&output.stdout)
+                    .lines()
+                    .find_map(|line| {
+                        let mut fields = line.trim_start().splitn(3, char::is_whitespace);
+                        let process_id = fields.next()?.parse::<u32>().ok()?;
+                        let process_parent = fields.next()?.parse::<u32>().ok()?;
+                        let command = fields.next()?;
+                        (process_parent == parent_pid && command.contains(marker))
+                            .then_some(process_id)
+                    })
             });
-        if found {
-            return;
+        if let Some(process_id) = found {
+            return process_id;
         }
         thread::sleep(Duration::from_millis(10));
     }

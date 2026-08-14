@@ -16,6 +16,7 @@ a3s-acl.workspace = true
 a3s-test-agent = { path = "../a3s-test-agent" }
 a3s-test-core = { path = "../a3s-test-core" }
 a3s-test-driver-gui = { path = "../a3s-test-driver-gui" }
+a3s-test-driver-tui = { path = "../a3s-test-driver-tui" }
 a3s-test-driver-web = { path = "../a3s-test-driver-web" }
 a3s-test-runner = { path = "../a3s-test-runner" }
 a3s-test-session = { path = "../a3s-test-session" }

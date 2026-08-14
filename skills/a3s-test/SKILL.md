@@ -1,6 +1,6 @@
 ---
 name: a3s-test
-description: Drive interactive agentic Web or GUI tests and author deterministic A3S Test ACL suites. Use when a coding agent needs to explore an application, reproduce a UI bug, make observe-decide-act testing decisions, capture bounded evidence, turn a discovered workflow into regression coverage, or diagnose a3s-test JSON results.
+description: Drive interactive agentic Web or GUI tests and author deterministic Web, GUI, or TUI A3S Test ACL suites. Use when a coding agent needs to explore an application, reproduce a UI bug, make observe-decide-act testing decisions, capture bounded evidence, turn a discovered workflow into regression coverage, test a terminal application, or diagnose a3s-test JSON result.
 ---
 
 # A3S Test
@@ -16,8 +16,8 @@ surface sessions, typed actions, assertions, evidence, reports, and cleanup.
 - Use the persistent **agent CLI** for Web and the configured **MCP tools** for
   GUI. Read [references/gui-mcp.md](references/gui-mcp.md) before driving a GUI
   session.
-- Use an **ACL suite** for a known regression flow that should run
-  deterministically in local development and CI.
+- Use an **ACL suite** for a known Web, GUI, or TUI regression flow that should
+  run deterministically in local development and CI.
 
 Do not force an uncertain workflow into ACL before observing the product.
 After an agent session proves a stable path, promote the smallest useful path
@@ -173,11 +173,14 @@ the human to reconcile `needs_input` before claiming another finding.
 
 ## Deterministic regression workflow
 
-1. Read [references/web-acl.md](references/web-acl.md).
+1. Read [references/web-acl.md](references/web-acl.md) for a Web suite or
+   [references/tui-acl.md](references/tui-acl.md) for a TUI suite.
 2. Put project-owned suites under the project's test tree, normally
    `tests/e2e/`.
-3. Prefer role, label, test ID, and placeholder targets over CSS. Use refs
-   only when a preceding snapshot makes them stable inside the same scenario.
+3. For Web, prefer role, label, test ID, and placeholder targets over CSS. Use
+   refs only when a preceding snapshot makes them stable inside the same
+   scenario. For TUI, use semantic text/regex waits and typed terminal input;
+   do not invent browser selectors.
 4. Validate before running:
 
    ```bash
@@ -202,6 +205,7 @@ Capture the smallest evidence set that proves the result:
 - Use console and page-error output for browser failures.
 - Record HAR, trace, or video only around the relevant flow; these artifacts
   can be large.
+- Record bounded raw VT only when terminal output is material evidence.
 - Keep artifact paths relative. A3S Test confines them to the session or
   scenario artifact directory.
 - Do not place links or Windows reparse points inside artifact paths. Web and
@@ -240,10 +244,10 @@ values, network mocks, console fixtures, or committed evidence.
   completes or becomes `cleanup_required`, then use the same session ID so the
   retained ownership handle can finish cleanup.
 - For deterministic runs, the first `Ctrl+C` requests bounded cleanup. A
-  second `Ctrl+C` terminates only browser command/session boundaries and CUA
-  proxy trees owned by that process. Windows browser and CUA commands are
-  assigned to Job Objects before they begin executing; Unix boundaries use an
-  EOF watchdog so an uncatchable host exit still terminates their process
+  second `Ctrl+C` terminates only browser command/session boundaries, CUA
+  proxy trees, and TUI process trees owned by that process. Windows browser,
+  CUA, and TUI processes use kill-on-close Job ownership; Unix boundaries use
+  EOF watchdogs so an uncatchable host exit still terminates their process
   groups.
 - Do not add arbitrary sleeps. Use typed observations, waits, and assertions.
 
@@ -259,3 +263,5 @@ Use `test.session.*` for surface-neutral MCP session admission and lifecycle
 errors. Use `test.driver.gui.*` for CUA compatibility, permission, grounding,
 application ownership, or GUI lifecycle failures. GUI MCP artifacts live under
 the host-configured MCP artifact root.
+Use `test.driver.tui.*` for PTY/ConPTY creation, bounded terminal state, input,
+wait, recording, or process-tree cleanup failures.

@@ -1,8 +1,16 @@
 # Changelog
 
-## Unreleased
+## 0.9.0 - 2026-08-14
 
 ### Added
+
+- Added deterministic TUI suites through `a3s-test-driver-tui` and typed CLI
+  host options. Unix uses owned PTY process groups with host-death watchdogs;
+  Windows uses ConPTY sessions backed by kill-on-close Jobs.
+- Added action protocol revision 7 with `terminal_paste`, `terminal_resize`,
+  `terminal_recording`, and terminal regex waits. The semantic VT observation
+  includes bounded viewport and scrollback text, cursor and mode state, exit
+  status, and output truncation metadata.
 
 - Added `a3s-test agent run <agent-run.acl>` for one bounded Web workflow with
   a deployment-supplied HTTP LLM provider, typed action capabilities, exact
@@ -35,6 +43,11 @@
   deployment providers to consume evidence without client filesystem access.
 
 ### Safety
+
+- TUI close, cancellation, timeout, Drop, EOF, crash, and repeated interrupt
+  paths terminate only the exact owned process tree, including descendants
+  that outlive the root. Terminal dimensions, scrollback, paste, wait patterns,
+  retained output, and recording paths are bounded and contained.
 
 - Embedded CLI runs require at least one local `expect` action. Model
   `finish` is provisional until read-only verification passes and the exact
@@ -72,6 +85,11 @@
   both the service and HTTP adapter, and bound to the latest stored Test Kit
   revision before capture and after provider inference. Provider failure,
   cancellation, ref drift, or revision drift invalidates the observation.
+
+### Changed
+
+- Raised the Rust workspace release to `0.9.0`. The unchanged Test Kit remains
+  `0.2.0`.
 
 ## 0.8.0 - 2026-08-13
 

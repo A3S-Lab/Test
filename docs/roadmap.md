@@ -46,7 +46,9 @@
 - [x] Typed persistence of `exact_origin_v1` and `hostname_v1` containment
       modes, with fail-closed migration and retained `finish`/`abort` cleanup
 - [ ] Standalone exact-origin containment after its protocol exposes scheme,
-      host, and effective-port authorization; 0.26.x remains hostname-only
+      host, and effective-port authorization; audited 0.34.0 still exposes
+      hostname-only `allowedDomains`, while CI remains pinned to certified
+      0.26.0
 - [x] Compact pointer, form, keyboard, wheel, viewport, and evidence turns plus
       full typed actions
 - [x] Typed LLM provider and planner interface
@@ -102,11 +104,11 @@
 
 ## M4: TUI
 
-- [ ] PTY lifecycle and process-group supervision
-- [ ] Semantic terminal viewport
-- [ ] Key chords, paste, resize, and alternate-screen support
-- [ ] Text/regex waits and terminal recording
-- [ ] Ctrl+C, EOF, crash, and terminal restoration tests
+- [x] PTY lifecycle and process-group supervision
+- [x] Semantic terminal viewport
+- [x] Key chords, paste, resize, and alternate-screen support
+- [x] Text/regex waits and terminal recording
+- [x] Ctrl+C, EOF, crash, and terminal restoration tests
 
 ## M5: Distributed execution
 

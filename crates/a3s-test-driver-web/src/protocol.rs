@@ -254,6 +254,12 @@ pub(crate) fn wait_args(condition: &WaitCondition) -> Result<Vec<OsString>, Driv
             "document.readyState !== 'loading'".into(),
         ],
         WaitCondition::Text(text) => vec!["wait".into(), "--text".into(), text.into()],
+        WaitCondition::Regex(_) => {
+            return Err(DriverError::new(
+                "test.driver.web.wait_unsupported",
+                "regular-expression waits are available only on terminal surfaces",
+            ));
+        }
         WaitCondition::Url(url) => vec!["wait".into(), "--url".into(), url.into()],
         WaitCondition::Visible(target) => match target {
             Target::Ref { value } => vec!["wait".into(), OsString::from(value)],

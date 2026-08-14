@@ -2,7 +2,7 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-pub const ACTION_PROTOCOL_REVISION: u32 = 6;
+pub const ACTION_PROTOCOL_REVISION: u32 = 7;
 pub const PAGE_CONTEXT_PROTOCOL: &str = "a3s.test.page-context/1";
 pub const REPAIR_PROTOCOL: &str = "a3s.test.repair/1";
 
@@ -84,6 +84,16 @@ pub enum Action {
     },
     Press {
         key: String,
+    },
+    TerminalPaste {
+        text: String,
+    },
+    TerminalResize {
+        columns: u16,
+        rows: u16,
+    },
+    TerminalRecording {
+        path: String,
     },
     Wheel {
         target: Option<Target>,
@@ -255,6 +265,7 @@ pub enum Target {
 pub enum WaitCondition {
     Load(LoadState),
     Text(String),
+    Regex(String),
     Url(String),
     Visible(Target),
 }

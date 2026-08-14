@@ -1,0 +1,408 @@
+#[cfg(any(unix, windows))]
+use std::ffi::OsString;
+#[cfg(any(unix, windows))]
+use std::path::{Path, PathBuf};
+#[cfg(any(unix, windows))]
+use std::time::Duration;
+
+#[cfg(any(unix, windows))]
+use a3s_test_core::{Action, ScenarioContext, SurfaceDriver as _, TestStep, WaitCondition};
+use serde_json::Value;
+
+use super::*;
+#[cfg(any(unix, windows))]
+use crate::TuiCommand;
+
+#[cfg(unix)]
+fn shell_command(script: &str) -> TuiCommand {
+    let mut command = TuiCommand::new("/bin/sh");
+    command.arguments = vec![OsString::from("-c"), OsString::from(script)];
+    command
+}
+
+#[cfg(any(unix, windows))]
+fn test_config(command: TuiCommand) -> TuiDriverConfig {
+    TuiDriverConfig {
+        command,
+        initial_size: TuiSize::default(),
+        command_timeout: Duration::from_secs(5),
+        cleanup_timeout: Duration::from_secs(5),
+        scrollback_rows: 100,
+        max_output_bytes: 64 * 1024,
+    }
+}
+
+#[cfg(any(unix, windows))]
+async fn open_session(command: TuiCommand, artifacts: PathBuf) -> Box<dyn DriverSession> {
+    TuiDriver::new(test_config(command))
+        .open(&ScenarioContext {
+            run_id: "run".to_string(),
+            scenario_id: "scenario".to_string(),
+            artifacts_dir: artifacts,
+        })
+        .await
+        .expect("open terminal session")
+}
+
+#[cfg(any(unix, windows))]
+fn step(id: &str, action: Action) -> TestStep {
+    TestStep {
+        id: id.to_string(),
+        action,
+    }
+}
+
+#[cfg(any(unix, windows))]
+async fn wait_text(session: &mut dyn DriverSession, text: &str) {
+    session
+        .execute(&step(
+            "wait",
+            Action::Wait {
+                condition: WaitCondition::Text(text.to_string()),
+            },
+        ))
+        .await
+        .expect("wait for terminal text");
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn real_pty_supports_input_resize_modes_waits_and_recording() {
+    let temp = tempfile::tempdir().expect("temp dir");
+    let script = "trap 'exit 0' TERM; \
+                  stty -echo; \
+                  printf '\\033[?1049h\\033[?1h\\033[?2004hready\\033[2;3H'; \
+                  IFS= read -r line; \
+                  printf '\\033[?2004l\\033[?1l\\033[?1049linput:%s size:' \"$line\"; \
+                  stty size; \
+                  sleep 30";
+    let mut session = open_session(shell_command(script), temp.path().join("artifacts")).await;
+
+    wait_text(session.as_mut(), "ready").await;
+    let observation = session.observe().await.expect("observe modes");
+    assert_eq!(observation.data["viewport"]["alternate_screen"], true);
+    assert_eq!(observation.data["viewport"]["application_cursor"], true);
+    assert_eq!(observation.data["viewport"]["bracketed_paste"], true);
+    assert_eq!(observation.data["viewport"]["cursor"]["row"], 1);
+    assert_eq!(observation.data["viewport"]["cursor"]["column"], 2);
+
+    session
+        .execute(&step(
+            "resize",
+            Action::TerminalResize {
+                columns: 100,
+                rows: 30,
+            },
+        ))
+        .await
+        .expect("resize terminal");
+    session
+        .execute(&step(
+            "paste",
+            Action::TerminalPaste {
+                text: "hello".to_string(),
+            },
+        ))
+        .await
+        .expect("paste terminal input");
+    session
+        .execute(&step(
+            "enter",
+            Action::Press {
+                key: "Enter".to_string(),
+            },
+        ))
+        .await
+        .expect("press enter");
+    session
+        .execute(&step(
+            "regex",
+            Action::Wait {
+                condition: WaitCondition::Regex("input:hello.*size:30 100".to_string()),
+            },
+        ))
+        .await
+        .expect("wait for terminal regex");
+    let restored = session.observe().await.expect("observe restored modes");
+    assert_eq!(restored.data["viewport"]["alternate_screen"], false);
+    assert_eq!(restored.data["viewport"]["application_cursor"], false);
+    assert_eq!(restored.data["viewport"]["bracketed_paste"], false);
+    let output = session
+        .execute(&step(
+            "record",
+            Action::TerminalRecording {
+                path: "terminal/session.vt".to_string(),
+            },
+        ))
+        .await
+        .expect("record terminal");
+    let recording = &output.evidence[0].path;
+    let bytes = tokio::fs::read(recording).await.expect("read recording");
+    assert!(bytes
+        .windows(b"size:30 100".len())
+        .any(|part| part == b"size:30 100"));
+    assert!(bytes
+        .windows(b"\x1b[?1049h".len())
+        .any(|part| part == b"\x1b[?1049h"));
+    session.close().await.expect("close terminal");
+}
+
+#[cfg(windows)]
+#[tokio::test]
+async fn real_conpty_supports_input_and_reaps_its_job_tree() {
+    let temp = tempfile::tempdir().expect("temp dir");
+    let fixture = temp
+        .path()
+        .join("a3s-test-tui-windows-descendant-fixture.cmd");
+    std::fs::write(&fixture, "@echo off\r\nping -n 31 127.0.0.1 >nul\r\n")
+        .expect("descendant fixture");
+    let pid_file = temp.path().join("descendant.pid");
+    let script = format!(
+        "$child = Start-Process -FilePath {} -PassThru; \
+         [System.IO.File]::WriteAllText({}, [string]$child.Id); \
+         [Console]::WriteLine('ready'); \
+         $line = [Console]::ReadLine(); \
+         [Console]::WriteLine('input:' + $line)",
+        powershell_quote(&fixture),
+        powershell_quote(&pid_file),
+    );
+    let powershell = PathBuf::from(std::env::var_os("SystemRoot").expect("SystemRoot"))
+        .join("System32/WindowsPowerShell/v1.0/powershell.exe");
+    let mut command = TuiCommand::new(powershell);
+    command.arguments = [
+        "-NoLogo",
+        "-NoProfile",
+        "-NonInteractive",
+        "-Command",
+        &script,
+    ]
+    .into_iter()
+    .map(OsString::from)
+    .collect();
+    let mut session = open_session(command, temp.path().join("artifacts")).await;
+
+    wait_text(session.as_mut(), "ready").await;
+    session
+        .execute(&step(
+            "paste",
+            Action::TerminalPaste {
+                text: "hello".to_string(),
+            },
+        ))
+        .await
+        .expect("paste terminal input");
+    session
+        .execute(&step(
+            "enter",
+            Action::Press {
+                key: "Enter".to_string(),
+            },
+        ))
+        .await
+        .expect("press enter");
+    wait_text(session.as_mut(), "input:hello").await;
+    let descendant = wait_for_pid(&pid_file).await;
+    assert!(
+        windows_process_is_running(descendant),
+        "descendant exited before containment was tested"
+    );
+
+    session.close().await.expect("close ConPTY tree");
+    let stopped = wait_until_stopped(descendant).await;
+    if !stopped {
+        terminate_fixture(descendant);
+    }
+    assert!(
+        stopped,
+        "Windows Job descendant {descendant} survived terminal close"
+    );
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn wait_can_match_text_retained_only_in_scrollback() {
+    let temp = tempfile::tempdir().expect("temp dir");
+    let script = "printf 'scrollback-marker\\n'; i=0; while [ $i -lt 40 ]; do printf 'line-%s\\n' \"$i\"; i=$((i + 1)); done; sleep 30";
+    let mut session = open_session(shell_command(script), temp.path().join("artifacts")).await;
+    wait_text(session.as_mut(), "line-39").await;
+    wait_text(session.as_mut(), "scrollback-marker").await;
+    let observation = session.observe().await.expect("observe scrollback");
+    assert!(observation.data["viewport"]["text"]
+        .as_str()
+        .is_some_and(|text| text.contains("scrollback-marker")));
+    session.close().await.expect("close terminal");
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn wait_drains_final_output_after_a_clean_process_exit() {
+    let temp = tempfile::tempdir().expect("temp dir");
+    for attempt in 0..25 {
+        let mut session = open_session(
+            shell_command("printf 'final-output\\n'"),
+            temp.path().join(format!("artifacts-{attempt}")),
+        )
+        .await;
+        wait_text(session.as_mut(), "final-output").await;
+        session.close().await.expect("close terminal");
+    }
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn close_terminates_descendant_after_root_has_exited() {
+    let temp = tempfile::tempdir().expect("temp dir");
+    let pid_file = temp.path().join("descendant.pid");
+    let script = format!(
+        ": a3s-test-tui-descendant-fixture; trap '' HUP; sleep 30 & child=$!; printf '%s\\n' \"$child\" > {}; printf 'spawned\\n'; exit 0",
+        shell_quote(&pid_file)
+    );
+    let mut session = open_session(shell_command(&script), temp.path().join("artifacts")).await;
+    wait_text(session.as_mut(), "spawned").await;
+    let descendant = wait_for_pid(&pid_file).await;
+    session.close().await.expect("close terminal tree");
+    let stopped = wait_until_stopped(descendant).await;
+    if !stopped {
+        terminate_fixture(descendant);
+    }
+    assert!(stopped, "descendant {descendant} survived terminal close");
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn drop_terminates_the_exact_owned_process_group() {
+    let temp = tempfile::tempdir().expect("temp dir");
+    let pid_file = temp.path().join("descendant.pid");
+    let script = format!(
+        ": a3s-test-tui-descendant-fixture; sleep 30 & child=$!; printf '%s\\n' \"$child\" > {}; printf 'spawned\\n'; wait",
+        shell_quote(&pid_file)
+    );
+    let mut session = open_session(shell_command(&script), temp.path().join("artifacts")).await;
+    wait_text(session.as_mut(), "spawned").await;
+    let descendant = wait_for_pid(&pid_file).await;
+    drop(session);
+    let stopped = wait_until_stopped(descendant).await;
+    if !stopped {
+        terminate_fixture(descendant);
+    }
+    assert!(stopped, "descendant {descendant} survived terminal drop");
+}
+
+#[cfg(unix)]
+fn shell_quote(path: &Path) -> String {
+    format!("'{}'", path.display().to_string().replace('\'', "'\\''"))
+}
+
+#[cfg(windows)]
+fn powershell_quote(path: &Path) -> String {
+    format!("'{}'", path.display().to_string().replace('\'', "''"))
+}
+
+#[cfg(any(unix, windows))]
+async fn wait_for_pid(path: &Path) -> u32 {
+    let deadline = tokio::time::Instant::now() + Duration::from_secs(5);
+    loop {
+        if let Ok(source) = tokio::fs::read_to_string(path).await {
+            if let Ok(process_id) = source.trim().parse::<u32>() {
+                return process_id;
+            }
+        }
+        assert!(
+            tokio::time::Instant::now() < deadline,
+            "PID was not published"
+        );
+        tokio::time::sleep(Duration::from_millis(10)).await;
+    }
+}
+
+#[cfg(any(unix, windows))]
+async fn wait_until_stopped(process_id: u32) -> bool {
+    let deadline = tokio::time::Instant::now() + Duration::from_secs(5);
+    while process_is_running(process_id) {
+        if tokio::time::Instant::now() >= deadline {
+            return false;
+        }
+        tokio::time::sleep(Duration::from_millis(10)).await;
+    }
+    true
+}
+
+#[cfg(unix)]
+fn process_is_running(process_id: u32) -> bool {
+    let Ok(process_id) = i32::try_from(process_id) else {
+        return false;
+    };
+    match nix::sys::signal::kill(nix::unistd::Pid::from_raw(process_id), None) {
+        Ok(()) => !is_zombie(process_id),
+        Err(nix::errno::Errno::ESRCH) => false,
+        Err(_) => true,
+    }
+}
+
+#[cfg(windows)]
+fn process_is_running(process_id: u32) -> bool {
+    windows_process_is_running(process_id)
+}
+
+#[cfg(windows)]
+fn windows_process_is_running(process_id: u32) -> bool {
+    use std::os::windows::io::{AsRawHandle as _, FromRawHandle as _, OwnedHandle};
+    use windows_sys::Win32::Foundation::STILL_ACTIVE;
+    use windows_sys::Win32::System::Threading::{
+        GetExitCodeProcess, OpenProcess, PROCESS_QUERY_LIMITED_INFORMATION,
+    };
+
+    let raw_handle = unsafe { OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, process_id) };
+    if raw_handle.is_null() {
+        return false;
+    }
+    let handle = unsafe { OwnedHandle::from_raw_handle(raw_handle) };
+    let mut exit_code = 0_u32;
+    let queried = unsafe { GetExitCodeProcess(handle.as_raw_handle(), &mut exit_code) };
+    queried != 0 && exit_code == u32::try_from(STILL_ACTIVE).expect("STILL_ACTIVE is positive")
+}
+
+#[cfg(target_os = "linux")]
+fn is_zombie(process_id: i32) -> bool {
+    std::fs::read_to_string(format!("/proc/{process_id}/stat"))
+        .ok()
+        .and_then(|source| source.rsplit_once(") ").map(|(_, tail)| tail.to_string()))
+        .is_some_and(|tail| tail.starts_with("Z "))
+}
+
+#[cfg(all(unix, not(target_os = "linux")))]
+fn is_zombie(_process_id: i32) -> bool {
+    false
+}
+
+#[cfg(unix)]
+fn terminate_fixture(process_id: u32) {
+    if let Ok(process_id) = i32::try_from(process_id) {
+        let _ = nix::sys::signal::kill(
+            nix::unistd::Pid::from_raw(process_id),
+            nix::sys::signal::Signal::SIGKILL,
+        );
+    }
+}
+
+#[cfg(windows)]
+fn terminate_fixture(process_id: u32) {
+    use std::os::windows::io::{AsRawHandle as _, FromRawHandle as _, OwnedHandle};
+    use windows_sys::Win32::System::Threading::{OpenProcess, TerminateProcess, PROCESS_TERMINATE};
+
+    let raw_handle = unsafe { OpenProcess(PROCESS_TERMINATE, 0, process_id) };
+    if !raw_handle.is_null() {
+        let handle = unsafe { OwnedHandle::from_raw_handle(raw_handle) };
+        let _ = unsafe { TerminateProcess(handle.as_raw_handle(), 1) };
+    }
+}
+
+#[test]
+fn observation_shape_remains_bounded_and_typed() {
+    let mut state = TerminalState::new(TuiSize::default(), 10, 1024);
+    state.process(b"hello");
+    let data: Value = state.data_with_history();
+    assert_eq!(data["surface"], "tui");
+    assert_eq!(data["viewport"]["columns"], 80);
+    assert_eq!(data["process"]["running"], true);
+}

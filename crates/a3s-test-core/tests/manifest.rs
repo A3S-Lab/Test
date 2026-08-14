@@ -175,6 +175,65 @@ suite "gui-vision" {
 }
 
 #[test]
+fn parses_typed_terminal_actions_and_regex_wait() {
+    let suite = TestSuite::from_acl(
+        r#"
+suite "tui-smoke" {
+    scenario "editor" {
+        surface = "tui"
+
+        terminal_resize "large" {
+            columns = 120
+            rows = 40
+        }
+        terminal_paste "command" {
+            text = "open document.txt"
+        }
+        press "submit" {
+            key = "Enter"
+        }
+        wait "ready" {
+            regex = "Ready: [0-9]+ files"
+        }
+        terminal_recording "evidence" {
+            path = "terminal/session.vt"
+        }
+    }
+}
+"#,
+    )
+    .expect("valid TUI actions");
+
+    let scenario = &suite.scenarios[0];
+    assert_eq!(scenario.surface, Surface::Tui);
+    assert_eq!(
+        scenario.steps[0].action,
+        Action::TerminalResize {
+            columns: 120,
+            rows: 40,
+        }
+    );
+    assert_eq!(
+        scenario.steps[1].action,
+        Action::TerminalPaste {
+            text: "open document.txt".to_string(),
+        }
+    );
+    assert_eq!(
+        scenario.steps[3].action,
+        Action::Wait {
+            condition: WaitCondition::Regex("Ready: [0-9]+ files".to_string()),
+        }
+    );
+    assert_eq!(
+        scenario.steps[4].action,
+        Action::TerminalRecording {
+            path: "terminal/session.vt".to_string(),
+        }
+    );
+}
+
+#[test]
 fn rejects_unknown_actions_with_a_stable_location() {
     let error = TestSuite::from_acl(
         r#"

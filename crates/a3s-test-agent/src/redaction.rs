@@ -133,7 +133,7 @@ impl ProvenanceRedactor {
     fn redact_action(&self, action: &mut Action) {
         match action {
             Action::Navigate { url } => self.redact_url(url),
-            Action::Snapshot { .. } | Action::Viewport { .. } => {}
+            Action::Snapshot { .. } | Action::Viewport { .. } | Action::TerminalResize { .. } => {}
             Action::VerifyContract {
                 contract,
                 variant,
@@ -165,6 +165,8 @@ impl ProvenanceRedactor {
                 self.redact_target(target);
             }
             Action::Press { key } => self.redact_text(key),
+            Action::TerminalPaste { text } => text.clone_from(&self.replacement),
+            Action::TerminalRecording { path } => self.redact_text(path),
             Action::Wheel { target, .. } => {
                 if let Some(target) = target {
                     self.redact_target(target);
@@ -228,6 +230,7 @@ impl ProvenanceRedactor {
         match condition {
             WaitCondition::Load(_) => {}
             WaitCondition::Text(text) => self.redact_text(text),
+            WaitCondition::Regex(regex) => self.redact_text(regex),
             WaitCondition::Url(url) => self.redact_url(url),
             WaitCondition::Visible(target) => self.redact_target(target),
         }

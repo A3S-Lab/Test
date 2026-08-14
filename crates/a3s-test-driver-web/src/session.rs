@@ -485,6 +485,12 @@ impl DriverSession for AgentBrowserSession {
                 .execute_command(vec!["press".into(), key.into()])
                 .await
                 .map(|data| StepOutput::new("key pressed").with_data(data)),
+            Action::TerminalPaste { .. }
+            | Action::TerminalResize { .. }
+            | Action::TerminalRecording { .. } => Err(DriverError::new(
+                "test.driver.web.action_unsupported",
+                "terminal actions are available only on terminal surfaces",
+            )),
             Action::Wheel {
                 target,
                 delta_x,

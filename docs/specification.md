@@ -623,6 +623,35 @@ observation-scoped pixel target: its first argument must be the latest visual
 reference returned by a window-vision observation and its coordinates are
 unsigned 32-bit image pixels. Web drivers reject both GUI-only target forms.
 
+TUI scenarios share `snapshot`, `press`, `wait`, and `expect`. Their
+surface-specific actions are:
+
+```acl
+terminal_resize "editor-size" {
+    columns = 120
+    rows = 40
+}
+
+terminal_paste "command" {
+    text = "open document.txt"
+}
+
+wait "loaded" {
+    regex = "Loaded [0-9]+ files"
+}
+
+terminal_recording "evidence" {
+    path = "terminal/editor.vt"
+}
+```
+
+Terminal columns and rows are positive bounded integers. Paste is limited to
+1 MiB and honors bracketed-paste mode. `press` accepts one character, named
+terminal keys, `Control+<letter>`, or `Alt+<character>`. Terminal waits admit
+either `text` or a bounded valid `regex`; browser load, URL, and element waits
+are rejected on TUI surfaces. Recording paths are relative, traversal-free,
+and confined beneath the canonical scenario artifact root.
+
 `select` requires at least one value. `wheel` requires `delta_y`; `delta_x`
 defaults to zero, at least one delta must be non-zero, and `modifiers` may
 contain unique `alt`, `control`, `meta`, or `shift` values. A wheel without a
@@ -648,7 +677,7 @@ code and path to repair manifests.
 ## Browser admission and runner bounds
 
 `a3s-test capabilities --json` probes the configured executable before any
-browser session launches. Action protocol revision 6 admits A3S Browser
+browser session launches. Action protocol revision 7 admits A3S Browser
 `>= 0.4.0, < 0.5.0` and standalone agent-browser `>= 0.26.0, < 0.27.0`.
 Unverified versions fail with `test.driver.web.version_unsupported`.
 
@@ -802,7 +831,7 @@ Success or a non-retryable cleanup failure releases the session identifier.
 ## Optional visual grounding
 
 Visual grounding is a typed SDK-host capability in `a3s-test-agent`; it is not
-an ACL action and does not change action protocol revision 6. Deterministic Web
+an ACL action and does not change the action protocol. Deterministic Web
 targeting remains role, label, test ID, placeholder, text, current ref, and CSS
 in that order of preference. A host may invoke visual grounding only through
 `GroundingTrigger::ExplicitRequest` or `GroundingTrigger::SemanticFallback`

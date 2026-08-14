@@ -502,6 +502,9 @@ stored driver before any turn. Legacy state without typed deployment proof is
 a one-way compatibility boundary: metadata inspection and terminal cleanup
 are allowed, while observation and action turns fail closed. Cleanup connects
 without claiming that newly supplied policy retrofitted an existing daemon.
+The 0.34.0 schema, CLI, MCP, and native network filter were re-audited on
+2026-08-14 and still authorize hostnames rather than scheme plus effective
+port, so that newer line is not admitted or advertised as exact-origin safe.
 
 The shared action protocol is revisioned independently of browser executable
 versions. Revision 2 adds Office-grade interactions. A basic interaction uses
@@ -512,11 +515,12 @@ movement plus a cancelable page `contextmenu` event, avoiding an unobservable
 browser-native menu; drag scrolls both endpoints into view; wheel owns modifier
 press/release cleanup.
 
-Revision 6 is the current cross-surface contract. Revision 4 adds GUI
+Revision 7 is the current cross-surface contract. Revision 4 adds GUI
 automation-ID targets, revision 5 adds observation-scoped visual points, and
-revision 6 reserves `verify_contract` for deterministic runner execution. Web,
-GUI, interactive-agent, and MCP action paths reject or omit that runner-owned
-action instead of silently dispatching it to a surface.
+revision 6 reserves `verify_contract` for deterministic runner execution.
+Revision 7 adds terminal paste, resize, recording, and regex waits. Web and GUI
+drivers explicitly reject terminal-only actions, while interactive schemas
+continue to omit the runner-owned contract action.
 
 The adapter keeps configuration, command execution, protocol mapping, session
 behavior, and host-process supervision in separate modules. The public crate
@@ -547,6 +551,22 @@ executable before dispatch is retryable. A timeout or output failure may have
 already applied an action and is therefore never retried. The runner bounds
 retry count and backoff inside the scenario deadline. Scenario concurrency is
 also bounded and report order remains the manifest order.
+
+## TUI driver
+
+`a3s-test-driver-tui` owns terminal implementation details behind the shared
+surface contracts. On Unix, each program starts as a new PTY session and
+process-group leader; close, cancellation, timeout, Drop, and a second CLI
+interrupt terminate that exact group. An EOF watchdog kills the group if the
+A3S Test host dies before normal cleanup. On Windows, ConPTY creates the root
+inside a kill-on-close Job so descendants cannot escape before containment.
+
+One bounded `vt100` state supplies viewport text, scrollback, cursor position,
+alternate-screen, application-cursor, and bracketed-paste semantics. Viewport,
+scrollback, raw output, paste, wait patterns, and recordings all have hard
+limits. Input and resize run off the async executor, recordings reject links
+and traversal, and cleanup always targets the owned tree even when the root
+process has already exited but a descendant remains.
 
 ## GUI driver
 

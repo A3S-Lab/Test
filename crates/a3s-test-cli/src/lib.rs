@@ -12,6 +12,9 @@ use a3s_test_driver_gui::{
     terminate_active_cua_processes, ApplicationIdentity, AttachSpec, CuaEndpoint, GuiAppTarget,
     GuiCaptureScope, GuiDriver, GuiDriverConfig, GuiProfile, LaunchSpec, WindowSelector,
 };
+use a3s_test_driver_tui::{
+    terminate_active_tui_processes, TuiCommand, TuiDriver, TuiDriverConfig, TuiSize,
+};
 use a3s_test_driver_web::{
     terminate_active_commands, AgentBrowserConfig, AgentBrowserDriver, BrowserCapabilities,
     BrowserCommand,
@@ -130,6 +133,8 @@ struct RunArgs {
     max_parallel_scenarios: usize,
     #[command(flatten)]
     gui: GuiRunArgs,
+    #[command(flatten)]
+    tui: TuiRunArgs,
     /// Emit machine-readable JSON.
     #[arg(long)]
     json: bool,
@@ -221,6 +226,35 @@ struct GuiRunArgs {
     gui_window_automation_id: Option<String>,
 }
 
+#[derive(Debug, Args)]
+struct TuiRunArgs {
+    /// Executable owned by every TUI scenario in this run.
+    #[arg(long)]
+    tui_executable: Option<PathBuf>,
+    /// Argument passed to the TUI executable. Repeat to pass multiple arguments.
+    #[arg(
+        long = "tui-arg",
+        requires = "tui_executable",
+        allow_hyphen_values = true
+    )]
+    tui_arguments: Vec<std::ffi::OsString>,
+    /// Absolute working directory for the TUI executable.
+    #[arg(long, requires = "tui_executable")]
+    tui_working_directory: Option<PathBuf>,
+    /// Initial terminal column count.
+    #[arg(long, default_value_t = 80, requires = "tui_executable")]
+    tui_columns: u16,
+    /// Initial terminal row count.
+    #[arg(long, default_value_t = 24, requires = "tui_executable")]
+    tui_rows: u16,
+    /// Retained semantic scrollback rows.
+    #[arg(long, default_value_t = 2_000, requires = "tui_executable")]
+    tui_scrollback_rows: usize,
+    /// Maximum retained raw terminal output in bytes.
+    #[arg(long, default_value_t = 4 * 1024 * 1024, requires = "tui_executable")]
+    tui_max_output_bytes: usize,
+}
+
 /// Dispatch one command without storing every async branch in one stack future.
 ///
 /// Windows gives the process main thread a smaller default stack than Unix.
@@ -294,22 +328,46 @@ async fn run(args: RunArgs) -> Result<ExitCode> {
         .scenarios
         .iter()
         .any(|scenario| scenario.surface == Surface::Gui);
-    let command = browser_command(args.browser_driver, args.browser_executable);
-    let browser = AgentBrowserDriver::new(AgentBrowserConfig {
-        command,
-        namespace: String::new(),
-        headed: args.headed,
-        command_timeout: Duration::from_millis(args.command_timeout_ms),
-        idle_timeout: Duration::from_millis(args.idle_timeout_ms),
-        network_policy: Default::default(),
-    });
-    let mut drivers: Vec<Arc<dyn SurfaceDriver>> = vec![Arc::new(browser)];
+    let has_tui = suite
+        .scenarios
+        .iter()
+        .any(|scenario| scenario.surface == Surface::Tui);
+    let has_web = suite
+        .scenarios
+        .iter()
+        .any(|scenario| scenario.surface == Surface::Web);
+    let mut drivers: Vec<Arc<dyn SurfaceDriver>> = Vec::new();
+    if has_web {
+        let command = browser_command(args.browser_driver, args.browser_executable.clone());
+        drivers.push(Arc::new(AgentBrowserDriver::new(AgentBrowserConfig {
+            command,
+            namespace: String::new(),
+            headed: args.headed,
+            command_timeout: Duration::from_millis(args.command_timeout_ms),
+            idle_timeout: Duration::from_millis(args.idle_timeout_ms),
+            network_policy: Default::default(),
+        })));
+    } else if args.browser_executable.is_some()
+        || args.browser_driver != BrowserDriverKind::A3s
+        || args.headed
+    {
+        anyhow::bail!("Web options were provided but the suite has no Web scenarios");
+    }
     if has_gui {
         drivers.push(Arc::new(
             gui_driver(&args.gui, Duration::from_millis(args.command_timeout_ms)).await?,
         ));
     } else if args.gui.requested() {
         anyhow::bail!("GUI options were provided but the suite has no GUI scenarios");
+    }
+    if has_tui {
+        drivers.push(Arc::new(tui_driver(
+            &args.tui,
+            Duration::from_millis(args.command_timeout_ms),
+            Duration::from_millis(args.cleanup_timeout_ms),
+        )?));
+    } else if args.tui.requested() {
+        anyhow::bail!("TUI options were provided but the suite has no TUI scenarios");
     }
     let runner = Runner::new(
         drivers,
@@ -420,6 +478,47 @@ impl GuiRunArgs {
             || self.gui_window_title.is_some()
             || self.gui_window_automation_id.is_some()
     }
+}
+
+impl TuiRunArgs {
+    fn requested(&self) -> bool {
+        self.tui_executable.is_some()
+    }
+}
+
+fn tui_driver(
+    args: &TuiRunArgs,
+    command_timeout: Duration,
+    cleanup_timeout: Duration,
+) -> Result<TuiDriver> {
+    let executable = args
+        .tui_executable
+        .as_ref()
+        .context("TUI scenarios require --tui-executable")?;
+    let working_directory = args
+        .tui_working_directory
+        .as_ref()
+        .map(|directory| {
+            if directory.is_absolute() {
+                Ok(directory.clone())
+            } else {
+                anyhow::bail!("--tui-working-directory must be absolute")
+            }
+        })
+        .transpose()?;
+    let mut command = TuiCommand::new(executable);
+    command.arguments.clone_from(&args.tui_arguments);
+    command.working_directory = working_directory;
+    let config = TuiDriverConfig {
+        command,
+        initial_size: TuiSize::new(args.tui_columns, args.tui_rows).map_err(anyhow::Error::new)?,
+        command_timeout,
+        cleanup_timeout,
+        scrollback_rows: args.tui_scrollback_rows,
+        max_output_bytes: args.tui_max_output_bytes,
+    };
+    config.validate().map_err(anyhow::Error::new)?;
+    Ok(TuiDriver::new(config))
 }
 
 async fn gui_driver(args: &GuiRunArgs, command_timeout: Duration) -> Result<GuiDriver> {
@@ -689,7 +788,9 @@ fn install_interrupt_handler(cancellation: CancellationToken) -> tokio::task::Jo
         cancellation.cancel();
 
         if tokio::signal::ctrl_c().await.is_ok() {
+            eprintln!("second interrupt received; forcing owned process cleanup");
             terminate_active_cua_processes();
+            terminate_active_tui_processes();
             terminate_active_commands();
             std::process::exit(130);
         }
