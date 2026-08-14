@@ -1,4 +1,4 @@
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::process::Command;
 
 fn binary() -> PathBuf {
@@ -49,7 +49,9 @@ mod unix {
     use tokio::net::TcpListener;
     use tokio_util::sync::CancellationToken;
 
-    use super::{binary, Command, Path};
+    use std::path::Path;
+
+    use super::{binary, Command};
 
     const IMAGE_DIGEST: &str =
         "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
