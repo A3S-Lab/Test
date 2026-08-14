@@ -405,7 +405,7 @@ tagged Rust package:
 
 ```bash
 cargo install --git https://github.com/A3S-Lab/Test \
-  --tag v0.11.0 --locked a3s-test-cli
+  --tag v0.12.0 --locked a3s-test-cli
 ```
 
 ### Hermetic runner image
@@ -448,10 +448,12 @@ TUI execution plus evidence and cleanup.
 
 Remote dispatch uses the separate, authenticated
 `a3s.test.remote-worker/1` protocol. Inspect the strict request, response, and
-worker descriptor before integrating a scheduler:
+worker descriptor before integrating a scheduler. Report discovery and byte
+transport use the companion `a3s.test.remote-artifacts/1` protocol:
 
 ```bash
 a3s-test worker remote schema
+a3s-test worker artifacts schema
 ```
 
 The reference host listens on loopback only. Its expected `Authorization`
@@ -482,14 +484,30 @@ deadlines and renewable leases are mandatory. The service persists a bounded
 sequential queue, cancellation, restart interruption, and digest-bound report
 summaries beneath its exclusive private state root.
 
+The artifact service shares the reference host's transport authentication at
+`POST /v1/artifacts`. It can inspect the service, query terminal reports, list
+one job's report and evidence descriptors, and read a SHA-256-bound artifact
+in chunks of at most 1 MiB. Every list or read binds the job ID, dispatch ID,
+and immutable request digest; reads additionally bind the artifact digest and
+a bounded offset. Query cursors are canonical, bounded, and tied to their
+original query or job request.
+
+Retention is deployment-owned and enforced during idle periods, after job
+completion, and during restart. By default, complete job inputs, reports, and
+evidence retain the newest 256 jobs within an aggregate 20 GiB and seven-day
+window. Compact report indexes retain up to 10,000 jobs for 90 days. The five
+`worker serve` flags prefixed by `--retention-` or `--report-index-` can lower
+or raise those reviewed bounds. Payload pruning is crash-recoverable; the
+longer-lived index continues to expose immutable descriptors with a `pruned`
+state. Once the index expires, the job and dispatch idempotency window ends.
+
 Requests cannot select executables, backends, credentials, or network policy.
 The deployment must still treat the configured TUI as an authority boundary:
 selecting a shell, or an application with a shell escape, intentionally grants
 that authority to authenticated jobs. Use a dedicated least-privilege test
 target. TLS termination and external client authentication belong in the
-deployment proxy. Report and evidence bytes remain local to the worker;
-artifact retention and transport are intentionally separate from this
-protocol.
+deployment proxy. The execution protocol never carries report or evidence
+bytes; only the independently versioned artifact protocol does.
 
 The authorization environment variable is consumed only by the reference
 host. It is explicitly removed from browser capability probes, Web driver

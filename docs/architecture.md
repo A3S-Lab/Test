@@ -402,18 +402,19 @@ The reference host is exposed through:
 
 ```text
 a3s-test worker remote schema
+a3s-test worker artifacts schema
 a3s-test worker serve [deployment-owned Web and/or TUI profile]
 ```
 
-It accepts `POST /v1/worker` on a loopback listener only and requires the
-request's `Authorization` header to exactly match a bounded value read from a
-named environment variable. TLS termination and scheduler authentication
-policy remain external. The server never prints the authorization value. Its
-Web policy requires deployment-supplied exact origins, and its TUI executable
-and arguments are fixed at startup. Browser probes, Web commands, and TUI
-children explicitly remove the authorization environment variable before
-process creation. Runner artifacts use the job's private artifact root without
-changing the process-wide working directory.
+It accepts `POST /v1/worker` and `POST /v1/artifacts` on a loopback listener
+only and requires the request's `Authorization` header to exactly match a
+bounded value read from a named environment variable. TLS termination and
+scheduler authentication policy remain external. The server never prints the
+authorization value. Its Web policy requires deployment-supplied exact
+origins, and its TUI executable and arguments are fixed at startup. Browser
+probes, Web commands, and TUI children explicitly remove the authorization
+environment variable before process creation. Runner artifacts use the job's
+private artifact root without changing the process-wide working directory.
 
 Fixed executable selection prevents a request from choosing a new process; it
 does not reduce the authority already exposed by that executable. A shell or a
@@ -421,9 +422,46 @@ TUI with shell escapes therefore grants shell authority to authenticated jobs
 and must only be selected when the deployment explicitly intends that trust
 boundary.
 
-The response intentionally does not transport report or evidence bytes.
-Artifact retention, download authorization, indexing, and garbage collection
-remain a separate protocol and roadmap concern.
+The execution response intentionally does not transport report or evidence
+bytes. Those responsibilities belong to the independently versioned artifact
+boundary below.
+
+## Remote artifact boundary
+
+Protocol `a3s.test.remote-artifacts/1` is transport-neutral and read-only. It
+shares the reference host's exact transport authentication but does not add
+commands to the execution protocol. `inspect` returns the worker identity,
+inventory digest, deployment retention policy, and hard pagination/chunk
+limits. `list_reports` queries terminal snapshots by canonical state set,
+suite, run ID, and exclusive completion-time bounds. `list_artifacts` returns
+immutable report and evidence descriptors. `read` returns one Base64 chunk.
+
+Artifact access is capability-like rather than path-like. A request supplies
+the job ID, dispatch ID, and immutable submission digest. Listing cursors bind
+that request digest. Reads additionally select the indexed report or evidence
+path by its SHA-256 digest and use a bounded offset and chunk length. The
+service resolves only paths already present in the durable index, rejects
+links and Windows reparse points, rechecks canonical containment and file
+length, and hashes the complete file before returning any requested chunk.
+Replacement or corruption therefore fails closed.
+
+Retention has two ordered tiers. The short tier owns complete inputs, report
+bytes, and evidence; the long tier owns the compact terminal snapshot and
+immutable artifact descriptors. Count, aggregate-byte, and age limits prune
+the oldest payloads first. Count and age limits later remove complete job
+records, ending status lookup and dispatch idempotency for those IDs. The
+default short tier is 256 jobs, 20 GiB, and seven days; the default index tier
+is 10,000 jobs and 90 days. The worker applies these bounds after completion,
+on restart, and at the exact next age deadline while idle.
+
+Each terminal job persists `jobs/<job-id>/artifact-index.json`. Payload state
+moves from `retained` to `pruning` before bytes are removed and then to
+`pruned`. Atomic index writes and a startup staging sweep make both payload
+pruning and full index removal recoverable after interruption. Startup also
+rebuilds retained indexes from the actual files and rejects malformed or
+mismatched persisted descriptors. If an index cannot be made durable after a
+terminal event, the worker stops admitting new jobs until retention becomes
+healthy or the deployment repairs the state.
 
 CI builds the exact image and runs it with no external network, a read-only
 root, all Linux capabilities dropped, `no-new-privileges`, bounded memory,

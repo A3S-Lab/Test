@@ -1,10 +1,12 @@
 mod admission;
+mod artifacts;
 mod model;
 mod persistence;
 mod runtime;
 mod service;
 
 pub use admission::{AdmittedRemoteFile, AdmittedRemoteJob};
+pub use artifacts::*;
 pub use model::*;
 pub use service::*;
 

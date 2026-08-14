@@ -30,6 +30,8 @@ enum WorkerCommand {
     Schema(WorkerSchemaArgs),
     /// Inspect the authenticated remote execution protocol.
     Remote(remote::WorkerRemoteArgs),
+    /// Inspect the authenticated remote report and artifact protocol.
+    Artifacts(remote::WorkerArtifactArgs),
     /// Serve authenticated remote jobs on a loopback HTTP listener.
     Serve(Box<remote::WorkerServeArgs>),
 }
@@ -65,6 +67,7 @@ pub(crate) async fn execute(args: WorkerArgs) -> Result<ExitCode> {
         WorkerCommand::Inventory(args) => inventory(args).await,
         WorkerCommand::Schema(args) => schema(args),
         WorkerCommand::Remote(args) => remote::execute(args),
+        WorkerCommand::Artifacts(args) => remote::execute_artifacts(args),
         WorkerCommand::Serve(args) => remote::serve(*args).await,
     }
 }

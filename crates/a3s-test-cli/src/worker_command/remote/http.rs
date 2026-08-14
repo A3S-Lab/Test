@@ -1,6 +1,6 @@
 use std::{future::IntoFuture, sync::Arc, time::Duration};
 
-use a3s_test_worker::{RemoteWorkerRequest, RemoteWorkerService};
+use a3s_test_worker::{RemoteArtifactRequest, RemoteWorkerRequest, RemoteWorkerService};
 use anyhow::{Context, Result};
 use axum::{
     body::{to_bytes, Body},
@@ -10,8 +10,11 @@ use axum::{
     routing::post,
     Json, Router,
 };
-use serde::Serialize;
-use tokio::{net::TcpListener, sync::Semaphore};
+use serde::{de::DeserializeOwned, Serialize};
+use tokio::{
+    net::TcpListener,
+    sync::{OwnedSemaphorePermit, Semaphore},
+};
 use tokio_util::sync::CancellationToken;
 
 const MAX_CONCURRENT_HTTP_REQUESTS: usize = 4;
@@ -49,7 +52,8 @@ pub(super) async fn serve(
         request_slots: Arc::new(Semaphore::new(MAX_CONCURRENT_HTTP_REQUESTS)),
     };
     let application = Router::new()
-        .route("/v1/worker", post(handle_request))
+        .route("/v1/worker", post(handle_worker_request))
+        .route("/v1/artifacts", post(handle_artifact_request))
         .with_state(state);
     let graceful_shutdown = shutdown.clone();
     let server = axum::serve(listener, application)
@@ -71,29 +75,53 @@ pub(super) async fn serve(
     }
 }
 
-async fn handle_request(State(state): State<HttpState>, request: Request<Body>) -> Response {
+async fn handle_worker_request(State(state): State<HttpState>, request: Request<Body>) -> Response {
+    let (request, _request_slot) =
+        match decode_request::<RemoteWorkerRequest>(&state, request).await {
+            Ok(request) => request,
+            Err(response) => return response,
+        };
+    no_store(Json(state.service.handle(request).await).into_response())
+}
+
+async fn handle_artifact_request(
+    State(state): State<HttpState>,
+    request: Request<Body>,
+) -> Response {
+    let (request, _request_slot) =
+        match decode_request::<RemoteArtifactRequest>(&state, request).await {
+            Ok(request) => request,
+            Err(response) => return response,
+        };
+    no_store(Json(state.service.handle_artifact(request).await).into_response())
+}
+
+async fn decode_request<T: DeserializeOwned>(
+    state: &HttpState,
+    request: Request<Body>,
+) -> Result<(T, OwnedSemaphorePermit), Response> {
     if !authorization_matches(request.headers(), &state.authorization) {
-        return transport_error(
+        return Err(transport_error(
             StatusCode::UNAUTHORIZED,
             "test.worker.remote.transport_unauthorized",
             "request did not provide the required transport authorization",
-        );
+        ));
     }
     if !content_type_is_json(request.headers()) {
-        return transport_error(
+        return Err(transport_error(
             StatusCode::UNSUPPORTED_MEDIA_TYPE,
             "test.worker.remote.transport_content_type_invalid",
             "remote worker requests require application/json",
-        );
+        ));
     }
-    let _request_slot = match Arc::clone(&state.request_slots).try_acquire_owned() {
+    let request_slot = match Arc::clone(&state.request_slots).try_acquire_owned() {
         Ok(slot) => slot,
         Err(_) => {
-            return transport_error(
+            return Err(transport_error(
                 StatusCode::TOO_MANY_REQUESTS,
                 "test.worker.remote.transport_busy",
                 "remote worker HTTP admission is at its concurrency bound",
-            );
+            ));
         }
     };
     let body = match tokio::time::timeout(
@@ -104,31 +132,31 @@ async fn handle_request(State(state): State<HttpState>, request: Request<Body>) 
     {
         Ok(Ok(body)) => body,
         Ok(Err(_)) => {
-            return transport_error(
+            return Err(transport_error(
                 StatusCode::PAYLOAD_TOO_LARGE,
                 "test.worker.remote.transport_request_too_large",
                 "remote worker request exceeds the HTTP body limit",
-            );
+            ));
         }
         Err(_) => {
-            return transport_error(
+            return Err(transport_error(
                 StatusCode::REQUEST_TIMEOUT,
                 "test.worker.remote.transport_request_timeout",
                 "remote worker request body exceeded its read deadline",
-            );
+            ));
         }
     };
-    let request = match serde_json::from_slice::<RemoteWorkerRequest>(&body) {
+    let request = match serde_json::from_slice::<T>(&body) {
         Ok(request) => request,
         Err(_) => {
-            return transport_error(
+            return Err(transport_error(
                 StatusCode::BAD_REQUEST,
                 "test.worker.remote.transport_json_invalid",
                 "remote worker request is not valid strict JSON",
-            );
+            ));
         }
     };
-    no_store(Json(state.service.handle(request).await).into_response())
+    Ok((request, request_slot))
 }
 
 fn authorization_matches(headers: &HeaderMap, expected: &[u8]) -> bool {

@@ -848,9 +848,75 @@ minute. Invalid bounds fail before capability probing or listener startup.
 Terminal snapshots may be `passed`, `failed`, `timed_out`, `cancelled`, or
 `interrupted`. A completed runner result includes scenario counts and a report
 descriptor containing media type, byte length, and SHA-256. The report and
-surface artifacts stay in the private job directory. This protocol does not
-provide artifact transport, retention policy, indexing, or scheduler-side
-sharding.
+surface artifacts stay in the private job directory. This execution protocol
+does not transport those bytes or define scheduler-side sharding.
+
+## Remote artifact protocol
+
+Report indexing and artifact transport use the separate
+`a3s.test.remote-artifacts/1` protocol. Discover its exact JSON Schema 2020-12
+request, response, descriptor, and invariants with:
+
+```bash
+a3s-test worker artifacts schema
+```
+
+The strict envelope contains `protocol`, a bounded `request_id`, and one
+tagged command:
+
+- `inspect` returns worker identity, capability-inventory digest, retention
+  policy, and hard service limits;
+- `list_reports` queries terminal report-index entries;
+- `list_artifacts` pages through one job's report and evidence descriptors;
+- `read` returns one bounded Base64 artifact chunk.
+
+A report query contains a non-empty, sorted, unique set of terminal states and
+may constrain suite, run ID, and exclusive `finished_after_ms` and
+`finished_before_ms` bounds. Pages contain at most 100 reports. Artifact pages
+contain at most 256 descriptors. Cursors use canonical unpadded URL-safe
+Base64, are limited to 512 bytes, and bind the original query digest or
+immutable job request digest. Changing a bound field invalidates the cursor.
+
+Artifact list and read requests bind `job_id`, `dispatch_id`, and
+`expected_request_digest`. A read selects either the report digest or an exact
+indexed evidence path and digest. `offset` must be before the file end and
+`max_bytes` is limited to 1 through 1,048,576. The response repeats the job,
+dispatch, request, artifact descriptor, and offset bindings. It never accepts
+an arbitrary server path. Before returning a chunk, the worker rejects links,
+Windows reparse points, non-regular files, size changes, containment escapes,
+and a full-file SHA-256 mismatch.
+
+The deployment configures retention through these `worker serve` options:
+
+```text
+--retention-max-jobs          default 256
+--retention-max-bytes         default 21474836480
+--retention-max-age-ms        default 604800000
+--report-index-max-jobs       default 10000
+--report-index-max-age-ms     default 7776000000
+```
+
+The report-index count and age must be at least the corresponding payload
+bounds. Complete inputs, report bytes, and evidence are pruned when any short
+tier bound is exceeded. The compact terminal snapshot and artifact
+descriptors remain queryable with `payload_state: "pruned"` until an index
+bound expires. Index expiry removes the full job record and therefore ends
+status lookup and idempotent replay for its job and dispatch IDs.
+
+Retention runs after job completion, during restart, and at the next age
+deadline while the worker is idle. A durable per-job index records
+`retained`, `pruning`, or `pruned` before and after deletion so startup can
+finish interrupted garbage collection. Retained indexes are rebuilt and
+compared with actual bytes on restart; malformed descriptors, unsafe files,
+or mismatched digests fail closed. A successful executor result that produced
+unsafe evidence is converted to a durable failed job without touching the
+external link target.
+
+The reference HTTP transport exposes this protocol at `POST /v1/artifacts` on
+the same loopback listener and under the same exact Authorization check,
+content-type rule, body deadline, request-size limit, concurrency bound, and
+`no-store` response policy as `POST /v1/worker`. TLS termination and external
+client identity remain deployment responsibilities.
 
 ## Agent-run configuration
 

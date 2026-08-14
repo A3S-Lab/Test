@@ -5,10 +5,12 @@ use std::{
 use a3s_test_driver_tui::{TuiCapabilities, TuiCommand, TuiDriverConfig, TuiSize};
 use a3s_test_driver_web::{AgentBrowserConfig, BrowserNetworkPolicy};
 use a3s_test_worker::{
-    remote_worker_protocol_schema, RemoteWorkerDescriptor, RemoteWorkerIdentity,
-    RemoteWorkerLimits, RemoteWorkerService, RemoteWorkerServiceConfig, WebExecutionMode,
-    WorkerCapabilityInventory, WorkerSurfaceCapability, MAX_REMOTE_CLEANUP_TIMEOUT_MS,
-    MIN_REMOTE_CLEANUP_TIMEOUT_MS,
+    remote_artifact_protocol_schema, remote_worker_protocol_schema, RemoteArtifactDescriptor,
+    RemoteRetentionPolicy, RemoteWorkerDescriptor, RemoteWorkerIdentity, RemoteWorkerLimits,
+    RemoteWorkerService, RemoteWorkerServiceConfig, WebExecutionMode, WorkerCapabilityInventory,
+    WorkerSurfaceCapability, DEFAULT_MAX_INDEXED_JOBS, DEFAULT_MAX_INDEX_AGE_MS,
+    DEFAULT_MAX_RETAINED_BYTES, DEFAULT_MAX_RETAINED_JOBS, DEFAULT_MAX_RETENTION_AGE_MS,
+    MAX_REMOTE_CLEANUP_TIMEOUT_MS, MIN_REMOTE_CLEANUP_TIMEOUT_MS,
 };
 use anyhow::{Context, Result};
 use clap::{Args, Subcommand};
@@ -43,6 +45,18 @@ struct RemoteSchemaArgs {
     /// Emit compact JSON instead of pretty JSON.
     #[arg(long)]
     compact: bool,
+}
+
+#[derive(Debug, Args)]
+pub(super) struct WorkerArtifactArgs {
+    #[command(subcommand)]
+    command: WorkerArtifactCommand,
+}
+
+#[derive(Debug, Subcommand)]
+enum WorkerArtifactCommand {
+    /// Print the strict report-index and artifact-transport schemas.
+    Schema(RemoteSchemaArgs),
 }
 
 #[derive(Debug, Args)]
@@ -120,6 +134,21 @@ pub(super) struct WorkerServeArgs {
     /// Maximum jobs waiting behind the single active remote job.
     #[arg(long, default_value_t = 16)]
     max_queued_jobs: u16,
+    /// Maximum terminal jobs whose complete input, report, and evidence remain retained.
+    #[arg(long, default_value_t = DEFAULT_MAX_RETAINED_JOBS)]
+    retention_max_jobs: u32,
+    /// Aggregate byte budget for retained terminal-job inputs, reports, and evidence.
+    #[arg(long, default_value_t = DEFAULT_MAX_RETAINED_BYTES)]
+    retention_max_bytes: u64,
+    /// Maximum age of complete terminal-job payloads.
+    #[arg(long, default_value_t = DEFAULT_MAX_RETENTION_AGE_MS)]
+    retention_max_age_ms: u64,
+    /// Maximum compact terminal-job records retained in the report index.
+    #[arg(long, default_value_t = DEFAULT_MAX_INDEXED_JOBS)]
+    report_index_max_jobs: u32,
+    /// Maximum age of compact terminal-job records in the report index.
+    #[arg(long, default_value_t = DEFAULT_MAX_INDEX_AGE_MS)]
+    report_index_max_age_ms: u64,
     /// Emit a compact JSON readiness record.
     #[arg(long)]
     compact: bool,
@@ -129,6 +158,7 @@ pub(super) struct WorkerServeArgs {
 struct ReadyRecord<'a> {
     listen: String,
     worker: &'a RemoteWorkerDescriptor,
+    artifacts: &'a RemoteArtifactDescriptor,
 }
 
 pub(super) fn execute(args: WorkerRemoteArgs) -> Result<ExitCode> {
@@ -140,8 +170,18 @@ pub(super) fn execute(args: WorkerRemoteArgs) -> Result<ExitCode> {
     }
 }
 
+pub(super) fn execute_artifacts(args: WorkerArtifactArgs) -> Result<ExitCode> {
+    match args.command {
+        WorkerArtifactCommand::Schema(args) => {
+            print_json(&remote_artifact_protocol_schema(), args.compact)?;
+            Ok(ExitCode::SUCCESS)
+        }
+    }
+}
+
 pub(super) async fn serve(args: WorkerServeArgs) -> Result<ExitCode> {
     validate_serve_args(&args)?;
+    let retention_policy = retention_policy(&args)?;
     let authorization = read_authorization(&args.authorization_env)?;
     let state_root = absolute_path(args.state_root.clone())?;
     let profiles = build_profiles(&args).await?;
@@ -170,7 +210,8 @@ pub(super) async fn serve(args: WorkerServeArgs) -> Result<ExitCode> {
         .context("failed to inspect remote worker listener")?;
     let executor = Arc::new(executor::CliRemoteExecutor::new(profiles.executor));
     let service = RemoteWorkerService::open(
-        RemoteWorkerServiceConfig::new(state_root, descriptor),
+        RemoteWorkerServiceConfig::new(state_root, descriptor)
+            .with_retention_policy(retention_policy),
         executor,
     )
     .await
@@ -179,6 +220,7 @@ pub(super) async fn serve(args: WorkerServeArgs) -> Result<ExitCode> {
         &ReadyRecord {
             listen: listen.to_string(),
             worker: service.descriptor(),
+            artifacts: service.artifact_descriptor(),
         },
         args.compact,
     )?;
@@ -323,6 +365,18 @@ fn validate_serve_args(args: &WorkerServeArgs) -> Result<()> {
         }
     }
     Ok(())
+}
+
+fn retention_policy(args: &WorkerServeArgs) -> Result<RemoteRetentionPolicy> {
+    let policy = RemoteRetentionPolicy {
+        max_retained_jobs: args.retention_max_jobs,
+        max_retained_bytes: args.retention_max_bytes,
+        max_retention_age_ms: args.retention_max_age_ms,
+        max_indexed_jobs: args.report_index_max_jobs,
+        max_index_age_ms: args.report_index_max_age_ms,
+    };
+    policy.validate().map_err(anyhow::Error::new)?;
+    Ok(policy)
 }
 
 fn read_authorization(environment_name: &str) -> Result<Arc<[u8]>> {

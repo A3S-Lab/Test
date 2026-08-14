@@ -1,5 +1,43 @@
 # Changelog
 
+## 0.12.0 - 2026-08-14
+
+### Added
+
+- Added the independent `a3s.test.remote-artifacts/1` protocol with generated
+  strict schemas for service inspection, bounded terminal-report queries,
+  paginated artifact descriptors, and chunked report or evidence reads.
+- Added `a3s-test worker artifacts schema` and authenticated
+  `POST /v1/artifacts` support to the loopback reference host. Readiness now
+  reports both execution and artifact descriptors.
+- Added deployment-owned two-tier retention. Complete inputs, reports, and
+  evidence are bounded by job count, aggregate bytes, and age; compact report
+  indexes have independent longer count and age windows. Age limits continue
+  to run while the worker is idle.
+- Added restart reconstruction, crash-recoverable `retained` to `pruning` to
+  `pruned` transitions, and bounded full-index garbage collection.
+
+### Safety
+
+- Artifact lists and reads bind job ID, dispatch ID, immutable request digest,
+  and canonical bounded cursors. Reads additionally bind the artifact SHA-256,
+  exact indexed path, offset, and maximum chunk size.
+- Artifact scans and reads reject symbolic links, Windows reparse points,
+  containment escapes, non-regular or empty evidence, ASCII case-folded path
+  collisions, file replacement, digest drift, oversized trees, and corrupted
+  persisted indexes.
+- Unsafe evidence cannot leave a successful terminal result. The worker
+  records a durable failure, removes only the owned payload, preserves any
+  external link target, and fails closed to new submissions if durable
+  retention becomes unhealthy.
+
+### Changed
+
+- Raised the Rust workspace release to `0.12.0`. The unchanged Test Kit remains
+  `0.2.0`.
+- Kept artifact transport out of `a3s.test.remote-worker/1`; execution and
+  retained-byte access remain independently versioned authority boundaries.
+
 ## 0.11.0 - 2026-08-14
 
 ### Added

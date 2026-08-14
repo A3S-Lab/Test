@@ -121,7 +121,10 @@
       a persistent sequential queue; cancellation and restart recovery; and a
       loopback-only HTTP/CLI reference host for deployment-owned Web and TUI
       profiles
-- [ ] Artifact retention and report indexing
+- [x] Separate authenticated artifact protocol with bounded report queries,
+      digest-bound paginated evidence access, chunked reads, deployment-owned
+      two-tier retention, idle-time garbage collection, durable pruning
+      recovery, and corruption/link/reparse fail-closed checks
 - [ ] Sharding, quarantine, flake accounting, and historical comparison
 - [ ] GUI worker pools with explicit host permissions
 

@@ -17,16 +17,18 @@ use crate::WorkerSurface;
 
 use super::{
     admission::{remote_error, submission_request_digest, validate_storage_key, validate_token},
+    artifacts::{self, persistence::StoredArtifactIndex},
     persistence::{self, PersistedJobDefinition},
-    RemoteJobSnapshot, RemoteJobState, RemoteScenarioCounts, RemoteWorkerCommand,
-    RemoteWorkerDescriptor, RemoteWorkerError, RemoteWorkerOutcome, RemoteWorkerRequest,
-    RemoteWorkerResponse,
+    RemoteArtifactDescriptor, RemoteJobSnapshot, RemoteJobState, RemoteRetentionPolicy,
+    RemoteScenarioCounts, RemoteWorkerCommand, RemoteWorkerDescriptor, RemoteWorkerError,
+    RemoteWorkerOutcome, RemoteWorkerRequest, RemoteWorkerResponse,
 };
 
 #[derive(Clone, Debug)]
 pub struct RemoteWorkerServiceConfig {
     pub state_root: PathBuf,
     pub descriptor: RemoteWorkerDescriptor,
+    pub retention_policy: RemoteRetentionPolicy,
 }
 
 impl RemoteWorkerServiceConfig {
@@ -35,7 +37,14 @@ impl RemoteWorkerServiceConfig {
         Self {
             state_root,
             descriptor,
+            retention_policy: RemoteRetentionPolicy::default(),
         }
+    }
+
+    #[must_use]
+    pub fn with_retention_policy(mut self, retention_policy: RemoteRetentionPolicy) -> Self {
+        self.retention_policy = retention_policy;
+        self
     }
 }
 
@@ -120,7 +129,7 @@ pub trait RemoteJobExecutor: Send + Sync {
 
 #[derive(Clone)]
 pub struct RemoteWorkerService {
-    shared: Arc<ServiceShared>,
+    pub(super) shared: Arc<ServiceShared>,
     worker_task: Arc<Mutex<Option<JoinHandle<()>>>>,
     _shutdown_on_drop: Arc<ShutdownOnDrop>,
 }
@@ -141,8 +150,10 @@ impl RemoteWorkerService {
         let RemoteWorkerServiceConfig {
             state_root,
             descriptor,
+            retention_policy,
         } = config;
         descriptor.validate()?;
+        retention_policy.validate()?;
         persistence::prepare_state_root(&state_root).await?;
         let state_root = tokio::fs::canonicalize(&state_root)
             .await
@@ -154,6 +165,7 @@ impl RemoteWorkerService {
                 )
             })?;
         let state_lock = persistence::acquire_state_lock(&state_root).await?;
+        artifacts::persistence::recover_staging(&state_root).await?;
         persistence::bind_descriptor(&state_root, &descriptor).await?;
         let clock = ServiceClock::new()?;
         let loaded =
@@ -197,6 +209,12 @@ impl RemoteWorkerService {
                 )
                 .await?;
             }
+            let artifact_index = artifacts::persistence::load_or_create(
+                &state_root,
+                &snapshot,
+                snapshot.finished_at_ms.unwrap_or_else(|| clock.now_ms()),
+            )
+            .await?;
             let (lease_tx, _) = watch::channel(snapshot.lease_expires_at_ms);
             state
                 .dispatches
@@ -210,14 +228,24 @@ impl RemoteWorkerService {
                     execution: None,
                     cancellation: CancellationToken::new(),
                     lease_tx,
+                    artifacts: Some(artifact_index),
                 },
             );
         }
+
+        artifacts::retention::enforce_retention_state(
+            &state_root,
+            &retention_policy,
+            &mut state,
+            clock.now_ms(),
+        )
+        .await?;
 
         let queue_capacity = usize::from(descriptor.limits.max_queued_jobs) + 1;
         let (queue_tx, queue_rx) = mpsc::channel(queue_capacity);
         let shared = Arc::new(ServiceShared {
             root: state_root,
+            artifact_descriptor: descriptor.artifact_descriptor(retention_policy),
             descriptor,
             executor,
             clock,
@@ -258,6 +286,13 @@ impl RemoteWorkerService {
         {
             let state = self.shared.state.lock().await;
             ensure_open(&state)?;
+            if let Some(error) = &state.retention_error {
+                return Err(RemoteWorkerError::new(
+                    "test.worker.artifact.retention_unhealthy",
+                    format!("artifact retention is unhealthy: {}", error.message),
+                    true,
+                ));
+            }
             if let Some(job_id) = state.dispatches.get(&submission.dispatch_id) {
                 let existing = state.jobs.get(job_id).ok_or_else(state_index_error)?;
                 if existing.snapshot.job_id == submission.job_id
@@ -339,6 +374,7 @@ impl RemoteWorkerService {
                     execution: Some(execution),
                     cancellation: CancellationToken::new(),
                     lease_tx,
+                    artifacts: None,
                 },
             );
         }
@@ -531,6 +567,7 @@ impl RemoteWorkerService {
 pub(super) struct ServiceShared {
     pub root: PathBuf,
     pub descriptor: RemoteWorkerDescriptor,
+    pub artifact_descriptor: RemoteArtifactDescriptor,
     pub executor: Arc<dyn RemoteJobExecutor>,
     pub clock: ServiceClock,
     pub state: Mutex<ServiceState>,
@@ -546,6 +583,7 @@ pub(super) struct ServiceState {
     pub dispatches: BTreeMap<String, String>,
     pub queued_jobs: usize,
     pub closed: bool,
+    pub retention_error: Option<RemoteWorkerError>,
 }
 
 pub(super) struct JobRecord {
@@ -556,6 +594,7 @@ pub(super) struct JobRecord {
     pub execution: Option<RemoteExecutionJob>,
     pub cancellation: CancellationToken,
     pub lease_tx: watch::Sender<u64>,
+    pub artifacts: Option<StoredArtifactIndex>,
 }
 
 #[derive(Clone)]
@@ -612,9 +651,19 @@ pub(super) async fn persist_transition(
             "remote job event sequence overflowed",
         )
     })?;
+    let prepared_index = if snapshot.state.terminal() {
+        Some(artifacts::persistence::prepare(&shared.root, &snapshot, now_ms).await?)
+    } else {
+        None
+    };
     persistence::append_event(&shared.root, &snapshot.job_id, sequence, now_ms, &snapshot).await?;
     record.sequence = sequence;
     record.snapshot = snapshot;
+    if let Some(index) = prepared_index {
+        artifacts::persistence::persist_prepared(&shared.root, &record.snapshot.job_id, &index)
+            .await?;
+        record.artifacts = Some(index);
+    }
     Ok(())
 }
 

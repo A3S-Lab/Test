@@ -26,6 +26,10 @@ pub(super) async fn worker_loop(shared: Arc<ServiceShared>, mut queue: mpsc::Rec
                 if let Err(error) = run_job(&shared, &job_id).await {
                     record_runtime_failure(&shared, &job_id, error).await;
                 }
+                super::artifacts::retention::enforce_retention(&shared).await;
+            }
+            _ = super::artifacts::retention::wait_until_due(&shared) => {
+                super::artifacts::retention::enforce_retention(&shared).await;
             }
         }
     }

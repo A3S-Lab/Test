@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 use std::process::Command;
 
-use a3s_test_worker::REMOTE_WORKER_PROTOCOL;
+use a3s_test_worker::{REMOTE_ARTIFACT_PROTOCOL, REMOTE_WORKER_PROTOCOL};
 
 #[cfg(unix)]
 use std::{
@@ -15,7 +15,8 @@ use std::{
 
 #[cfg(unix)]
 use a3s_test_worker::{
-    RemoteInputBundle, RemoteInputFile, RemoteJobState, RemoteJobSubmission, RemoteWorkerCommand,
+    RemoteArtifactCommand, RemoteArtifactRequest, RemoteArtifactSelector, RemoteInputBundle,
+    RemoteInputFile, RemoteJobState, RemoteJobSubmission, RemoteReportQuery, RemoteWorkerCommand,
     RemoteWorkerDescriptor, RemoteWorkerRequest, WorkerSurface,
 };
 
@@ -203,6 +204,30 @@ fn remote_worker_schema_exposes_authenticated_digest_bound_execution() {
 }
 
 #[test]
+fn remote_artifact_schema_exposes_bounded_digest_bound_transport() {
+    let output = Command::new(binary())
+        .args(["worker", "artifacts", "schema", "--compact"])
+        .output()
+        .expect("run remote artifact schema");
+
+    assert!(output.status.success(), "{output:?}");
+    let value: serde_json::Value =
+        serde_json::from_slice(&output.stdout).expect("remote artifact schema JSON");
+    assert_eq!(value["protocol"], REMOTE_ARTIFACT_PROTOCOL);
+    assert_eq!(
+        value["invariants"]["transport_authentication_required"],
+        true
+    );
+    assert_eq!(value["invariants"]["deployment_owned_retention"], true);
+    assert_eq!(value["invariants"]["digest_bound_reads"], true);
+    assert_eq!(value["invariants"]["bounded_pagination"], true);
+    assert_eq!(value["invariants"]["bounded_chunks"], true);
+    assert_eq!(value["invariants"]["no_arbitrary_paths"], true);
+    assert_eq!(value["invariants"]["transports_artifacts"], true);
+    assert_eq!(value["request_schema"]["additionalProperties"], false);
+}
+
+#[test]
 fn remote_worker_serve_rejects_non_loopback_listeners() {
     let output = Command::new(binary())
         .args([
@@ -252,6 +277,35 @@ fn remote_worker_serve_rejects_unbounded_deadline_configuration_before_startup()
     assert!(!output.status.success(), "{output:?}");
     assert!(
         String::from_utf8_lossy(&output.stderr).contains("cannot exceed 300000 ms"),
+        "{output:?}"
+    );
+}
+
+#[test]
+fn remote_worker_serve_rejects_an_unordered_retention_policy_before_startup() {
+    let output = Command::new(binary())
+        .args([
+            "worker",
+            "serve",
+            "--instance-id",
+            "worker-test",
+            "--image-digest",
+            "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "--authorization-env",
+            "A3S_TEST_REMOTE_WORKER_AUTH",
+            "--tui-executable",
+            "/bin/sh",
+            "--retention-max-jobs",
+            "2",
+            "--report-index-max-jobs",
+            "1",
+        ])
+        .output()
+        .expect("run remote worker with unordered retention");
+
+    assert!(!output.status.success(), "{output:?}");
+    assert!(
+        String::from_utf8_lossy(&output.stderr).contains("retention limits"),
         "{output:?}"
     );
 }
@@ -330,6 +384,7 @@ fn authenticated_remote_http_host_executes_a_real_tui_job() {
     let address = ready["listen"].as_str().expect("remote worker address");
     let descriptor: RemoteWorkerDescriptor =
         serde_json::from_value(ready["worker"].clone()).expect("worker descriptor");
+    assert_eq!(ready["artifacts"]["protocol"], REMOTE_ARTIFACT_PROTOCOL);
 
     let inspect = RemoteWorkerRequest {
         protocol: REMOTE_WORKER_PROTOCOL.to_string(),
@@ -420,6 +475,111 @@ fn authenticated_remote_http_host_executes_a_real_tui_job() {
         terminal["outcome"]["job"]["result"]["scenarios"]["passed"],
         1
     );
+    let artifact_inspect = RemoteArtifactRequest {
+        protocol: REMOTE_ARTIFACT_PROTOCOL.to_string(),
+        request_id: "artifact-inspect".to_string(),
+        command: RemoteArtifactCommand::Inspect,
+    };
+    let (status, error) = post_json_at_path(address, "/v1/artifacts", None, &artifact_inspect);
+    assert_eq!(status, 401);
+    assert_eq!(error["code"], "test.worker.remote.transport_unauthorized");
+    let (status, artifact_service) = post_json_at_path(
+        address,
+        "/v1/artifacts",
+        Some(authorization),
+        &artifact_inspect,
+    );
+    assert_eq!(status, 200, "{artifact_service}");
+    assert_eq!(artifact_service["outcome"]["type"], "descriptor");
+    assert_eq!(
+        artifact_service["outcome"]["service"]["inventory_digest"],
+        descriptor.inventory_digest
+    );
+
+    let list_reports = RemoteArtifactRequest {
+        protocol: REMOTE_ARTIFACT_PROTOCOL.to_string(),
+        request_id: "artifact-reports".to_string(),
+        command: RemoteArtifactCommand::ListReports {
+            query: RemoteReportQuery {
+                states: vec![RemoteJobState::Passed],
+                suite: None,
+                run_id: None,
+                finished_after_ms: None,
+                finished_before_ms: None,
+                limit: 10,
+                cursor: None,
+            },
+        },
+    };
+    let (status, reports) =
+        post_json_at_path(address, "/v1/artifacts", Some(authorization), &list_reports);
+    assert_eq!(status, 200, "{reports}");
+    assert_eq!(reports["outcome"]["type"], "reports");
+    assert_eq!(
+        reports["outcome"]["page"]["reports"][0]["job"]["job_id"],
+        "job-tui-e2e"
+    );
+    assert_eq!(
+        reports["outcome"]["page"]["reports"][0]["payload_state"],
+        "retained"
+    );
+
+    let request_digest = terminal["outcome"]["job"]["request_digest"]
+        .as_str()
+        .expect("remote request digest");
+    let report_digest = terminal["outcome"]["job"]["result"]["report"]["sha256"]
+        .as_str()
+        .expect("remote report digest");
+    let list_artifacts = RemoteArtifactRequest {
+        protocol: REMOTE_ARTIFACT_PROTOCOL.to_string(),
+        request_id: "artifact-list".to_string(),
+        command: RemoteArtifactCommand::ListArtifacts {
+            job_id: "job-tui-e2e".to_string(),
+            dispatch_id: "dispatch-tui-e2e".to_string(),
+            expected_request_digest: request_digest.to_string(),
+            limit: 10,
+            cursor: None,
+        },
+    };
+    let (status, artifacts) = post_json_at_path(
+        address,
+        "/v1/artifacts",
+        Some(authorization),
+        &list_artifacts,
+    );
+    assert_eq!(status, 200, "{artifacts}");
+    assert_eq!(artifacts["outcome"]["type"], "artifacts");
+    assert_eq!(
+        artifacts["outcome"]["page"]["artifacts"][0]["kind"],
+        "report"
+    );
+    assert!(artifacts["outcome"]["page"]["artifacts"]
+        .as_array()
+        .is_some_and(|artifacts| artifacts.len() >= 2));
+
+    let read_report = RemoteArtifactRequest {
+        protocol: REMOTE_ARTIFACT_PROTOCOL.to_string(),
+        request_id: "artifact-read".to_string(),
+        command: RemoteArtifactCommand::Read {
+            job_id: "job-tui-e2e".to_string(),
+            dispatch_id: "dispatch-tui-e2e".to_string(),
+            expected_request_digest: request_digest.to_string(),
+            artifact: RemoteArtifactSelector::Report {
+                sha256: report_digest.to_string(),
+            },
+            offset: 0,
+            max_bytes: 1024 * 1024,
+        },
+    };
+    let (status, report_chunk) =
+        post_json_at_path(address, "/v1/artifacts", Some(authorization), &read_report);
+    assert_eq!(status, 200, "{report_chunk}");
+    assert_eq!(report_chunk["outcome"]["type"], "chunk");
+    assert_eq!(report_chunk["outcome"]["chunk"]["eof"], true);
+    assert!(report_chunk["outcome"]["chunk"]["contents_base64"]
+        .as_str()
+        .is_some_and(|contents| !contents.is_empty()));
+
     let report: serde_json::Value = serde_json::from_slice(
         &std::fs::read(state_root.join("jobs/job-tui-e2e/report.bin"))
             .expect("persisted remote report"),
@@ -523,6 +683,16 @@ fn post_json(
     authorization: Option<&str>,
     value: &impl serde::Serialize,
 ) -> (u16, serde_json::Value) {
+    post_json_at_path(address, "/v1/worker", authorization, value)
+}
+
+#[cfg(unix)]
+fn post_json_at_path(
+    address: &str,
+    path: &str,
+    authorization: Option<&str>,
+    value: &impl serde::Serialize,
+) -> (u16, serde_json::Value) {
     let body = serde_json::to_vec(value).expect("HTTP request JSON");
     let mut stream = TcpStream::connect(address).expect("connect to remote worker");
     stream
@@ -536,7 +706,7 @@ fn post_json(
         .unwrap_or_default();
     write!(
         stream,
-        "POST /v1/worker HTTP/1.1\r\nHost: {address}\r\nContent-Type: application/json\r\n{authorization}Content-Length: {}\r\nConnection: close\r\n\r\n",
+        "POST {path} HTTP/1.1\r\nHost: {address}\r\nContent-Type: application/json\r\n{authorization}Content-Length: {}\r\nConnection: close\r\n\r\n",
         body.len()
     )
     .expect("write HTTP headers");
