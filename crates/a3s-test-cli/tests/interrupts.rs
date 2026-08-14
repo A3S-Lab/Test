@@ -570,11 +570,10 @@ fn wait_for_child_command(parent_pid: u32, marker: &str, timeout: Duration) -> u
                 String::from_utf8_lossy(&output.stdout)
                     .lines()
                     .find_map(|line| {
-                        let mut fields = line.trim_start().splitn(3, char::is_whitespace);
+                        let mut fields = line.split_whitespace();
                         let process_id = fields.next()?.parse::<u32>().ok()?;
                         let process_parent = fields.next()?.parse::<u32>().ok()?;
-                        let command = fields.next()?;
-                        (process_parent == parent_pid && command.contains(marker))
+                        (process_parent == parent_pid && line.contains(marker))
                             .then_some(process_id)
                     })
             });
