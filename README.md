@@ -405,7 +405,7 @@ tagged Rust package:
 
 ```bash
 cargo install --git https://github.com/A3S-Lab/Test \
-  --tag v0.10.0 --locked a3s-test-cli
+  --tag v0.11.0 --locked a3s-test-cli
 ```
 
 ### Hermetic runner image
@@ -443,6 +443,58 @@ policy. The release smoke test runs the image as its non-root user with no
 external network, a read-only root filesystem, dropped capabilities, and
 bounded temporary filesystems, then proves both loopback-only Web and owned
 TUI execution plus evidence and cleanup.
+
+### Serve a remote worker
+
+Remote dispatch uses the separate, authenticated
+`a3s.test.remote-worker/1` protocol. Inspect the strict request, response, and
+worker descriptor before integrating a scheduler:
+
+```bash
+a3s-test worker remote schema
+```
+
+The reference host listens on loopback only. Its expected `Authorization`
+header comes from an environment variable, while its image identity, Web
+network policy, browser integration, and TUI command are fixed by the
+deployment at startup:
+
+```bash
+export A3S_TEST_WORKER_AUTHORIZATION='Bearer replace-with-a-secret'
+export A3S_TEST_WORKER_IMAGE_DIGEST='sha256:replace-with-64-lowercase-hex-digits'
+
+a3s-test worker serve \
+  --listen 127.0.0.1:9400 \
+  --state-root /var/lib/a3s-test-worker \
+  --instance-id runner-west-1 \
+  --image-digest "$A3S_TEST_WORKER_IMAGE_DIGEST" \
+  --authorization-env A3S_TEST_WORKER_AUTHORIZATION \
+  --browser-driver standalone \
+  --browser-executable agent-browser \
+  --web-allow-origin https://preview.example.test \
+  --tui-executable /opt/example-app/bin/test-console
+```
+
+Each request is bound to that exact instance, image digest, and full
+capability-inventory digest. Submitted ACL files use a bounded, sorted,
+SHA-256-verified inline bundle. Dispatch IDs are immutable and idempotent;
+deadlines and renewable leases are mandatory. The service persists a bounded
+sequential queue, cancellation, restart interruption, and digest-bound report
+summaries beneath its exclusive private state root.
+
+Requests cannot select executables, backends, credentials, or network policy.
+The deployment must still treat the configured TUI as an authority boundary:
+selecting a shell, or an application with a shell escape, intentionally grants
+that authority to authenticated jobs. Use a dedicated least-privilege test
+target. TLS termination and external client authentication belong in the
+deployment proxy. Report and evidence bytes remain local to the worker;
+artifact retention and transport are intentionally separate from this
+protocol.
+
+The authorization environment variable is consumed only by the reference
+host. It is explicitly removed from browser capability probes, Web driver
+commands, and TUI child processes before those deployment-owned programs are
+started.
 
 ## Turn a proven path into a regression
 
@@ -651,6 +703,7 @@ a3s-test provider schema llm
 a3s-test provider schema visual-grounding
 a3s-test worker schema
 a3s-test worker inventory
+a3s-test worker remote schema
 ```
 
 ## Architecture
@@ -672,7 +725,7 @@ crates/
 ├── a3s-test-core/        # Typed suites, actions, observations, and surface contracts
 ├── a3s-test-runner/      # Deadlines, cancellation, retries, and reports
 ├── a3s-test-session/     # Surface-neutral long-lived session application layer
-├── a3s-test-worker/      # Typed, self-reported scheduling capability inventory
+├── a3s-test-worker/      # Capability inventory and persistent remote worker service
 ├── a3s-test-driver-gui/  # Locked MCP adapter boundary for A3S CUA
 ├── a3s-test-driver-tui/  # Owned PTY/ConPTY and bounded VT semantics
 ├── a3s-test-driver-web/  # A3S Browser / agent-browser adapter

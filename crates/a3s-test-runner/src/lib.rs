@@ -55,6 +55,7 @@ pub struct Runner {
     drivers: HashMap<Surface, Arc<dyn SurfaceDriver>>,
     contracts: ContractRegistry,
     options: RunnerOptions,
+    artifacts_root: PathBuf,
 }
 
 #[derive(Clone, Default)]
@@ -122,6 +123,7 @@ impl Runner {
             drivers: by_surface,
             contracts: ContractRegistry::default(),
             options,
+            artifacts_root: PathBuf::from(".a3s-test"),
         })
     }
 
@@ -131,16 +133,26 @@ impl Runner {
         self
     }
 
+    pub fn with_artifacts_root(mut self, artifacts_root: PathBuf) -> Result<Self, String> {
+        if artifacts_root.as_os_str().is_empty() {
+            return Err("artifact root must not be empty".to_string());
+        }
+        self.artifacts_root = artifacts_root;
+        Ok(self)
+    }
+
     pub async fn run(&self, suite: &TestSuite, cancellation: CancellationToken) -> RunResult {
         let run_id = new_run_id();
-        let mut indexed = stream::iter(suite.scenarios.iter().enumerate())
+        // Buffered scenario futures own their inputs so this run future remains
+        // Send when a Runner is embedded behind an async-trait executor.
+        let mut indexed = stream::iter(suite.scenarios.clone().into_iter().enumerate())
             .map(|(index, scenario)| {
                 let cancellation = cancellation.clone();
-                let run_id = &run_id;
+                let run_id = run_id.clone();
                 async move {
                     (
                         index,
-                        self.run_scenario(run_id, scenario, cancellation).await,
+                        self.run_scenario(&run_id, &scenario, cancellation).await,
                     )
                 }
             })
@@ -183,7 +195,9 @@ impl Runner {
         let context = ScenarioContext {
             run_id: run_id.to_string(),
             scenario_id: scenario.id.clone(),
-            artifacts_dir: PathBuf::from(".a3s-test")
+            artifacts_dir: self
+                .artifacts_root
+                .clone()
                 .join("runs")
                 .join(run_id)
                 .join(artifact_component(&scenario.id)),

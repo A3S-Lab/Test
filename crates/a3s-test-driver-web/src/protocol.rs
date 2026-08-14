@@ -56,6 +56,7 @@ pub(crate) fn invocation(
         program: config.command.program().to_path_buf(),
         args,
         env,
+        env_remove: Default::default(),
         timeout: config.command_timeout,
     }
 }

@@ -1,5 +1,62 @@
 # Changelog
 
+## 0.11.0 - 2026-08-14
+
+### Added
+
+- Added transport-neutral protocol `a3s.test.remote-worker/1` with generated
+  strict request, response, and descriptor schemas. Every dispatch binds one
+  exact worker instance, externally supplied image digest, complete capability
+  inventory digest, absolute deadline, renewable lease, required surfaces,
+  and immutable request digest.
+- Added bounded, sorted, SHA-256-verified inline input bundles with portable
+  paths and canonical Base64 admission before any private materialization.
+- Added a persistent sequential remote worker service with bounded queueing,
+  idempotent dispatch, conflict rejection, lease renewal, queued and running
+  cancellation, deadline enforcement, bounded cleanup, append-only job state,
+  exclusive descriptor-bound state roots, and restart interruption recovery.
+- Added `a3s-test worker remote schema` and the `a3s-test worker serve`
+  reference host. It serves one strict HTTP endpoint on loopback, requires an
+  exact environment-supplied Authorization header, and executes only
+  deployment-owned Web and TUI profiles.
+- Added digest-bound terminal report summaries and private per-job Runner
+  artifact roots. A real HTTP/TUI integration test proves authentication,
+  dispatch, PTY execution, report persistence, evidence containment, SIGINT
+  shutdown, and exact owned cleanup.
+
+### Safety
+
+- Remote requests cannot select commands, browser integrations, TUI backends,
+  arguments, credentials, or network policy. Web origins and domains and the
+  TUI executable are fixed when the host starts. Selecting a shell or an
+  application with shell escapes remains an explicit deployment grant to
+  authenticated jobs.
+- The reference HTTP host rejects non-loopback binds, oversized or non-JSON
+  bodies, and missing or incorrect authorization. TLS termination and external
+  authentication policy remain deployment responsibilities, and configured
+  authorization values are never printed or inherited by browser probes, Web
+  commands, or TUI child processes.
+- Remote command/body, browser-idle, cleanup, and retry-backoff settings have
+  explicit startup bounds, so capability probing cannot be configured with an
+  effectively unbounded deadline.
+- Failed identity, capability, time, path, size, Base64, or digest admission
+  writes no job input. Exact duplicate dispatches return their durable state;
+  conflicting reuse fails closed. Non-terminal durable state is never resumed
+  speculatively after restart.
+- Reports and surface evidence remain private worker files. Remote responses
+  expose only bounded counts and a media-type, byte-length, and SHA-256 report
+  descriptor; artifact transport remains a separate milestone.
+- Dropping the final remote service handle cancels its worker loop, preventing
+  an embedding process from retaining the exclusive state-root lock through a
+  detached task.
+
+### Changed
+
+- Added a configurable Runner artifact root so remote jobs do not mutate the
+  process-wide working directory.
+- Raised the Rust workspace release to `0.11.0`. The unchanged Test Kit remains
+  `0.2.0`.
+
 ## 0.10.0 - 2026-08-14
 
 ### Added

@@ -109,6 +109,7 @@ jobs:
               /successful_command_descendant_fixture/ && $0 !~ /awk/ { print }
               /owned_process_tree_descendant_fixture/ && $0 !~ /awk/ { print }
               /a3s-test-tui-(descendant|interrupt|second-interrupt|host-crash)-fixture/ && $0 !~ /awk/ { print }
+              /a3s-test .*worker serve/ && $0 !~ /awk/ { print }
               /fake-agent-browser/ && $0 !~ /awk/ { print }
             '
           )"
@@ -136,7 +137,8 @@ jobs:
             Get-CimInstance Win32_Process | Where-Object {
               $_.CommandLine -match 'successful_command_descendant_fixture' -or
               $_.CommandLine -match 'owned_process_tree_descendant_fixture' -or
-              $_.CommandLine -match 'a3s-test-tui-windows-descendant-fixture'
+              $_.CommandLine -match 'a3s-test-tui-windows-descendant-fixture' -or
+              $_.CommandLine -match 'a3s-test(\.exe)? worker serve'
             }
           )
           $runtimeRoot = [System.IO.Path]::GetTempPath()

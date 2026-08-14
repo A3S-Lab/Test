@@ -1,4 +1,8 @@
-//! Typed scheduling evidence for A3S Test workers.
+//! Typed scheduling evidence and remote execution for A3S Test workers.
+
+mod remote;
+
+pub use remote::*;
 
 use a3s_test_driver_tui::{TuiBackend, TuiCapabilities};
 use a3s_test_driver_web::BrowserCapabilities;

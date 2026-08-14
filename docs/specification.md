@@ -757,7 +757,100 @@ or browser versions, feature overclaims, invalid protocol revisions, and
 concurrency outside 1 through 64 are rejected by local admission. An external
 scheduler must bind the release image digest and apply its own identity,
 authorization, network, filesystem, credential, and resource policy. This
-protocol does not define remote dispatch or artifact transport.
+protocol does not authorize remote dispatch by itself.
+
+## Remote worker protocol
+
+Remote execution uses protocol `a3s.test.remote-worker/1`. Discover its exact
+JSON Schema 2020-12 request, response, descriptor, and invariants with:
+
+```bash
+a3s-test worker remote schema
+```
+
+The strict request envelope contains `protocol`, a bounded `request_id`, and
+one tagged command:
+
+- `inspect` returns the descriptor bound to the running service;
+- `submit` admits one immutable job and returns its current snapshot;
+- `status` reads a job by its exact job and dispatch IDs;
+- `renew_lease` monotonically extends a non-terminal claim within the worker
+  lease limit and never beyond the job deadline;
+- `cancel` records a bounded reason and cancels queued or running work.
+
+Every submission binds all of the following:
+
+- a portable `job_id` and globally immutable `dispatch_id`;
+- the exact worker instance ID;
+- an externally supplied lowercase SHA-256 image digest;
+- the SHA-256 digest of the complete admitted capability inventory;
+- issue time, absolute deadline, and renewable lease expiry in Unix
+  milliseconds;
+- admitted scenario concurrency and a sorted, unique set of required
+  surfaces;
+- a sorted inline input bundle containing the ACL manifest.
+
+Input paths are portable relative paths with no empty, current-directory,
+parent-directory, backslash, root, trailing-dot, reserved Windows device, or
+non-portable component. ASCII case-folding collisions are rejected before
+filesystem access. Job and dispatch IDs obey the same storage-key safety
+rules. File contents are non-empty canonical Base64, individually
+SHA-256-bound, and constrained by
+per-file, file-count, total decoded-byte, and complete request limits. The
+service validates and decodes the full submission before private
+materialization. Unknown fields and unknown protocol revisions fail closed.
+
+The reference transport is one HTTP/1.1 `POST /v1/worker` endpoint. It binds
+only an IPv4 or IPv6 loopback socket, accepts `application/json`, applies the
+descriptor request-byte limit, and requires an exact `Authorization` header
+whose expected value comes from `--authorization-env`. The value itself must
+not be passed on the command line or inherited by browser capability probes,
+Web commands, or TUI child processes. TLS termination, client identity, rate
+limits, and external resource isolation belong to the deployment. An example
+TUI-only host is:
+
+```bash
+export A3S_TEST_WORKER_AUTHORIZATION='Bearer replace-with-a-secret'
+
+a3s-test worker serve \
+  --listen 127.0.0.1:9400 \
+  --state-root /var/lib/a3s-test-worker \
+  --instance-id runner-west-1 \
+  --image-digest sha256:<64-lowercase-hex-digits> \
+  --authorization-env A3S_TEST_WORKER_AUTHORIZATION \
+  --tui-executable /opt/example-app/bin/test-console
+```
+
+Web execution additionally requires an explicit typed browser integration and
+at least one deployment-owned exact origin:
+
+```bash
+  --browser-driver standalone \
+  --browser-executable agent-browser \
+  --web-allow-origin https://preview.example.test
+```
+
+Requests cannot select or override either executable, its arguments, Web
+origin/domain policy, credentials, or driver backend. The reference service
+runs one job at a time with a bounded waiting queue. A deployment must treat
+the fixed TUI executable as an authority boundary: selecting a shell or an
+application with shell escapes grants that authority to authenticated jobs.
+Exact duplicate submits return the existing snapshot; reuse of a job or
+dispatch ID with different content is rejected. State transitions are
+persisted as append-only event files under an exclusive state root bound to the
+complete worker descriptor. The last durable non-terminal state is marked
+`interrupted` on restart.
+
+Remote command and HTTP body deadlines are capped at five minutes, browser
+idle timeout at one hour, cleanup at five minutes, and retry backoff at one
+minute. Invalid bounds fail before capability probing or listener startup.
+
+Terminal snapshots may be `passed`, `failed`, `timed_out`, `cancelled`, or
+`interrupted`. A completed runner result includes scenario counts and a report
+descriptor containing media type, byte length, and SHA-256. The report and
+surface artifacts stay in the private job directory. This protocol does not
+provide artifact transport, retention policy, indexing, or scheduler-side
+sharding.
 
 ## Agent-run configuration
 

@@ -9,7 +9,7 @@ description = "Surface-neutral long-lived agent session application layer for A3
 
 [dependencies]
 a3s-test-core = { path = "../a3s-test-core" }
-fs2 = "0.4"
+fs2.workspace = true
 futures.workspace = true
 serde.workspace = true
 serde_json.workspace = true

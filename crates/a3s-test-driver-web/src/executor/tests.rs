@@ -23,6 +23,11 @@ const DESCENDANT_PARENT_ENV: &str = "A3S_TEST_BROWSER_PARENT_FILE";
 const DESCENDANT_LEAF_ENV: &str = "A3S_TEST_BROWSER_LEAF_FILE";
 const DESCENDANT_ATTACHED_ENV: &str = "A3S_TEST_BROWSER_ATTACHED_FILE";
 const DESCENDANT_OUTPUT_PID_ENV: &str = "A3S_TEST_BROWSER_OUTPUT_PID_FILE";
+#[cfg(unix)]
+const ENVIRONMENT_REMOVAL_FIXTURE_TEST: &str =
+    "executor::tests::command_environment_removal_fixture";
+#[cfg(unix)]
+const ENVIRONMENT_REMOVAL_NAME: &str = "A3S_TEST_BROWSER_INHERITED_SECRET";
 #[cfg(windows)]
 const CONSOLE_PROBE_TEST: &str = "executor::tests::windows_browser_command_console_probe_fixture";
 #[cfg(windows)]
@@ -41,6 +46,7 @@ async fn successful_command_keeps_its_persistent_descendant_alive() {
         program: PathBuf::from("/bin/sh"),
         args: vec![OsString::from("-c"), OsString::from(script)],
         env: Default::default(),
+        env_remove: Default::default(),
         timeout: Duration::from_secs(5),
     };
 
@@ -61,6 +67,24 @@ async fn successful_command_keeps_its_persistent_descendant_alive() {
         "successful command cleanup killed the persistent daemon"
     );
     let _ = kill(process_id, Signal::SIGKILL);
+}
+
+#[cfg(unix)]
+#[test]
+fn command_executor_removes_an_inherited_environment_variable() {
+    let output =
+        std::process::Command::new(std::env::current_exe().expect("current test executable"))
+            .args([
+                ENVIRONMENT_REMOVAL_FIXTURE_TEST,
+                "--ignored",
+                "--exact",
+                "--nocapture",
+            ])
+            .env(ENVIRONMENT_REMOVAL_NAME, "inherited-secret")
+            .output()
+            .expect("run environment-removal fixture");
+
+    assert!(output.status.success(), "{output:?}");
 }
 
 #[tokio::test]
@@ -86,6 +110,7 @@ async fn successful_command_does_not_wait_for_inherited_output_handles() {
             OsString::from("--nocapture"),
         ],
         env,
+        env_remove: Default::default(),
         timeout: Duration::from_secs(5),
     };
 
@@ -164,6 +189,7 @@ async fn oversized_browser_command_output_is_rejected() {
             OsString::from("--nocapture"),
         ],
         env,
+        env_remove: Default::default(),
         timeout: Duration::from_secs(5),
     };
 
@@ -193,6 +219,7 @@ async fn windows_browser_command_and_cmd_shim_run_without_a_console() {
             OsString::from("--nocapture"),
         ],
         env: BTreeMap::from([(OsString::from(CONSOLE_PROBE_ENV), OsString::from("1"))]),
+        env_remove: Default::default(),
         timeout: Duration::from_secs(5),
     };
 
@@ -607,6 +634,7 @@ fn descendant_fixture_invocation(
             OsString::from("--exact"),
         ],
         env,
+        env_remove: Default::default(),
         timeout: Duration::from_secs(5),
     }
 }
@@ -712,6 +740,7 @@ fn successful_command_descendant_fixture() {
                 OsString::from("--nocapture"),
             ],
             env,
+            env_remove: Default::default(),
             timeout: Duration::from_secs(5),
         };
         let runtime = tokio::runtime::Builder::new_current_thread()
@@ -804,6 +833,36 @@ fn successful_command_descendant_fixture() {
         std::process::exit(23);
     }
     println!("{{}}");
+}
+
+#[cfg(unix)]
+#[test]
+#[ignore = "helper process for the inherited browser environment removal test"]
+fn command_environment_removal_fixture() {
+    assert_eq!(
+        std::env::var(ENVIRONMENT_REMOVAL_NAME).as_deref(),
+        Ok("inherited-secret"),
+        "fixture must begin with an inherited value"
+    );
+    let environment_name = OsString::from(ENVIRONMENT_REMOVAL_NAME);
+    let invocation = CommandInvocation {
+        program: PathBuf::from("/bin/sh"),
+        args: vec![
+            OsString::from("-c"),
+            OsString::from(format!("test -z \"${{{ENVIRONMENT_REMOVAL_NAME}+x}}\"")),
+        ],
+        env: BTreeMap::from([(environment_name.clone(), OsString::from("explicit-secret"))]),
+        env_remove: [environment_name].into_iter().collect(),
+        timeout: Duration::from_secs(5),
+    };
+    let runtime = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .expect("environment-removal runtime");
+    let output = runtime
+        .block_on(TokioCommandExecutor.run(invocation))
+        .expect("environment-removal browser command");
+    assert_eq!(output.exit_code, 0, "{}", output.stderr);
 }
 
 #[cfg(unix)]

@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::ffi::OsString;
 use std::fs::File;
 use std::io::{Read as _, Seek as _};
@@ -22,6 +22,7 @@ pub struct CommandInvocation {
     pub program: PathBuf,
     pub args: Vec<OsString>,
     pub env: BTreeMap<OsString, OsString>,
+    pub env_remove: BTreeSet<OsString>,
     pub timeout: Duration,
 }
 
@@ -106,9 +107,11 @@ impl CommandExecutor for TokioCommandExecutor {
             child_stderr,
         } = prepare_command_output().await?;
         let mut command = Command::new(&invocation.program);
+        command.args(&invocation.args).envs(&invocation.env);
+        for name in &invocation.env_remove {
+            command.env_remove(name);
+        }
         command
-            .args(&invocation.args)
-            .envs(&invocation.env)
             .stdin(Stdio::null())
             .stdout(child_stdout)
             .stderr(child_stderr)

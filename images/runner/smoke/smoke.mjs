@@ -216,6 +216,27 @@ assert(
   "image identity must remain external",
 );
 
+const remoteSchema = await executeJson("remote-worker-schema", [
+  "a3s-test",
+  "worker",
+  "remote",
+  "schema",
+  "--compact",
+]);
+assert(remoteSchema.protocol === "a3s.test.remote-worker/1", "remote protocol mismatch");
+assert(
+  remoteSchema.invariants.transport_authentication_required === true,
+  "remote worker must require transport authentication",
+);
+assert(
+  remoteSchema.invariants.request_cannot_select_executables === true,
+  "remote requests must not select executables",
+);
+assert(
+  remoteSchema.invariants.transports_artifacts === false,
+  "remote protocol must not claim artifact transport",
+);
+
 const license = await stat("/usr/share/licenses/a3s-test/LICENSE");
 assert(license.isFile() && license.size > 0, "runner license must be present");
 

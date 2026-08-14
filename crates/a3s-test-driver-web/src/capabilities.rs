@@ -134,6 +134,7 @@ pub(crate) async fn discover(
             program: config.command.program().to_path_buf(),
             args,
             env: Default::default(),
+            env_remove: Default::default(),
             timeout: config.command_timeout,
         })
         .await

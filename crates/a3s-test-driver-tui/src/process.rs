@@ -112,6 +112,9 @@ fn configure_command(builder: &mut portable_pty::CommandBuilder, command: &TuiCo
     if let Some(directory) = &command.working_directory {
         builder.cwd(directory.as_os_str());
     }
+    for name in &command.removed_environment {
+        builder.env_remove(name);
+    }
     for (name, value) in &command.environment {
         builder.env(name, value);
     }
@@ -388,6 +391,9 @@ mod platform {
         builder.args(&command.arguments);
         if let Some(directory) = &command.working_directory {
             builder.current_dir(directory);
+        }
+        for name in &command.removed_environment {
+            builder.env_remove(name);
         }
         builder.env("TERM", "xterm-256color");
         builder.env("COLORTERM", "truecolor");

@@ -115,7 +115,12 @@
 - [x] Hermetic Linux/amd64 runner image and strict, self-reported Web/TUI
       capability inventory, with digest-pinned inputs, non-root restricted
       smoke tests, and externally bound release image identity
-- [ ] Remote worker protocol
+- [x] Authenticated remote worker protocol with exact instance, image, and
+      capability-inventory binding; bounded digest-verified inline inputs;
+      immutable idempotent dispatch; absolute deadlines and renewable leases;
+      a persistent sequential queue; cancellation and restart recovery; and a
+      loopback-only HTTP/CLI reference host for deployment-owned Web and TUI
+      profiles
 - [ ] Artifact retention and report indexing
 - [ ] Sharding, quarantine, flake accounting, and historical comparison
 - [ ] GUI worker pools with explicit host permissions

@@ -364,8 +364,66 @@ An inventory is deliberately self-reported scheduling evidence. Its generated
 schema states that it is unauthenticated, does not authorize execution, and
 requires an external image identity. A scheduler must bind the release image
 digest and independently enforce worker identity, network, filesystem,
-credentials, and resource policy before dispatch. The remote worker protocol
-is a later milestone and cannot infer execution authority from this document.
+credentials, and resource policy before dispatch. Inventory alone never grants
+remote execution authority.
+
+## Remote worker boundary
+
+Protocol `a3s.test.remote-worker/1` adds transport-neutral dispatch without
+turning A3S Test into a remote shell. The scheduler binds every submission to
+one exact worker instance, an externally supplied image digest, and the digest
+of the worker's complete admitted capability inventory. A request contains no
+browser command, TUI executable, backend name, environment, credential, or
+network-policy field. Those choices are typed objects created by the worker
+deployment before it starts accepting jobs.
+
+Remote inputs are a non-empty, canonically sorted inline bundle. Every entry
+uses a bounded portable relative path, canonical Base64, and a SHA-256 digest;
+the declared ACL manifest must be present. Admission validates the complete
+bundle in memory before creating private state. The service then materializes
+it beneath one exclusive, descriptor-bound state root. A failed identity,
+time, capability, size, path, encoding, or digest check writes no job input.
+
+The transport-neutral service owns a bounded sequential queue and an
+append-only event sequence for each job. Dispatch IDs are immutable and exact
+replays are idempotent. Conflicting reuse fails closed. Every job has an
+absolute Unix-millisecond deadline and a renewable bounded lease. Queued and
+running jobs can be cancelled; expiry cancels the exact execution token, and
+cleanup is bounded. On restart, any last durable non-terminal state becomes
+`interrupted` rather than being guessed safe to resume. A terminal run stores
+the complete report privately and returns only its media type, byte length,
+SHA-256 digest, scenario counts, and run identity.
+
+Explicit service shutdown waits for bounded worker cleanup. Dropping the last
+service handle also cancels the worker loop so an embedding process cannot
+silently retain the state-root lock through a detached idle task.
+
+The reference host is exposed through:
+
+```text
+a3s-test worker remote schema
+a3s-test worker serve [deployment-owned Web and/or TUI profile]
+```
+
+It accepts `POST /v1/worker` on a loopback listener only and requires the
+request's `Authorization` header to exactly match a bounded value read from a
+named environment variable. TLS termination and scheduler authentication
+policy remain external. The server never prints the authorization value. Its
+Web policy requires deployment-supplied exact origins, and its TUI executable
+and arguments are fixed at startup. Browser probes, Web commands, and TUI
+children explicitly remove the authorization environment variable before
+process creation. Runner artifacts use the job's private artifact root without
+changing the process-wide working directory.
+
+Fixed executable selection prevents a request from choosing a new process; it
+does not reduce the authority already exposed by that executable. A shell or a
+TUI with shell escapes therefore grants shell authority to authenticated jobs
+and must only be selected when the deployment explicitly intends that trust
+boundary.
+
+The response intentionally does not transport report or evidence bytes.
+Artifact retention, download authorization, indexing, and garbage collection
+remain a separate protocol and roadmap concern.
 
 CI builds the exact image and runs it with no external network, a read-only
 root, all Linux capabilities dropped, `no-new-privileges`, bounded memory,

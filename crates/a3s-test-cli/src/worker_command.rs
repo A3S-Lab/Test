@@ -14,6 +14,8 @@ use serde::Serialize;
 
 use super::{browser_command, validate_timeout, BrowserDriverKind};
 
+mod remote;
+
 #[derive(Debug, Args)]
 pub(crate) struct WorkerArgs {
     #[command(subcommand)]
@@ -26,6 +28,10 @@ enum WorkerCommand {
     Inventory(WorkerInventoryArgs),
     /// Print the versioned worker capability protocol and JSON Schema.
     Schema(WorkerSchemaArgs),
+    /// Inspect the authenticated remote execution protocol.
+    Remote(remote::WorkerRemoteArgs),
+    /// Serve authenticated remote jobs on a loopback HTTP listener.
+    Serve(Box<remote::WorkerServeArgs>),
 }
 
 #[derive(Debug, Args)]
@@ -58,6 +64,8 @@ pub(crate) async fn execute(args: WorkerArgs) -> Result<ExitCode> {
     match args.command {
         WorkerCommand::Inventory(args) => inventory(args).await,
         WorkerCommand::Schema(args) => schema(args),
+        WorkerCommand::Remote(args) => remote::execute(args),
+        WorkerCommand::Serve(args) => remote::serve(*args).await,
     }
 }
 

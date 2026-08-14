@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::ffi::OsString;
 use std::path::PathBuf;
 use std::time::Duration;
@@ -43,6 +43,7 @@ pub struct TuiCommand {
     pub arguments: Vec<OsString>,
     pub working_directory: Option<PathBuf>,
     pub environment: BTreeMap<OsString, OsString>,
+    pub removed_environment: BTreeSet<OsString>,
 }
 
 impl TuiCommand {
@@ -52,6 +53,7 @@ impl TuiCommand {
             arguments: Vec::new(),
             working_directory: None,
             environment: BTreeMap::new(),
+            removed_environment: BTreeSet::new(),
         }
     }
 }
@@ -89,6 +91,22 @@ impl TuiDriverConfig {
         {
             return Err(config_error(
                 "TUI environment must contain at most 128 bounded non-empty names and values",
+            ));
+        }
+        if self.command.removed_environment.len() > 128
+            || self
+                .command
+                .removed_environment
+                .iter()
+                .any(|name| name.is_empty() || name.len() > 4_096)
+            || self
+                .command
+                .removed_environment
+                .iter()
+                .any(|name| self.command.environment.contains_key(name))
+        {
+            return Err(config_error(
+                "TUI environment removals must be bounded, non-empty, and disjoint from explicit values",
             ));
         }
         if let Some(directory) = &self.command.working_directory {
@@ -175,6 +193,29 @@ mod tests {
         };
         assert_eq!(
             config.validate().expect_err("unbounded output").code(),
+            "test.driver.tui.config_invalid"
+        );
+    }
+
+    #[test]
+    fn configuration_rejects_conflicting_environment_removal() {
+        let mut command = TuiCommand::new("sh");
+        command
+            .environment
+            .insert(OsString::from("WORKER_SECRET"), OsString::from("value"));
+        command
+            .removed_environment
+            .insert(OsString::from("WORKER_SECRET"));
+        let config = TuiDriverConfig {
+            command,
+            ..TuiDriverConfig::default()
+        };
+
+        assert_eq!(
+            config
+                .validate()
+                .expect_err("environment removal conflict")
+                .code(),
             "test.driver.tui.config_invalid"
         );
     }
