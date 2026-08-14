@@ -237,7 +237,7 @@ fn windows_conpty_fixture() {
     let pid_file = std::env::var_os(CONPTY_FIXTURE_PID_ENV)
         .map(PathBuf::from)
         .expect("ConPTY fixture descendant PID file");
-    let child = std::process::Command::new(
+    let mut child = std::process::Command::new(
         std::env::current_exe().expect("current ConPTY descendant executable"),
     )
     .args([CONPTY_FIXTURE_TEST, "--ignored", "--exact"])
@@ -257,6 +257,9 @@ fn windows_conpty_fixture() {
         .expect("read ConPTY input");
     println!("input:{}", line.trim_end_matches(&['\r', '\n'][..]));
     std::io::stdout().flush().expect("flush ConPTY input echo");
+    child
+        .wait()
+        .expect("wait for the ConPTY descendant fixture");
 }
 
 #[cfg(unix)]
