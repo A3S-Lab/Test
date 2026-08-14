@@ -25,7 +25,11 @@ fn test_config(command: TuiCommand) -> TuiDriverConfig {
     TuiDriverConfig {
         command,
         initial_size: TuiSize::default(),
-        command_timeout: Duration::from_secs(5),
+        command_timeout: if cfg!(windows) {
+            Duration::from_secs(15)
+        } else {
+            Duration::from_secs(5)
+        },
         cleanup_timeout: Duration::from_secs(5),
         scrollback_rows: 100,
         max_output_bytes: 64 * 1024,
