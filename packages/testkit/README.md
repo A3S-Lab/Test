@@ -62,6 +62,29 @@ from one through twenty. Projection is one-way and advisory: a missing bridge,
 an incompatible page, or a rejected report never changes the Runner's report
 or verdict.
 
+## Advisory design suggestions
+
+`reportDesignAudit` accepts only `a3s.test.design-audit-report/1` records whose
+provenance is advisory and matches the current page revision. Provider/model
+identity, observation, screenshot and page-context digests, dimensions, usage,
+findings, and targets are structurally bounded. A node target must still
+resolve in the live page. These reports live in a separate Design Audit store,
+never in the deterministic Quality Store or Repair Ledger. A later page
+revision expires them immediately.
+
+The overlay shows the provider's summary, rationale, typed dimension,
+priority, confidence, and current target. Reviewing or cancelling a suggestion
+does nothing to the product and grants no repair authority. The reviewer can
+edit the recommendation or choose a new target, then explicitly save a local
+draft or send it through the existing single/batch repair flow. High provider
+priority maps only to `important`; design advice can never create a blocking
+repair or test verdict by itself.
+
+Reports are bounded to 500 findings and 1 MiB encoded JSON.
+`maxDesignAuditReports` defaults to five and is clamped from one through
+twenty. `listDesignAuditReports`, `dismissDesignAuditFinding`, and
+`dismissDesignAuditReport` manage only these local review candidates.
+
 Geometry remains in CSS pixels at every browser zoom level. The page snapshot
 separates the layout viewport and DPR from an optional visual viewport with its
 current offset, visible size, and scale, allowing A3S Test to reason about

@@ -25,6 +25,8 @@ pub(super) enum AgentCommand {
     Inspect(InspectArgs),
     /// Locate a target from a fresh revision-bound screenshot without acting.
     Ground(GroundArgs),
+    /// Request a revision-bound advisory design-quality review without acting.
+    Audit(AuditArgs),
     /// Execute one schema-validated action in an active session.
     Act(ActArgs),
     /// Click a ref or CSS target in an active session.
@@ -189,6 +191,54 @@ pub(super) struct GroundArgs {
     /// Emit machine-readable JSON.
     #[arg(long)]
     pub(super) json: bool,
+}
+
+#[derive(Debug, Args)]
+pub(super) struct AuditArgs {
+    /// Active session identifier.
+    #[arg(long)]
+    pub(super) session: String,
+    /// Latest observation identifier whose page revision is being reviewed.
+    #[arg(long)]
+    pub(super) observation: u64,
+    /// ACL provider configuration.
+    #[arg(long)]
+    pub(super) config: PathBuf,
+    /// Design dimension to review. Repeat or use comma-separated values; omitted reviews all dimensions.
+    #[arg(long, value_enum, value_delimiter = ',')]
+    pub(super) dimension: Vec<DesignAuditDimensionArg>,
+    /// Emit machine-readable JSON.
+    #[arg(long)]
+    pub(super) json: bool,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq, ValueEnum)]
+pub(super) enum DesignAuditDimensionArg {
+    VisualHierarchy,
+    LayoutComposition,
+    SpacingRhythm,
+    Typography,
+    ColorUse,
+    Consistency,
+    InteractionClarity,
+    ContentClarity,
+    ResponsiveComposition,
+}
+
+impl From<DesignAuditDimensionArg> for a3s_test_agent::DesignAuditDimension {
+    fn from(value: DesignAuditDimensionArg) -> Self {
+        match value {
+            DesignAuditDimensionArg::VisualHierarchy => Self::VisualHierarchy,
+            DesignAuditDimensionArg::LayoutComposition => Self::LayoutComposition,
+            DesignAuditDimensionArg::SpacingRhythm => Self::SpacingRhythm,
+            DesignAuditDimensionArg::Typography => Self::Typography,
+            DesignAuditDimensionArg::ColorUse => Self::ColorUse,
+            DesignAuditDimensionArg::Consistency => Self::Consistency,
+            DesignAuditDimensionArg::InteractionClarity => Self::InteractionClarity,
+            DesignAuditDimensionArg::ContentClarity => Self::ContentClarity,
+            DesignAuditDimensionArg::ResponsiveComposition => Self::ResponsiveComposition,
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, ValueEnum)]

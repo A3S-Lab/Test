@@ -56,6 +56,10 @@ are:
   optional human review.
 - `listQualityReports()`, `dismissQualityFinding(...)`, and
   `dismissQualityReport(...)` manage only local review candidates.
+- `reportDesignAudit(report)` accepts a revision-bound advisory Design Audit
+  Report for optional human review.
+- `listDesignAuditReports()`, `dismissDesignAuditFinding(...)`, and
+  `dismissDesignAuditReport(...)` manage a separate advisory store.
 - `dispose()` removes SDK observers, portals, listeners, and private state.
 
 The bridge does not expose `eval`, filesystem access, cookies, arbitrary
@@ -88,7 +92,7 @@ revision and scope.
 ```json
 {
   "protocol": "a3s.test.page-context/1",
-  "sdkVersion": "0.2.0",
+  "sdkVersion": "0.3.0",
   "revision": 42,
   "page": {
     "id": "checkout",
@@ -295,6 +299,48 @@ findings, 5,000 matches, 1 MiB of encoded JSON, finite numbers, bounded strings,
 unique finding IDs, and JSON depth 32. A newer report atomically replaces the
 same contract/variant/state scope. A passed report or one with no findings
 clears earlier candidates in that scope while still emitting a refresh event.
+
+### Advisory design-audit candidates
+
+Design audit has a different source of truth. Browser facts remain the
+revision-bound screenshot and complete forensic Page Context snapshot; the
+provider's interpretation of hierarchy, composition, rhythm, typography,
+color, consistency, clarity, and responsiveness is advisory. The Web driver
+projects only locally admitted `a3s.test.design-audit-report/1` values:
+
+```text
+verified screenshot + forensic page context
+                    |
+         admitted advisory provider report
+                    |
+             Design Audit Store
+                    |
+       reviewer dismisses, edits, or retargets
+                    |
+          local draft or explicit submission
+                    |
+            authoritative Repair Ledger
+```
+
+The Design Audit Store is separate from both the deterministic Quality Store
+and Repair Ledger. It requires `authority = advisory`, the current exact page
+revision, bounded provider/model and digest provenance, unique requested
+dimensions, at most 500 bounded findings, and at most 1 MiB encoded JSON. A
+node target must resolve when projected. Page and normalized-region targets
+are converted to current visual-viewport CSS pixels for review markers. Any
+later page revision clears the stored advice before it can be promoted.
+
+The overlay displays summary, rationale, dimension, priority, confidence, and
+target. Opening or cancelling the editor leaves the suggestion intact.
+Dismissal removes only that suggestion. A recommendation becomes a repair
+draft only after explicit review or retargeting; high priority maps to
+`important`, never `blocking`. Saving and sending use the same single/batch
+flow and verification gates as a manually marked finding. The provider cannot
+skip that human promotion step.
+
+`maxDesignAuditReports` defaults to five and is clamped from one through
+twenty. A newer report from the same provider, model, and observation replaces
+that scope; an empty report clears it.
 
 ### Layout Mode
 
@@ -646,11 +692,13 @@ unknown; bridge presence and protocol are discovered independently from the
 loaded page. Unsupported or malformed bridges fail closed for scoped context
 operations without exposing arbitrary browser evaluation to the agent.
 
-Treat `a3s.test.page-context/1`, `a3s.test.quality-report/1`, and
-`a3s.test.repair/1` as versioned contracts. Additive SDK releases may add
+Treat `a3s.test.page-context/1`, `a3s.test.quality-report/1`,
+`a3s.test.design-audit-report/1`, and `a3s.test.repair/1` as versioned
+contracts. Additive SDK releases may add
 optional fields or capabilities but must retain the hard payload bounds,
 private node-ID handling, redaction behavior, latest-observation ref expiry,
-and the separation between quality candidates and repair authorization.
+and the separation between deterministic quality candidates, advisory design
+suggestions, and repair authorization.
 
 ## Storage and recovery
 

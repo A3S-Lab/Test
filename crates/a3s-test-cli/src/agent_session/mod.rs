@@ -1,4 +1,5 @@
 mod args;
+mod design_audit;
 mod events;
 mod grounding;
 mod inspect;
@@ -56,6 +57,7 @@ pub(crate) async fn execute(args: AgentArgs) -> Result<ExitCode> {
         AgentCommand::Observe(args) => observe(args).await,
         AgentCommand::Inspect(args) => inspect::execute(args).await,
         AgentCommand::Ground(args) => grounding::execute(args).await,
+        AgentCommand::Audit(args) => design_audit::execute(args).await,
         AgentCommand::Act(args) => act(args).await,
         AgentCommand::Click(args) => {
             perform_action(

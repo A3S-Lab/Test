@@ -437,6 +437,49 @@ provider failure, cancellation, binding change, or revision drift invalidates
 the observation. Success records advisory evidence only and never dispatches
 input.
 
+## Advisory design audit
+
+Use `agent audit` when the goal is to review hierarchy, composition, spacing,
+typography, color use, consistency, clarity, or responsive composition rather
+than locate an element or verify a deterministic requirement:
+
+```bash
+a3s-test provider schema design-audit
+a3s-test agent audit \
+  --session checkout \
+  --observation 7 \
+  --config examples/design-audit.acl \
+  --dimension visual-hierarchy,spacing-rhythm \
+  --json
+```
+
+The command requires the latest observation and an embedded, complete Test Kit
+snapshot. It captures a PNG, requests forensic page context up to the Test Kit
+bound, and sends both through `a3s.test.design-audit-provider/1`. The provider
+receives semantic nodes and state, current geometry, component/source hints,
+locators, facts, and bounded computed styles in addition to pixels. It does not
+receive workspace mutation or browser action authority.
+
+The provider may return page-, node-, or normalized-region-bound findings in
+the explicitly requested dimensions. A3S Test independently verifies the
+identity, observation, surface revision, screenshot and context digests,
+dimension scope, current node geometry, string and finding limits, deadline,
+and cost. It then rechecks the page revision. Any failure invalidates the
+observation before another action can use stale evidence.
+
+The result is `a3s.test.design-audit-report/1` with `authority = advisory`.
+There is deliberately no verdict. The provider cannot create a Surface
+Contract expectation or enqueue a repair. If the page embeds a compatible
+Test Kit, the Web driver projects admitted findings into its separate Design
+Audit store. The reviewer must dismiss, edit, or retarget each suggestion and
+explicitly save or send it before the existing Repair Ledger can process it.
+Single and batch submission then use the same repair verification and human
+acceptance gates as manually marked findings.
+
+The inference endpoint and model runtime are deployment-owned. A3S Test does
+not download weights, infer a backend from the model name, or grant additional
+authority based on provider identity.
+
 ## Contract-generation provider
 
 Expected-interface generation is separate from both `LlmProvider` planning and

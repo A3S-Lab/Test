@@ -3,13 +3,15 @@ use serde::Serialize;
 
 use crate::{
     ContractGenerationProviderRequest, ContractGenerationProviderResponse,
-    GroundingProviderRequest, GroundingProviderResponse, HttpContractGenerationRequest,
-    HttpContractGenerationResponse, HttpLlmCompletionRequest, HttpLlmCompletionResponse,
-    HttpVisualGroundingRequest, HttpVisualGroundingResponse, StructuredLlmRequest,
-    StructuredLlmResponse,
+    DesignAuditProviderRequest, DesignAuditProviderResponse, GroundingProviderRequest,
+    GroundingProviderResponse, HttpContractGenerationRequest, HttpContractGenerationResponse,
+    HttpDesignAuditRequest, HttpDesignAuditResponse, HttpLlmCompletionRequest,
+    HttpLlmCompletionResponse, HttpVisualGroundingRequest, HttpVisualGroundingResponse,
+    StructuredLlmRequest, StructuredLlmResponse,
 };
 
 pub const CONTRACT_GENERATION_PROVIDER_PROTOCOL: &str = "a3s.test.contract-generation-provider/1";
+pub const DESIGN_AUDIT_PROVIDER_PROTOCOL: &str = "a3s.test.design-audit-provider/1";
 pub const LLM_PROVIDER_PROTOCOL: &str = "a3s.test.llm-provider/1";
 pub const VISUAL_GROUNDING_PROVIDER_PROTOCOL: &str = "a3s.test.visual-grounding-provider/2";
 
@@ -117,6 +119,38 @@ pub fn contract_generation_provider_schema() -> ProviderProtocolSchema {
             endpoint_policy: "https_or_loopback_http",
             request_envelope_schema: schemars::schema_for!(HttpContractGenerationRequest),
             response_envelope_schema: schemars::schema_for!(HttpContractGenerationResponse),
+        },
+    }
+}
+
+#[must_use]
+pub fn design_audit_provider_schema() -> ProviderProtocolSchema {
+    ProviderProtocolSchema {
+        protocol: DESIGN_AUDIT_PROVIDER_PROTOCOL,
+        authority: ProviderOutputAuthority::Advisory,
+        invariants: ProviderSafetyInvariants {
+            input_digest_bound: true,
+            request_deadline_required: true,
+            request_cost_ceiling_required: true,
+            response_identity_bound: true,
+            local_admission_required: true,
+            observation_scoped_output: true,
+            semantic_evidence_preferred: true,
+            human_review_required_for_expected_surface: true,
+            may_determine_test_verdict: false,
+            may_authorize_repair: false,
+            may_claim_browser_observation: false,
+            may_propose_surface_actions: false,
+        },
+        request_schema: schemars::schema_for!(DesignAuditProviderRequest),
+        response_schema: schemars::schema_for!(DesignAuditProviderResponse),
+        http: HttpProviderProtocolSchema {
+            method: "POST",
+            content_type: "application/json",
+            redirects_allowed: false,
+            endpoint_policy: "https_or_loopback_http",
+            request_envelope_schema: schemars::schema_for!(HttpDesignAuditRequest),
+            response_envelope_schema: schemars::schema_for!(HttpDesignAuditResponse),
         },
     }
 }

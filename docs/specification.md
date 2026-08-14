@@ -1313,3 +1313,83 @@ page must retain the observation's exact Test Kit revision and `@cN` bindings
 through screenshot capture and provider completion. Failure invalidates that
 observation. Success records an advisory result and PNG evidence but never
 dispatches input, determines a verdict, or authorizes repair.
+
+## Advisory design-quality audit
+
+Design audit is an explicit persistent-session operation, not a deterministic
+assertion and not an action. Run:
+
+```bash
+a3s-test provider schema design-audit
+a3s-test agent audit \
+  --session checkout \
+  --observation 7 \
+  --config examples/design-audit.acl \
+  --dimension visual-hierarchy,spacing-rhythm \
+  --json
+```
+
+The stable provider identifier is `a3s.test.design-audit-provider/1`. Its
+generated strict schemas describe a request bound to these fields:
+
+| Field | Rule |
+| --- | --- |
+| `screenshot_path` | Bounded path to one regular non-link PNG evidence file |
+| `screenshot_sha256` | `sha256:` plus 64 lowercase hexadecimal characters |
+| `page_context_sha256` | SHA-256 of the canonical complete typed page snapshot |
+| `width`, `height` | Positive bounded screenshot-pixel dimensions |
+| `observation_id` | Positive latest persistent-agent observation |
+| `surface_revision` | Positive exact Test Kit revision for that observation |
+| `page_context` | Ready, complete, non-diff forensic Page Context v1 snapshot |
+| `dimensions` | Non-empty unique typed audit dimensions |
+| `issued_at_unix_ms`, `deadline_unix_ms` | Absolute bounded provider window |
+| `max_cost_microusd` | Provider-reported cost ceiling |
+
+Dimensions are `visual_hierarchy`, `layout_composition`, `spacing_rhythm`,
+`typography`, `color_use`, `consistency`, `interaction_clarity`,
+`content_clarity`, and `responsive_composition`. Omitting `--dimension`
+requests all dimensions. Repeating a dimension is rejected before session
+access.
+
+The provider response must repeat identity, observation, revision, both
+digests, dimensions, image dimensions, and exact requested dimension order.
+Each finding has a unique bounded ID, requested dimension, `high`, `medium`,
+or `low` advisory priority, summary, rationale, recommendation, integer
+confidence from 0 through 100, and one target:
+
+- `page` identifies the complete current page;
+- `node` names a visible current Test Kit node with finite geometry;
+- `region` is a finite positive-sized rectangle wholly inside normalized
+  screenshot coordinates.
+
+Local admission rejects unknown or stale nodes, invalid geometry, duplicate
+finding IDs, unrequested dimensions, oversized fields or context, identity or
+digest mismatch, cost overrun, timeout, cancellation, image replacement, and
+page revision drift. The admitted report protocol is
+`a3s.test.design-audit-report/1` with `authority = advisory`. It has no test
+outcome, expected-surface authority, action, or repair authorization.
+
+The CLI ACL root is `design_audit` and accepts:
+
+| Attribute | Rule | Default |
+| --- | --- | --- |
+| `max_cost_microusd` | Required non-negative provider cost ceiling | none |
+| `timeout_ms` | 1 millisecond through 5 minutes | `30000` |
+| `max_findings` | 1 through 500 | `100` |
+| `max_summary_bytes` | 1 through 65536 | `2048` |
+| `max_rationale_bytes` | 1 through 65536 | `8192` |
+| `max_recommendation_bytes` | 1 through 65536 | `8192` |
+| `max_page_context_bytes` | 1 through 33554432 | `8388608` |
+
+Exactly one `provider` block supplies `name`, `model`, `endpoint`, and optional
+`authorization_env`. Endpoint and credential rules match the other provider
+adapters. HTTP replaces the local screenshot path with `observation.png` and
+adds a digest-bound Base64 `image/png` attachment. The deployment remains
+responsible for the model runtime and licensing.
+
+After local admission and a final revision check, a compatible Web driver
+projects the report through `reportDesignAudit`. Test Kit stores it separately
+from deterministic Quality Reports and the Repair Ledger. Dismissal has no
+side effect. Opening or cancelling review grants no authority. A suggestion
+enters the Repair Ledger only after a human reviews or retargets it and
+explicitly saves or sends it through the existing single/batch workflow.

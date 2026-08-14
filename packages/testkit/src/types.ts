@@ -1,6 +1,7 @@
 export const PAGE_CONTEXT_PROTOCOL = "a3s.test.page-context/1" as const;
 export const PAGE_CONTEXT_SYMBOL = Symbol.for("a3s.test.page-context");
 export const QUALITY_REPORT_PROTOCOL = "a3s.test.quality-report/1" as const;
+export const DESIGN_AUDIT_REPORT_PROTOCOL = "a3s.test.design-audit-report/1" as const;
 
 export type ContextDetail = "summary" | "scoped" | "diff" | "forensic";
 
@@ -329,10 +330,64 @@ export type QualityReportRecord = QualityReport & {
   reportedAt: string;
 };
 
+export type DesignAuditDimension =
+  | "visual_hierarchy"
+  | "layout_composition"
+  | "spacing_rhythm"
+  | "typography"
+  | "color_use"
+  | "consistency"
+  | "interaction_clarity"
+  | "content_clarity"
+  | "responsive_composition";
+
+export type DesignAuditPriority = "high" | "medium" | "low";
+
+export type DesignAuditTarget =
+  | { kind: "page" }
+  | { kind: "node"; node_id: string }
+  | { kind: "region"; region: Rect };
+
+export type DesignAuditFinding = {
+  id: string;
+  dimension: DesignAuditDimension;
+  priority: DesignAuditPriority;
+  summary: string;
+  rationale: string;
+  recommendation: string;
+  confidence: number;
+  target: DesignAuditTarget;
+};
+
+export type DesignAuditReport = {
+  protocol: typeof DESIGN_AUDIT_REPORT_PROTOCOL;
+  provenance: {
+    identity: { provider: string; model: string };
+    observation_id: number;
+    surface_revision: number;
+    screenshot_sha256: string;
+    page_context_sha256: string;
+    width: number;
+    height: number;
+    usage: { input_units: number; output_units: number; cost_microusd: number };
+    request_id?: string | null;
+    authority: "advisory";
+  };
+  dimensions: DesignAuditDimension[];
+  findings: DesignAuditFinding[];
+};
+
+export type DesignAuditReportRecord = DesignAuditReport & {
+  id: string;
+  reportedAt: string;
+};
+
 export type TestKitEvent =
   | { type: "context.revision"; revision: number }
   | { type: "quality.reported"; report: QualityReportRecord }
   | { type: "quality.dismissed"; reportId: string; findingId?: string }
+  | { type: "design_audit.reported"; report: DesignAuditReportRecord }
+  | { type: "design_audit.dismissed"; reportId: string; findingId?: string }
   | { type: "repair.submitted"; repairs: SubmittedRepair[] }
   | { type: "repair.action_submitted"; action: RepairHumanAction }
   | { type: "repair.updated"; repair: SubmittedRepair; event: RepairEvent };
@@ -365,6 +420,10 @@ export type PageContextBridge = {
   listQualityReports(): QualityReportRecord[];
   dismissQualityFinding(reportId: string, findingId: string): boolean;
   dismissQualityReport(reportId: string): boolean;
+  reportDesignAudit(report: DesignAuditReport): boolean;
+  listDesignAuditReports(): DesignAuditReportRecord[];
+  dismissDesignAuditFinding(reportId: string, findingId: string): boolean;
+  dismissDesignAuditReport(reportId: string): boolean;
   setAnimationsPaused(paused: boolean): void;
   animationsPaused(): boolean;
   dispose(): void;
@@ -391,6 +450,7 @@ export type TestKitOptions = {
   repairEndpoint?: string;
   repairStorage?: "local" | "session" | "memory";
   maxQualityReports?: number;
+  maxDesignAuditReports?: number;
 };
 
 export type TestKitRuntime = PageContextBridge & {

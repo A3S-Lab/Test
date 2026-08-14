@@ -1,4 +1,5 @@
 import { describeElement, overlaps, visualViewportInfo, walkElements, type NodeIdentity } from "./dom";
+import { DesignAuditStore, validDesignAuditReport } from "./design-audit-store";
 import { QualityStore } from "./quality-store";
 import { RepairStore } from "./repair-store";
 import { safeCallback, sanitizeFacts } from "./sanitize";
@@ -13,6 +14,7 @@ import {
   type ContextScope,
   type ContextSnapshotRequest,
   type JsonValue,
+  type DesignAuditReport,
   type PageContextBridge,
   type PageContextSnapshot,
   type QualityReport,
@@ -30,11 +32,11 @@ import {
   type TestKitRuntime,
 } from "./types";
 
-const SDK_VERSION = "0.2.0";
+const SDK_VERSION = "0.3.0";
 const DEFAULT_LIMITS: ContextLimits = { nodes: 500, stringBytes: 4_096, encodedBytes: 1_048_576 };
 const MAX_LIMITS: ContextLimits = { nodes: 5_000, stringBytes: 16_384, encodedBytes: 8_388_608 };
 
-type NormalizedOptions = Required<Pick<TestKitOptions, "enabled" | "redact" | "maxNodes" | "maxStringBytes" | "maxEncodedBytes" | "repairStorage" | "maxQualityReports">> & {
+type NormalizedOptions = Required<Pick<TestKitOptions, "enabled" | "redact" | "maxNodes" | "maxStringBytes" | "maxEncodedBytes" | "repairStorage" | "maxQualityReports" | "maxDesignAuditReports">> & {
   page: TestKitOptions["page"];
   repairEndpoint: string | undefined;
   ready: (() => boolean) | undefined;
@@ -54,6 +56,7 @@ class Runtime implements TestKitRuntime, NodeIdentity {
   readonly #cleanup: Array<() => void> = [];
   readonly #repairStore: RepairStore;
   readonly #qualityStore: QualityStore;
+  readonly #designAuditStore: DesignAuditStore;
   #nodeSequence = 0;
   #revision = 1;
   #disposed = false;
@@ -74,6 +77,7 @@ class Runtime implements TestKitRuntime, NodeIdentity {
       ...(options.repairEndpoint ? { repairEndpoint: options.repairEndpoint } : {}),
     });
     this.#qualityStore = new QualityStore(options.maxQualityReports);
+    this.#designAuditStore = new DesignAuditStore(options.maxDesignAuditReports);
     this.#observePage();
   }
 
@@ -84,6 +88,7 @@ class Runtime implements TestKitRuntime, NodeIdentity {
       capabilities: [
         "bounded_snapshot",
         "component_boundaries",
+        "design_audit_reports",
         "diff",
         "geometry",
         "layout_intents",
@@ -278,6 +283,37 @@ class Runtime implements TestKitRuntime, NodeIdentity {
     return dismissed;
   }
 
+  reportDesignAudit(report: DesignAuditReport): boolean {
+    this.#ensureActive();
+    if (!validDesignAuditReport(report)) return false;
+    if (report?.provenance?.surface_revision !== this.#revision) return false;
+    if (report.findings.some((finding) => (
+      finding.target.kind === "node" && this.resolve(finding.target.node_id) === null
+    ))) return false;
+    const record = this.#designAuditStore.report(report);
+    if (!record) return false;
+    this.#emit({ type: "design_audit.reported", report: record });
+    return true;
+  }
+
+  listDesignAuditReports() {
+    return this.#designAuditStore.list();
+  }
+
+  dismissDesignAuditFinding(reportId: string, findingId: string): boolean {
+    this.#ensureActive();
+    const dismissed = this.#designAuditStore.dismissFinding(reportId, findingId);
+    if (dismissed) this.#emit({ type: "design_audit.dismissed", reportId, findingId });
+    return dismissed;
+  }
+
+  dismissDesignAuditReport(reportId: string): boolean {
+    this.#ensureActive();
+    const dismissed = this.#designAuditStore.dismissReport(reportId);
+    if (dismissed) this.#emit({ type: "design_audit.dismissed", reportId });
+    return dismissed;
+  }
+
   setAnimationsPaused(paused: boolean): void {
     this.#ensureActive();
     if (this.#animationsPaused === paused) return;
@@ -335,6 +371,7 @@ class Runtime implements TestKitRuntime, NodeIdentity {
     this.#listeners.clear();
     this.#boundaries.clear();
     this.#qualityStore.clear();
+    this.#designAuditStore.clear();
     const host = window as unknown as Record<PropertyKey, unknown>;
     if (host[PAGE_CONTEXT_SYMBOL] === this) delete host[PAGE_CONTEXT_SYMBOL];
     if (currentRuntime === this) currentRuntime = null;
@@ -399,7 +436,11 @@ class Runtime implements TestKitRuntime, NodeIdentity {
       if (this.#disposed) return;
       this.#pendingRevision = false;
       this.#revision += 1;
+      const expiredDesignAuditReports = this.#designAuditStore.clear();
       this.#emit({ type: "context.revision", revision: this.#revision });
+      for (const reportId of expiredDesignAuditReports) {
+        this.#emit({ type: "design_audit.dismissed", reportId });
+      }
       for (const waiter of Array.from(this.#waiters)) {
         if (this.#revision > waiter.revision) {
           clearTimeout(waiter.timer);
@@ -606,6 +647,7 @@ export function installTestKit(options: TestKitOptions): TestKitRuntime {
     maxEncodedBytes: clamp(options.maxEncodedBytes ?? DEFAULT_LIMITS.encodedBytes, 1_024, MAX_LIMITS.encodedBytes),
     repairStorage: options.repairStorage ?? "session",
     maxQualityReports: clamp(options.maxQualityReports ?? 5, 1, 20),
+    maxDesignAuditReports: clamp(options.maxDesignAuditReports ?? 5, 1, 20),
     repairEndpoint: options.repairEndpoint,
   });
   currentRuntime = runtime;
@@ -647,6 +689,10 @@ function disabledBridge(): TestKitRuntime {
     listQualityReports: () => [],
     dismissQualityFinding: () => false,
     dismissQualityReport: () => false,
+    reportDesignAudit: () => false,
+    listDesignAuditReports: () => [],
+    dismissDesignAuditFinding: () => false,
+    dismissDesignAuditReport: () => false,
     setAnimationsPaused: () => undefined,
     animationsPaused: () => false,
     registerBoundary: () => () => undefined,

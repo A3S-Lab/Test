@@ -3,6 +3,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     ContractGenerationProviderRequest, ContractGenerationProviderResponse,
+    DesignAuditImageAttachment, DesignAuditProviderRequest, DesignAuditProviderResponse,
     GroundingImageAttachment, GroundingProviderRequest, GroundingProviderResponse,
     StructuredLlmRequest, StructuredLlmResponse,
 };
@@ -18,6 +19,13 @@ fn visual_grounding_protocol_schema(_: &mut SchemaGenerator) -> Schema {
     schemars::json_schema!({
         "type": "string",
         "const": "a3s.test.visual-grounding-provider/2"
+    })
+}
+
+fn design_audit_protocol_schema(_: &mut SchemaGenerator) -> Schema {
+    schemars::json_schema!({
+        "type": "string",
+        "const": "a3s.test.design-audit-provider/1"
     })
 }
 
@@ -83,6 +91,30 @@ pub enum HttpVisualGroundingResponse {
     },
     Failure {
         #[schemars(schema_with = "visual_grounding_protocol_schema")]
+        protocol: String,
+        error: HttpProviderErrorResponse,
+    },
+}
+
+#[derive(Clone, Debug, Deserialize, JsonSchema, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct HttpDesignAuditRequest {
+    #[schemars(schema_with = "design_audit_protocol_schema")]
+    pub protocol: String,
+    pub request: DesignAuditProviderRequest,
+    pub image: DesignAuditImageAttachment,
+}
+
+#[derive(Clone, Debug, Deserialize, JsonSchema, PartialEq, Serialize)]
+#[serde(tag = "status", rename_all = "snake_case", deny_unknown_fields)]
+pub enum HttpDesignAuditResponse {
+    Success {
+        #[schemars(schema_with = "design_audit_protocol_schema")]
+        protocol: String,
+        response: DesignAuditProviderResponse,
+    },
+    Failure {
+        #[schemars(schema_with = "design_audit_protocol_schema")]
         protocol: String,
         error: HttpProviderErrorResponse,
     },

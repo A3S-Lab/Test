@@ -5,8 +5,8 @@ use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use a3s_test_core::{
-    Action, CaptureOperation, ContractReport, DriverError, DriverSession, Evidence, Expectation,
-    GroundingScreenshot, PageContextInspectRequest, PageContextInspectScope,
+    Action, CaptureOperation, ContractReport, DesignAuditReport, DriverError, DriverSession,
+    Evidence, Expectation, GroundingScreenshot, PageContextInspectRequest, PageContextInspectScope,
     PageContextObservation, PageContextSnapshot, RepairAclProof, RepairEvidenceBundle,
     RepairEvidencePhase, RepairEvidenceRequest, RepairFinding, RepairHumanAction,
     RepairStatusEvent, ScenarioContext, StepOutput, Surface, SurfaceDriver, SurfaceObservation,
@@ -94,6 +94,11 @@ const REPORT_QUALITY_SCRIPT: &str = r#"((report) => {
   const bridge = window[Symbol.for("a3s.test.page-context")];
   if (!bridge || typeof bridge.reportQuality !== "function") return false;
   return bridge.reportQuality(report) === true;
+})(null)"#;
+const REPORT_DESIGN_AUDIT_SCRIPT: &str = r#"((report) => {
+  const bridge = window[Symbol.for("a3s.test.page-context")];
+  if (!bridge || typeof bridge.reportDesignAudit !== "function") return false;
+  return bridge.reportDesignAudit(report) === true;
 })(null)"#;
 
 #[derive(Clone, Debug)]
@@ -340,6 +345,13 @@ impl AgentBrowserSession {
         report: &ContractReport,
     ) -> Result<bool, DriverError> {
         <Self as DriverSession>::project_quality_report(self, report).await
+    }
+
+    pub async fn project_design_audit_report(
+        &mut self,
+        report: &DesignAuditReport,
+    ) -> Result<bool, DriverError> {
+        <Self as DriverSession>::project_design_audit_report(self, report).await
     }
 
     pub async fn take_human_repair_actions(
@@ -664,6 +676,24 @@ impl DriverSession for AgentBrowserSession {
         Ok(browser_result(value).as_bool().unwrap_or(false))
     }
 
+    async fn project_design_audit_report(
+        &mut self,
+        report: &DesignAuditReport,
+    ) -> Result<bool, DriverError> {
+        self.ensure_open()?;
+        let report = serde_json::to_string(report).map_err(|error| {
+            DriverError::new(
+                "test.driver.web.design_audit_report_invalid",
+                format!("failed to encode the design-audit report: {error}"),
+            )
+        })?;
+        let script = REPORT_DESIGN_AUDIT_SCRIPT.replace("(null)", &format!("({report})"));
+        let value = self
+            .execute_command(vec!["eval".into(), script.into()])
+            .await?;
+        Ok(browser_result(value).as_bool().unwrap_or(false))
+    }
+
     async fn take_repair_actions(
         &mut self,
         limit: usize,
@@ -875,7 +905,7 @@ impl DriverSession for AgentBrowserSession {
             "detail": request.detail,
             "scope": scope,
             "cursor": request.cursor,
-            "limits": { "nodes": request.limit.clamp(1, 500) },
+            "limits": { "nodes": request.limit.clamp(1, 5_000) },
         });
         let script = format!(
             "(() => {{ const bridge = window[Symbol.for(\"a3s.test.page-context\")]; if (!bridge || typeof bridge.probe !== \"function\" || typeof bridge.snapshot !== \"function\") return {{ present: false }}; const probe = bridge.probe(); if (probe?.protocol !== \"a3s.test.page-context/1\") return {{ present: false }}; return {{ present: true, ...bridge.snapshot({request}) }}; }})()"

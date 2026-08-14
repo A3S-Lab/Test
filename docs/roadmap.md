@@ -485,3 +485,27 @@ The completion work intentionally preserves these product boundaries:
       revision failure and retain non-verdict, non-repair authority
 - [x] Add driver, provider, service, schema, CLI help, and fake browser plus
       real HTTP integration coverage
+
+## M19: Advisory design-quality audit
+
+- [x] Define `a3s.test.design-audit-provider/1` with strict generated request,
+      response, and HTTP-envelope schemas and explicit advisory authority
+- [x] Bind every request and response to provider/model identity, observation,
+      page revision, screenshot digest and dimensions, complete forensic page
+      context digest, selected dimensions, deadline, and cost ceiling
+- [x] Admit only bounded findings whose typed dimension was requested and
+      whose page, current-node, or normalized-region target is locally valid
+- [x] Keep design judgment separate from deterministic Surface Contract facts;
+      it cannot determine a verdict, approve an expected surface, dispatch an
+      action, or authorize repair
+- [x] Add deployment-owned HTTP transport with digest-bound PNG attachment,
+      fixed endpoint policy, bounded bodies, redacted credentials, and local
+      response admission
+- [x] Add `a3s-test agent audit` for the latest persistent Web observation,
+      including forensic context capture and post-inference revision checks
+- [x] Add `a3s.test.design-audit-report/1` projection to a separate bounded
+      Test Kit store and visible advisory review candidates
+- [x] Require a human to review or retarget each suggestion before it becomes
+      a local draft or enters the existing single/batch Repair Ledger
+- [x] Add service, wire, HTTP, driver, CLI, runtime, and React integration
+      coverage without bundling or selecting a model runtime

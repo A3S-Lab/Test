@@ -6,15 +6,19 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use a3s_test_agent::{
     AgentGoal, ContractGenerationProvider, ContractGenerationProviderIdentity,
-    ContractGenerationProviderRequest, GroundingProviderIdentity, GroundingProviderRequest,
-    GroundingTrigger, HttpContractGenerationProvider, HttpContractGenerationRequest,
+    ContractGenerationProviderRequest, DesignAuditDimension, DesignAuditProvider,
+    DesignAuditProviderIdentity, DesignAuditProviderRequest, GroundingProviderIdentity,
+    GroundingProviderRequest, GroundingTrigger, HttpContractGenerationProvider,
+    HttpContractGenerationRequest, HttpDesignAuditProvider, HttpDesignAuditRequest,
     HttpLlmCompletionRequest, HttpLlmProvider, HttpProviderConfig, HttpProviderEndpoint,
     HttpVisualGroundingProvider, HttpVisualGroundingRequest, LlmIdentity, LlmProvider,
     PlannerContext, RemainingBudget, StructuredLlmRequest, VisualGroundingProvider,
-    CONTRACT_GENERATION_PROVIDER_PROTOCOL, LLM_PROVIDER_PROTOCOL,
+    CONTRACT_GENERATION_PROVIDER_PROTOCOL, DESIGN_AUDIT_PROVIDER_PROTOCOL, LLM_PROVIDER_PROTOCOL,
     VISUAL_GROUNDING_PROVIDER_PROTOCOL,
 };
-use a3s_test_core::{ContractContext, ContractMode, Surface, SurfaceObservation};
+use a3s_test_core::{
+    ContractContext, ContractMode, PageContextSnapshot, Surface, SurfaceObservation,
+};
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
@@ -197,6 +201,85 @@ async fn visual_grounding_adapter_preserves_digest_deadline_cost_and_identity() 
     let debug = format!("{:?}", envelope.image);
     assert!(debug.contains("<redacted>"));
     assert!(!debug.contains(&envelope.image.bytes_base64));
+}
+
+#[tokio::test]
+async fn design_audit_adapter_sends_digest_bound_image_and_complete_page_context() {
+    let request = design_audit_request();
+    let identity = design_audit_identity();
+    let server = FixtureServer::start(vec![ResponseSpec::json(json!({
+        "status": "success",
+        "protocol": DESIGN_AUDIT_PROVIDER_PROTOCOL,
+        "response": {
+            "identity": identity,
+            "observation_id": request.observation_id,
+            "surface_revision": request.surface_revision,
+            "screenshot_sha256": request.screenshot_sha256,
+            "page_context_sha256": request.page_context_sha256,
+            "width": request.width,
+            "height": request.height,
+            "dimensions": request.dimensions,
+            "findings": [],
+            "usage": { "input_units": 3, "output_units": 1, "cost_microusd": 12 },
+            "request_id": "design-http-1"
+        }
+    }))])
+    .await;
+    let provider = HttpDesignAuditProvider::new(
+        design_audit_identity(),
+        HttpProviderConfig::new(server.endpoint.clone()),
+    )
+    .expect("HTTP design-audit provider");
+
+    let response = provider
+        .audit(request.clone())
+        .await
+        .expect("design-audit provider response");
+
+    assert_eq!(response.identity, design_audit_identity());
+    assert_eq!(response.request_id.as_deref(), Some("design-http-1"));
+    let requests = server.finish().await;
+    let envelope: HttpDesignAuditRequest =
+        serde_json::from_slice(&requests[0].body).expect("design-audit request envelope");
+    assert_eq!(envelope.protocol, DESIGN_AUDIT_PROVIDER_PROTOCOL);
+    assert_eq!(envelope.request.screenshot_path, "observation.png");
+    assert_eq!(envelope.request.page_context, request.page_context);
+    assert_eq!(
+        envelope.request.page_context_sha256,
+        request.page_context_sha256
+    );
+    assert_eq!(envelope.image.screenshot_sha256, request.screenshot_sha256);
+    assert_eq!(envelope.image.media_type, "image/png");
+    assert_eq!(
+        envelope.image.bytes_base64,
+        "YTNzLXRlc3QgSFRUUCBncm91bmRpbmcgZml4dHVyZQ=="
+    );
+    let debug = format!("{:?}", envelope.image);
+    assert!(debug.contains("<redacted>"));
+    assert!(!debug.contains(&envelope.image.bytes_base64));
+}
+
+#[tokio::test]
+async fn design_audit_adapter_rejects_context_digest_drift_before_network_dispatch() {
+    let server = FixtureServer::start(Vec::new()).await;
+    let provider = HttpDesignAuditProvider::new(
+        design_audit_identity(),
+        HttpProviderConfig::new(server.endpoint.clone()),
+    )
+    .expect("HTTP design-audit provider");
+    let mut request = design_audit_request();
+    request.page_context_sha256 = format!("sha256:{}", "0".repeat(64));
+
+    let error = provider
+        .audit(request)
+        .await
+        .expect_err("context digest drift must fail before dispatch");
+
+    assert_eq!(
+        error.code(),
+        "test.agent.design_audit.http.context_mismatch"
+    );
+    assert!(server.finish().await.is_empty());
 }
 
 #[tokio::test]
@@ -607,6 +690,13 @@ fn grounding_identity() -> GroundingProviderIdentity {
     }
 }
 
+fn design_audit_identity() -> DesignAuditProviderIdentity {
+    DesignAuditProviderIdentity {
+        provider: "fixture-http".to_string(),
+        model: "design-audit-model".to_string(),
+    }
+}
+
 fn contract_request() -> ContractGenerationProviderRequest {
     let issued_at_unix_ms = unix_ms();
     ContractGenerationProviderRequest {
@@ -639,6 +729,60 @@ fn grounding_request() -> GroundingProviderRequest {
         trigger: GroundingTrigger::ExplicitRequest,
         issued_at_unix_ms,
         deadline_unix_ms: issued_at_unix_ms + 15_000,
+        max_cost_microusd: 10_000,
+    }
+}
+
+fn design_audit_request() -> DesignAuditProviderRequest {
+    let issued_at_unix_ms = unix_ms();
+    let directory = tempfile::tempdir().expect("temporary design-audit image directory");
+    let screenshot_path = directory.path().join("observation.png");
+    std::fs::write(&screenshot_path, GROUNDING_IMAGE_BYTES)
+        .expect("write design-audit image fixture");
+    GROUNDING_IMAGES.with(|images| images.borrow_mut().push(directory));
+    let page_context: PageContextSnapshot = serde_json::from_value(json!({
+        "protocol": "a3s.test.page-context/1",
+        "sdkVersion": "0.3.0",
+        "revision": 42,
+        "page": {
+            "id": "checkout",
+            "url": "https://example.test/checkout",
+            "route": "/checkout",
+            "title": "Checkout",
+            "ready": true,
+            "viewport": { "width": 1440.0, "height": 900.0, "dpr": 1.0 },
+            "document": { "width": 1440.0, "height": 900.0 },
+            "scroll": { "x": 0.0, "y": 0.0 },
+            "language": "en",
+            "theme": "light"
+        },
+        "components": [],
+        "nodes": [],
+        "facts": {},
+        "removedNodeIds": [],
+        "truncated": false,
+        "nextCursor": null
+    }))
+    .expect("page context");
+    let page_context_sha256 = format!(
+        "sha256:{:x}",
+        Sha256::digest(serde_json::to_vec(&page_context).expect("page-context JSON"))
+    );
+    DesignAuditProviderRequest {
+        screenshot_path: screenshot_path.to_string_lossy().into_owned(),
+        screenshot_sha256: format!("sha256:{:x}", Sha256::digest(GROUNDING_IMAGE_BYTES)),
+        page_context_sha256,
+        width: 1_440,
+        height: 900,
+        observation_id: 7,
+        surface_revision: 42,
+        page_context,
+        dimensions: vec![
+            DesignAuditDimension::VisualHierarchy,
+            DesignAuditDimension::SpacingRhythm,
+        ],
+        issued_at_unix_ms,
+        deadline_unix_ms: issued_at_unix_ms + 30_000,
         max_cost_microusd: 10_000,
     }
 }

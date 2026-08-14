@@ -1,6 +1,6 @@
 {
   "name": "@a3s-lab/testkit",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Embedded page context and human review SDK for A3S Test",
   "license": "MIT",
   "type": "module",

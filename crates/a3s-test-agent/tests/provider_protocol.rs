@@ -1,9 +1,10 @@
 use a3s_test_agent::{
-    contract_generation_provider_schema, llm_provider_schema, visual_grounding_provider_schema,
-    ContractGenerationProviderRequest, ContractGenerationProviderResponse,
+    contract_generation_provider_schema, design_audit_provider_schema, llm_provider_schema,
+    visual_grounding_provider_schema, ContractGenerationProviderRequest,
+    ContractGenerationProviderResponse, DesignAuditProviderRequest, DesignAuditProviderResponse,
     GroundingProviderRequest, GroundingProviderResponse, ProviderOutputAuthority,
     StructuredLlmRequest, StructuredLlmResponse, CONTRACT_GENERATION_PROVIDER_PROTOCOL,
-    LLM_PROVIDER_PROTOCOL, VISUAL_GROUNDING_PROVIDER_PROTOCOL,
+    DESIGN_AUDIT_PROVIDER_PROTOCOL, LLM_PROVIDER_PROTOCOL, VISUAL_GROUNDING_PROVIDER_PROTOCOL,
 };
 use serde::de::DeserializeOwned;
 use serde::Serialize;
@@ -20,6 +21,10 @@ fn provider_protocol_identifiers_and_authority_are_stable() {
         "a3s.test.visual-grounding-provider/2"
     );
     assert_eq!(LLM_PROVIDER_PROTOCOL, "a3s.test.llm-provider/1");
+    assert_eq!(
+        DESIGN_AUDIT_PROVIDER_PROTOCOL,
+        "a3s.test.design-audit-provider/1"
+    );
 
     let contract = contract_generation_provider_schema();
     assert_eq!(contract.protocol, CONTRACT_GENERATION_PROVIDER_PROTOCOL);
@@ -44,6 +49,22 @@ fn provider_protocol_identifiers_and_authority_are_stable() {
     assert!(!grounding.invariants.may_authorize_repair);
     assert!(!grounding.invariants.may_claim_browser_observation);
     assert!(!grounding.invariants.may_propose_surface_actions);
+
+    let design_audit = design_audit_provider_schema();
+    assert_eq!(design_audit.protocol, DESIGN_AUDIT_PROVIDER_PROTOCOL);
+    assert_eq!(design_audit.authority, ProviderOutputAuthority::Advisory);
+    assert!(design_audit.invariants.input_digest_bound);
+    assert!(design_audit.invariants.observation_scoped_output);
+    assert!(design_audit.invariants.semantic_evidence_preferred);
+    assert!(
+        design_audit
+            .invariants
+            .human_review_required_for_expected_surface
+    );
+    assert!(!design_audit.invariants.may_determine_test_verdict);
+    assert!(!design_audit.invariants.may_authorize_repair);
+    assert!(!design_audit.invariants.may_claim_browser_observation);
+    assert!(!design_audit.invariants.may_propose_surface_actions);
 
     let llm = llm_provider_schema();
     assert_eq!(llm.protocol, LLM_PROVIDER_PROTOCOL);
@@ -246,6 +267,72 @@ fn visual_grounding_schema_exposes_binding_fields_and_geometry_variants() {
 }
 
 #[test]
+fn design_audit_schema_exposes_complete_context_binding_and_advisory_findings() {
+    let bundle = serde_json::to_value(design_audit_provider_schema()).expect("schema JSON");
+    assert_required_properties(
+        &bundle["request_schema"],
+        &[
+            "screenshot_sha256",
+            "page_context_sha256",
+            "observation_id",
+            "surface_revision",
+            "page_context",
+            "dimensions",
+            "issued_at_unix_ms",
+            "deadline_unix_ms",
+            "max_cost_microusd",
+        ],
+    );
+    assert_required_properties(
+        &bundle["response_schema"],
+        &[
+            "identity",
+            "observation_id",
+            "surface_revision",
+            "screenshot_sha256",
+            "page_context_sha256",
+            "dimensions",
+            "findings",
+            "usage",
+        ],
+    );
+    for value in [
+        "visual_hierarchy",
+        "spacing_rhythm",
+        "interaction_clarity",
+        "page",
+        "node",
+        "region",
+        "recommendation",
+    ] {
+        assert!(contains_string(&bundle, value), "schema is missing {value}");
+    }
+    assert!(bundle["response_schema"]["properties"]
+        .get("outcome")
+        .is_none());
+    assert!(bundle["response_schema"]["properties"]
+        .get("verdict")
+        .is_none());
+    assert!(bundle["response_schema"]["properties"]
+        .get("repair")
+        .is_none());
+    assert_eq!(
+        bundle["http"]["request_envelope_schema"]["properties"]["protocol"]["const"],
+        DESIGN_AUDIT_PROVIDER_PROTOCOL
+    );
+    assert!(contains_string(
+        &bundle["http"]["request_envelope_schema"],
+        "bytes_base64"
+    ));
+    for value in ["status", "success", "failure", "response", "error"] {
+        assert!(
+            contains_string(&bundle["http"]["response_envelope_schema"], value),
+            "HTTP response schema is missing {value}"
+        );
+    }
+}
+
+#[test]
 fn contract_generation_wire_round_trips_and_rejects_unknown_fields() {
     let request = json!({
         "contract_name": "checkout",
@@ -382,6 +469,74 @@ fn visual_grounding_wire_round_trips_and_rejects_unknown_fields() {
     });
     assert_round_trip::<GroundingProviderResponse>(response.clone());
     assert_unknown_field_rejected::<GroundingProviderResponse>(response);
+}
+
+#[test]
+fn design_audit_wire_round_trips_and_rejects_unknown_fields() {
+    let page_context = json!({
+        "protocol": "a3s.test.page-context/1",
+        "sdkVersion": "0.3.0",
+        "revision": 42,
+        "page": {
+            "id": "checkout",
+            "url": "https://example.test/checkout",
+            "route": "/checkout",
+            "title": "Checkout",
+            "ready": true,
+            "viewport": { "width": 1280.0, "height": 720.0, "dpr": 1.0 },
+            "document": { "width": 1280.0, "height": 900.0 },
+            "scroll": { "x": 0.0, "y": 0.0 },
+            "language": "en",
+            "theme": "light"
+        },
+        "components": [],
+        "nodes": [],
+        "facts": {},
+        "removedNodeIds": [],
+        "truncated": false,
+        "nextCursor": null
+    });
+    let request = json!({
+        "screenshot_path": "/workspace/observation.png",
+        "screenshot_sha256": format!("sha256:{}", "c".repeat(64)),
+        "page_context_sha256": format!("sha256:{}", "d".repeat(64)),
+        "width": 1280,
+        "height": 720,
+        "observation_id": 7,
+        "surface_revision": 42,
+        "page_context": page_context,
+        "dimensions": ["visual_hierarchy", "spacing_rhythm"],
+        "issued_at_unix_ms": 1_000,
+        "deadline_unix_ms": 31_000,
+        "max_cost_microusd": 10_000
+    });
+    assert_round_trip::<DesignAuditProviderRequest>(request.clone());
+    assert_unknown_field_rejected::<DesignAuditProviderRequest>(request);
+
+    let response = json!({
+        "identity": { "provider": "fixture", "model": "design-review-model" },
+        "observation_id": 7,
+        "surface_revision": 42,
+        "screenshot_sha256": format!("sha256:{}", "c".repeat(64)),
+        "page_context_sha256": format!("sha256:{}", "d".repeat(64)),
+        "width": 1280,
+        "height": 720,
+        "dimensions": ["visual_hierarchy", "spacing_rhythm"],
+        "findings": [{
+            "id": "hierarchy-primary-action",
+            "dimension": "visual_hierarchy",
+            "priority": "high",
+            "summary": "The primary action lacks emphasis",
+            "rationale": "Competing actions have equal weight",
+            "recommendation": "Increase contrast and surrounding space",
+            "confidence": 91,
+            "target": { "kind": "region", "region": { "x": 0.1, "y": 0.2, "width": 0.4, "height": 0.2 } }
+        }],
+        "usage": { "input_units": 1, "output_units": 1, "cost_microusd": 500 },
+        "request_id": "request-design-1"
+    });
+    assert_round_trip::<DesignAuditProviderResponse>(response.clone());
+    assert_unknown_field_rejected::<DesignAuditProviderResponse>(response);
 }
 
 fn assert_required_properties(schema: &Value, expected: &[&str]) {

@@ -17,20 +17,23 @@ mod wire;
 
 pub use config::{HttpProviderConfig, HttpProviderConfigError, HttpProviderEndpoint};
 pub use wire::{
-    HttpContractGenerationRequest, HttpContractGenerationResponse, HttpLlmCompletionRequest,
-    HttpLlmCompletionResponse, HttpProviderErrorResponse, HttpVisualGroundingRequest,
-    HttpVisualGroundingResponse,
+    HttpContractGenerationRequest, HttpContractGenerationResponse, HttpDesignAuditRequest,
+    HttpDesignAuditResponse, HttpLlmCompletionRequest, HttpLlmCompletionResponse,
+    HttpProviderErrorResponse, HttpVisualGroundingRequest, HttpVisualGroundingResponse,
 };
 use wire::{HttpProviderRemoteError, HttpProviderRequestEnvelope, HttpProviderResponseEnvelope};
 
+use crate::design_audit::MAX_DESIGN_AUDIT_IMAGE_BYTES;
 use crate::grounding::MAX_GROUNDING_IMAGE_BYTES;
 use crate::{
     ContractGenerationError, ContractGenerationProvider, ContractGenerationProviderIdentity,
-    ContractGenerationProviderRequest, ContractGenerationProviderResponse, GroundingError,
+    ContractGenerationProviderRequest, ContractGenerationProviderResponse, DesignAuditError,
+    DesignAuditImageAttachment, DesignAuditProvider, DesignAuditProviderIdentity,
+    DesignAuditProviderRequest, DesignAuditProviderResponse, GroundingError,
     GroundingImageAttachment, GroundingProviderIdentity, GroundingProviderRequest,
     GroundingProviderResponse, LlmError, LlmIdentity, LlmProvider, StructuredLlmRequest,
     StructuredLlmResponse, VisualGroundingProvider, CONTRACT_GENERATION_PROVIDER_PROTOCOL,
-    LLM_PROVIDER_PROTOCOL, VISUAL_GROUNDING_PROVIDER_PROTOCOL,
+    DESIGN_AUDIT_PROVIDER_PROTOCOL, LLM_PROVIDER_PROTOCOL, VISUAL_GROUNDING_PROVIDER_PROTOCOL,
 };
 
 const MAX_ERROR_MESSAGE_CHARACTERS: usize = 64 * 1_024;
@@ -103,6 +106,27 @@ impl HttpProviderTransport {
         let timeout =
             admitted_request_timeout(issued_at_unix_ms, deadline_unix_ms, self.config.timeout)?;
         let envelope = HttpVisualGroundingRequest {
+            protocol: protocol.to_string(),
+            request: request.clone(),
+            image: image.clone(),
+        };
+        self.exchange_envelope(protocol, &envelope, timeout).await
+    }
+
+    async fn exchange_design_audit<Response>(
+        &self,
+        protocol: &'static str,
+        request: &DesignAuditProviderRequest,
+        image: &DesignAuditImageAttachment,
+        issued_at_unix_ms: u64,
+        deadline_unix_ms: u64,
+    ) -> Result<Response, HttpExchangeError>
+    where
+        Response: DeserializeOwned,
+    {
+        let timeout =
+            admitted_request_timeout(issued_at_unix_ms, deadline_unix_ms, self.config.timeout)?;
+        let envelope = HttpDesignAuditRequest {
             protocol: protocol.to_string(),
             request: request.clone(),
             image: image.clone(),
@@ -503,6 +527,165 @@ impl VisualGroundingProvider for HttpVisualGroundingProvider {
     }
 }
 
+pub struct HttpDesignAuditProvider {
+    identity: DesignAuditProviderIdentity,
+    transport: HttpProviderTransport,
+}
+
+impl fmt::Debug for HttpDesignAuditProvider {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("HttpDesignAuditProvider")
+            .field("identity", &self.identity)
+            .field("transport", &self.transport)
+            .finish()
+    }
+}
+
+impl HttpDesignAuditProvider {
+    pub fn new(
+        identity: DesignAuditProviderIdentity,
+        config: HttpProviderConfig,
+    ) -> Result<Self, HttpProviderConfigError> {
+        validate_identity(&identity.provider, &identity.model)?;
+        Ok(Self {
+            identity,
+            transport: HttpProviderTransport::new(config)?,
+        })
+    }
+}
+
+#[async_trait]
+impl DesignAuditProvider for HttpDesignAuditProvider {
+    fn identity(&self) -> DesignAuditProviderIdentity {
+        self.identity.clone()
+    }
+
+    async fn audit(
+        &self,
+        request: DesignAuditProviderRequest,
+    ) -> Result<DesignAuditProviderResponse, DesignAuditError> {
+        admitted_request_timeout(
+            request.issued_at_unix_ms,
+            request.deadline_unix_ms,
+            self.transport.config.timeout,
+        )
+        .map_err(design_audit_http_error)?;
+        let screenshot_path = request.screenshot_path.clone();
+        let screenshot_sha256 = request.screenshot_sha256.clone();
+        let actual_page_context_sha256 = serde_json::to_vec(&request.page_context)
+            .map(|bytes| format!("sha256:{:x}", Sha256::digest(bytes)))
+            .map_err(|error| {
+                DesignAuditError::new(
+                    "test.agent.design_audit.http.context_invalid",
+                    format!("failed to encode design-audit page context: {error}"),
+                    false,
+                )
+            })?;
+        if actual_page_context_sha256 != request.page_context_sha256 {
+            return Err(DesignAuditError::new(
+                "test.agent.design_audit.http.context_mismatch",
+                "design-audit page context does not match its admitted SHA-256 digest",
+                false,
+            ));
+        }
+        let issued_at_unix_ms = request.issued_at_unix_ms;
+        let deadline_unix_ms = request.deadline_unix_ms;
+        let screenshot_bytes = read_design_audit_image(&screenshot_path).await?;
+        let actual_sha256 = format!("sha256:{:x}", Sha256::digest(&screenshot_bytes));
+        if actual_sha256 != screenshot_sha256 {
+            return Err(DesignAuditError::new(
+                "test.agent.design_audit.http.image_mismatch",
+                "design-audit image bytes changed after request admission",
+                false,
+            ));
+        }
+        let wire_request = DesignAuditProviderRequest {
+            screenshot_path: "observation.png".to_string(),
+            ..request
+        };
+        let image = DesignAuditImageAttachment {
+            screenshot_sha256,
+            media_type: "image/png".to_string(),
+            bytes_base64: BASE64_STANDARD.encode(screenshot_bytes),
+        };
+        self.transport
+            .exchange_design_audit(
+                DESIGN_AUDIT_PROVIDER_PROTOCOL,
+                &wire_request,
+                &image,
+                issued_at_unix_ms,
+                deadline_unix_ms,
+            )
+            .await
+            .and_then(|response: DesignAuditProviderResponse| {
+                if response.identity == self.identity {
+                    Ok(response)
+                } else {
+                    Err(HttpExchangeError::protocol(
+                        "provider HTTP response identity does not match the configured provider",
+                    ))
+                }
+            })
+            .map_err(design_audit_http_error)
+    }
+}
+
+async fn read_design_audit_image(path: &str) -> Result<Vec<u8>, DesignAuditError> {
+    const MAX_PATH_BYTES: usize = 16 * 1_024;
+    if path.trim().is_empty() || path.len() > MAX_PATH_BYTES {
+        return Err(DesignAuditError::new(
+            "test.agent.design_audit.http.image_invalid",
+            format!("design-audit image path must contain 1 to {MAX_PATH_BYTES} bytes"),
+            false,
+        ));
+    }
+    let metadata = tokio::fs::symlink_metadata(path).await.map_err(|error| {
+        DesignAuditError::new(
+            "test.agent.design_audit.http.image_invalid",
+            format!("failed to inspect design-audit image: {error}"),
+            false,
+        )
+    })?;
+    if !metadata.file_type().is_file()
+        || metadata.file_type().is_symlink()
+        || metadata.len() == 0
+        || metadata.len() > MAX_DESIGN_AUDIT_IMAGE_BYTES
+    {
+        return Err(DesignAuditError::new(
+            "test.agent.design_audit.http.image_invalid",
+            "design-audit image must be a bounded non-empty regular file",
+            false,
+        ));
+    }
+    let file = tokio::fs::File::open(path).await.map_err(|error| {
+        DesignAuditError::new(
+            "test.agent.design_audit.http.image_invalid",
+            format!("failed to open design-audit image: {error}"),
+            false,
+        )
+    })?;
+    let mut bytes = Vec::with_capacity(metadata.len() as usize);
+    file.take(MAX_DESIGN_AUDIT_IMAGE_BYTES + 1)
+        .read_to_end(&mut bytes)
+        .await
+        .map_err(|error| {
+            DesignAuditError::new(
+                "test.agent.design_audit.http.image_invalid",
+                format!("failed to read design-audit image: {error}"),
+                false,
+            )
+        })?;
+    if bytes.is_empty() || bytes.len() as u64 > MAX_DESIGN_AUDIT_IMAGE_BYTES {
+        return Err(DesignAuditError::new(
+            "test.agent.design_audit.http.image_invalid",
+            "design-audit image changed outside the admitted size bound",
+            false,
+        ));
+    }
+    Ok(bytes)
+}
+
 async fn read_grounding_image(path: &str) -> Result<Vec<u8>, GroundingError> {
     validate_grounding_image_path(path)?;
     let metadata = tokio::fs::symlink_metadata(path).await.map_err(|error| {
@@ -604,6 +787,14 @@ fn contract_http_error(error: HttpExchangeError) -> ContractGenerationError {
 fn grounding_http_error(error: HttpExchangeError) -> GroundingError {
     GroundingError::new(
         format!("test.agent.grounding.http.{}", error.code),
+        error.message,
+        error.retryable,
+    )
+}
+
+fn design_audit_http_error(error: HttpExchangeError) -> DesignAuditError {
+    DesignAuditError::new(
+        format!("test.agent.design_audit.http.{}", error.code),
         error.message,
         error.retryable,
     )

@@ -1,6 +1,7 @@
 //! Typed test specifications and surface-driver contracts for A3S Test.
 
 mod contract;
+mod design_audit;
 mod driver;
 mod error;
 mod manifest;
@@ -12,6 +13,11 @@ pub use contract::{
     AdmittedProvenance, ContractCitation, ContractContext, ContractElement, ContractMode,
     ContractProvenanceKind, ContractProvenanceStatus, ContractSeverity, ContractVariant,
     SurfaceContract, SurfaceContractDraft,
+};
+pub use design_audit::{
+    DesignAuditAuthority, DesignAuditDimension, DesignAuditFinding, DesignAuditNormalizedRegion,
+    DesignAuditPriority, DesignAuditProvenance, DesignAuditProviderIdentity, DesignAuditReport,
+    DesignAuditTarget, DesignAuditUsage, DESIGN_AUDIT_REPORT_PROTOCOL,
 };
 
 pub use driver::{

@@ -147,6 +147,26 @@ fn agent_ground_help_exposes_revision_bound_advisory_grounding() {
 }
 
 #[test]
+fn agent_audit_help_exposes_revision_bound_advisory_design_review() {
+    let output = Command::new(binary())
+        .args(["agent", "audit", "--help"])
+        .output()
+        .expect("run design-audit help");
+
+    assert!(output.status.success(), "{output:?}");
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.contains("advisory design-quality review"),
+        "{stdout}"
+    );
+    assert!(stdout.contains("--observation"), "{stdout}");
+    assert!(stdout.contains("--config"), "{stdout}");
+    assert!(stdout.contains("--dimension"), "{stdout}");
+    assert!(stdout.contains("visual-hierarchy"), "{stdout}");
+    assert!(stdout.contains("responsive-composition"), "{stdout}");
+}
+
+#[test]
 fn check_admits_every_referenced_surface_contract() {
     let temp = tempfile::tempdir().expect("tempdir");
     let contracts = temp.path().join("contracts");
@@ -564,6 +584,11 @@ fn provider_schema_exposes_versioned_wire_contracts() {
             "contract-generation",
             "a3s.test.contract-generation-provider/1",
             "candidate_only",
+        ),
+        (
+            "design-audit",
+            "a3s.test.design-audit-provider/1",
+            "advisory",
         ),
         (
             "visual-grounding",
@@ -1539,6 +1564,273 @@ visual_grounding {{
         .env("A3S_TEST_LOG", &log)
         .output()
         .expect("abort grounding session");
+    assert!(abort.status.success(), "{abort:?}");
+}
+
+#[cfg(unix)]
+#[test]
+fn agent_audit_binds_forensic_context_and_projects_only_advisory_findings() {
+    use sha2::Digest;
+    use std::io::{BufRead, BufReader, Read, Write};
+    use std::net::TcpListener;
+    use std::os::unix::fs::PermissionsExt;
+
+    let _test_guard = process_test_guard();
+    let temp = tempfile::tempdir().expect("tempdir");
+    let driver = temp.path().join("fake-agent-browser");
+    let log = temp.path().join("driver.log");
+    fs::write(
+        &driver,
+        r#"#!/bin/sh
+case " $* " in
+  *" --version "*)
+    printf 'agent-browser 0.26.0\n'
+    exit 0
+    ;;
+esac
+printf '%s\n' "$*" >> "$A3S_TEST_LOG"
+case " $* " in
+  *"reportDesignAudit"*)
+    printf '{"success":true,"data":{"result":true}}\n'
+    ;;
+  *" eval "*)
+    revision="${A3S_CONTEXT_REVISION:-42}"
+    pay_node='{"id":"private-pay","tag":"button","role":"button","name":"Pay","text":"Pay","testId":"pay","geometry":{"viewport":{"x":300.0,"y":160.0,"width":100.0,"height":50.0},"document":{"x":300.0,"y":160.0,"width":100.0,"height":50.0},"normalized":{"x":0.46875,"y":0.444444,"width":0.15625,"height":0.138889},"visibleRatio":1.0,"occluded":false,"position":"static","transformed":false},"state":{"visible":true},"locators":[{"type":"test_id","value":"pay"}],"computedStyles":{"font-size":"14px","font-weight":"400"}}'
+    summary_node='{"id":"private-summary","tag":"p","name":"Order summary","text":"Order summary","geometry":{"viewport":{"x":80.0,"y":80.0,"width":200.0,"height":40.0},"document":{"x":80.0,"y":80.0,"width":200.0,"height":40.0},"normalized":{"x":0.125,"y":0.222222,"width":0.3125,"height":0.111111},"visibleRatio":1.0,"occluded":false,"position":"static","transformed":false},"state":{"visible":true},"locators":[{"type":"text","value":"Order summary","exact":true}],"computedStyles":{"font-size":"12px","font-weight":"400"}}'
+    case " $* " in
+      *'"detail":"forensic"'*)
+        case " $* " in
+          *'"cursor":"audit-page-2"'*)
+            nodes="[$summary_node]"
+            truncated=false
+            next_cursor=null
+            ;;
+          *)
+            nodes="[$pay_node]"
+            truncated=true
+            next_cursor='"audit-page-2"'
+            ;;
+        esac
+        ;;
+      *)
+        nodes="[$pay_node,$summary_node]"
+        truncated=false
+        next_cursor=null
+        ;;
+    esac
+    printf '{"success":true,"data":{"result":{"present":true,"protocol":"a3s.test.page-context/1","sdkVersion":"0.3.0","revision":%s,"page":{"id":"checkout","url":"https://example.test/","route":"/","title":"Checkout","ready":true,"viewport":{"width":640.0,"height":360.0,"dpr":1.0},"document":{"width":640.0,"height":360.0},"scroll":{"x":0.0,"y":0.0},"language":"en","theme":"light"},"components":[],"nodes":%s,"facts":{},"removedNodeIds":[],"truncated":%s,"nextCursor":%s}}}\n' "$revision" "$nodes" "$truncated" "$next_cursor"
+    ;;
+  *" snapshot "*)
+    printf '{"success":true,"data":{"origin":"https://example.test/","snapshot":"@e1 [button] Pay"}}\n'
+    ;;
+  *" screenshot "*)
+    path=""
+    for argument in "$@"; do path="$argument"; done
+    mkdir -p "$(dirname "$path")"
+    printf '\211PNG\r\n\032\n\000\000\000\015IHDR\000\000\002\200\000\000\001h\010\006\000\000\000\000\000\000\000' > "$path"
+    printf '{"success":true}\n'
+    ;;
+  *)
+    printf '{"success":true}\n'
+    ;;
+esac
+"#,
+    )
+    .expect("driver");
+    fs::set_permissions(&driver, fs::Permissions::from_mode(0o755)).expect("permissions");
+
+    let start = start_agent_session(temp.path(), &driver, &log, "design-audit");
+    assert!(start.status.success(), "{start:?}");
+    let observe = Command::new(binary())
+        .args([
+            "agent",
+            "observe",
+            "--session",
+            "design-audit",
+            "--interactive",
+            "--json",
+        ])
+        .current_dir(temp.path())
+        .env("A3S_TEST_LOG", &log)
+        .env("A3S_CONTEXT_REVISION", "42")
+        .output()
+        .expect("observe page context");
+    assert!(observe.status.success(), "{observe:?}");
+
+    let listener = TcpListener::bind("127.0.0.1:0").expect("design-audit provider listener");
+    let address = listener.local_addr().expect("provider address");
+    let server = std::thread::spawn(move || {
+        let (stream, _) = listener.accept().expect("design-audit provider request");
+        let mut reader = BufReader::new(stream);
+        let mut request_line = String::new();
+        reader.read_line(&mut request_line).expect("request line");
+        let mut content_length = 0usize;
+        loop {
+            let mut line = String::new();
+            reader.read_line(&mut line).expect("request header");
+            if line == "\r\n" {
+                break;
+            }
+            let (name, value) = line.trim_end().split_once(':').expect("header shape");
+            if name.eq_ignore_ascii_case("content-length") {
+                content_length = value.trim().parse().expect("content length");
+            }
+        }
+        let mut body = vec![0; content_length];
+        reader.read_exact(&mut body).expect("provider body");
+        let envelope: serde_json::Value = serde_json::from_slice(&body).expect("provider JSON");
+        assert_eq!(request_line, "POST /audit HTTP/1.1\r\n");
+        assert_eq!(envelope["protocol"], "a3s.test.design-audit-provider/1");
+        assert_eq!(envelope["request"]["observation_id"], 1);
+        assert_eq!(envelope["request"]["surface_revision"], 42);
+        assert_eq!(envelope["request"]["screenshot_path"], "observation.png");
+        assert_eq!(envelope["request"]["page_context"]["truncated"], false);
+        assert_eq!(
+            envelope["request"]["page_context"]["nextCursor"],
+            serde_json::Value::Null
+        );
+        assert_eq!(
+            envelope["request"]["page_context"]["nodes"][0]["computedStyles"]["font-size"],
+            "14px"
+        );
+        assert_eq!(
+            envelope["request"]["page_context"]["nodes"]
+                .as_array()
+                .map(Vec::len),
+            Some(2)
+        );
+        assert_eq!(
+            envelope["request"]["page_context"]["nodes"][1]["id"],
+            "private-summary"
+        );
+        assert_eq!(
+            envelope["request"]["page_context_sha256"],
+            format!(
+                "sha256:{:x}",
+                sha2::Sha256::digest(
+                    serde_json::to_vec(
+                        &serde_json::from_value::<a3s_test_core::PageContextSnapshot>(
+                            envelope["request"]["page_context"].clone()
+                        )
+                        .expect("typed page context")
+                    )
+                    .expect("page-context bytes")
+                )
+            )
+        );
+        assert_eq!(
+            envelope["request"]["dimensions"],
+            serde_json::json!(["visual_hierarchy", "spacing_rhythm"])
+        );
+        assert_eq!(
+            envelope["image"]["screenshot_sha256"],
+            envelope["request"]["screenshot_sha256"]
+        );
+        let response = serde_json::to_vec(&serde_json::json!({
+            "status": "success",
+            "protocol": "a3s.test.design-audit-provider/1",
+            "response": {
+                "identity": { "provider": "fixture", "model": "design-review" },
+                "observation_id": 1,
+                "surface_revision": 42,
+                "screenshot_sha256": envelope["request"]["screenshot_sha256"],
+                "page_context_sha256": envelope["request"]["page_context_sha256"],
+                "width": 640,
+                "height": 360,
+                "dimensions": envelope["request"]["dimensions"],
+                "findings": [{
+                    "id": "hierarchy-primary-action",
+                    "dimension": "visual_hierarchy",
+                    "priority": "high",
+                    "summary": "The primary action lacks emphasis",
+                    "rationale": "Competing actions have equal visual weight",
+                    "recommendation": "Increase contrast and surrounding space",
+                    "confidence": 93,
+                    "target": { "kind": "node", "node_id": "private-pay" }
+                }],
+                "usage": { "input_units": 1, "output_units": 1, "cost_microusd": 10 },
+                "request_id": "audit-cli-1"
+            }
+        }))
+        .expect("provider response");
+        let stream = reader.get_mut();
+        write!(
+            stream,
+            "HTTP/1.1 200 OK\r\ncontent-type: application/json\r\ncontent-length: {}\r\nconnection: close\r\n\r\n",
+            response.len()
+        )
+        .expect("response head");
+        stream.write_all(&response).expect("response body");
+    });
+    let config = temp.path().join("design-audit.acl");
+    fs::write(
+        &config,
+        format!(
+            r#"
+design_audit {{
+  max_cost_microusd = 1000
+  provider {{
+    name = "fixture"
+    model = "design-review"
+    endpoint = "http://{address}/audit"
+  }}
+}}
+"#
+        ),
+    )
+    .expect("design-audit config");
+
+    let audit = Command::new(binary())
+        .args([
+            "agent",
+            "audit",
+            "--session",
+            "design-audit",
+            "--observation",
+            "1",
+            "--config",
+            config.to_str().expect("config path"),
+            "--dimension",
+            "visual-hierarchy,spacing-rhythm",
+            "--json",
+        ])
+        .current_dir(temp.path())
+        .env("A3S_TEST_LOG", &log)
+        .env("A3S_CONTEXT_REVISION", "42")
+        .output()
+        .expect("audit current observation");
+    assert!(audit.status.success(), "{audit:?}");
+    server.join().expect("design-audit provider server");
+    let audited: serde_json::Value =
+        serde_json::from_slice(&audit.stdout).expect("design-audit JSON");
+    assert_eq!(audited["authority"], "advisory");
+    assert_eq!(audited["report_protocol"], "a3s.test.design-audit-report/1");
+    assert_eq!(audited["observation_id"], 1);
+    assert_eq!(audited["projected_to_review"], true);
+    assert_eq!(
+        audited["output"]["data"]["report"]["findings"][0]["target"],
+        serde_json::json!({ "kind": "node", "node_id": "private-pay" })
+    );
+    assert_eq!(
+        audited["output"]["data"]["report"]["provenance"]["authority"],
+        "advisory"
+    );
+    assert!(audited["output"]["data"]["report"].get("outcome").is_none());
+    assert!(audited["output"]["data"]["report"].get("repair").is_none());
+    let driver_log = fs::read_to_string(&log).expect("driver log");
+    assert!(
+        driver_log.contains("\"detail\":\"forensic\""),
+        "{driver_log}"
+    );
+    assert!(driver_log.contains("audit-page-2"), "{driver_log}");
+    assert!(driver_log.contains("reportDesignAudit"), "{driver_log}");
+
+    let abort = Command::new(binary())
+        .args(["agent", "abort", "--session", "design-audit", "--json"])
+        .current_dir(temp.path())
+        .env("A3S_TEST_LOG", &log)
+        .output()
+        .expect("abort design-audit session");
     assert!(abort.status.success(), "{abort:?}");
 }
 

@@ -1,5 +1,47 @@
 # Changelog
 
+## 0.15.0 - 2026-08-15
+
+### Added
+
+- Added strict provider protocol `a3s.test.design-audit-provider/1` for
+  advisory design-quality review across hierarchy, composition, spacing,
+  typography, color use, consistency, interaction clarity, content clarity,
+  and responsive composition.
+- Added `HttpDesignAuditProvider`, generated provider and HTTP-envelope
+  schemas, digest-bound PNG transport, complete forensic Page Context input,
+  typed page/node/normalized-region findings, and local response admission.
+- Added `a3s-test agent audit` with ACL configuration, selected dimensions,
+  latest-observation and exact-revision binding, bounded context pagination,
+  post-inference revision checks, retained screenshot evidence, and optional
+  projection to an embedded review surface.
+- Added Test Kit protocol `a3s.test.design-audit-report/1`, a separate bounded
+  Design Audit store, advisory markers and review UI, explicit retargeting,
+  and human promotion into the existing single or batch Repair Ledger.
+
+### Safety
+
+- Design-audit output has no verdict, expected-surface, browser-action, or
+  repair authority. Even high-priority advice remains non-blocking until a
+  human explicitly reviews and saves or sends it.
+- Local admission binds provider/model identity, observation, surface
+  revision, screenshot and canonical page-context digests, dimensions,
+  complete context, current node geometry, deadline, response limits, and
+  provider-reported cost. Image and context bytes are rehashed again at the
+  HTTP boundary, and any later page revision expires the projected advice.
+- Provider ACL and credentials are admitted before browser access. HTTPS is
+  required except for explicit loopback HTTP, redirects and environment
+  proxies remain disabled, authorization is redacted, and inference runtime,
+  capacity, privacy, and licensing remain deployment-owned.
+
+### Changed
+
+- Raised the Rust workspace release to `0.15.0` and `@a3s-lab/testkit` to
+  `0.3.0`.
+- Increased bounded Web page-context inspection from 500 to 5,000 nodes so an
+  audit can assemble a complete paginated snapshot within the existing Test
+  Kit protocol limit.
+
 ## 0.14.0 - 2026-08-15
 
 ### Added

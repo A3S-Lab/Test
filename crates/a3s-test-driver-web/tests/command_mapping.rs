@@ -7,8 +7,10 @@ use std::time::Duration;
 
 use a3s_test_core::{
     Action, CaptureOperation, ContractFinding, ContractOutcome, ContractReport, ContractSeverity,
-    DialogOperation, FrameTarget, NetworkRoute, ScenarioContext, SurfaceDriver, TabOperation,
-    Target, TestStep, VideoOperation, WaitCondition,
+    DesignAuditAuthority, DesignAuditDimension, DesignAuditFinding, DesignAuditPriority,
+    DesignAuditProvenance, DesignAuditProviderIdentity, DesignAuditReport, DesignAuditTarget,
+    DesignAuditUsage, DialogOperation, FrameTarget, NetworkRoute, ScenarioContext, SurfaceDriver,
+    TabOperation, Target, TestStep, VideoOperation, WaitCondition,
 };
 use a3s_test_driver_web::{
     AgentBrowserConfig, AgentBrowserConnectionConfig, AgentBrowserDriver, BrowserCommand,
@@ -771,6 +773,51 @@ async fn missing_testkit_bridge_declines_quality_projection_without_an_error() {
 }
 
 #[tokio::test]
+async fn projects_admitted_design_advice_through_the_testkit_bridge() {
+    let temp = tempfile::tempdir().expect("tempdir");
+    let executor = Arc::new(QualityProjectionExecutor::new(true));
+    let driver = AgentBrowserDriver::with_executor(
+        standalone_config("design-audit-report"),
+        executor.clone(),
+    );
+    let mut session = driver
+        .open(&ScenarioContext {
+            run_id: "run".to_string(),
+            scenario_id: "design-audit".to_string(),
+            artifacts_dir: temp.path().join("artifacts"),
+        })
+        .await
+        .expect("session");
+
+    let accepted = session
+        .project_design_audit_report(&design_audit_report())
+        .await
+        .expect("design-audit projection");
+
+    assert!(accepted);
+    let invocations = executor.invocations.lock().unwrap();
+    assert_eq!(invocations.len(), 2);
+    let args = strip_session_prefix(&invocations[1].args);
+    assert_eq!(args[0], "eval");
+    let script = args[1].to_string_lossy();
+    assert!(
+        script.contains("typeof bridge.reportDesignAudit !== \"function\""),
+        "{script}"
+    );
+    assert!(
+        script.contains("bridge.reportDesignAudit(report) === true"),
+        "{script}"
+    );
+    assert!(
+        script.contains("a3s.test.design-audit-report/1"),
+        "{script}"
+    );
+    assert!(script.contains("hierarchy-primary-action"), "{script}");
+    assert!(script.contains("\"authority\":\"advisory\""), "{script}");
+    assert!(!script.contains("\"outcome\""), "{script}");
+}
+
+#[tokio::test]
 async fn bounds_repair_watch_below_the_browser_command_deadline() {
     let temp = tempfile::tempdir().expect("tempdir");
     let executor = Arc::new(RecordingExecutor::with_version("agent-browser 0.26.0"));
@@ -1529,6 +1576,44 @@ fn quality_report() -> ContractReport {
             element_id: Some("submit".to_string()),
             observed_node_id: Some("n1".to_string()),
             confidence: 100,
+        }],
+    }
+}
+
+fn design_audit_report() -> DesignAuditReport {
+    DesignAuditReport {
+        protocol: "a3s.test.design-audit-report/1".to_string(),
+        provenance: DesignAuditProvenance {
+            identity: DesignAuditProviderIdentity {
+                provider: "fixture".to_string(),
+                model: "design-review".to_string(),
+            },
+            observation_id: 7,
+            surface_revision: 42,
+            screenshot_sha256: format!("sha256:{}", "a".repeat(64)),
+            page_context_sha256: format!("sha256:{}", "b".repeat(64)),
+            width: 1280,
+            height: 720,
+            usage: DesignAuditUsage {
+                input_units: 10,
+                output_units: 2,
+                cost_microusd: 20,
+            },
+            request_id: Some("design-request-1".to_string()),
+            authority: DesignAuditAuthority::Advisory,
+        },
+        dimensions: vec![DesignAuditDimension::VisualHierarchy],
+        findings: vec![DesignAuditFinding {
+            id: "hierarchy-primary-action".to_string(),
+            dimension: DesignAuditDimension::VisualHierarchy,
+            priority: DesignAuditPriority::High,
+            summary: "The primary action lacks emphasis".to_string(),
+            rationale: "Competing actions have equal visual weight".to_string(),
+            recommendation: "Increase contrast and surrounding space".to_string(),
+            confidence: 91,
+            target: DesignAuditTarget::Node {
+                node_id: "n1".to_string(),
+            },
         }],
     }
 }

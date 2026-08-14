@@ -1,9 +1,72 @@
 import { describe, expect, it } from "vitest";
 import { installTestKit, registerBoundary } from "./runtime";
-import type { QualityReport, RepairDraft, RepairEvent } from "./types";
+import type { DesignAuditReport, QualityReport, RepairDraft, RepairEvent } from "./types";
 import { setRect } from "./test-setup";
 
 describe("page context runtime", () => {
+  it("admits revision-bound design advice without granting verdict or repair authority", () => {
+    document.body.innerHTML = `<main data-testid="hero">Checkout</main>`;
+    const target = document.querySelector<HTMLElement>("main")!;
+    setRect(target, { x: 100, y: 80, width: 500, height: 240 });
+    const bridge = installTestKit({
+      enabled: true,
+      page: { id: "design-audit" },
+      repairStorage: "memory",
+      maxDesignAuditReports: 1,
+    });
+    const snapshot = bridge.snapshot();
+    const nodeId = snapshot.nodes.find((node) => node.testId === "hero")!.id;
+    const report = designAuditReport(snapshot.revision, nodeId);
+    const events: string[] = [];
+    bridge.subscribe((event) => events.push(event.type));
+
+    expect(bridge.reportDesignAudit(report)).toBe(true);
+    expect(bridge.listDesignAuditReports()).toHaveLength(1);
+    expect(bridge.listQualityReports()).toEqual([]);
+    expect(bridge.listRepairs()).toEqual([]);
+    expect(bridge.takeRepairBatch()).toEqual([]);
+    expect(bridge.reportDesignAudit({
+      ...report,
+      provenance: { ...report.provenance, surface_revision: snapshot.revision + 1 },
+    })).toBe(false);
+    expect(bridge.reportDesignAudit({ ...report, unknown: true } as unknown as DesignAuditReport)).toBe(false);
+    expect(bridge.reportDesignAudit({} as DesignAuditReport)).toBe(false);
+    expect(bridge.reportDesignAudit({
+      ...report,
+      findings: [{ ...report.findings[0]!, target: undefined }],
+    } as unknown as DesignAuditReport)).toBe(false);
+
+    const reportId = bridge.listDesignAuditReports()[0]!.id;
+    expect(bridge.dismissDesignAuditFinding(reportId, "audit:hierarchy")).toBe(true);
+    expect(bridge.listDesignAuditReports()).toEqual([]);
+    expect(events).toEqual(["design_audit.reported", "design_audit.dismissed"]);
+  });
+
+  it("expires design advice as soon as its page revision changes", async () => {
+    document.body.innerHTML = `<main data-testid="hero">Checkout</main>`;
+    const target = document.querySelector<HTMLElement>("main")!;
+    setRect(target, { x: 100, y: 80, width: 500, height: 240 });
+    const bridge = installTestKit({
+      enabled: true,
+      page: { id: "design-audit-expiry" },
+      repairStorage: "memory",
+    });
+    const snapshot = bridge.snapshot();
+    const nodeId = snapshot.nodes.find((node) => node.testId === "hero")!.id;
+    expect(bridge.reportDesignAudit(designAuditReport(snapshot.revision, nodeId))).toBe(true);
+    const reportId = bridge.listDesignAuditReports()[0]!.id;
+    const events: string[] = [];
+    bridge.subscribe((event) => events.push(event.type));
+
+    const changed = bridge.waitForChange(snapshot.revision, 100);
+    target.textContent = "Checkout updated";
+
+    await expect(changed).resolves.toBeGreaterThan(snapshot.revision);
+    expect(bridge.listDesignAuditReports()).toEqual([]);
+    expect(events).toEqual(["context.revision", "design_audit.dismissed"]);
+    expect(bridge.dismissDesignAuditReport(reportId)).toBe(false);
+  });
+
   it("keeps bounded quality reports separate from the repair ledger", () => {
     document.body.innerHTML = `<button data-testid="pay">Pay now</button>`;
     const bridge = installTestKit({ enabled: true, page: { id: "quality" }, repairStorage: "memory", maxQualityReports: 1 });
@@ -471,3 +534,32 @@ describe("page context runtime", () => {
     expect(() => bridge.dispose()).not.toThrow();
   });
 });
+
+function designAuditReport(revision: number, nodeId: string): DesignAuditReport {
+  return {
+    protocol: "a3s.test.design-audit-report/1",
+    provenance: {
+      identity: { provider: "fixture", model: "design-review" },
+      observation_id: 7,
+      surface_revision: revision,
+      screenshot_sha256: `sha256:${"a".repeat(64)}`,
+      page_context_sha256: `sha256:${"b".repeat(64)}`,
+      width: 1280,
+      height: 720,
+      usage: { input_units: 10, output_units: 2, cost_microusd: 20 },
+      request_id: "audit-request-1",
+      authority: "advisory",
+    },
+    dimensions: ["visual_hierarchy", "spacing_rhythm"],
+    findings: [{
+      id: "audit:hierarchy",
+      dimension: "visual_hierarchy",
+      priority: "high",
+      summary: "The primary action lacks emphasis",
+      rationale: "Competing elements have equal visual weight",
+      recommendation: "Increase contrast and surrounding space",
+      confidence: 91,
+      target: { kind: "node", node_id: nodeId },
+    }],
+  };
+}

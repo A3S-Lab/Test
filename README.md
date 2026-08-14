@@ -186,12 +186,37 @@ digest-bound bytes in the version 2 HTTP envelope, and revalidates the page
 revision after provider inference. It never clicks. A unique hit may return a
 current `@cN` ref; zero or multiple hits remain image-bound advisory evidence.
 
-Both provider boundaries have stable, transport-neutral protocol identifiers
+Design-quality review is a separate advisory path. It combines one
+revision-bound PNG with the complete forensic Test Kit context, including
+semantic structure, geometry, component ownership, locators, and bounded
+computed styles. A deployment-owned provider may return typed observations
+about hierarchy, composition, spacing, typography, color use, consistency,
+interaction clarity, content clarity, and responsive composition:
+
+```bash
+a3s-test agent audit \
+  --session checkout \
+  --observation 1 \
+  --config examples/design-audit.acl \
+  --dimension visual-hierarchy,spacing-rhythm \
+  --json
+```
+
+Every response is re-admitted against the exact provider identity,
+observation, surface revision, screenshot and page-context digests, requested
+dimensions, current node geometry, deadline, and cost ceiling. It contains no
+test outcome and grants no action or repair authority. A compatible Test Kit
+shows admitted findings in a separate Design Audit store; only a human review,
+edit, or retarget can promote one into the existing single or batch repair
+flow.
+
+All provider boundaries have stable, transport-neutral protocol identifiers
 and generated JSON Schemas. Inspect the exact request, response, authority, and
 safety contract before implementing a local-process or remote-service adapter:
 
 ```bash
 a3s-test provider schema contract-generation
+a3s-test provider schema design-audit
 a3s-test provider schema llm
 a3s-test provider schema visual-grounding
 ```
@@ -200,8 +225,9 @@ The protocols describe data exchange only. They do not select a backend,
 bundle model weights, grant verdict authority, or authorize workspace repair.
 
 For deployment-owned inference services, `a3s-test-agent` also provides
-`HttpContractGenerationProvider` and `HttpVisualGroundingProvider`. Configure
-them with a typed `HttpProviderConfig` and an explicit provider/model identity:
+`HttpContractGenerationProvider`, `HttpDesignAuditProvider`, and
+`HttpVisualGroundingProvider`. Configure them with a typed
+`HttpProviderConfig` and an explicit provider/model identity:
 
 ```rust
 use std::sync::Arc;
@@ -405,7 +431,7 @@ tagged Rust package:
 
 ```bash
 cargo install --git https://github.com/A3S-Lab/Test \
-  --tag v0.14.0 --locked a3s-test-cli
+  --tag v0.15.0 --locked a3s-test-cli
 ```
 
 ### Hermetic runner image
@@ -832,6 +858,7 @@ opt-in. Inspect the exact protocol installed on the machine with:
 a3s-test capabilities --json
 a3s-test agent schema
 a3s-test provider schema contract-generation
+a3s-test provider schema design-audit
 a3s-test provider schema llm
 a3s-test provider schema visual-grounding
 a3s-test worker schema
@@ -862,7 +889,7 @@ crates/
 ├── a3s-test-driver-gui/  # Locked MCP adapter boundary for A3S CUA
 ├── a3s-test-driver-tui/  # Owned PTY/ConPTY and bounded VT semantics
 ├── a3s-test-driver-web/  # A3S Browser / agent-browser adapter
-└── a3s-test-agent/       # Embedded model loop, contract generation, and visual grounding
+└── a3s-test-agent/       # Embedded model loop, contract generation, grounding, and design audit
 
 skills/
 └── a3s-test/             # Portable Coding Agent Skill

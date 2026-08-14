@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 import { getPageContextBridge, installTestKit } from "./runtime";
 import { A3SReviewOverlay, A3STestBoundary, A3STestKit } from "./react";
 import { setRect } from "./test-setup";
-import type { QualityReport } from "./types";
+import type { DesignAuditReport, QualityReport } from "./types";
 
 function shadowQuery(selector: string): HTMLElement {
   const host = document.querySelector<HTMLElement>("[data-a3s-testkit-overlay]");
@@ -120,6 +120,62 @@ describe("React adapter and review overlay", () => {
     expect(bridge.listRepairs()).toHaveLength(1);
     expect(bridge.listRepairs()[0]).toMatchObject({
       instruction: "Add the required checkout action",
+      status: "queued",
+    });
+  });
+
+  it("requires human promotion before an advisory design suggestion enters repair", async () => {
+    render(<A3STestKit enabled page={{ id: "design-review" }} repairStorage="memory"><button data-testid="design-target">Complete purchase</button><A3SReviewOverlay enabled defaultOpen /></A3STestKit>);
+    await waitFor(() => expect(shadowQuery(".a3s-panel")).toBeTruthy());
+    const bridge = getPageContextBridge()!;
+    const target = document.querySelector<HTMLElement>("[data-testid=design-target]")!;
+    setRect(target, { x: 80, y: 120, width: 180, height: 44 });
+    const snapshot = bridge.snapshot();
+    const nodeId = snapshot.nodes.find((node) => node.testId === "design-target")!.id;
+    const report: DesignAuditReport = {
+      protocol: "a3s.test.design-audit-report/1",
+      provenance: {
+        identity: { provider: "fixture", model: "design-review" },
+        observation_id: 9,
+        surface_revision: snapshot.revision,
+        screenshot_sha256: `sha256:${"a".repeat(64)}`,
+        page_context_sha256: `sha256:${"b".repeat(64)}`,
+        width: 1280,
+        height: 720,
+        usage: { input_units: 12, output_units: 3, cost_microusd: 25 },
+        request_id: "design-review-1",
+        authority: "advisory",
+      },
+      dimensions: ["visual_hierarchy"],
+      findings: [{
+        id: "design:primary-action",
+        dimension: "visual_hierarchy",
+        priority: "high",
+        summary: "The primary action lacks emphasis",
+        rationale: "Nearby controls have the same visual weight",
+        recommendation: "Increase the primary action contrast and surrounding space",
+        confidence: 92,
+        target: { kind: "node", node_id: nodeId },
+      }],
+    };
+
+    expect(bridge.reportDesignAudit(report)).toBe(true);
+    await waitFor(() => expect(shadowQuery(".a3s-design-audit").textContent).toContain("The primary action lacks emphasis"));
+    expect(bridge.listRepairs()).toEqual([]);
+    fireEvent.click(shadowButton("Review suggestion"));
+    await waitFor(() => expect((shadowQuery("textarea") as HTMLTextAreaElement).value).toContain("Increase the primary action contrast"));
+    expect(bridge.listDesignAuditReports()).toHaveLength(1);
+    fireEvent.click(shadowButton("Cancel"));
+    expect(bridge.listDesignAuditReports()).toHaveLength(1);
+
+    fireEvent.click(shadowButton("Review suggestion"));
+    fireEvent.click(shadowButton("Send and auto-fix"));
+    await waitFor(() => expect(bridge.listDesignAuditReports()).toEqual([]));
+    expect(bridge.listRepairs()).toHaveLength(1);
+    expect(bridge.listRepairs()[0]).toMatchObject({
+      instruction: "Increase the primary action contrast and surrounding space",
+      intent: "change",
+      severity: "important",
       status: "queued",
     });
   });

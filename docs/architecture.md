@@ -278,6 +278,65 @@ DOM / AX / Test Kit semantic target ──success──> current semantic action
                   observation-bound advisory candidate
 ```
 
+### Advisory design-quality audit
+
+Design quality is not a browser fact. The browser and Test Kit can prove DOM
+structure, accessibility semantics, computed layout, geometry, visibility,
+component ownership, and selected computed styles. A model can interpret those
+facts and the screenshot, but its judgment about hierarchy, rhythm, clarity,
+or visual consistency remains an opinion. A3S Test therefore gives design
+audit its own authority boundary instead of turning subjective advice into a
+Surface Contract failure.
+
+Protocol `a3s.test.design-audit-provider/1` receives one regular PNG and one
+complete forensic `a3s.test.page-context/1` snapshot. Both are SHA-256-bound.
+The request also binds provider/model identity, agent observation ID, Test Kit
+surface revision, screenshot dimensions, selected typed dimensions, issue and
+deadline times, and a cost ceiling. The deployment owns inference transport,
+runtime, credentials, capacity, privacy policy, and model licensing; A3S Test
+does not bundle or select a model.
+
+`DesignAuditService` is the local admission authority. It rehashes the PNG and
+canonical typed page context, rejects incomplete or stale snapshots, and
+admits only bounded findings in requested dimensions. A target must be the
+whole page, a finite normalized screenshot region, or a currently visible
+node with admitted geometry. Identity, observation, revision, both digests,
+dimensions, request scope, cost, response size, unique IDs, and all text bounds
+must still match after inference.
+
+The admitted output uses `a3s.test.design-audit-report/1` and contains
+provenance, dimensions, and findings only. It intentionally has no outcome,
+verdict, expected value, proposed browser action, or repair instruction with
+execution authority. Provider priority maps only to advisory presentation;
+even a high-priority suggestion cannot become a blocking test result.
+
+```text
+latest observation + exact Test Kit revision
+                    |
+          verified PNG + forensic context
+                    |
+       deployment-owned design-audit provider
+                    |
+      local identity/digest/target/cost admission
+                    |
+       advisory Design Audit store in Test Kit
+                    |
+       human dismisses, edits, or retargets
+                    |
+       explicit draft/save/send authorization
+                    |
+          existing single/batch Repair Ledger
+```
+
+`a3s-test agent audit` implements this composition for a persistent Web
+session. It admits ACL and credentials before browser access, requires the
+latest observation and its exact Test Kit bindings, captures the PNG, requests
+a complete forensic page snapshot, invokes the provider, validates the page
+revision again, redacts configured secrets, and then attempts the optional
+review projection. Provider or revision failure invalidates the observation.
+Successful projection still does not authorize repair: the reviewer must take
+an explicit action in the embedded overlay.
+
 Quality projection has its own bounded best-effort budget outside deterministic
 step execution. A rejected, failed, cancelled, or hanging projection cannot
 turn a completed contract verdict into a failure, cancellation, or scenario

@@ -1,7 +1,9 @@
 import { markerRects, rectStyle } from "./review-utils";
+import { designAuditRepairTarget } from "./design-audit-candidates";
 import type { ReviewDraftItem } from "./review-storage";
 import type {
   PageContextBridge,
+  DesignAuditReportRecord,
   QualityReportRecord,
   SubmittedRepair,
 } from "./types";
@@ -12,6 +14,7 @@ export type ReviewMarkersProps = {
   drafts: ReviewDraftItem[];
   repairs: SubmittedRepair[];
   qualityReports: QualityReportRecord[];
+  designAuditReports: DesignAuditReportRecord[];
   onEditDraft(item: ReviewDraftItem): void;
 };
 
@@ -31,6 +34,10 @@ export function ReviewMarkers(props: ReviewMarkersProps) {
           }]
         : []
     ))),
+    ...props.designAuditReports.flatMap((report) => report.findings.flatMap((finding) => {
+      const target = designAuditRepairTarget(props.bridge, finding);
+      return target ? [{ id: finding.id, target, status: "design-audit" as const }] : [];
+    })),
   ];
   return <div className="a3s-markers">
     {markers.flatMap((marker) => markerRects(marker.target, props.bridge).map((rect, index) => {

@@ -3,8 +3,8 @@ use std::path::PathBuf;
 use async_trait::async_trait;
 
 use crate::{
-    ContractReport, DriverError, GroundingScreenshot, PageContextObservation, RepairAclProof,
-    RepairEvidenceBundle, RepairEvidenceRequest, RepairFinding, RepairHumanAction,
+    ContractReport, DesignAuditReport, DriverError, GroundingScreenshot, PageContextObservation,
+    RepairAclProof, RepairEvidenceBundle, RepairEvidenceRequest, RepairFinding, RepairHumanAction,
     RepairStatusEvent, StepOutput, Surface, SurfaceObservation, TestStep,
 };
 
@@ -81,6 +81,18 @@ pub trait DriverSession: Send {
     async fn project_quality_report(
         &mut self,
         _report: &ContractReport,
+    ) -> Result<bool, DriverError> {
+        Ok(false)
+    }
+
+    /// Project admitted design-quality advice into an optional human-review UI.
+    ///
+    /// The report is advisory, revision-bound, and carries no verdict or repair
+    /// authority. Drivers without a compatible embedded surface return
+    /// `Ok(false)`.
+    async fn project_design_audit_report(
+        &mut self,
+        _report: &DesignAuditReport,
     ) -> Result<bool, DriverError> {
         Ok(false)
     }
