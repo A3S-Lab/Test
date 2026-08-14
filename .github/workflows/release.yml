@@ -91,7 +91,10 @@ jobs:
         working-directory: skills
         run: |
           zip -X -r "${RUNNER_TEMP}/a3s-test.skill" a3s-test
-          sha256sum "${RUNNER_TEMP}/a3s-test.skill" > "${RUNNER_TEMP}/a3s-test.skill.sha256"
+          (
+            cd "${RUNNER_TEMP}"
+            sha256sum a3s-test.skill > a3s-test.skill.sha256
+          )
 
       - name: Upload Skill
         env:
