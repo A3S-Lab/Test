@@ -1,7 +1,11 @@
 #[cfg(any(unix, windows))]
 use std::ffi::OsString;
+#[cfg(windows)]
+use std::io::Write as _;
 #[cfg(any(unix, windows))]
 use std::path::{Path, PathBuf};
+#[cfg(windows)]
+use std::process::Stdio;
 #[cfg(any(unix, windows))]
 use std::time::Duration;
 
@@ -12,6 +16,13 @@ use serde_json::Value;
 use super::*;
 #[cfg(any(unix, windows))]
 use crate::TuiCommand;
+
+#[cfg(windows)]
+const CONPTY_FIXTURE_TEST: &str = "driver::tests::windows_conpty_fixture";
+#[cfg(windows)]
+const CONPTY_FIXTURE_MODE_ENV: &str = "A3S_TEST_TUI_CONPTY_FIXTURE_MODE";
+#[cfg(windows)]
+const CONPTY_FIXTURE_PID_ENV: &str = "A3S_TEST_TUI_CONPTY_FIXTURE_PID_FILE";
 
 #[cfg(unix)]
 fn shell_command(script: &str) -> TuiCommand {
@@ -155,34 +166,21 @@ async fn real_pty_supports_input_resize_modes_waits_and_recording() {
 #[tokio::test]
 async fn real_conpty_supports_input_and_reaps_its_job_tree() {
     let temp = tempfile::tempdir().expect("temp dir");
-    let fixture = temp
-        .path()
-        .join("a3s-test-tui-windows-descendant-fixture.cmd");
-    std::fs::write(&fixture, "@echo off\r\nping -n 31 127.0.0.1 >nul\r\n")
-        .expect("descendant fixture");
     let pid_file = temp.path().join("descendant.pid");
-    let script = format!(
-        "$child = Start-Process -FilePath {} -PassThru; \
-         [System.IO.File]::WriteAllText({}, [string]$child.Id); \
-         [Console]::WriteLine('ready'); \
-         $line = [Console]::ReadLine(); \
-         [Console]::WriteLine('input:' + $line)",
-        powershell_quote(&fixture),
-        powershell_quote(&pid_file),
+    let mut command =
+        TuiCommand::new(std::env::current_exe().expect("current ConPTY fixture executable"));
+    command.arguments = [CONPTY_FIXTURE_TEST, "--ignored", "--exact", "--nocapture"]
+        .into_iter()
+        .map(OsString::from)
+        .collect();
+    command.environment.insert(
+        OsString::from(CONPTY_FIXTURE_MODE_ENV),
+        OsString::from("parent"),
     );
-    let powershell = PathBuf::from(std::env::var_os("SystemRoot").expect("SystemRoot"))
-        .join("System32/WindowsPowerShell/v1.0/powershell.exe");
-    let mut command = TuiCommand::new(powershell);
-    command.arguments = [
-        "-NoLogo",
-        "-NoProfile",
-        "-NonInteractive",
-        "-Command",
-        &script,
-    ]
-    .into_iter()
-    .map(OsString::from)
-    .collect();
+    command.environment.insert(
+        OsString::from(CONPTY_FIXTURE_PID_ENV),
+        pid_file.clone().into_os_string(),
+    );
     let mut session = open_session(command, temp.path().join("artifacts")).await;
 
     wait_text(session.as_mut(), "ready").await;
@@ -220,6 +218,45 @@ async fn real_conpty_supports_input_and_reaps_its_job_tree() {
         stopped,
         "Windows Job descendant {descendant} survived terminal close"
     );
+}
+
+#[cfg(windows)]
+#[test]
+#[ignore = "helper process for the real ConPTY lifecycle test"]
+#[allow(
+    clippy::zombie_processes,
+    reason = "the fixture descendant must remain alive until the owning ConPTY Job closes"
+)]
+fn windows_conpty_fixture() {
+    let mode = std::env::var(CONPTY_FIXTURE_MODE_ENV).expect("ConPTY fixture mode");
+    if mode == "leaf" {
+        std::thread::sleep(Duration::from_secs(30));
+        return;
+    }
+    assert_eq!(mode, "parent", "unsupported ConPTY fixture mode");
+    let pid_file = std::env::var_os(CONPTY_FIXTURE_PID_ENV)
+        .map(PathBuf::from)
+        .expect("ConPTY fixture descendant PID file");
+    let child = std::process::Command::new(
+        std::env::current_exe().expect("current ConPTY descendant executable"),
+    )
+    .args([CONPTY_FIXTURE_TEST, "--ignored", "--exact"])
+    .env(CONPTY_FIXTURE_MODE_ENV, "leaf")
+    .stdin(Stdio::null())
+    .stdout(Stdio::null())
+    .stderr(Stdio::null())
+    .spawn()
+    .expect("spawn ConPTY descendant fixture");
+    std::fs::write(pid_file, child.id().to_string()).expect("publish ConPTY descendant PID");
+
+    println!("ready");
+    std::io::stdout().flush().expect("flush ConPTY readiness");
+    let mut line = String::new();
+    std::io::stdin()
+        .read_line(&mut line)
+        .expect("read ConPTY input");
+    println!("input:{}", line.trim_end_matches(&['\r', '\n'][..]));
+    std::io::stdout().flush().expect("flush ConPTY input echo");
 }
 
 #[cfg(unix)]
@@ -295,11 +332,6 @@ async fn drop_terminates_the_exact_owned_process_group() {
 #[cfg(unix)]
 fn shell_quote(path: &Path) -> String {
     format!("'{}'", path.display().to_string().replace('\'', "'\\''"))
-}
-
-#[cfg(windows)]
-fn powershell_quote(path: &Path) -> String {
-    format!("'{}'", path.display().to_string().replace('\'', "''"))
 }
 
 #[cfg(any(unix, windows))]
