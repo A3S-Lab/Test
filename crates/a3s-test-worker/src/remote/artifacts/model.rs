@@ -105,6 +105,32 @@ pub struct RemoteArtifactDescriptor {
     pub limits: RemoteArtifactLimits,
 }
 
+impl RemoteArtifactDescriptor {
+    pub fn validate(&self) -> Result<(), RemoteWorkerError> {
+        if self.protocol != REMOTE_ARTIFACT_PROTOCOL {
+            return Err(artifact_error(
+                "test.worker.artifact.protocol_unsupported",
+                format!("unsupported remote artifact protocol {:?}", self.protocol),
+            ));
+        }
+        validate_token(&self.worker.instance_id, "artifact worker instance ID")?;
+        validate_digest(&self.worker.image_digest, "artifact worker image digest")?;
+        validate_digest(&self.inventory_digest, "artifact inventory digest")?;
+        self.retention.validate()?;
+        if !(1..=MAX_REPORT_PAGE_SIZE).contains(&self.limits.max_report_page_size)
+            || !(1..=MAX_ARTIFACT_PAGE_SIZE).contains(&self.limits.max_artifact_page_size)
+            || !(1..=MAX_ARTIFACT_CHUNK_BYTES).contains(&self.limits.max_chunk_bytes)
+            || !(1..=MAX_ARTIFACTS_PER_JOB).contains(&self.limits.max_artifacts_per_job)
+        {
+            return Err(artifact_error(
+                "test.worker.artifact.limits_invalid",
+                "artifact service limits are outside the reviewed bounds",
+            ));
+        }
+        Ok(())
+    }
+}
+
 impl RemoteWorkerDescriptor {
     #[must_use]
     pub fn artifact_descriptor(

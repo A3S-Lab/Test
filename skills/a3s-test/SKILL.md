@@ -1,6 +1,6 @@
 ---
 name: a3s-test
-description: Drive interactive agentic Web or GUI tests and author deterministic Web, GUI, or TUI A3S Test ACL suites. Use when a coding agent needs to explore an application, reproduce a UI bug, make observe-decide-act testing decisions, capture bounded evidence, turn a discovered workflow into regression coverage, test a terminal application, or diagnose a3s-test JSON result.
+description: Drive interactive agentic Web or GUI tests and author or distribute deterministic Web, GUI, or TUI A3S Test ACL suites. Use when a coding agent needs to explore an application, reproduce a UI bug, make observe-decide-act testing decisions, capture bounded evidence, turn a discovered workflow into regression coverage, test a terminal application, coordinate remote Web/TUI workers, or diagnose a3s-test JSON result.
 ---
 
 # A3S Test
@@ -18,6 +18,10 @@ surface sessions, typed actions, assertions, evidence, reports, and cleanup.
   session.
 - Use an **ACL suite** for a known Web, GUI, or TUI regression flow that should
   run deterministically in local development and CI.
+- Use a **distributed ACL config** only after the suite is deterministic and
+  the deployment provides authenticated, image-bound Web/TUI workers. Read
+  [references/distributed-acl.md](references/distributed-acl.md) before
+  planning or running remote shards.
 
 Do not force an uncertain workflow into ACL before observing the product.
 After an agent session proves a stable path, promote the smallest useful path
@@ -196,6 +200,17 @@ the human to reconcile `needs_input` before claiming another finding.
 6. Distinguish a product failure, a test-specification failure, and an
    infrastructure failure before editing code.
 
+For an admitted remote deployment, inspect the immutable plan before running:
+
+```bash
+a3s-test distributed plan distributed.acl --compact
+a3s-test distributed run distributed.acl --json
+```
+
+Do not copy Authorization values into ACL or logs. A quarantine is not a
+generic retry or ignore list: it requires owner/reason/issue/expiry and can
+suppress only an explicit assertion or proven Surface Contract mismatch.
+
 ## Evidence
 
 Capture the smallest evidence set that proves the result:
@@ -249,6 +264,10 @@ values, network mocks, console fixtures, or committed evidence.
   CUA, and TUI processes use kill-on-close Job ownership; Unix boundaries use
   EOF watchdogs so an uncatchable host exit still terminates their process
   groups.
+- For distributed runs, the first `Ctrl+C` sends cancellation for each exact
+  submitted job/dispatch pair and records cancelled scenario observations.
+  Never stop worker processes by name or treat a lost lease as a product
+  failure.
 - Do not add arbitrary sleeps. Use typed observations, waits, and assertions.
 
 ## Diagnosis
@@ -257,7 +276,9 @@ Use `test.spec.*` errors to repair ACL admission. Use
 `test.driver.web.*` errors for browser compatibility, protocol, or lifecycle
 problems. Use `test.assert.*` errors to compare expected product state with
 evidence. Use `test.run.*` errors for deterministic-run cancellation,
-deadlines, and cleanup. Agent-session metadata and events live under
+deadlines, and cleanup. Use `test.distributed.*` and `test.worker.*` shard
+issues for coordinator, binding, transport, report, or worker failures; these
+must not be hidden by quarantine. Agent-session metadata and events live under
 `.a3s-test/agent-sessions/<session>/`.
 Use `test.session.*` for surface-neutral MCP session admission and lifecycle
 errors. Use `test.driver.gui.*` for CUA compatibility, permission, grounding,

@@ -223,7 +223,7 @@ const remoteSchema = await executeJson("remote-worker-schema", [
   "schema",
   "--compact",
 ]);
-assert(remoteSchema.protocol === "a3s.test.remote-worker/1", "remote protocol mismatch");
+assert(remoteSchema.protocol === "a3s.test.remote-worker/2", "remote protocol mismatch");
 assert(
   remoteSchema.invariants.transport_authentication_required === true,
   "remote worker must require transport authentication",

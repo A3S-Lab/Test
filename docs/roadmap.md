@@ -125,7 +125,10 @@
       digest-bound paginated evidence access, chunked reads, deployment-owned
       two-tier retention, idle-time garbage collection, durable pruning
       recovery, and corruption/link/reparse fail-closed checks
-- [ ] Sharding, quarantine, flake accounting, and historical comparison
+- [x] Deterministic surface-aware sharding, exact scenario dispatch, bounded
+      concurrent coordination, accountable quarantine, flake accounting,
+      cross-revision historical comparison, digest-bound report verification,
+      and atomic retained analyses
 - [ ] GUI worker pools with explicit host permissions
 
 ## M6: Embedded Web Test Kit

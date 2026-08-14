@@ -40,6 +40,7 @@ fn submission(now_ms: u64) -> RemoteJobSubmission {
         lease_expires_at_ms: now_ms + 30_000,
         max_parallel_scenarios: 2,
         required_surfaces: vec![WorkerSurface::Tui],
+        scenario_ids: vec!["terminal".to_string()],
         input: RemoteInputBundle {
             manifest: "suite.acl".to_string(),
             files: vec![RemoteInputFile::from_bytes(
@@ -67,6 +68,7 @@ fn remote_protocol_schema_is_strict_and_states_execution_boundaries() {
     assert!(protocol.invariants.request_cannot_select_executables);
     assert!(protocol.invariants.deadline_and_lease_required);
     assert!(protocol.invariants.idempotent_dispatch_required);
+    assert!(protocol.invariants.scenario_selection_digest_bound);
     assert!(!protocol.invariants.transports_artifacts);
 
     let request_schema = serde_json::to_value(protocol.request_schema).expect("request schema");
@@ -105,6 +107,7 @@ fn valid_submission_is_digest_bound_and_decodes_a_canonical_bundle() {
     assert!(admitted.files()[0].bytes().starts_with(b"suite"));
     assert!(admitted.request_digest().starts_with("sha256:"));
     assert_eq!(admitted.required_surfaces(), &[WorkerSurface::Tui]);
+    assert_eq!(admitted.scenario_ids(), &["terminal"]);
 }
 
 #[test]
@@ -209,6 +212,52 @@ fn submission_rejects_unavailable_or_noncanonical_surface_requirements() {
             .expect_err("parallelism over inventory")
             .code(),
         "test.worker.remote.parallelism_unavailable"
+    );
+}
+
+#[test]
+fn submission_rejects_empty_duplicate_or_noncanonical_scenario_selection() {
+    let now_ms = 1_800_000_000_000;
+    let descriptor = descriptor();
+
+    let mut empty = submission(now_ms);
+    empty.scenario_ids.clear();
+    assert_eq!(
+        empty
+            .admit(now_ms, &descriptor)
+            .expect_err("empty scenario selection")
+            .code(),
+        "test.worker.remote.scenario_selection_invalid"
+    );
+
+    let mut duplicate = submission(now_ms);
+    duplicate.scenario_ids = vec!["terminal".to_string(), "terminal".to_string()];
+    assert_eq!(
+        duplicate
+            .admit(now_ms, &descriptor)
+            .expect_err("duplicate scenario selection")
+            .code(),
+        "test.worker.remote.scenario_selection_invalid"
+    );
+
+    let mut unsorted = submission(now_ms);
+    unsorted.scenario_ids = vec!["zeta".to_string(), "alpha".to_string()];
+    assert_eq!(
+        unsorted
+            .admit(now_ms, &descriptor)
+            .expect_err("non-canonical scenario selection")
+            .code(),
+        "test.worker.remote.scenario_selection_invalid"
+    );
+
+    let mut unsafe_id = submission(now_ms);
+    unsafe_id.scenario_ids = vec!["../outside".to_string()];
+    assert_eq!(
+        unsafe_id
+            .admit(now_ms, &descriptor)
+            .expect_err("unsafe scenario identifier")
+            .code(),
+        "test.worker.remote.scenario_selection_invalid"
     );
 }
 

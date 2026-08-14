@@ -761,7 +761,7 @@ protocol does not authorize remote dispatch by itself.
 
 ## Remote worker protocol
 
-Remote execution uses protocol `a3s.test.remote-worker/1`. Discover its exact
+Remote execution uses protocol `a3s.test.remote-worker/2`. Discover its exact
 JSON Schema 2020-12 request, response, descriptor, and invariants with:
 
 ```bash
@@ -788,6 +788,7 @@ Every submission binds all of the following:
   milliseconds;
 - admitted scenario concurrency and a sorted, unique set of required
   surfaces;
+- a non-empty, sorted, unique set of exact scenario IDs;
 - a sorted inline input bundle containing the ACL manifest.
 
 Input paths are portable relative paths with no empty, current-directory,
@@ -849,7 +850,9 @@ Terminal snapshots may be `passed`, `failed`, `timed_out`, `cancelled`, or
 `interrupted`. A completed runner result includes scenario counts and a report
 descriptor containing media type, byte length, and SHA-256. The report and
 surface artifacts stay in the private job directory. This execution protocol
-does not transport those bytes or define scheduler-side sharding.
+does not transport those bytes or choose scheduler-side sharding. Version 2
+only admits and digest-binds the exact scenario selection supplied by a
+coordinator.
 
 ## Remote artifact protocol
 
@@ -917,6 +920,121 @@ the same loopback listener and under the same exact Authorization check,
 content-type rule, body deadline, request-size limit, concurrency bound, and
 `no-store` response policy as `POST /v1/worker`. TLS termination and external
 client identity remain deployment responsibilities.
+
+## Distributed-run configuration
+
+`a3s-test distributed plan <path>` and `a3s-test distributed run <path>` read a
+separate ACL document with exactly one labeled `distributed_run` block.
+`a3s-test distributed schema` prints strict JSON Schemas for protocol
+`a3s.test.distributed-run/1` plan requests, plans, analysis requests, and
+analyses.
+
+```acl
+distributed_run "ci" {
+  input_root = "."
+  manifest = "tests/e2e/smoke.acl"
+  additional_inputs = ["tests/fixtures/account.json"]
+  history_root = ".a3s-test/distributed/ci"
+  history_window = 20
+  history_max_runs = 100
+  history_max_age_ms = 7776000000
+  job_timeout_ms = 600000
+  lease_ms = 60000
+  poll_interval_ms = 250
+  http_timeout_ms = 30000
+
+  worker "runner-west" {
+    endpoint = "https://runner-west.example.test"
+    image_digest = "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    inventory_digest = "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+    authorization_env = "A3S_TEST_WORKER_AUTHORIZATION_WEST"
+    max_parallel_scenarios = 4
+  }
+
+  quarantine "known-checkout-race" {
+    reason = "Known checkout state race"
+    owner = "checkout-team"
+    issue = "https://issues.example.test/123"
+    expires_at_ms = 4102444800000
+  }
+}
+```
+
+The root attributes are:
+
+- `manifest` is required and is relative to `input_root`;
+- `input_root` defaults to `.` relative to the config directory;
+- `additional_inputs` defaults to an empty string list;
+- `history_root` defaults to `.a3s-test/distributed/<run-label>` relative to
+  the config directory;
+- `history_window` defaults to 20 and is limited to 1 through 100;
+- `history_max_runs` defaults to 100 and is limited to 1 through 200;
+- `history_max_age_ms` defaults to 90 days and must be at least one second;
+- `job_timeout_ms` defaults to ten minutes and is limited to one second
+  through 24 hours;
+- `lease_ms` defaults to one minute, is limited to one second through one
+  hour, and cannot exceed the job timeout;
+- `poll_interval_ms` defaults to 250 and is limited to 10 through 60,000;
+- `http_timeout_ms` defaults to 30 seconds and is limited to 1 millisecond
+  through five minutes.
+
+The config file must be a non-empty regular non-link file no larger than 1
+MiB. Every path is relative, contained, and traversal-free. Input preparation
+automatically includes the suite manifest, upload sources, referenced Surface
+Contracts, their provenance files, and `additional_inputs`. It admits at most
+1,024 non-empty regular files, 16 MiB per file, and 32 MiB decoded total. Each
+path component rejects symbolic links and Windows reparse points. The suite
+digest binds the manifest path and sorted remote path/SHA-256 pairs, not local
+absolute paths.
+
+A config requires 1 through 64 unique `worker` blocks. `endpoint` must be an
+HTTPS origin or an explicit loopback HTTP origin with no credentials, path,
+query, or fragment. `image_digest` is required. `inventory_digest` is an
+optional exact pin; an omitted pin still becomes exact after live inspection
+and is bound into the plan. `authorization_env` is required, must begin with
+`A3S_TEST_WORKER_AUTHORIZATION_`, and may contain only uppercase ASCII letters,
+digits, and underscores. Its value is read as the complete Authorization
+header, never serialized. `max_parallel_scenarios` defaults to 1, is limited
+to 1 through 64, and cannot exceed the inspected inventory.
+
+Each optional `quarantine` label is an exact scenario ID. `reason`, `owner`,
+`issue`, and a future Unix-millisecond `expires_at_ms` are all required;
+duplicate, unknown, or expired targets reject planning. Admission is frozen at
+run start and bound by the plan digest. A quarantine changes disposition only
+for `test.assert.*`, `test.contract.mismatch`, or
+`test.contract.state_mismatch`. It never suppresses driver, cleanup,
+inconclusive-contract, transport, report, timeout, cancellation, interruption,
+or other infrastructure failures. A passing quarantined scenario is reported
+as `quarantined_pass` so stale entries remain visible.
+
+Planning concurrently inspects both remote endpoints and requires exact
+worker/artifact identity, image, and inventory agreement. Scenarios are sorted
+by scarce eligible surface, descending duration estimate, and ID. Duration is
+the median of up to 20 recent passed or test-failed observations for the exact
+suite digest, or the scenario timeout when no sample exists. Stable lane
+scoring assigns every scenario exactly once and emits one shard per used
+worker. The plan digest covers all bindings and quarantines.
+
+Run dispatch validates each submission locally against the inspected worker
+limits before transport. Submissions are idempotent, concurrently bounded,
+and use independent renewable-lease supervision. On interrupt, every known
+job/dispatch pair receives an exact cancel request. Terminal report bytes are
+read only through digest-bound artifact chunks and are revalidated against the
+summary, suite, run, counts, exact scenario IDs, and surface mapping before
+analysis.
+
+The private history root is exclusively locked. Runs and reports are written
+atomically, reject links/reparse points and conflicting IDs, and are pruned by
+count and age. Compact scheduling records are bounded to 2 MiB and analysis
+reports to 16 MiB, which covers the admitted 4,096-scenario protocol maximum.
+The latest retained run is the historical-change baseline, including across
+suite revisions. Flake counts and duration estimates include only the exact
+suite digest. Reports are stored as
+`<history_root>/reports/<run-id>.json`; compact scheduling history is stored
+under `<history_root>/runs/`.
+
+Distributed exit status is 0 for passed, 1 for required product failures, 2
+for infrastructure failure, 124 for timeout, and 130 for cancellation.
 
 ## Agent-run configuration
 

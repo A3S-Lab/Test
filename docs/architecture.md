@@ -369,7 +369,7 @@ remote execution authority.
 
 ## Remote worker boundary
 
-Protocol `a3s.test.remote-worker/1` adds transport-neutral dispatch without
+Protocol `a3s.test.remote-worker/2` adds transport-neutral dispatch without
 turning A3S Test into a remote shell. The scheduler binds every submission to
 one exact worker instance, an externally supplied image digest, and the digest
 of the worker's complete admitted capability inventory. A request contains no
@@ -393,6 +393,12 @@ cleanup is bounded. On restart, any last durable non-terminal state becomes
 `interrupted` rather than being guessed safe to resume. A terminal run stores
 the complete report privately and returns only its media type, byte length,
 SHA-256 digest, scenario counts, and run identity.
+
+Version 2 additionally requires a sorted, unique, digest-bound scenario ID
+selection. The worker admits the complete suite, filters it to that exact set,
+recomputes its surface requirements, and rejects any mismatch before opening a
+driver. Upload paths are rebound beneath the private materialized input root;
+every traversed component rejects symbolic links and Windows reparse points.
 
 Explicit service shutdown waits for bounded worker cleanup. Dropping the last
 service handle also cancels the worker loop so an embedding process cannot
@@ -462,6 +468,86 @@ rebuilds retained indexes from the actual files and rejects malformed or
 mismatched persisted descriptors. If an index cannot be made durable after a
 terminal event, the worker stops admitting new jobs until retention becomes
 healthy or the deployment repairs the state.
+
+## Distributed coordinator
+
+Protocol `a3s.test.distributed-run/1` is the coordinator-side plan and analysis
+contract. It does not add scheduler authority to Core and does not bypass the
+remote execution or artifact boundaries. The CLI projection is:
+
+```text
+a3s-test distributed schema
+a3s-test distributed plan <config.acl>
+a3s-test distributed run <config.acl>
+```
+
+The ACL config names a contained suite input root, bounded history root and
+retention window, job/lease/poll/HTTP deadlines, accountable quarantines, and
+one or more worker origins. Credentials are absent from ACL; each worker names
+an environment variable with the dedicated
+`A3S_TEST_WORKER_AUTHORIZATION_` prefix. HTTPS is required except for explicit
+loopback HTTP. Redirects and environment proxies are disabled.
+
+Preparation has four fail-closed stages:
+
+```text
+contained suite + referenced inputs
+                |
+                v
+execution/artifact inspection --exact identity/image/inventory--> eligible workers
+                |                                                   |
+bounded history + accountable quarantine                            |
+                |                                                   |
+                +---------------- deterministic planner <-----------+
+                                           |
+                                           v
+                                SHA-256-bound shard plan
+```
+
+The input digest binds the manifest path and the sorted path/digest mapping for
+the manifest, uploads, Surface Contracts, contract provenance, and explicit
+additional inputs. Directory and file traversal rejects links, reparse points,
+containment escapes, and size/count overflow. The history store is private,
+exclusively locked, link-safe, atomically published, and pruned by count and
+age.
+
+Planning is deterministic for the same admitted request. Scenarios needed by
+the fewest workers are placed first, longer exact-suite median durations break
+the next tie, and stable worker/lane scoring balances predicted completion.
+The scenario timeout is the fallback estimate. Each used worker receives one
+shard whose exact instance, image, inventory, concurrency, predicted duration,
+and sorted scenario IDs are part of the plan digest.
+
+Dispatches use immutable job and dispatch IDs. Submission is bounded in
+memory, but already-submitted shards execute concurrently. A dedicated lease
+supervisor remains independent of status polling so a slow status response
+cannot consume the claim renewal path. The first interrupt stops undispatched
+work, sends `cancel` for every exact submitted job, and produces cancelled
+scenario observations; a second interrupt retains the existing emergency exit
+semantics.
+
+The coordinator does not trust a terminal summary as the verdict. It reads the
+report only through the artifact protocol and verifies every repeated job,
+dispatch, request-digest, descriptor, offset, EOF, and Base64 binding. It then
+verifies the complete report SHA-256, byte length, media type, suite, run ID,
+aggregate status, scenario counts, exact scenario set, and surface mapping.
+Any missing or conflicting evidence becomes a shard infrastructure issue.
+
+Only `test.assert.*`, `test.contract.mismatch`, and
+`test.contract.state_mismatch` are classified as product test failures.
+Contract inconclusive results, driver errors, cleanup errors, missing reports,
+transport faults, timeouts, cancellation, and interruption remain
+non-quarantinable. Quarantine admission requires scenario, reason, owner,
+issue, and expiry, and is frozen at run start through the plan digest. This
+prevents a clock crossing during an admitted run from changing its verdict.
+
+Analysis stores one observation per planned scenario, its disposition,
+historical change, and bounded flake counts. The latest retained run is the
+change baseline even when suite bytes changed, allowing added, removed, fixed,
+and regressed scenario reporting. Duration estimation and flake accounting use
+only history with the exact current suite digest. This avoids mixing changed
+test semantics into reliability statistics while still showing suite-revision
+changes.
 
 CI builds the exact image and runs it with no external network, a read-only
 root, all Linux capabilities dropped, `no-new-privileges`, bounded memory,

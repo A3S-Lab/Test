@@ -119,6 +119,8 @@ pub struct RemoteJobSubmission {
     pub max_parallel_scenarios: u16,
     #[schemars(length(min = 1, max = 2))]
     pub required_surfaces: Vec<WorkerSurface>,
+    #[schemars(length(min = 1, max = 4096))]
+    pub scenario_ids: Vec<String>,
     pub input: RemoteInputBundle,
 }
 

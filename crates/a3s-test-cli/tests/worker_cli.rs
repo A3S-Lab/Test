@@ -435,6 +435,7 @@ fn authenticated_remote_http_host_executes_a_real_tui_job() {
         lease_expires_at_ms: now_ms + 20_000,
         max_parallel_scenarios: 1,
         required_surfaces: vec![WorkerSurface::Tui],
+        scenario_ids: vec!["terminal".to_string()],
         input: RemoteInputBundle {
             manifest: "suite.acl".to_string(),
             files: vec![RemoteInputFile::from_bytes("suite.acl", manifest)],

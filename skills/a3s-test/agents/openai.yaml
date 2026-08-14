@@ -1,4 +1,4 @@
 interface:
   display_name: "A3S Test"
-  short_description: "Test Web, GUI, and TUI workflows with evidence"
-  default_prompt: "Use $a3s-test to explore this application, capture bounded evidence, and promote the stable workflow to typed regression coverage."
+  short_description: "Test and distribute Web, GUI, and TUI workflows with evidence"
+  default_prompt: "Use $a3s-test to explore this application, capture bounded evidence, promote the stable workflow to typed regression coverage, and use authenticated distributed workers only when the project provides an admitted deployment config."

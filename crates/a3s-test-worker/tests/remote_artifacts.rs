@@ -128,7 +128,19 @@ fn artifact_requests_are_strict_and_report_queries_are_explicit() {
     unsorted.states.sort();
     unsorted.validate().expect("canonical states");
 
-    let artifact_descriptor = descriptor().artifact_descriptor(RemoteRetentionPolicy::default());
+    let mut artifact_descriptor =
+        descriptor().artifact_descriptor(RemoteRetentionPolicy::default());
+    artifact_descriptor
+        .validate()
+        .expect("valid artifact descriptor");
     assert_eq!(artifact_descriptor.protocol, REMOTE_ARTIFACT_PROTOCOL);
     assert_eq!(artifact_descriptor.worker, descriptor().identity);
+    artifact_descriptor.limits.max_chunk_bytes = 0;
+    assert_eq!(
+        artifact_descriptor
+            .validate()
+            .expect_err("invalid artifact limits")
+            .code(),
+        "test.worker.artifact.limits_invalid"
+    );
 }

@@ -29,6 +29,7 @@ mod action_schema;
 mod agent_host;
 mod agent_session;
 mod contract_workflow;
+mod distributed_command;
 mod gui_certification;
 mod mcp;
 mod mcp_web;
@@ -56,6 +57,8 @@ enum Commands {
     Capabilities(CapabilitiesArgs),
     /// Generate and explicitly review source-bound Expected Surface Contracts.
     Contract(contract_workflow::ContractArgs),
+    /// Plan and execute authenticated distributed test shards.
+    Distributed(distributed_command::DistributedArgs),
     /// Print the locked GUI platform and endpoint certification matrix.
     GuiCertification(gui_certification::GuiCertificationArgs),
     /// Exercise one real GUI profile and verify observation plus owned cleanup.
@@ -269,6 +272,7 @@ pub fn execute(cli: Cli) -> Pin<Box<dyn Future<Output = Result<ExitCode>>>> {
         Commands::Check(args) => Box::pin(check(args)),
         Commands::Capabilities(args) => Box::pin(capabilities(args)),
         Commands::Contract(args) => Box::pin(contract_workflow::execute(args)),
+        Commands::Distributed(args) => Box::pin(distributed_command::execute(args)),
         Commands::GuiCertification(args) => {
             Box::pin(async move { gui_certification::print_matrix(args) })
         }

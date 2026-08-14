@@ -59,6 +59,7 @@ pub struct RemoteExecutionJob {
     deadline_ms: u64,
     max_parallel_scenarios: u16,
     required_surfaces: Vec<WorkerSurface>,
+    scenario_ids: Vec<String>,
 }
 
 impl RemoteExecutionJob {
@@ -105,6 +106,11 @@ impl RemoteExecutionJob {
     #[must_use]
     pub fn required_surfaces(&self) -> &[WorkerSurface] {
         &self.required_surfaces
+    }
+
+    #[must_use]
+    pub fn scenario_ids(&self) -> &[String] {
+        &self.scenario_ids
     }
 }
 
@@ -679,6 +685,7 @@ fn execution_job(root: &Path, definition: &PersistedJobDefinition) -> RemoteExec
         deadline_ms: definition.deadline_ms,
         max_parallel_scenarios: definition.max_parallel_scenarios,
         required_surfaces: definition.required_surfaces.clone(),
+        scenario_ids: definition.scenario_ids.clone(),
     }
 }
 

@@ -112,7 +112,7 @@ RUN printf '%s\n' \
 LABEL org.opencontainers.image.version="${IMAGE_VERSION}" \
       org.opencontainers.image.revision="${SOURCE_REVISION}" \
       io.a3s.test.runner.capability-protocol="a3s.test.worker-capabilities/1" \
-      io.a3s.test.runner.remote-worker-protocol="a3s.test.remote-worker/1"
+      io.a3s.test.runner.remote-worker-protocol="a3s.test.remote-worker/2"
 
 COPY --from=rust-builder --chmod=0555 /output/a3s-test /usr/local/bin/a3s-test
 COPY --from=browser-cli /output/node_modules /opt/a3s-test-runner/node_modules

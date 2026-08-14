@@ -1,7 +1,9 @@
 //! Typed scheduling evidence and remote execution for A3S Test workers.
 
+mod distributed;
 mod remote;
 
+pub use distributed::*;
 pub use remote::*;
 
 use a3s_test_driver_tui::{TuiBackend, TuiCapabilities};

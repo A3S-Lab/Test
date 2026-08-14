@@ -405,7 +405,7 @@ tagged Rust package:
 
 ```bash
 cargo install --git https://github.com/A3S-Lab/Test \
-  --tag v0.12.0 --locked a3s-test-cli
+  --tag v0.13.0 --locked a3s-test-cli
 ```
 
 ### Hermetic runner image
@@ -447,7 +447,7 @@ TUI execution plus evidence and cleanup.
 ### Serve a remote worker
 
 Remote dispatch uses the separate, authenticated
-`a3s.test.remote-worker/1` protocol. Inspect the strict request, response, and
+`a3s.test.remote-worker/2` protocol. Inspect the strict request, response, and
 worker descriptor before integrating a scheduler. Report discovery and byte
 transport use the companion `a3s.test.remote-artifacts/1` protocol:
 
@@ -513,6 +513,67 @@ The authorization environment variable is consumed only by the reference
 host. It is explicitly removed from browser capability probes, Web driver
 commands, and TUI child processes before those deployment-owned programs are
 started.
+
+### Run a distributed suite
+
+The coordinator uses ACL for deployment configuration and protocol
+`a3s.test.distributed-run/1` for immutable plans and verified analyses:
+
+```bash
+a3s-test distributed schema
+a3s-test distributed plan distributed.acl --compact
+a3s-test distributed run distributed.acl --json
+```
+
+```acl
+distributed_run "ci" {
+  input_root = "."
+  manifest = "tests/e2e/smoke.acl"
+  history_root = ".a3s-test/distributed/ci"
+  history_window = 20
+  job_timeout_ms = 600000
+  lease_ms = 60000
+
+  worker "runner-west" {
+    endpoint = "https://runner-west.example.test"
+    image_digest = "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    inventory_digest = "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+    authorization_env = "A3S_TEST_WORKER_AUTHORIZATION_WEST"
+    max_parallel_scenarios = 4
+  }
+
+  quarantine "known-checkout-race" {
+    reason = "Known checkout state race"
+    owner = "checkout-team"
+    issue = "https://issues.example.test/123"
+    expires_at_ms = 4102444800000
+  }
+}
+```
+
+Planning inspects execution and artifact endpoints concurrently, verifies the
+exact instance, image, and inventory bindings, then assigns scarce surfaces
+first. Within that constraint it uses recent median durations and deterministic
+lane balancing. Every scenario appears exactly once, and the complete plan is
+SHA-256-bound. Uploads, referenced Surface Contracts, provenance files, and
+explicit additional inputs are included automatically in one contained,
+link-safe bundle.
+
+Run dispatch is concurrent and idempotent. Lease renewal is independent of
+status polling, and the first interrupt cancels each exact submitted job. A
+terminal report is accepted only after its job, dispatch, request digest,
+suite, run ID, media type, byte length, SHA-256, counts, scenario set, and
+surface bindings all match. Report bytes are fetched only through bounded
+digest-bound artifact chunks.
+
+Quarantine is accountable and frozen into the admitted plan: every entry
+requires a reason, owner, issue, and future expiry. It can suppress only an
+explicit assertion failure or a proven Surface Contract mismatch. Driver,
+cleanup, timeout, cancellation, interruption, and infrastructure failures are
+always required. Reports retain dispositions, flake counts, the latest-run
+comparison, removed scenarios, and shard issues under the configured history
+root. Flake accounting uses the exact suite digest; change comparison also
+works across suite revisions within the same distributed-run history root.
 
 ## Turn a proven path into a regression
 
@@ -739,7 +800,7 @@ adapters outside the framework-independent core.
 
 ```text
 crates/
-├── a3s-test-cli/         # Agent sessions, deterministic runs, MCP, and CI
+├── a3s-test-cli/         # Sessions, local/distributed runs, MCP, and CI
 ├── a3s-test-core/        # Typed suites, actions, observations, and surface contracts
 ├── a3s-test-runner/      # Deadlines, cancellation, retries, and reports
 ├── a3s-test-session/     # Surface-neutral long-lived session application layer
@@ -763,7 +824,7 @@ Process exit codes are stable:
 | ---: | --- |
 | `0` | Passed |
 | `1` | Test or action failed |
-| `2` | Invalid invocation or configuration |
+| `2` | Invalid invocation/configuration or distributed infrastructure failure |
 | `124` | Timed out |
 | `130` | Cancelled |
 
@@ -779,8 +840,7 @@ boundaries and TUI process trees owned by the current process.
   MCP tools, action provenance, policy, and embedded LLM budgets.
 - [ACL specification](docs/specification.md) — the complete typed manifest
   grammar and validation rules.
-- [Roadmap](docs/roadmap.md) — shipped milestones and planned distributed
-  execution work.
+- [Roadmap](docs/roadmap.md) — shipped milestones and remaining platform work.
 - [Changelog](CHANGELOG.md) — release-by-release behavior and safety changes.
 
 ## Development

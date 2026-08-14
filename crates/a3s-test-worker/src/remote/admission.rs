@@ -42,6 +42,7 @@ pub struct AdmittedRemoteJob {
     lease_expires_at_ms: u64,
     max_parallel_scenarios: u16,
     required_surfaces: Vec<WorkerSurface>,
+    scenario_ids: Vec<String>,
 }
 
 impl AdmittedRemoteJob {
@@ -88,6 +89,11 @@ impl AdmittedRemoteJob {
     #[must_use]
     pub fn required_surfaces(&self) -> &[WorkerSurface] {
         &self.required_surfaces
+    }
+
+    #[must_use]
+    pub fn scenario_ids(&self) -> &[String] {
+        &self.scenario_ids
     }
 }
 
@@ -233,6 +239,7 @@ pub(super) fn admit_submission(
         lease_expires_at_ms: submission.lease_expires_at_ms,
         max_parallel_scenarios: submission.max_parallel_scenarios,
         required_surfaces: submission.required_surfaces.clone(),
+        scenario_ids: submission.scenario_ids.clone(),
     })
 }
 
@@ -333,6 +340,25 @@ fn validate_requirements(
         return Err(remote_error(
             "test.worker.remote.surface_unavailable",
             "job requires a surface absent from the admitted worker inventory",
+        ));
+    }
+    if submission.scenario_ids.is_empty()
+        || submission.scenario_ids.len() > 4_096
+        || submission
+            .scenario_ids
+            .windows(2)
+            .any(|pair| pair[0] >= pair[1])
+        || submission.scenario_ids.iter().any(|scenario_id| {
+            scenario_id.len() > 64
+                || scenario_id.is_empty()
+                || !scenario_id
+                    .bytes()
+                    .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_'))
+        })
+    {
+        return Err(remote_error(
+            "test.worker.remote.scenario_selection_invalid",
+            "scenario IDs must be non-empty, unique, canonically ordered, and portable",
         ));
     }
     Ok(())

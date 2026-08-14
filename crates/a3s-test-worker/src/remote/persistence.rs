@@ -34,6 +34,8 @@ pub(super) struct PersistedJobDefinition {
     pub deadline_ms: u64,
     pub max_parallel_scenarios: u16,
     pub required_surfaces: Vec<WorkerSurface>,
+    #[serde(default)]
+    pub scenario_ids: Vec<String>,
 }
 
 impl PersistedJobDefinition {
@@ -47,6 +49,7 @@ impl PersistedJobDefinition {
             deadline_ms: job.deadline_ms(),
             max_parallel_scenarios: job.max_parallel_scenarios(),
             required_surfaces: job.required_surfaces().to_vec(),
+            scenario_ids: job.scenario_ids().to_vec(),
         }
     }
 

@@ -1,5 +1,58 @@
 # Changelog
 
+## 0.13.0 - 2026-08-14
+
+### Added
+
+- Added protocol `a3s.test.distributed-run/1` with generated strict schemas for
+  deterministic plans, shard bindings, run analyses, accountable quarantine,
+  flake summaries, historical changes, and shard issues.
+- Added `a3s-test distributed schema`, `distributed plan <config.acl>`, and
+  `distributed run <config.acl>`. ACL configuration owns contained inputs,
+  worker identity and image pins, environment-supplied authorization, bounded
+  deadlines, history retention, and explicit quarantine accountability.
+- Added deterministic surface-aware sharding. Scarce worker surfaces are
+  scheduled first, recent exact-suite median durations replace timeout
+  fallbacks when available, and stable lane balancing assigns every scenario
+  exactly once.
+- Added bounded concurrent dispatch, independent renewable-lease supervision,
+  exact remote cancellation on interrupt, strict terminal report retrieval,
+  atomic local report/history persistence, count/age retention, and exclusive
+  history-root locking.
+- Added real multi-worker HTTP integration coverage for planning, exact
+  dispatch, quarantine, a second historical run, fixed/flake detection, and
+  first-interrupt exit 130 with a retained cancelled remote job.
+
+### Safety
+
+- Advanced the execution protocol to `a3s.test.remote-worker/2`. Every
+  submission now carries a non-empty, sorted, unique scenario ID set that is
+  part of the immutable request digest. The worker filters the admitted suite
+  to exactly that set and rejects missing, duplicate, or surface-drifted
+  selections before driver startup.
+- The coordinator accepts a report only after verifying its job, dispatch,
+  immutable request digest, artifact descriptor, chunk offsets and EOF,
+  canonical Base64, complete SHA-256, size, media type, suite, run ID, status,
+  counts, exact scenario set, and surface mapping.
+- Quarantine can suppress only explicit `test.assert.*` failures and proven
+  Surface Contract mismatches. Driver, cleanup, inconclusive-contract,
+  transport, report, timeout, cancellation, interruption, and other
+  infrastructure failures remain required.
+- Distributed config, suite inputs, contract provenance, history, report
+  writes, pruning, and remote upload rebinding reject symbolic links, Windows
+  reparse points, containment escapes, unsafe replacement, oversized data, and
+  conflicting immutable IDs. HTTP requires HTTPS except for loopback, disables
+  redirects and environment proxies, and never serializes credentials.
+
+### Changed
+
+- Historical change comparison now uses the latest retained run, including
+  across suite revisions. Flake accounting and scheduling durations remain
+  restricted to the exact suite digest so changed test semantics do not enter
+  reliability statistics.
+- Raised the Rust workspace release to `0.13.0`. The unchanged Test Kit remains
+  `0.2.0`.
+
 ## 0.12.0 - 2026-08-14
 
 ### Added
