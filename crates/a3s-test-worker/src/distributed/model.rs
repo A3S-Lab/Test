@@ -26,6 +26,7 @@ pub struct DistributedWorkerSpec {
     pub inventory_digest: String,
     pub max_parallel_scenarios: u16,
     pub surfaces: Vec<WorkerSurface>,
+    pub host_permission_digest: Option<String>,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
@@ -88,6 +89,8 @@ pub struct DistributedShard {
     pub worker_instance: String,
     pub required_image_digest: String,
     pub required_inventory_digest: String,
+    pub required_surfaces: Vec<WorkerSurface>,
+    pub required_host_permission_digest: Option<String>,
     pub max_parallel_scenarios: u16,
     pub predicted_duration_ms: u64,
     pub scenario_ids: Vec<String>,

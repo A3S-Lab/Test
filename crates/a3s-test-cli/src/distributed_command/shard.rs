@@ -119,6 +119,11 @@ async fn execute_inner(
         .collect::<Result<BTreeSet<_>, _>>()?
         .into_iter()
         .collect::<Vec<_>>();
+    if required_surfaces != shard.required_surfaces {
+        return Err(CallFailure::protocol(
+            "planned shard surfaces do not match the selected suite scenarios",
+        ));
+    }
 
     let submission_slot = tokio::select! {
         biased;
@@ -145,6 +150,7 @@ async fn execute_inner(
         lease_expires_at_ms,
         max_parallel_scenarios: shard.max_parallel_scenarios,
         required_surfaces,
+        required_host_permission_digest: shard.required_host_permission_digest.clone(),
         scenario_ids: shard.scenario_ids.clone(),
         input: (*input).clone(),
     };

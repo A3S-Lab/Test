@@ -13,6 +13,8 @@ const IMAGE_DIGEST: &str =
     "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
 const INVENTORY_DIGEST: &str =
     "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc";
+const HOST_PERMISSION_DIGEST: &str =
+    "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd";
 
 fn worker(instance_id: &str, surfaces: Vec<WorkerSurface>) -> DistributedWorkerSpec {
     DistributedWorkerSpec {
@@ -20,6 +22,9 @@ fn worker(instance_id: &str, surfaces: Vec<WorkerSurface>) -> DistributedWorkerS
         image_digest: IMAGE_DIGEST.to_string(),
         inventory_digest: INVENTORY_DIGEST.to_string(),
         max_parallel_scenarios: 1,
+        host_permission_digest: surfaces
+            .contains(&WorkerSurface::Gui)
+            .then(|| HOST_PERMISSION_DIGEST.to_string()),
         surfaces,
     }
 }
@@ -62,6 +67,8 @@ fn distributed_protocol_schema_states_determinism_and_quarantine_boundaries() {
     assert_eq!(protocol.protocol, DISTRIBUTED_RUN_PROTOCOL);
     assert!(protocol.invariants.deterministic_sharding);
     assert!(protocol.invariants.exact_worker_identity_binding);
+    assert!(protocol.invariants.exact_host_permission_binding);
+    assert!(protocol.invariants.exclusive_gui_workers);
     assert!(protocol.invariants.exact_scenario_selection);
     assert!(protocol.invariants.digest_bound_plan);
     assert!(protocol.invariants.accountable_quarantine);
@@ -74,6 +81,43 @@ fn distributed_protocol_schema_states_determinism_and_quarantine_boundaries() {
     let analysis = serde_json::to_value(protocol.analysis_schema).expect("analysis schema");
     assert_eq!(plan["additionalProperties"], false);
     assert_eq!(analysis["additionalProperties"], false);
+}
+
+#[test]
+fn planner_binds_gui_shards_to_one_exclusive_permission_grant() {
+    let request = DistributedPlanRequest {
+        plan_id: "plan-gui".to_string(),
+        suite: "desktop".to_string(),
+        suite_digest: SUITE_DIGEST.to_string(),
+        created_at_ms: 1_800_000_000_000,
+        scenarios: vec![scenario("editor", WorkerSurface::Gui, 30_000)],
+        workers: vec![worker("desktop-1", vec![WorkerSurface::Gui])],
+        history: Vec::new(),
+        quarantines: Vec::new(),
+    };
+    let plan = plan_distributed_run(request).expect("GUI plan");
+    assert_eq!(plan.shards.len(), 1);
+    assert_eq!(plan.shards[0].max_parallel_scenarios, 1);
+    assert_eq!(plan.shards[0].required_surfaces, [WorkerSurface::Gui]);
+    assert_eq!(
+        plan.shards[0].required_host_permission_digest.as_deref(),
+        Some(HOST_PERMISSION_DIGEST)
+    );
+
+    let mut invalid = worker("desktop-2", vec![WorkerSurface::Gui]);
+    invalid.max_parallel_scenarios = 2;
+    let request = DistributedPlanRequest {
+        plan_id: "plan-unsafe-gui".to_string(),
+        suite: "desktop".to_string(),
+        suite_digest: SUITE_DIGEST.to_string(),
+        created_at_ms: 1_800_000_000_000,
+        scenarios: vec![scenario("editor", WorkerSurface::Gui, 30_000)],
+        workers: vec![invalid],
+        history: Vec::new(),
+        quarantines: Vec::new(),
+    };
+    let error = plan_distributed_run(request).expect_err("concurrent GUI worker");
+    assert_eq!(error.code(), "test.distributed.worker_invalid");
 }
 
 #[test]

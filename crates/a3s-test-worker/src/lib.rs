@@ -1,9 +1,11 @@
 //! Typed scheduling evidence and remote execution for A3S Test workers.
 
 mod distributed;
+mod gui;
 mod remote;
 
 pub use distributed::*;
+pub use gui::*;
 pub use remote::*;
 
 use a3s_test_driver_tui::{TuiBackend, TuiCapabilities};
@@ -13,7 +15,7 @@ use semver::Version;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-pub const WORKER_CAPABILITY_PROTOCOL: &str = "a3s.test.worker-capabilities/1";
+pub const WORKER_CAPABILITY_PROTOCOL: &str = "a3s.test.worker-capabilities/2";
 const MAX_PARALLEL_SCENARIOS: u16 = 64;
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
@@ -79,6 +81,7 @@ impl WorkerRuntime {
 #[serde(rename_all = "lowercase")]
 pub enum WorkerSurface {
     Web,
+    Gui,
     Tui,
 }
 
@@ -95,6 +98,9 @@ pub enum WorkerSurfaceCapability {
         execution: WebExecutionMode,
         browser: BrowserCapabilities,
     },
+    Gui {
+        desktop: Box<WorkerGuiCapability>,
+    },
     Tui {
         terminal: TuiCapabilities,
     },
@@ -105,6 +111,7 @@ impl WorkerSurfaceCapability {
     pub fn surface(&self) -> WorkerSurface {
         match self {
             Self::Web { .. } => WorkerSurface::Web,
+            Self::Gui { .. } => WorkerSurface::Gui,
             Self::Tui { .. } => WorkerSurface::Tui,
         }
     }
@@ -112,6 +119,7 @@ impl WorkerSurfaceCapability {
     fn validate(&self) -> Result<(), WorkerCapabilityError> {
         let result = match self {
             Self::Web { browser, .. } => browser.validate(),
+            Self::Gui { desktop } => return desktop.validate(),
             Self::Tui { terminal } => terminal.validate(),
         };
         result.map_err(|error| {
@@ -128,6 +136,7 @@ impl WorkerSurfaceCapability {
     fn surface_name(&self) -> &'static str {
         match self.surface() {
             WorkerSurface::Web => "Web",
+            WorkerSurface::Gui => "GUI",
             WorkerSurface::Tui => "TUI",
         }
     }
@@ -141,7 +150,7 @@ pub struct WorkerCapabilityInventory {
     pub runtime: WorkerRuntime,
     #[schemars(range(min = 1, max = 64))]
     pub max_parallel_scenarios: u16,
-    #[schemars(length(min = 1, max = 2))]
+    #[schemars(length(min = 1, max = 3))]
     pub surfaces: Vec<WorkerSurfaceCapability>,
 }
 
@@ -183,6 +192,17 @@ impl WorkerCapabilityInventory {
                 "worker inventory must contain at least one surface",
             ));
         }
+        if self.max_parallel_scenarios != 1
+            && self
+                .surfaces
+                .iter()
+                .any(|capability| capability.surface() == WorkerSurface::Gui)
+        {
+            return Err(inventory_error(
+                "test.worker.inventory.gui_parallelism_invalid",
+                "a GUI worker represents one exclusive desktop and must advertise exactly one parallel scenario",
+            ));
+        }
         for capability in &self.surfaces {
             if let WorkerSurfaceCapability::Tui { terminal } = capability {
                 let backend_matches_target = matches!(
@@ -196,6 +216,14 @@ impl WorkerCapabilityInventory {
                     return Err(inventory_error(
                         "test.worker.inventory.surface_target_mismatch",
                         "TUI backend does not match the worker operating system",
+                    ));
+                }
+            }
+            if let WorkerSurfaceCapability::Gui { desktop } = capability {
+                if desktop.application.operating_system() != self.runtime.operating_system {
+                    return Err(inventory_error(
+                        "test.worker.inventory.surface_target_mismatch",
+                        "GUI application identity does not match the worker operating system",
                     ));
                 }
             }
@@ -219,6 +247,16 @@ impl WorkerCapabilityInventory {
         }
         Ok(())
     }
+
+    #[must_use]
+    pub fn gui_capability(&self) -> Option<&WorkerGuiCapability> {
+        self.surfaces
+            .iter()
+            .find_map(|capability| match capability {
+                WorkerSurfaceCapability::Gui { desktop } => Some(desktop.as_ref()),
+                _ => None,
+            })
+    }
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
@@ -234,6 +272,9 @@ pub struct WorkerCapabilityInvariants {
     pub authorizes_execution: bool,
     pub web_executable_probe_required: bool,
     pub compiled_tui_projection_required: bool,
+    pub gui_host_probe_required: bool,
+    pub gui_host_permissions_explicit: bool,
+    pub gui_desktop_exclusive: bool,
     pub external_image_identity_required: bool,
 }
 
@@ -256,6 +297,9 @@ pub fn worker_capability_protocol_schema() -> WorkerCapabilityProtocolSchema {
             authorizes_execution: false,
             web_executable_probe_required: true,
             compiled_tui_projection_required: true,
+            gui_host_probe_required: true,
+            gui_host_permissions_explicit: true,
+            gui_desktop_exclusive: true,
             external_image_identity_required: true,
         },
         inventory_schema: schemars::schema_for!(WorkerCapabilityInventory),

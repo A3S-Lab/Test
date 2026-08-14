@@ -44,6 +44,9 @@ struct WorkerInventoryArgs {
     /// Override the explicitly selected browser driver executable.
     #[arg(long, requires = "browser_driver")]
     browser_executable: Option<PathBuf>,
+    /// Add one deployment-owned, permission-probed GUI host profile.
+    #[arg(long)]
+    gui_host_profile: Option<PathBuf>,
     /// Browser capability probe deadline.
     #[arg(long, default_value_t = 30_000)]
     command_timeout_ms: u64,
@@ -90,6 +93,17 @@ async fn inventory(args: WorkerInventoryArgs) -> Result<ExitCode> {
         surfaces.push(WorkerSurfaceCapability::Web {
             execution: WebExecutionMode::Headless,
             browser: capabilities,
+        });
+    }
+    if let Some(path) = args.gui_host_profile {
+        let loaded = remote::gui_profile::load(
+            &path,
+            Duration::from_millis(args.command_timeout_ms),
+            Default::default(),
+        )
+        .await?;
+        surfaces.push(WorkerSurfaceCapability::Gui {
+            desktop: Box::new(loaded.capability),
         });
     }
     let inventory = WorkerCapabilityInventory::local(args.max_parallel_scenarios, surfaces)

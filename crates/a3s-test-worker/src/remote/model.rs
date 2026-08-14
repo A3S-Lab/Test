@@ -117,8 +117,11 @@ pub struct RemoteJobSubmission {
     pub lease_expires_at_ms: u64,
     #[schemars(range(min = 1, max = 64))]
     pub max_parallel_scenarios: u16,
-    #[schemars(length(min = 1, max = 2))]
+    #[schemars(length(min = 1, max = 3))]
     pub required_surfaces: Vec<WorkerSurface>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[schemars(regex(pattern = r"^sha256:[0-9a-f]{64}$"))]
+    pub required_host_permission_digest: Option<String>,
     #[schemars(length(min = 1, max = 4096))]
     pub scenario_ids: Vec<String>,
     pub input: RemoteInputBundle,

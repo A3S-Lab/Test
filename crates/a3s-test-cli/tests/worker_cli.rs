@@ -34,11 +34,14 @@ fn worker_schema_exposes_scheduling_evidence_without_trust_authority() {
     assert!(output.status.success(), "{output:?}");
     let value: serde_json::Value =
         serde_json::from_slice(&output.stdout).expect("worker schema JSON");
-    assert_eq!(value["protocol"], "a3s.test.worker-capabilities/1");
+    assert_eq!(value["protocol"], "a3s.test.worker-capabilities/2");
     assert_eq!(value["authority"], "scheduling_evidence");
     assert_eq!(value["invariants"]["self_reported"], true);
     assert_eq!(value["invariants"]["authenticated"], false);
     assert_eq!(value["invariants"]["authorizes_execution"], false);
+    assert_eq!(value["invariants"]["gui_host_probe_required"], true);
+    assert_eq!(value["invariants"]["gui_host_permissions_explicit"], true);
+    assert_eq!(value["invariants"]["gui_desktop_exclusive"], true);
     assert_eq!(
         value["invariants"]["external_image_identity_required"],
         true
@@ -62,7 +65,7 @@ fn worker_inventory_reports_the_compiled_tui_surface_by_default() {
     assert!(output.status.success(), "{output:?}");
     let value: serde_json::Value =
         serde_json::from_slice(&output.stdout).expect("worker inventory JSON");
-    assert_eq!(value["protocol"], "a3s.test.worker-capabilities/1");
+    assert_eq!(value["protocol"], "a3s.test.worker-capabilities/2");
     assert_eq!(value["max_parallel_scenarios"], 4);
     assert_eq!(value["surfaces"].as_array().map(Vec::len), Some(1));
     assert_eq!(value["surfaces"][0]["surface"], "tui");
@@ -179,6 +182,142 @@ fn worker_inventory_does_not_infer_a_browser_backend_from_an_executable() {
     );
 }
 
+#[cfg(target_os = "macos")]
+#[test]
+fn worker_inventory_adds_gui_only_after_a_real_host_probe() {
+    use a3s_test_driver_gui::CuaCompatibility;
+    use serde_json::json;
+    use std::fs;
+    use std::os::unix::fs::PermissionsExt;
+
+    let temp = tempfile::tempdir().expect("tempdir");
+    let proxy = temp.path().join("fake-cua-driver");
+    let compatibility = CuaCompatibility::locked().expect("locked CUA compatibility");
+    let tools = compatibility
+        .tools()
+        .iter()
+        .map(|(name, requirement)| {
+            json!({
+                "name": name,
+                "description": format!("fake {name}"),
+                "inputSchema": { "type": "object" },
+                "annotations": {
+                    "readOnlyHint": false,
+                    "destructiveHint": false,
+                    "idempotentHint": false,
+                    "openWorldHint": false,
+                },
+                "capabilities": requirement.capabilities(),
+            })
+        })
+        .collect::<Vec<_>>();
+    let initialize = json!({
+        "jsonrpc": "2.0",
+        "id": 1,
+        "result": {
+            "protocolVersion": "2025-06-18",
+            "capabilities": { "tools": {} },
+            "serverInfo": { "name": "cua-driver", "version": "0.10.0" },
+        },
+    })
+    .to_string();
+    let tools_list = json!({
+        "jsonrpc": "2.0",
+        "id": 2,
+        "result": {
+            "tools": tools,
+            "capability_version": compatibility.capability_vocabulary(),
+            "schema_version": compatibility.tools_schema(),
+        },
+    })
+    .to_string();
+    let permissions = json!({
+        "jsonrpc": "2.0",
+        "id": 3,
+        "result": {
+            "content": [{ "type": "text", "text": "permissions ready" }],
+            "structuredContent": {
+                "accessibility": true,
+                "screen_recording": true,
+                "source": { "attribution": "driver-daemon" },
+            },
+        },
+    })
+    .to_string();
+    assert!([&initialize, &tools_list, &permissions]
+        .into_iter()
+        .all(|response| !response.contains('\'')));
+    fs::write(
+        &proxy,
+        format!(
+            r#"#!/bin/sh
+while IFS= read -r request; do
+  case "$request" in
+    *'"method":"initialize"'*) printf '%s\n' '{initialize}' ;;
+    *'"method":"notifications/initialized"'*) ;;
+    *'"method":"tools/list"'*) printf '%s\n' '{tools_list}' ;;
+    *'"name":"check_permissions"'*) printf '%s\n' '{permissions}' ;;
+    *) exit 99 ;;
+  esac
+done
+"#
+        ),
+    )
+    .expect("fake CUA proxy");
+    fs::set_permissions(&proxy, fs::Permissions::from_mode(0o755)).expect("proxy permissions");
+    fs::write(temp.path().join("policy.yaml"), "version: 1\n").expect("GUI policy");
+    fs::write(
+        temp.path().join("gui-host.acl"),
+        r#"gui_host "desktop-primary" {
+  endpoint = "installed_daemon"
+  proxy_executable = "fake-cua-driver"
+  policy_file = "policy.yaml"
+  macos_bundle_id = "com.example.Editor"
+  target = "launch"
+  profile = "semantic"
+  permission_source = "driver_daemon"
+  permissions = ["accessibility", "screen_recording"]
+}
+"#,
+    )
+    .expect("GUI host profile");
+
+    let output = Command::new(binary())
+        .args([
+            "worker",
+            "inventory",
+            "--max-parallel-scenarios",
+            "1",
+            "--gui-host-profile",
+            temp.path()
+                .join("gui-host.acl")
+                .to_str()
+                .expect("GUI profile path"),
+            "--compact",
+        ])
+        .output()
+        .expect("run GUI worker inventory");
+
+    assert!(output.status.success(), "{output:?}");
+    let inventory: serde_json::Value =
+        serde_json::from_slice(&output.stdout).expect("GUI inventory JSON");
+    assert_eq!(inventory["surfaces"][0]["surface"], "gui");
+    assert_eq!(
+        inventory["surfaces"][0]["desktop"]["profile_id"],
+        "desktop-primary"
+    );
+    assert_eq!(
+        inventory["surfaces"][0]["desktop"]["host_permissions"]["source"],
+        "driver_daemon"
+    );
+    assert!(
+        inventory["surfaces"][0]["desktop"]["host_permission_digest"]
+            .as_str()
+            .is_some_and(|digest| digest.starts_with("sha256:"))
+    );
+    assert_eq!(inventory["surfaces"][1]["surface"], "tui");
+}
+
 #[test]
 fn remote_worker_schema_exposes_authenticated_digest_bound_execution() {
     let output = Command::new(binary())
@@ -199,6 +338,11 @@ fn remote_worker_schema_exposes_authenticated_digest_bound_execution() {
         value["invariants"]["request_cannot_select_executables"],
         true
     );
+    assert_eq!(
+        value["invariants"]["request_cannot_select_applications"],
+        true
+    );
+    assert_eq!(value["invariants"]["exact_host_permission_binding"], true);
     assert_eq!(value["invariants"]["transports_artifacts"], false);
     assert_eq!(value["request_schema"]["additionalProperties"], false);
 }
@@ -278,6 +422,35 @@ fn remote_worker_serve_rejects_unbounded_deadline_configuration_before_startup()
     assert!(
         String::from_utf8_lossy(&output.stderr).contains("cannot exceed 300000 ms"),
         "{output:?}"
+    );
+}
+
+#[test]
+fn remote_worker_serve_rejects_shared_gui_parallelism_before_profile_startup() {
+    let output = Command::new(binary())
+        .args([
+            "worker",
+            "serve",
+            "--instance-id",
+            "worker-gui-test",
+            "--image-digest",
+            "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "--authorization-env",
+            "A3S_TEST_REMOTE_WORKER_AUTH",
+            "--gui-host-profile",
+            "missing-gui-host.acl",
+            "--max-parallel-scenarios",
+            "2",
+        ])
+        .output()
+        .expect("run GUI worker with shared parallelism");
+
+    assert!(!output.status.success(), "{output:?}");
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("one exclusive desktop"), "{output:?}");
+    assert!(
+        !stderr.contains("missing-gui-host.acl"),
+        "GUI profile startup ran before parallelism admission: {output:?}"
     );
 }
 
@@ -435,6 +608,7 @@ fn authenticated_remote_http_host_executes_a_real_tui_job() {
         lease_expires_at_ms: now_ms + 20_000,
         max_parallel_scenarios: 1,
         required_surfaces: vec![WorkerSurface::Tui],
+        required_host_permission_digest: None,
         scenario_ids: vec!["terminal".to_string()],
         input: RemoteInputBundle {
             manifest: "suite.acl".to_string(),

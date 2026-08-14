@@ -342,6 +342,41 @@ fn validate_requirements(
             "job requires a surface absent from the admitted worker inventory",
         ));
     }
+    let requires_gui = submission.required_surfaces.contains(&WorkerSurface::Gui);
+    match (
+        requires_gui,
+        submission.required_host_permission_digest.as_deref(),
+        descriptor.inventory.gui_capability(),
+    ) {
+        (true, None, _) => {
+            return Err(remote_error(
+                "test.worker.remote.host_permission_binding_missing",
+                "GUI jobs must bind the exact probed host permission grant",
+            ));
+        }
+        (true, Some(required), Some(capability)) => {
+            validate_digest(required, "required GUI host permission digest")?;
+            if required != capability.host_permission_digest {
+                return Err(remote_error(
+                    "test.worker.remote.host_permission_mismatch",
+                    "GUI job requires a different host permission grant",
+                ));
+            }
+        }
+        (true, Some(_), None) => {
+            return Err(remote_error(
+                "test.worker.remote.surface_unavailable",
+                "GUI job requires a worker without a GUI capability",
+            ));
+        }
+        (false, Some(_), _) => {
+            return Err(remote_error(
+                "test.worker.remote.host_permission_binding_unexpected",
+                "non-GUI jobs cannot require GUI host permissions",
+            ));
+        }
+        (false, None, _) => {}
+    }
     if submission.scenario_ids.is_empty()
         || submission.scenario_ids.len() > 4_096
         || submission

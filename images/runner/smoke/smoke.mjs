@@ -179,7 +179,7 @@ const inventory = await executeJson("worker-inventory", [
   "1",
   "--compact",
 ]);
-assert(inventory.protocol === "a3s.test.worker-capabilities/1", "worker protocol mismatch");
+assert(inventory.protocol === "a3s.test.worker-capabilities/2", "worker protocol mismatch");
 assert(inventory.runtime.operating_system === "linux", "runner must report Linux");
 assert(inventory.runtime.architecture === "x86_64", "runner must report amd64");
 assert(inventory.surfaces.length === 2, "runner must report exactly Web and TUI");
@@ -203,7 +203,7 @@ assert(schema.authority === "scheduling_evidence", "worker schema authority mism
 assert(schema.invariants.authenticated === false, "inventory must remain self-reported");
 assert(schema.invariants.authorizes_execution === false, "inventory must not authorize execution");
 assert(
-  schema.inventory_schema.properties.protocol.const === "a3s.test.worker-capabilities/1",
+  schema.inventory_schema.properties.protocol.const === "a3s.test.worker-capabilities/2",
   "inventory schema must bind the protocol",
 );
 assert(
@@ -223,7 +223,7 @@ const remoteSchema = await executeJson("remote-worker-schema", [
   "schema",
   "--compact",
 ]);
-assert(remoteSchema.protocol === "a3s.test.remote-worker/2", "remote protocol mismatch");
+assert(remoteSchema.protocol === "a3s.test.remote-worker/3", "remote protocol mismatch");
 assert(
   remoteSchema.invariants.transport_authentication_required === true,
   "remote worker must require transport authentication",
@@ -231,6 +231,14 @@ assert(
 assert(
   remoteSchema.invariants.request_cannot_select_executables === true,
   "remote requests must not select executables",
+);
+assert(
+  remoteSchema.invariants.request_cannot_select_applications === true,
+  "remote requests must not select applications",
+);
+assert(
+  remoteSchema.invariants.exact_host_permission_binding === true,
+  "remote GUI jobs must bind exact host permissions",
 );
 assert(
   remoteSchema.invariants.transports_artifacts === false,

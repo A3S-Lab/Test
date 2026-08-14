@@ -8,6 +8,7 @@ mod api;
 mod artifact;
 mod compatibility;
 mod config;
+mod host;
 mod lifecycle;
 mod process;
 mod protocol;
@@ -23,6 +24,10 @@ pub use compatibility::{
 pub use config::{
     ApplicationIdentity, AttachSpec, CuaEndpoint, GuiAppTarget, GuiCaptureScope, GuiDriverConfig,
     GuiProfile, LaunchSpec, WindowSelector,
+};
+pub use host::{
+    GuiHostPermission, GuiHostPermissionGrant, GuiHostPermissionSource, GuiHostProbe,
+    GUI_HOST_PERMISSION_PROTOCOL,
 };
 pub use process::terminate_active_cua_processes;
 pub use protocol::{

@@ -7,6 +7,7 @@ use std::{
 };
 
 use a3s_test_core::{Surface, SurfaceDriver};
+use a3s_test_driver_gui::{GuiDriver, GuiDriverConfig};
 use a3s_test_driver_tui::{TuiDriver, TuiDriverConfig};
 use a3s_test_driver_web::{
     AgentBrowserConfig, AgentBrowserDriver, CommandError, CommandExecutor, CommandInvocation,
@@ -23,6 +24,7 @@ use tokio_util::sync::CancellationToken;
 #[derive(Clone)]
 pub(super) struct ExecutorProfiles {
     pub web: Option<AgentBrowserConfig>,
+    pub gui: Option<GuiDriverConfig>,
     pub tui: Option<TuiDriverConfig>,
     pub authorization_environment: OsString,
     pub cleanup_timeout: Duration,
@@ -126,6 +128,16 @@ impl RemoteJobExecutor for CliRemoteExecutor {
                 RemoteWorkerError::new(error.code(), error.message(), error.retryable())
             })?;
             drivers.push(Arc::new(TuiDriver::new(config)));
+        }
+        if actual_surfaces.contains(&WorkerSurface::Gui) {
+            let config = self.profiles.gui.clone().ok_or_else(|| {
+                RemoteWorkerError::new(
+                    "test.worker.remote.gui_profile_missing",
+                    "remote GUI execution profile is unavailable",
+                    false,
+                )
+            })?;
+            drivers.push(Arc::new(GuiDriver::new(config)));
         }
 
         let runner = Runner::new(
@@ -352,12 +364,8 @@ fn suite_surfaces(
         .iter()
         .map(|scenario| match scenario.surface {
             Surface::Web => Ok(WorkerSurface::Web),
+            Surface::Gui => Ok(WorkerSurface::Gui),
             Surface::Tui => Ok(WorkerSurface::Tui),
-            Surface::Gui => Err(RemoteWorkerError::new(
-                "test.worker.remote.gui_unsupported",
-                "reference remote worker does not execute GUI scenarios",
-                false,
-            )),
         })
         .collect()
 }
@@ -372,8 +380,9 @@ fn execution_error(code: &'static str, error: anyhow::Error, retryable: bool) ->
 
 #[cfg(test)]
 mod tests {
-    use super::{bind_upload_inputs, select_scenarios};
+    use super::{bind_upload_inputs, select_scenarios, suite_surfaces};
     use a3s_test_core::{Action, TestSuite};
+    use a3s_test_worker::WorkerSurface;
     use std::path::Path;
 
     #[test]
@@ -394,6 +403,25 @@ mod tests {
         assert_eq!(
             error.code(),
             "test.worker.remote.scenario_selection_mismatch"
+        );
+    }
+
+    #[test]
+    fn gui_suites_map_to_the_remote_gui_surface() {
+        let suite = TestSuite::from_acl(
+            r#"suite "remote-gui" {
+  scenario "editor" {
+    surface = "gui"
+    click "save" { target = automation_id("save-button") }
+  }
+}
+"#,
+        )
+        .expect("GUI suite");
+
+        assert_eq!(
+            suite_surfaces(&suite).expect("remote surface mapping"),
+            [WorkerSurface::Gui].into_iter().collect()
         );
     }
 

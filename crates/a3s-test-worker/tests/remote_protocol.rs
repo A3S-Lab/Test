@@ -1,8 +1,10 @@
+use a3s_test_driver_gui::{GuiHostPermissionGrant, GuiHostPermissionSource};
 use a3s_test_driver_tui::TuiCapabilities;
 use a3s_test_worker::{
     remote_worker_protocol_schema, RemoteInputBundle, RemoteInputFile, RemoteJobSubmission,
     RemoteWorkerDescriptor, RemoteWorkerIdentity, RemoteWorkerLimits, WorkerCapabilityInventory,
-    WorkerSurface, WorkerSurfaceCapability, REMOTE_WORKER_PROTOCOL,
+    WorkerGuiApplication, WorkerGuiCapability, WorkerGuiEndpoint, WorkerGuiPerception,
+    WorkerGuiTarget, WorkerSurface, WorkerSurfaceCapability, REMOTE_WORKER_PROTOCOL,
 };
 
 const IMAGE_DIGEST: &str =
@@ -40,6 +42,7 @@ fn submission(now_ms: u64) -> RemoteJobSubmission {
         lease_expires_at_ms: now_ms + 30_000,
         max_parallel_scenarios: 2,
         required_surfaces: vec![WorkerSurface::Tui],
+        required_host_permission_digest: None,
         scenario_ids: vec!["terminal".to_string()],
         input: RemoteInputBundle {
             manifest: "suite.acl".to_string(),
@@ -66,6 +69,8 @@ fn remote_protocol_schema_is_strict_and_states_execution_boundaries() {
     assert!(protocol.invariants.tls_termination_external);
     assert!(protocol.invariants.external_image_identity_required);
     assert!(protocol.invariants.request_cannot_select_executables);
+    assert!(protocol.invariants.request_cannot_select_applications);
+    assert!(protocol.invariants.exact_host_permission_binding);
     assert!(protocol.invariants.deadline_and_lease_required);
     assert!(protocol.invariants.idempotent_dispatch_required);
     assert!(protocol.invariants.scenario_selection_digest_bound);
@@ -87,7 +92,85 @@ fn remote_protocol_schema_is_strict_and_states_execution_boundaries() {
     assert_eq!(
         request_schema["$defs"]["RemoteJobSubmission"]["properties"]["required_surfaces"]
             ["maxItems"],
-        2
+        3
+    );
+}
+
+#[test]
+fn gui_submission_requires_the_exact_probed_host_permission_grant() {
+    let now_ms = 1_800_000_000_000;
+    let host_permissions = GuiHostPermissionGrant::required(GuiHostPermissionSource::DriverDaemon);
+    let permission_digest = host_permissions.digest();
+    let application = match std::env::consts::OS {
+        "macos" => WorkerGuiApplication::MacosBundle {
+            bundle_id: "com.example.Editor".to_string(),
+        },
+        "windows" => WorkerGuiApplication::WindowsExecutable {
+            path: "C:/Program Files/Example/editor.exe".to_string(),
+            expected_publisher: None,
+        },
+        _ => WorkerGuiApplication::LinuxDesktop {
+            desktop_id: "com.example.Editor".to_string(),
+        },
+    };
+    let inventory = WorkerCapabilityInventory::local(
+        1,
+        vec![WorkerSurfaceCapability::Gui {
+            desktop: Box::new(WorkerGuiCapability {
+                profile_id: "desktop-primary".to_string(),
+                compatibility_profile: "macos-installed-daemon".to_string(),
+                endpoint: WorkerGuiEndpoint::InstalledDaemon,
+                perception: WorkerGuiPerception::Semantic,
+                target: WorkerGuiTarget::Launch,
+                application,
+                cua_driver_version: "0.10.0".to_string(),
+                mcp_protocol: "2025-06-18".to_string(),
+                capability_vocabulary: "cua.capabilities/1".to_string(),
+                tools_schema: "cua.tools/1".to_string(),
+                configuration_digest:
+                    "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+                        .to_string(),
+                policy_digest:
+                    "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+                        .to_string(),
+                host_permission_digest: permission_digest.clone(),
+                host_permissions,
+            }),
+        }],
+    )
+    .expect("GUI inventory");
+    let descriptor = RemoteWorkerDescriptor::new(
+        RemoteWorkerIdentity {
+            instance_id: "desktop-west-1".to_string(),
+            image_digest: IMAGE_DIGEST.to_string(),
+        },
+        inventory,
+        RemoteWorkerLimits::default(),
+    )
+    .expect("GUI descriptor");
+    let mut job = submission(now_ms);
+    job.worker_instance = descriptor.identity.instance_id.clone();
+    job.required_inventory_digest = descriptor.inventory_digest.clone();
+    job.max_parallel_scenarios = 1;
+    job.required_surfaces = vec![WorkerSurface::Gui];
+    job.required_host_permission_digest = Some(permission_digest.clone());
+    job.admit(now_ms, &descriptor)
+        .expect("permission-bound GUI job");
+
+    job.required_host_permission_digest = None;
+    assert_eq!(
+        job.admit(now_ms, &descriptor)
+            .expect_err("missing permission binding")
+            .code(),
+        "test.worker.remote.host_permission_binding_missing"
+    );
+    job.required_host_permission_digest =
+        Some("sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff".to_string());
+    assert_eq!(
+        job.admit(now_ms, &descriptor)
+            .expect_err("mismatched permission binding")
+            .code(),
+        "test.worker.remote.host_permission_mismatch"
     );
 }
 

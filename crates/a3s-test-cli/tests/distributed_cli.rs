@@ -14,8 +14,10 @@ fn distributed_schema_exposes_the_safety_invariants() {
     assert!(output.status.success(), "{output:?}");
     let schema: serde_json::Value =
         serde_json::from_slice(&output.stdout).expect("distributed schema JSON");
-    assert_eq!(schema["protocol"], "a3s.test.distributed-run/1");
+    assert_eq!(schema["protocol"], "a3s.test.distributed-run/2");
     assert_eq!(schema["invariants"]["deterministic_sharding"], true);
+    assert_eq!(schema["invariants"]["exact_host_permission_binding"], true);
+    assert_eq!(schema["invariants"]["exclusive_gui_workers"], true);
     assert_eq!(
         schema["invariants"]["infrastructure_failures_never_quarantined"],
         true

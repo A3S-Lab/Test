@@ -16,9 +16,10 @@ use crate::artifact::{
     image_evidence, prepare_artifact_root, prepare_png_artifact, validate_grounding_image,
     validate_screenshot,
 };
+use crate::host::validate_permissions;
 use crate::lifecycle::{
-    bind_application, bind_window, cleanup_resources, validate_permissions,
-    validate_runtime_binding, ApplicationBinding, WindowBinding,
+    bind_application, bind_window, cleanup_resources, validate_runtime_binding, ApplicationBinding,
+    WindowBinding,
 };
 use crate::semantic::{ElementAddress, SemanticState, VisualAddress};
 use crate::{
@@ -52,6 +53,58 @@ impl GuiDriver {
     pub fn execution_profile(&self) -> Result<crate::GuiExecutionProfile, DriverError> {
         self.config.execution_profile()
     }
+
+    pub async fn probe_host(&self) -> Result<crate::GuiHostProbe, DriverError> {
+        self.config.validate()?;
+        let config = self.config.clone();
+        let transport_factory = Arc::clone(&self.transport_factory);
+        tokio::spawn(async move { probe_gui_host(config, transport_factory).await })
+            .await
+            .map_err(|error| {
+                DriverError::new(
+                    "test.driver.gui.probe_task_failed",
+                    format!("GUI host probe task failed: {error}"),
+                )
+            })?
+    }
+}
+
+async fn probe_gui_host(
+    config: GuiDriverConfig,
+    transport_factory: Arc<dyn CuaTransportFactory>,
+) -> Result<crate::GuiHostProbe, DriverError> {
+    let transport = transport_factory.connect(&config).await?;
+    let client = Arc::new(CuaClient::new(transport));
+    let capabilities = match client.admit_locked().await {
+        Ok(capabilities) => capabilities,
+        Err(error) => {
+            let _ = client.close().await;
+            return Err(error);
+        }
+    };
+    let api = CuaApi::new(Arc::clone(&client), "host-probe".to_string());
+    let permissions = match api.permissions().await {
+        Ok(permissions) => permissions,
+        Err(error) => {
+            let _ = api.close().await;
+            return Err(error);
+        }
+    };
+    let permissions = match validate_permissions(&config.endpoint, &permissions) {
+        Ok(permissions) => permissions,
+        Err(error) => {
+            let _ = api.close().await;
+            return Err(error);
+        }
+    };
+    api.close().await?;
+    Ok(crate::GuiHostProbe {
+        driver_version: capabilities.driver_version.to_string(),
+        protocol_version: capabilities.protocol_version,
+        capability_vocabulary: capabilities.capability_vocabulary,
+        tools_schema: capabilities.tools_schema,
+        permissions,
+    })
 }
 
 #[async_trait]

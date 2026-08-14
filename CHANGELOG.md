@@ -1,5 +1,49 @@
 # Changelog
 
+## 0.14.0 - 2026-08-15
+
+### Added
+
+- Added exclusive GUI worker profiles backed by deployment-owned `gui_host`
+  ACL. Worker startup now admits the fixed CUA endpoint, policy, application,
+  launch or attach target, perception profile, and explicit host-permission
+  declaration before accepting jobs.
+- Added read-only GUI host readiness probes. Inventory protocol
+  `a3s.test.worker-capabilities/2` records the locked CUA contract, application
+  target, configuration and policy digests, exact `accessibility` and
+  `screen_recording` grant, attribution source, and permission digest without
+  launching the configured application.
+- Added GUI-aware deterministic sharding in
+  `a3s.test.distributed-run/2`. GUI workers and shards have one exclusive
+  desktop lane, and the coordinator requires an exact
+  `host_permission_digest` pin for every inspected GUI worker.
+
+### Safety
+
+- Advanced remote execution to `a3s.test.remote-worker/3`. GUI submissions
+  must bind the exact host-permission digest from the admitted worker
+  inventory; missing, mismatched, or unexpected permission bindings fail
+  before input materialization or driver startup.
+- Remote requests cannot select a GUI application, executable, policy,
+  endpoint, target, or shell. GUI sessions revalidate the live permission
+  grant before application launch or attachment, and retain the existing
+  application, PID, window, and owned-cleanup checks during execution.
+- Worker authorization environment variables are explicitly removed from CUA
+  proxy children. Regression coverage proves the child does not inherit the
+  configured value.
+
+### Changed
+
+- `a3s-test worker inventory` and `a3s-test worker serve` now accept
+  `--gui-host-profile`. A worker exposing GUI must use
+  `--max-parallel-scenarios 1`; pools scale by deploying independent desktop
+  workers.
+- Distributed GUI plans now repeat required surfaces and the permission digest
+  in each immutable shard and remote submission, and include both in the plan
+  digest.
+- Raised the Rust workspace release to `0.14.0`. The unchanged Test Kit remains
+  `0.2.0`.
+
 ## 0.13.0 - 2026-08-14
 
 ### Added

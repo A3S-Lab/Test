@@ -8,8 +8,8 @@ use a3s_test_core::{Action, ScenarioContext, Surface, SurfaceDriver, Target, Tes
 use a3s_test_driver_gui::{
     ApplicationIdentity, AttachSpec, CuaCompatibility, CuaEndpoint, CuaTransport,
     CuaTransportError, CuaTransportFactory, GuiAppTarget, GuiCaptureScope, GuiDriver,
-    GuiDriverConfig, GuiProfile, JsonRpcNotification, JsonRpcRequest, JsonRpcResponse, LaunchSpec,
-    WindowSelector,
+    GuiDriverConfig, GuiHostPermission, GuiHostPermissionSource, GuiProfile, JsonRpcNotification,
+    JsonRpcRequest, JsonRpcResponse, LaunchSpec, WindowSelector,
 };
 use async_trait::async_trait;
 use serde_json::{json, Value};
@@ -414,6 +414,7 @@ fn launch_config(temp: &TempDir) -> GuiDriverConfig {
         capture_scope: GuiCaptureScope::Window,
         profile: GuiProfile::Semantic,
         command_timeout: Duration::from_secs(2),
+        removed_environment: Default::default(),
     }
 }
 
@@ -447,6 +448,34 @@ fn context(temp: &TempDir) -> ScenarioContext {
 
 fn driver(config: GuiDriverConfig, transport: Arc<FakeTransport>) -> GuiDriver {
     GuiDriver::with_transport_factory(config, Arc::new(FakeFactory { transport }))
+}
+
+#[tokio::test]
+async fn host_probe_is_read_only_and_returns_exact_permissions() {
+    let temp = TempDir::new().expect("temp dir");
+    let transport = FakeTransport::new(FakeOptions::default());
+    let probe = driver(launch_config(&temp), Arc::clone(&transport))
+        .probe_host()
+        .await
+        .expect("GUI host probe");
+
+    assert_eq!(
+        probe.permissions.source,
+        GuiHostPermissionSource::DriverDaemon
+    );
+    assert_eq!(
+        probe.permissions.permissions,
+        [
+            GuiHostPermission::Accessibility,
+            GuiHostPermission::ScreenRecording,
+        ]
+    );
+    assert_eq!(probe.driver_version, "0.10.0");
+    assert!(probe.permissions.digest().starts_with("sha256:"));
+    let names = transport.tool_names().await;
+    assert_eq!(names, ["check_permissions"]);
+    assert!(transport.closed().await);
+    assert!(!transport.running().await);
 }
 
 #[tokio::test]

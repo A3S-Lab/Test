@@ -1,3 +1,5 @@
+use std::collections::BTreeSet;
+use std::ffi::OsStr;
 use std::ffi::OsString;
 use std::num::NonZeroU32;
 use std::path::PathBuf;
@@ -80,6 +82,7 @@ pub struct GuiDriverConfig {
     pub capture_scope: GuiCaptureScope,
     pub profile: GuiProfile,
     pub command_timeout: Duration,
+    pub removed_environment: BTreeSet<OsString>,
 }
 
 impl GuiDriverConfig {
@@ -93,6 +96,16 @@ impl GuiDriverConfig {
         validate_window(&self.window)?;
         if self.command_timeout.is_zero() {
             return Err(config_error("command timeout must be greater than zero"));
+        }
+        if self.removed_environment.len() > 128
+            || self
+                .removed_environment
+                .iter()
+                .any(|name| !valid_environment_name(name))
+        {
+            return Err(config_error(
+                "removed environment variable names must be bounded and non-empty",
+            ));
         }
         self.execution_profile()?;
         Ok(())
@@ -250,6 +263,37 @@ fn validate_text(value: &str, name: &str) -> Result<(), DriverError> {
     }
 }
 
+#[cfg(unix)]
+fn valid_environment_name(name: &OsStr) -> bool {
+    use std::os::unix::ffi::OsStrExt;
+
+    let bytes = name.as_bytes();
+    !bytes.is_empty()
+        && bytes.len() <= 4_096
+        && !bytes.iter().any(|byte| matches!(byte, b'=' | b'\0'))
+}
+
+#[cfg(windows)]
+fn valid_environment_name(name: &OsStr) -> bool {
+    use std::os::windows::ffi::OsStrExt;
+
+    let mut length = 0_usize;
+    for character in name.encode_wide() {
+        length = length.saturating_add(1);
+        if character == u16::from(b'=') || character == 0 {
+            return false;
+        }
+    }
+    (1..=4_096).contains(&length)
+}
+
+#[cfg(not(any(unix, windows)))]
+fn valid_environment_name(name: &OsStr) -> bool {
+    name.to_str().is_some_and(|name| {
+        !name.is_empty() && name.len() <= 4_096 && !name.bytes().any(|byte| byte == b'=')
+    })
+}
+
 fn config_error(message: impl Into<String>) -> DriverError {
     DriverError::new("test.driver.gui.config_invalid", message)
 }
@@ -275,6 +319,7 @@ mod tests {
             capture_scope: GuiCaptureScope::Window,
             profile: GuiProfile::Semantic,
             command_timeout: Duration::from_secs(30),
+            removed_environment: BTreeSet::new(),
         }
     }
 
@@ -309,5 +354,27 @@ mod tests {
         });
         let error = config.validate().expect_err("unsupported Windows profile");
         assert_eq!(error.code(), "test.driver.gui.platform_unsupported");
+    }
+
+    #[test]
+    fn rejects_unbounded_environment_removal() {
+        let mut config = valid_config();
+        config
+            .removed_environment
+            .insert(OsString::from("x".repeat(4_097)));
+
+        let error = config
+            .validate()
+            .expect_err("unbounded environment removal");
+        assert_eq!(error.code(), "test.driver.gui.config_invalid");
+
+        let mut config = valid_config();
+        config
+            .removed_environment
+            .insert(OsString::from("INVALID=NAME"));
+        let error = config
+            .validate()
+            .expect_err("invalid environment removal name");
+        assert_eq!(error.code(), "test.driver.gui.config_invalid");
     }
 }

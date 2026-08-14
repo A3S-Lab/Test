@@ -245,6 +245,7 @@ fn scenario_counts(scenarios: &[ScenarioResult]) -> RemoteScenarioCounts {
 fn core_surface(surface: WorkerSurface) -> Surface {
     match surface {
         WorkerSurface::Web => Surface::Web,
+        WorkerSurface::Gui => Surface::Gui,
         WorkerSurface::Tui => Surface::Tui,
     }
 }

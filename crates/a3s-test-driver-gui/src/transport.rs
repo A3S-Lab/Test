@@ -181,6 +181,9 @@ impl StdioCuaTransport {
             .stdin(std::process::Stdio::piped())
             .stdout(std::process::Stdio::piped())
             .stderr(std::process::Stdio::piped());
+        for name in &config.removed_environment {
+            command.env_remove(name);
+        }
         configure_owned_process(&mut command);
 
         let mut child = command.spawn().map_err(|error| {
@@ -501,6 +504,12 @@ mod tests {
     use super::*;
     use std::sync::Arc;
 
+    #[cfg(unix)]
+    const ENVIRONMENT_REMOVAL_FIXTURE_TEST: &str =
+        "transport::tests::cua_proxy_environment_removal_fixture";
+    #[cfg(unix)]
+    const ENVIRONMENT_REMOVAL_NAME: &str = "A3S_TEST_GUI_INHERITED_SECRET";
+
     #[test]
     fn builds_only_supported_proxy_commands() {
         let (program, arguments) = proxy_command(&CuaEndpoint::InstalledDaemon {
@@ -524,6 +533,87 @@ mod tests {
                 OsString::from("private.sock"),
             ]
         );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn cua_proxy_does_not_inherit_a_configured_environment_variable() {
+        let output =
+            std::process::Command::new(std::env::current_exe().expect("current test executable"))
+                .args([
+                    ENVIRONMENT_REMOVAL_FIXTURE_TEST,
+                    "--ignored",
+                    "--exact",
+                    "--nocapture",
+                ])
+                .env(ENVIRONMENT_REMOVAL_NAME, "inherited-secret")
+                .output()
+                .expect("run CUA environment-removal fixture");
+
+        assert!(output.status.success(), "{output:?}");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    #[ignore = "helper process for the inherited CUA environment removal test"]
+    fn cua_proxy_environment_removal_fixture() {
+        use std::collections::BTreeSet;
+        use std::os::unix::fs::PermissionsExt;
+
+        assert_eq!(
+            std::env::var(ENVIRONMENT_REMOVAL_NAME).as_deref(),
+            Ok("inherited-secret"),
+            "fixture must begin with an inherited value"
+        );
+        let temp = tempfile::tempdir().expect("tempdir");
+        let proxy = temp.path().join("cua-proxy");
+        std::fs::write(
+            &proxy,
+            format!(
+                "#!/bin/sh\n\
+                 test -z \"${{{ENVIRONMENT_REMOVAL_NAME}+x}}\" || exit 97\n\
+                 IFS= read -r _ || exit 98\n\
+                 printf '{{\"jsonrpc\":\"2.0\",\"id\":1,\"result\":{{}}}}\\n'\n"
+            ),
+        )
+        .expect("write fake CUA proxy");
+        std::fs::set_permissions(&proxy, std::fs::Permissions::from_mode(0o755))
+            .expect("fake CUA proxy permissions");
+        let policy = temp.path().join("policy.yaml");
+        std::fs::write(&policy, "version: 1\n").expect("write CUA policy");
+        let config = GuiDriverConfig {
+            endpoint: CuaEndpoint::InstalledDaemon {
+                proxy_executable: proxy,
+            },
+            policy_file: policy,
+            target: crate::GuiAppTarget::Launch(crate::LaunchSpec {
+                application: crate::ApplicationIdentity::MacOsBundle {
+                    bundle_id: "com.example.Editor".to_string(),
+                },
+                arguments: Vec::new(),
+                working_directory: None,
+            }),
+            window: crate::WindowSelector::Primary,
+            capture_scope: crate::GuiCaptureScope::Window,
+            profile: crate::GuiProfile::Semantic,
+            command_timeout: Duration::from_secs(5),
+            removed_environment: BTreeSet::from([OsString::from(ENVIRONMENT_REMOVAL_NAME)]),
+        };
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .expect("CUA environment-removal runtime");
+        runtime.block_on(async move {
+            let transport = StdioCuaTransport::spawn(&config)
+                .await
+                .expect("spawn fake CUA proxy");
+            let response = transport
+                .request(JsonRpcRequest::new(1, "fixture/environment", None))
+                .await
+                .expect("environment-removal response");
+            assert_eq!(response.id, serde_json::Value::from(1));
+            transport.close().await.expect("close fake CUA proxy");
+        });
     }
 
     #[tokio::test]

@@ -593,6 +593,7 @@ async fn gui_driver(args: &GuiRunArgs, command_timeout: Duration) -> Result<GuiD
             GuiProfileArg::WindowVision => GuiProfile::WindowVision,
         },
         command_timeout,
+        removed_environment: Default::default(),
     };
     config.validate().map_err(anyhow::Error::new)?;
     Ok(GuiDriver::new(config))

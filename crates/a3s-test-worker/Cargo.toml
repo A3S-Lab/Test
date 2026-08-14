@@ -8,6 +8,7 @@ rust-version.workspace = true
 description = "Typed capability inventory and remote execution service for A3S Test"
 
 [dependencies]
+a3s-test-driver-gui = { path = "../a3s-test-driver-gui" }
 a3s-test-driver-tui = { path = "../a3s-test-driver-tui" }
 a3s-test-driver-web = { path = "../a3s-test-driver-web" }
 async-trait.workspace = true

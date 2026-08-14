@@ -303,6 +303,7 @@ mod tests {
             endpoint: endpoint.to_string(),
             image_digest: DIGEST.to_string(),
             inventory_digest: None,
+            host_permission_digest: None,
             authorization_env: authorization_env.to_string(),
             max_parallel_scenarios: 1,
         }

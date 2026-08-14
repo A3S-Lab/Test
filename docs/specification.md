@@ -708,7 +708,7 @@ browser action exits are never retried.
 
 ## Worker capability inventory
 
-The worker capability protocol is `a3s.test.worker-capabilities/1`. Its CLI
+The worker capability protocol is `a3s.test.worker-capabilities/2`. Its CLI
 projection always emits JSON:
 
 ```bash
@@ -717,6 +717,9 @@ a3s-test worker inventory --max-parallel-scenarios 1
 a3s-test worker inventory \
   --browser-driver standalone \
   --browser-executable agent-browser
+a3s-test worker inventory \
+  --max-parallel-scenarios 1 \
+  --gui-host-profile /etc/a3s-test/gui-host.acl
 ```
 
 The inventory has four required fields:
@@ -725,17 +728,28 @@ The inventory has four required fields:
 - `runtime` contains a bounded implementation name, semantic version,
   operating system, and architecture;
 - `max_parallel_scenarios` is an integer from 1 through 64;
-- `surfaces` is a non-empty, unique, canonically ordered list of typed Web or
-  TUI capability entries.
+- `surfaces` is a non-empty, unique, canonically ordered list of typed Web,
+  GUI, or TUI capability entries.
 
-Web is canonically ordered before TUI. A Web entry declares headless execution
-and embeds the admitted `BrowserCapabilities`. It is emitted only when the
-caller explicitly selects `a3s` or `standalone` and the selected executable's
-real `--version` probe succeeds. The feature set must exactly match the
-reviewed integration. In particular, standalone 0.26.x reports hostname
-containment and must not report exact-origin containment. Supplying a browser
-executable without a typed integration is invalid, and a requested probe
-failure fails the complete command.
+The order is Web, GUI, then TUI. A Web entry declares headless execution and
+embeds the admitted `BrowserCapabilities`. It is emitted only when the caller
+explicitly selects `a3s` or `standalone` and the selected executable's real
+`--version` probe succeeds. The feature set must exactly match the reviewed
+integration. In particular, standalone 0.26.x reports hostname containment
+and must not report exact-origin containment. Supplying a browser executable
+without a typed integration is invalid, and a requested probe failure fails
+the complete command.
+
+A GUI entry represents exactly one deployment-owned desktop and therefore
+requires `max_parallel_scenarios = 1`. It contains the fixed profile ID,
+locked compatibility profile, endpoint and perception kinds, launch or attach
+target, typed application identity, CUA version and schema identifiers,
+configuration and policy digests, and the exact host-permission grant and
+digest. The CLI emits it only after a real CUA probe validates the locked
+contract and returns both `accessibility` and `screen_recording`. The probe is
+read-only and does not launch or attach to the application. Installed-daemon
+grants must use `driver_daemon` attribution; embedded-socket grants must use
+`host` attribution. The digest must exactly match the canonical typed grant.
 
 A TUI entry embeds protocol `a3s.test.driver-tui/1`, the backend compiled for
 the host (`unix_pty` or `windows_con_pty`), the reviewed feature set, and hard
@@ -749,6 +763,8 @@ authority invariants:
 - the inventory is self-reported scheduling evidence;
 - it is not authenticated and does not authorize execution;
 - Web evidence requires a real executable probe;
+- GUI evidence requires a real host probe, explicit permissions, and one
+  exclusive desktop lane;
 - TUI evidence must match the compiled backend projection;
 - an external image identity is required.
 
@@ -761,7 +777,7 @@ protocol does not authorize remote dispatch by itself.
 
 ## Remote worker protocol
 
-Remote execution uses protocol `a3s.test.remote-worker/2`. Discover its exact
+Remote execution uses protocol `a3s.test.remote-worker/3`. Discover its exact
 JSON Schema 2020-12 request, response, descriptor, and invariants with:
 
 ```bash
@@ -788,6 +804,7 @@ Every submission binds all of the following:
   milliseconds;
 - admitted scenario concurrency and a sorted, unique set of required
   surfaces;
+- the exact GUI host-permission digest when, and only when, GUI is required;
 - a non-empty, sorted, unique set of exact scenario IDs;
 - a sorted inline input bundle containing the ACL manifest.
 
@@ -806,9 +823,9 @@ only an IPv4 or IPv6 loopback socket, accepts `application/json`, applies the
 descriptor request-byte limit, and requires an exact `Authorization` header
 whose expected value comes from `--authorization-env`. The value itself must
 not be passed on the command line or inherited by browser capability probes,
-Web commands, or TUI child processes. TLS termination, client identity, rate
-limits, and external resource isolation belong to the deployment. An example
-TUI-only host is:
+Web commands, CUA proxy children, or TUI child processes. TLS termination,
+client identity, rate limits, and external resource isolation belong to the
+deployment. An example TUI-only host is:
 
 ```bash
 export A3S_TEST_WORKER_AUTHORIZATION='Bearer replace-with-a-secret'
@@ -831,8 +848,36 @@ at least one deployment-owned exact origin:
   --web-allow-origin https://preview.example.test
 ```
 
-Requests cannot select or override either executable, its arguments, Web
-origin/domain policy, credentials, or driver backend. The reference service
+GUI execution additionally requires a deployment-owned ACL profile:
+
+```acl
+gui_host "desktop-primary" {
+  endpoint = "installed_daemon"
+  proxy_executable = "/opt/a3s/bin/cua-driver"
+  policy_file = "/etc/a3s-test/cua-policy.yaml"
+  macos_bundle_id = "com.example.Editor"
+  target = "launch"
+  arguments = ["--safe-mode"]
+  profile = "semantic"
+  permission_source = "driver_daemon"
+  permissions = ["accessibility", "screen_recording"]
+}
+```
+
+`endpoint` is `installed_daemon` or `embedded_socket`; the latter also
+requires `embedded_socket` and `permission_source = "host"`. `target` is
+`launch` or `attach`; attach may specify `attach_pid`, while launch may specify
+up to 32 bounded `arguments`. A window may be selected by exactly one of
+`window_title` or `window_automation_id`, otherwise the primary window is
+used. `profile` is `semantic` or `window_vision`. The profile and policy are
+bounded regular non-link files, and the CUA proxy is a regular non-link file.
+Unknown blocks, attributes, implicit permissions, wrong ordering, wrong
+attribution, and a mismatch between the declaration and live probe all fail
+worker startup. Remote requests cannot override any profile field.
+
+Requests cannot select or override an executable, GUI application or target,
+its arguments, Web origin/domain policy, credentials, or driver backend. The
+reference service
 runs one job at a time with a bounded waiting queue. A deployment must treat
 the fixed TUI executable as an authority boundary: selecting a shell or an
 application with shell escapes grants that authority to authenticated jobs.
@@ -851,8 +896,12 @@ Terminal snapshots may be `passed`, `failed`, `timed_out`, `cancelled`, or
 descriptor containing media type, byte length, and SHA-256. The report and
 surface artifacts stay in the private job directory. This execution protocol
 does not transport those bytes or choose scheduler-side sharding. Version 2
-only admits and digest-binds the exact scenario selection supplied by a
-coordinator.
+adds the exact scenario selection supplied by a coordinator. Version 3 adds
+GUI execution and the exact permission binding. GUI admission requires one
+parallel scenario, the GUI surface in both the suite and submission, and a
+permission digest identical to the current worker inventory. Non-GUI jobs
+reject an unexpected permission binding. The GUI driver revalidates the live
+grant again before launching or attaching to the fixed application.
 
 ## Remote artifact protocol
 
@@ -926,7 +975,7 @@ client identity remain deployment responsibilities.
 `a3s-test distributed plan <path>` and `a3s-test distributed run <path>` read a
 separate ACL document with exactly one labeled `distributed_run` block.
 `a3s-test distributed schema` prints strict JSON Schemas for protocol
-`a3s.test.distributed-run/1` plan requests, plans, analysis requests, and
+`a3s.test.distributed-run/2` plan requests, plans, analysis requests, and
 analyses.
 
 ```acl
@@ -960,6 +1009,20 @@ distributed_run "ci" {
 }
 ```
 
+If a worker advertises GUI, its block must also pin the exact permission
+digest from the inspected inventory and keep one exclusive lane:
+
+```acl
+  worker "desktop-primary" {
+    endpoint = "https://desktop-primary.example.test"
+    image_digest = "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+    inventory_digest = "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+    host_permission_digest = "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+    authorization_env = "A3S_TEST_WORKER_AUTHORIZATION_DESKTOP"
+    max_parallel_scenarios = 1
+  }
+```
+
 The root attributes are:
 
 - `manifest` is required and is relative to `input_root`;
@@ -991,11 +1054,15 @@ A config requires 1 through 64 unique `worker` blocks. `endpoint` must be an
 HTTPS origin or an explicit loopback HTTP origin with no credentials, path,
 query, or fragment. `image_digest` is required. `inventory_digest` is an
 optional exact pin; an omitted pin still becomes exact after live inspection
-and is bound into the plan. `authorization_env` is required, must begin with
+and is bound into the plan. `host_permission_digest` is required exactly when
+the inspected worker advertises GUI and must match that inventory's permission
+grant; it is invalid for a worker without GUI. `authorization_env` is
+required, must begin with
 `A3S_TEST_WORKER_AUTHORIZATION_`, and may contain only uppercase ASCII letters,
 digits, and underscores. Its value is read as the complete Authorization
 header, never serialized. `max_parallel_scenarios` defaults to 1, is limited
-to 1 through 64, and cannot exceed the inspected inventory.
+to 1 through 64, and cannot exceed the inspected inventory. A worker exposing
+GUI must use exactly 1.
 
 Each optional `quarantine` label is an exact scenario ID. `reason`, `owner`,
 `issue`, and a future Unix-millisecond `expires_at_ms` are all required;
@@ -1008,12 +1075,15 @@ or other infrastructure failures. A passing quarantined scenario is reported
 as `quarantined_pass` so stale entries remain visible.
 
 Planning concurrently inspects both remote endpoints and requires exact
-worker/artifact identity, image, and inventory agreement. Scenarios are sorted
-by scarce eligible surface, descending duration estimate, and ID. Duration is
+worker/artifact identity, image, inventory, and any GUI host-permission
+agreement. Scenarios are sorted by scarce eligible surface, descending
+duration estimate, and ID. Duration is
 the median of up to 20 recent passed or test-failed observations for the exact
 suite digest, or the scenario timeout when no sample exists. Stable lane
 scoring assigns every scenario exactly once and emits one shard per used
-worker. The plan digest covers all bindings and quarantines.
+worker. GUI shards require one exclusive lane and repeat the permission digest
+in the plan and remote submission. The plan digest covers all bindings and
+quarantines.
 
 Run dispatch validates each submission locally against the inspected worker
 limits before transport. Submissions are idempotent, concurrently bounded,

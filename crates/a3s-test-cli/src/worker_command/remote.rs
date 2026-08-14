@@ -22,6 +22,7 @@ use super::print_json;
 use crate::{browser_command, validate_timeout, BrowserDriverKind};
 
 mod executor;
+pub(super) mod gui_profile;
 mod http;
 
 const MAX_REMOTE_COMMAND_TIMEOUT_MS: u64 = 5 * 60 * 1_000;
@@ -88,6 +89,9 @@ pub(super) struct WorkerServeArgs {
     /// Additional hostname admitted by the deployment Web policy.
     #[arg(long = "web-allow-domain", requires = "browser_driver")]
     web_allowed_domains: Vec<String>,
+    /// Deployment-owned ACL profile for one exclusive, permission-probed GUI desktop.
+    #[arg(long)]
+    gui_host_profile: Option<PathBuf>,
     /// Deployment-owned executable used by every remote TUI scenario; a shell grants shell authority.
     #[arg(long)]
     tui_executable: Option<PathBuf>,
@@ -311,13 +315,29 @@ async fn build_profiles(args: &WorkerServeArgs) -> Result<BuiltProfiles> {
             terminal: TuiCapabilities::compiled().map_err(anyhow::Error::new)?,
         });
     }
+    let gui = match &args.gui_host_profile {
+        Some(path) => {
+            let loaded = gui_profile::load(
+                path,
+                Duration::from_millis(args.command_timeout_ms),
+                std::collections::BTreeSet::from([authorization_environment.clone()]),
+            )
+            .await?;
+            capabilities.push(WorkerSurfaceCapability::Gui {
+                desktop: Box::new(loaded.capability),
+            });
+            Some(loaded.config)
+        }
+        None => None,
+    };
     if capabilities.is_empty() {
-        anyhow::bail!("remote worker requires a deployment-owned Web or TUI profile");
+        anyhow::bail!("remote worker requires a deployment-owned Web, GUI, or TUI profile");
     }
     Ok(BuiltProfiles {
         capabilities,
         executor: executor::ExecutorProfiles {
             web,
+            gui,
             tui,
             authorization_environment,
             cleanup_timeout: runner_cleanup_timeout,
@@ -355,6 +375,11 @@ fn validate_serve_args(args: &WorkerServeArgs) -> Result<()> {
     }
     if !(1..=64).contains(&args.max_parallel_scenarios) {
         anyhow::bail!("parallel scenario limit must be between 1 and 64");
+    }
+    if args.gui_host_profile.is_some() && args.max_parallel_scenarios != 1 {
+        anyhow::bail!(
+            "a GUI worker represents one exclusive desktop and requires --max-parallel-scenarios 1"
+        );
     }
     if !(1..=1_024).contains(&args.max_queued_jobs) {
         anyhow::bail!("queued job limit must be between 1 and 1024");

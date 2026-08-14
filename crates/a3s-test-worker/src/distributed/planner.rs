@@ -17,6 +17,7 @@ struct WorkerState {
     spec: DistributedWorkerSpec,
     lanes: Vec<u64>,
     scenario_ids: Vec<String>,
+    surfaces: BTreeSet<crate::WorkerSurface>,
 }
 
 pub fn plan_distributed_run(
@@ -73,6 +74,7 @@ pub fn plan_distributed_run(
             lanes: vec![0; usize::from(spec.max_parallel_scenarios)],
             spec,
             scenario_ids: Vec::new(),
+            surfaces: BTreeSet::new(),
         })
         .collect::<Vec<_>>();
 
@@ -85,7 +87,12 @@ pub fn plan_distributed_run(
             .min_by_key(|(_, worker)| candidate_score(worker, estimate))
             .map(|(index, _)| index)
             .expect("eligible worker count was validated");
-        assign(&mut workers[selected], &scenario.id, estimate);
+        assign(
+            &mut workers[selected],
+            &scenario.id,
+            scenario.surface,
+            estimate,
+        );
     }
 
     let mut shards = Vec::new();
@@ -101,11 +108,18 @@ pub fn plan_distributed_run(
         })?;
         let mut scenario_ids = worker.scenario_ids;
         scenario_ids.sort();
+        let required_surfaces = worker.surfaces.into_iter().collect::<Vec<_>>();
+        let required_host_permission_digest = required_surfaces
+            .contains(&crate::WorkerSurface::Gui)
+            .then_some(worker.spec.host_permission_digest.clone())
+            .flatten();
         shards.push(DistributedShard {
             index,
             worker_instance: worker.spec.instance_id,
             required_image_digest: worker.spec.image_digest,
             required_inventory_digest: worker.spec.inventory_digest,
+            required_surfaces,
+            required_host_permission_digest,
             max_parallel_scenarios: worker.spec.max_parallel_scenarios,
             predicted_duration_ms: worker.lanes.into_iter().max().unwrap_or_default(),
             scenario_ids,
@@ -159,6 +173,24 @@ pub(super) fn validate_plan(plan: &DistributedRunPlan) -> Result<(), Distributed
         validate_identifier(&shard.worker_instance, "shard worker instance")?;
         validate_digest(&shard.required_image_digest, "shard image digest")?;
         validate_digest(&shard.required_inventory_digest, "shard inventory digest")?;
+        let gui_required = shard.required_surfaces.contains(&crate::WorkerSurface::Gui);
+        if shard.required_surfaces.is_empty()
+            || shard
+                .required_surfaces
+                .windows(2)
+                .any(|pair| pair[0] >= pair[1])
+            || (gui_required && shard.required_host_permission_digest.is_none())
+            || (!gui_required && shard.required_host_permission_digest.is_some())
+            || (gui_required && shard.max_parallel_scenarios != 1)
+        {
+            return Err(DistributedError::new(
+                "test.distributed.plan_invalid",
+                "distributed shard surfaces and host permission binding are invalid",
+            ));
+        }
+        if let Some(digest) = &shard.required_host_permission_digest {
+            validate_digest(digest, "shard host permission digest")?;
+        }
         if shard.index != expected_index
             || !worker_ids.insert(shard.worker_instance.as_str())
             || !(1..=64).contains(&shard.max_parallel_scenarios)
@@ -269,7 +301,12 @@ fn validate_request(request: &DistributedPlanRequest) -> Result<(), DistributedE
         }
         if !(1..=64).contains(&worker.max_parallel_scenarios)
             || worker.surfaces.is_empty()
+            || worker.surfaces.len() > 3
             || worker.surfaces.windows(2).any(|pair| pair[0] >= pair[1])
+            || (worker.surfaces.contains(&crate::WorkerSurface::Gui)
+                && (worker.max_parallel_scenarios != 1 || worker.host_permission_digest.is_none()))
+            || (!worker.surfaces.contains(&crate::WorkerSurface::Gui)
+                && worker.host_permission_digest.is_some())
         {
             return Err(DistributedError::new(
                 "test.distributed.worker_invalid",
@@ -278,6 +315,9 @@ fn validate_request(request: &DistributedPlanRequest) -> Result<(), DistributedE
                     worker.instance_id
                 ),
             ));
+        }
+        if let Some(digest) = &worker.host_permission_digest {
+            validate_digest(digest, "worker host permission digest")?;
         }
     }
     validate_history(&request.history)?;
@@ -415,7 +455,12 @@ fn candidate_score(worker: &WorkerState, estimate: u64) -> (u64, u64, &str) {
     )
 }
 
-fn assign(worker: &mut WorkerState, scenario_id: &str, estimate: u64) {
+fn assign(
+    worker: &mut WorkerState,
+    scenario_id: &str,
+    surface: crate::WorkerSurface,
+    estimate: u64,
+) {
     let lane = worker
         .lanes
         .iter()
@@ -425,6 +470,7 @@ fn assign(worker: &mut WorkerState, scenario_id: &str, estimate: u64) {
         .expect("workers have at least one lane");
     worker.lanes[lane] = worker.lanes[lane].saturating_add(estimate);
     worker.scenario_ids.push(scenario_id.to_string());
+    worker.surfaces.insert(surface);
 }
 
 fn digest(value: &impl Serialize) -> Result<String, DistributedError> {

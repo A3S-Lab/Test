@@ -143,6 +143,11 @@ async fn prepare(
                     image_digest: worker.descriptor.identity.image_digest.clone(),
                     inventory_digest: worker.descriptor.inventory_digest.clone(),
                     max_parallel_scenarios: worker.config.max_parallel_scenarios,
+                    host_permission_digest: worker
+                        .descriptor
+                        .inventory
+                        .gui_capability()
+                        .map(|capability| capability.host_permission_digest.clone()),
                     surfaces: worker
                         .descriptor
                         .inventory
@@ -203,12 +208,7 @@ fn scenario_surfaces(suite: &PreparedSuite) -> Result<BTreeMap<String, WorkerSur
             let surface = match scenario.surface {
                 Surface::Web => WorkerSurface::Web,
                 Surface::Tui => WorkerSurface::Tui,
-                Surface::Gui => {
-                    anyhow::bail!(
-                        "distributed reference workers do not execute GUI scenario '{}'",
-                        scenario.id
-                    )
-                }
+                Surface::Gui => WorkerSurface::Gui,
             };
             Ok((scenario.id.clone(), surface))
         })
@@ -320,6 +320,29 @@ fn validate_worker_binding(
             config.instance_id
         );
     }
+    let actual_host_permission_digest = descriptor
+        .inventory
+        .gui_capability()
+        .map(|capability| capability.host_permission_digest.as_str());
+    match (
+        config.host_permission_digest.as_deref(),
+        actual_host_permission_digest,
+    ) {
+        (Some(expected), Some(actual)) if expected == actual => {}
+        (Some(_), Some(_)) => anyhow::bail!(
+            "worker '{}' GUI host permission digest does not match the configured pin",
+            config.instance_id
+        ),
+        (None, Some(_)) => anyhow::bail!(
+            "worker '{}' exposes GUI but the distributed config omits host_permission_digest",
+            config.instance_id
+        ),
+        (Some(_), None) => anyhow::bail!(
+            "worker '{}' config pins GUI host permissions but the worker exposes no GUI surface",
+            config.instance_id
+        ),
+        (None, None) => {}
+    }
     if artifacts.worker != descriptor.identity
         || artifacts.inventory_digest != descriptor.inventory_digest
     {
@@ -389,4 +412,97 @@ fn collect_shards(
         anyhow::bail!("distributed shard results do not cover every planned scenario exactly once");
     }
     Ok((scenarios, issues))
+}
+
+#[cfg(test)]
+mod tests {
+    use a3s_test_driver_gui::{GuiHostPermissionGrant, GuiHostPermissionSource};
+    use a3s_test_worker::{
+        RemoteRetentionPolicy, RemoteWorkerIdentity, RemoteWorkerLimits, WorkerCapabilityInventory,
+        WorkerGuiApplication, WorkerGuiCapability, WorkerGuiEndpoint, WorkerGuiPerception,
+        WorkerGuiTarget, WorkerSurfaceCapability,
+    };
+
+    use super::{validate_worker_binding, WorkerConfig};
+
+    const IMAGE_DIGEST: &str =
+        "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+    const OTHER_PERMISSION_DIGEST: &str =
+        "sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff";
+
+    #[test]
+    fn coordinator_requires_the_exact_gui_host_permission_pin() {
+        let permissions = GuiHostPermissionGrant::required(GuiHostPermissionSource::DriverDaemon);
+        let permission_digest = permissions.digest();
+        let application = match std::env::consts::OS {
+            "macos" => WorkerGuiApplication::MacosBundle {
+                bundle_id: "com.example.Editor".to_string(),
+            },
+            "windows" => WorkerGuiApplication::WindowsExecutable {
+                path: "C:/Program Files/Example/editor.exe".to_string(),
+                expected_publisher: Some("Example, Inc.".to_string()),
+            },
+            _ => WorkerGuiApplication::LinuxDesktop {
+                desktop_id: "com.example.Editor".to_string(),
+            },
+        };
+        let inventory = WorkerCapabilityInventory::local(
+            1,
+            vec![WorkerSurfaceCapability::Gui {
+                desktop: Box::new(WorkerGuiCapability {
+                    profile_id: "desktop-primary".to_string(),
+                    compatibility_profile: "macos-installed".to_string(),
+                    endpoint: WorkerGuiEndpoint::InstalledDaemon,
+                    perception: WorkerGuiPerception::Semantic,
+                    target: WorkerGuiTarget::Launch,
+                    application,
+                    cua_driver_version: "0.10.0".to_string(),
+                    mcp_protocol: "2025-06-18".to_string(),
+                    capability_vocabulary: "1".to_string(),
+                    tools_schema: "1".to_string(),
+                    configuration_digest:
+                        "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+                            .to_string(),
+                    policy_digest:
+                        "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+                            .to_string(),
+                    host_permission_digest: permission_digest.clone(),
+                    host_permissions: permissions,
+                }),
+            }],
+        )
+        .expect("GUI worker inventory");
+        let descriptor = a3s_test_worker::RemoteWorkerDescriptor::new(
+            RemoteWorkerIdentity {
+                instance_id: "desktop-west-1".to_string(),
+                image_digest: IMAGE_DIGEST.to_string(),
+            },
+            inventory,
+            RemoteWorkerLimits::default(),
+        )
+        .expect("GUI worker descriptor");
+        let artifacts = descriptor.artifact_descriptor(RemoteRetentionPolicy::default());
+        let mut config = WorkerConfig {
+            instance_id: descriptor.identity.instance_id.clone(),
+            endpoint: "https://desktop-west-1.example.test".to_string(),
+            image_digest: IMAGE_DIGEST.to_string(),
+            inventory_digest: None,
+            host_permission_digest: None,
+            authorization_env: "A3S_TEST_WORKER_AUTHORIZATION_DESKTOP_WEST_1".to_string(),
+            max_parallel_scenarios: 1,
+        };
+
+        let error = validate_worker_binding(&config, &descriptor, &artifacts)
+            .expect_err("missing GUI permission pin");
+        assert!(error.to_string().contains("omits host_permission_digest"));
+
+        config.host_permission_digest = Some(OTHER_PERMISSION_DIGEST.to_string());
+        let error = validate_worker_binding(&config, &descriptor, &artifacts)
+            .expect_err("mismatched GUI permission pin");
+        assert!(error.to_string().contains("does not match"));
+
+        config.host_permission_digest = Some(permission_digest);
+        validate_worker_binding(&config, &descriptor, &artifacts)
+            .expect("exact GUI permission pin");
+    }
 }

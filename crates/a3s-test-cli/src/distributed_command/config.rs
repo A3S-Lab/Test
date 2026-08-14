@@ -34,6 +34,7 @@ pub(super) struct WorkerConfig {
     pub endpoint: String,
     pub image_digest: String,
     pub inventory_digest: Option<String>,
+    pub host_permission_digest: Option<String>,
     pub authorization_env: String,
     pub max_parallel_scenarios: u16,
 }
@@ -66,6 +67,7 @@ impl std::fmt::Debug for WorkerConfig {
             .field("endpoint", &self.endpoint)
             .field("image_digest", &self.image_digest)
             .field("inventory_digest", &self.inventory_digest)
+            .field("host_permission_digest", &self.host_permission_digest)
             .field("authorization_env", &self.authorization_env)
             .field("max_parallel_scenarios", &self.max_parallel_scenarios)
             .finish()
@@ -216,6 +218,7 @@ fn parse_worker(block: &Block) -> Result<WorkerConfig> {
             "endpoint",
             "image_digest",
             "inventory_digest",
+            "host_permission_digest",
             "authorization_env",
             "max_parallel_scenarios",
         ],
@@ -227,6 +230,11 @@ fn parse_worker(block: &Block) -> Result<WorkerConfig> {
         optional_string_value(block, "inventory_digest", "distributed_run.worker")?;
     if let Some(digest) = &inventory_digest {
         validate_digest(digest, "worker inventory digest")?;
+    }
+    let host_permission_digest =
+        optional_string_value(block, "host_permission_digest", "distributed_run.worker")?;
+    if let Some(digest) = &host_permission_digest {
+        validate_digest(digest, "worker host permission digest")?;
     }
     let authorization_env =
         required_string(block, "authorization_env", "distributed_run.worker")?.to_string();
@@ -241,6 +249,7 @@ fn parse_worker(block: &Block) -> Result<WorkerConfig> {
         endpoint: required_string(block, "endpoint", "distributed_run.worker")?.to_string(),
         image_digest: image_digest.to_string(),
         inventory_digest,
+        host_permission_digest,
         authorization_env,
         max_parallel_scenarios,
     })
@@ -466,6 +475,7 @@ mod tests {
   worker "runner-west" {{
     endpoint = "https://worker.example.test"
     image_digest = "{DIGEST}"
+    host_permission_digest = "{DIGEST}"
     authorization_env = "A3S_TEST_WORKER_AUTHORIZATION_WEST"
     max_parallel_scenarios = 4
   }}
@@ -483,6 +493,10 @@ mod tests {
         assert_eq!(config.id, "ci");
         assert_eq!(config.history_window, 12);
         assert_eq!(config.workers[0].instance_id, "runner-west");
+        assert_eq!(
+            config.workers[0].host_permission_digest.as_deref(),
+            Some(DIGEST)
+        );
         assert_eq!(config.workers[0].max_parallel_scenarios, 4);
         assert_eq!(config.quarantines[0].scenario_id, "checkout");
     }

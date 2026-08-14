@@ -405,7 +405,7 @@ tagged Rust package:
 
 ```bash
 cargo install --git https://github.com/A3S-Lab/Test \
-  --tag v0.13.0 --locked a3s-test-cli
+  --tag v0.14.0 --locked a3s-test-cli
 ```
 
 ### Hermetic runner image
@@ -447,7 +447,7 @@ TUI execution plus evidence and cleanup.
 ### Serve a remote worker
 
 Remote dispatch uses the separate, authenticated
-`a3s.test.remote-worker/2` protocol. Inspect the strict request, response, and
+`a3s.test.remote-worker/3` protocol. Inspect the strict request, response, and
 worker descriptor before integrating a scheduler. Report discovery and byte
 transport use the companion `a3s.test.remote-artifacts/1` protocol:
 
@@ -458,8 +458,8 @@ a3s-test worker artifacts schema
 
 The reference host listens on loopback only. Its expected `Authorization`
 header comes from an environment variable, while its image identity, Web
-network policy, browser integration, and TUI command are fixed by the
-deployment at startup:
+network policy, browser integration, GUI host profile, and TUI command are
+fixed by the deployment at startup:
 
 ```bash
 export A3S_TEST_WORKER_AUTHORIZATION='Bearer replace-with-a-secret'
@@ -476,6 +476,43 @@ a3s-test worker serve \
   --web-allow-origin https://preview.example.test \
   --tui-executable /opt/example-app/bin/test-console
 ```
+
+A GUI worker is one deployment-owned desktop slot and must advertise exactly
+one parallel scenario. Its application, launch or attach target, CUA endpoint,
+policy, perception profile, and complete permission declaration live in a
+separate bounded ACL file:
+
+```acl
+gui_host "desktop-primary" {
+  endpoint = "installed_daemon"
+  proxy_executable = "/opt/a3s/bin/cua-driver"
+  policy_file = "/etc/a3s-test/cua-policy.yaml"
+  macos_bundle_id = "com.example.Editor"
+  target = "launch"
+  arguments = ["--safe-mode"]
+  profile = "window_vision"
+  permission_source = "driver_daemon"
+  permissions = ["accessibility", "screen_recording"]
+}
+```
+
+```bash
+a3s-test worker serve \
+  --instance-id desktop-primary \
+  --image-digest "$A3S_TEST_WORKER_IMAGE_DIGEST" \
+  --authorization-env A3S_TEST_WORKER_AUTHORIZATION \
+  --gui-host-profile /etc/a3s-test/gui-host.acl \
+  --max-parallel-scenarios 1
+```
+
+Startup admits the locked CUA contract and calls its read-only permission
+probe without launching the configured application. The inventory records the
+exact application and endpoint profile, configuration and policy digests,
+permission source, `accessibility` and `screen_recording` grant, and its
+canonical digest. Installed-daemon permissions must be attributed to the
+driver daemon; embedded-socket permissions must be attributed to the host.
+Every GUI session rechecks the permissions before application launch or
+attachment.
 
 Each request is bound to that exact instance, image digest, and full
 capability-inventory digest. Submitted ACL files use a bounded, sorted,
@@ -501,7 +538,8 @@ or raise those reviewed bounds. Payload pruning is crash-recoverable; the
 longer-lived index continues to expose immutable descriptors with a `pruned`
 state. Once the index expires, the job and dispatch idempotency window ends.
 
-Requests cannot select executables, backends, credentials, or network policy.
+Requests cannot select executables, applications, backends, credentials, or
+network policy.
 The deployment must still treat the configured TUI as an authority boundary:
 selecting a shell, or an application with a shell escape, intentionally grants
 that authority to authenticated jobs. Use a dedicated least-privilege test
@@ -511,13 +549,13 @@ bytes; only the independently versioned artifact protocol does.
 
 The authorization environment variable is consumed only by the reference
 host. It is explicitly removed from browser capability probes, Web driver
-commands, and TUI child processes before those deployment-owned programs are
-started.
+commands, CUA proxy children, and TUI child processes before those
+deployment-owned programs are started.
 
 ### Run a distributed suite
 
 The coordinator uses ACL for deployment configuration and protocol
-`a3s.test.distributed-run/1` for immutable plans and verified analyses:
+`a3s.test.distributed-run/2` for immutable plans and verified analyses:
 
 ```bash
 a3s-test distributed schema
@@ -551,13 +589,29 @@ distributed_run "ci" {
 }
 ```
 
+A worker that advertises GUI must also be pinned to the exact permission
+digest reported by its inspected capability inventory:
+
+```acl
+  worker "desktop-primary" {
+    endpoint = "https://desktop-primary.example.test"
+    image_digest = "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+    inventory_digest = "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+    host_permission_digest = "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+    authorization_env = "A3S_TEST_WORKER_AUTHORIZATION_DESKTOP"
+    max_parallel_scenarios = 1
+  }
+```
+
 Planning inspects execution and artifact endpoints concurrently, verifies the
-exact instance, image, and inventory bindings, then assigns scarce surfaces
-first. Within that constraint it uses recent median durations and deterministic
-lane balancing. Every scenario appears exactly once, and the complete plan is
-SHA-256-bound. Uploads, referenced Surface Contracts, provenance files, and
-explicit additional inputs are included automatically in one contained,
-link-safe bundle.
+exact instance, image, inventory, and any GUI host-permission binding, then
+assigns scarce surfaces first. GUI shards remain exclusive and repeat that
+permission digest in the immutable submission. Within those constraints the
+planner uses recent median durations and deterministic lane balancing. Every
+scenario appears exactly once, and the complete plan is SHA-256-bound.
+Uploads, referenced Surface Contracts, provenance files, and explicit
+additional inputs are included automatically in one contained, link-safe
+bundle.
 
 Run dispatch is concurrent and idempotent. Lease renewal is independent of
 status polling, and the first interrupt cancels each exact submitted job. A

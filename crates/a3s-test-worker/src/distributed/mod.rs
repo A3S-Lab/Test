@@ -9,12 +9,14 @@ pub use planner::plan_distributed_run;
 use schemars::Schema;
 use serde::Serialize;
 
-pub const DISTRIBUTED_RUN_PROTOCOL: &str = "a3s.test.distributed-run/1";
+pub const DISTRIBUTED_RUN_PROTOCOL: &str = "a3s.test.distributed-run/2";
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
 pub struct DistributedRunProtocolInvariants {
     pub deterministic_sharding: bool,
     pub exact_worker_identity_binding: bool,
+    pub exact_host_permission_binding: bool,
+    pub exclusive_gui_workers: bool,
     pub exact_scenario_selection: bool,
     pub digest_bound_plan: bool,
     pub accountable_quarantine: bool,
@@ -39,6 +41,8 @@ pub fn distributed_run_protocol_schema() -> DistributedRunProtocolSchema {
         invariants: DistributedRunProtocolInvariants {
             deterministic_sharding: true,
             exact_worker_identity_binding: true,
+            exact_host_permission_binding: true,
+            exclusive_gui_workers: true,
             exact_scenario_selection: true,
             digest_bound_plan: true,
             accountable_quarantine: true,

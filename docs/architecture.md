@@ -337,19 +337,19 @@ Chrome archive is verified by SHA-256 before the image build. The final image
 is non-root, supports a read-only root filesystem, includes no GUI runtime,
 and never advertises GUI execution.
 
-The image exposes protocol `a3s.test.worker-capabilities/1` through two CLI
+Workers expose protocol `a3s.test.worker-capabilities/2` through two CLI
 commands:
 
 ```text
-a3s-test worker inventory [explicit Web probe]
+a3s-test worker inventory [explicit Web probe and/or GUI host profile]
 a3s-test worker schema
 ```
 
 `a3s-test-worker` owns the transport-neutral inventory model. It records the
 CLI implementation and semantic version, operating system, architecture,
 maximum scenario concurrency, and one strictly typed entry per available
-surface. Entries use canonical Web-then-TUI order and reject duplicates. The
-concurrency claim is limited to 1 through 64.
+surface. Entries use canonical Web-then-GUI-then-TUI order and reject
+duplicates. The concurrency claim is limited to 1 through 64.
 
 TUI capability evidence comes from the backend compiled for the current
 platform and lists its protocol, semantic features, and hard viewport,
@@ -358,7 +358,19 @@ absent by default. It appears only after the caller explicitly selects a typed
 browser integration and the real executable passes its version probe and
 local feature admission. A requested probe failure aborts the inventory
 command; it cannot silently degrade to TUI-only output. Standalone 0.26.0 does
-not claim exact-origin containment, and the runner does not claim GUI support.
+not claim exact-origin containment, and the hermetic runner does not claim GUI
+support.
+
+GUI capability evidence appears only after `--gui-host-profile` admits a
+deployment-owned ACL file and performs a real, read-only CUA startup probe.
+The probe validates the locked CUA protocol and tool vocabulary, then reads
+the exact `accessibility` and `screen_recording` grant without launching or
+attaching to the configured application. The capability records the fixed
+application target, endpoint and perception profiles, configuration and policy
+digests, permission attribution, and canonical permission digest. A GUI
+inventory must advertise exactly one parallel scenario because it represents
+one physical desktop slot. A pool is multiple independently supervised GUI
+workers, never concurrent jobs sharing one desktop.
 
 An inventory is deliberately self-reported scheduling evidence. Its generated
 schema states that it is unauthenticated, does not authorize execution, and
@@ -369,13 +381,13 @@ remote execution authority.
 
 ## Remote worker boundary
 
-Protocol `a3s.test.remote-worker/2` adds transport-neutral dispatch without
+Protocol `a3s.test.remote-worker/3` adds transport-neutral dispatch without
 turning A3S Test into a remote shell. The scheduler binds every submission to
 one exact worker instance, an externally supplied image digest, and the digest
 of the worker's complete admitted capability inventory. A request contains no
-browser command, TUI executable, backend name, environment, credential, or
-network-policy field. Those choices are typed objects created by the worker
-deployment before it starts accepting jobs.
+browser command, GUI application or target, TUI executable, backend name,
+environment, credential, or network-policy field. Those choices are typed
+objects created by the worker deployment before it starts accepting jobs.
 
 Remote inputs are a non-empty, canonically sorted inline bundle. Every entry
 uses a bounded portable relative path, canonical Base64, and a SHA-256 digest;
@@ -400,6 +412,13 @@ recomputes its surface requirements, and rejects any mismatch before opening a
 driver. Upload paths are rebound beneath the private materialized input root;
 every traversed component rejects symbolic links and Windows reparse points.
 
+Version 3 adds GUI dispatch. A submission containing the GUI surface must
+repeat the exact probed host-permission digest from the admitted inventory;
+missing or different bindings fail before materialization or driver startup.
+A non-GUI submission cannot carry that field. The GUI session still rechecks
+the live permission grant immediately before application launch or attachment,
+so a grant revoked after inventory publication fails closed.
+
 Explicit service shutdown waits for bounded worker cleanup. Dropping the last
 service handle also cancels the worker loop so an embedding process cannot
 silently retain the state-root lock through a detached idle task.
@@ -409,7 +428,7 @@ The reference host is exposed through:
 ```text
 a3s-test worker remote schema
 a3s-test worker artifacts schema
-a3s-test worker serve [deployment-owned Web and/or TUI profile]
+a3s-test worker serve [deployment-owned Web, GUI, and/or TUI profile]
 ```
 
 It accepts `POST /v1/worker` and `POST /v1/artifacts` on a loopback listener
@@ -417,10 +436,12 @@ only and requires the request's `Authorization` header to exactly match a
 bounded value read from a named environment variable. TLS termination and
 scheduler authentication policy remain external. The server never prints the
 authorization value. Its Web policy requires deployment-supplied exact
-origins, and its TUI executable and arguments are fixed at startup. Browser
-probes, Web commands, and TUI children explicitly remove the authorization
-environment variable before process creation. Runner artifacts use the job's
-private artifact root without changing the process-wide working directory.
+origins, its GUI host ACL fixes the CUA endpoint, policy, application, and
+permission declaration, and its TUI executable and arguments are fixed at
+startup. Browser probes, Web commands, CUA proxy children, and TUI children
+explicitly remove the authorization environment variable before process
+creation. Runner artifacts use the job's private artifact root without
+changing the process-wide working directory.
 
 Fixed executable selection prevents a request from choosing a new process; it
 does not reduce the authority already exposed by that executable. A shell or a
@@ -471,7 +492,7 @@ healthy or the deployment repairs the state.
 
 ## Distributed coordinator
 
-Protocol `a3s.test.distributed-run/1` is the coordinator-side plan and analysis
+Protocol `a3s.test.distributed-run/2` is the coordinator-side plan and analysis
 contract. It does not add scheduler authority to Core and does not bypass the
 remote execution or artifact boundaries. The CLI projection is:
 
@@ -483,8 +504,9 @@ a3s-test distributed run <config.acl>
 
 The ACL config names a contained suite input root, bounded history root and
 retention window, job/lease/poll/HTTP deadlines, accountable quarantines, and
-one or more worker origins. Credentials are absent from ACL; each worker names
-an environment variable with the dedicated
+one or more worker origins. A GUI worker additionally requires the exact
+`host_permission_digest` observed during deployment admission. Credentials are
+absent from ACL; each worker names an environment variable with the dedicated
 `A3S_TEST_WORKER_AUTHORIZATION_` prefix. HTTPS is required except for explicit
 loopback HTTP. Redirects and environment proxies are disabled.
 
@@ -515,8 +537,11 @@ Planning is deterministic for the same admitted request. Scenarios needed by
 the fewest workers are placed first, longer exact-suite median durations break
 the next tie, and stable worker/lane scoring balances predicted completion.
 The scenario timeout is the fallback estimate. Each used worker receives one
-shard whose exact instance, image, inventory, concurrency, predicted duration,
-and sorted scenario IDs are part of the plan digest.
+shard whose exact instance, image, inventory, required surfaces, concurrency,
+predicted duration, and sorted scenario IDs are part of the plan digest. A GUI
+shard also carries the inspected host-permission digest and can target only a
+worker with one exclusive desktop lane. The same binding is copied into the
+remote submission and revalidated by the worker.
 
 Dispatches use immutable job and dispatch IDs. Submission is bounded in
 memory, but already-submitted shards execute concurrently. A dedicated lease

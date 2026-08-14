@@ -129,7 +129,11 @@
       concurrent coordination, accountable quarantine, flake accounting,
       cross-revision historical comparison, digest-bound report verification,
       and atomic retained analyses
-- [ ] GUI worker pools with explicit host permissions
+- [x] Exclusive GUI worker pools with deployment-owned ACL host profiles,
+      read-only CUA readiness probes, explicit permission attribution,
+      configuration/policy/inventory digests, exact permission binding through
+      planning and dispatch, per-session grant revalidation, and authorization
+      environment scrubbing
 
 ## M6: Embedded Web Test Kit
 

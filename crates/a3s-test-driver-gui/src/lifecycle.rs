@@ -4,8 +4,8 @@ use std::time::Duration;
 
 use a3s_test_core::DriverError;
 
-use crate::api::{CuaApi, CuaApp, CuaPermissions, CuaWindow};
-use crate::{ApplicationIdentity, CuaEndpoint, GuiAppTarget, LaunchSpec, WindowSelector};
+use crate::api::{CuaApi, CuaApp, CuaWindow};
+use crate::{ApplicationIdentity, GuiAppTarget, LaunchSpec, WindowSelector};
 
 const WINDOW_DISCOVERY_ATTEMPTS: usize = 5;
 const WINDOW_DISCOVERY_INTERVAL: Duration = Duration::from_millis(100);
@@ -22,42 +22,6 @@ pub(crate) struct ApplicationBinding {
 pub(crate) struct WindowBinding {
     pub window_id: u32,
     pub title: String,
-}
-
-pub(crate) fn validate_permissions(
-    endpoint: &CuaEndpoint,
-    permissions: &CuaPermissions,
-) -> Result<(), DriverError> {
-    let expected_attribution = match endpoint {
-        CuaEndpoint::InstalledDaemon { .. } => "driver-daemon",
-        CuaEndpoint::EmbeddedSocket { .. } => "host",
-    };
-    if permissions.source.attribution != expected_attribution {
-        return Err(DriverError::new(
-            "test.driver.gui.permission_identity_invalid",
-            format!(
-                "CUA permission status is attributed to '{}', expected '{expected_attribution}'",
-                permissions.source.attribution
-            ),
-        ));
-    }
-    if !permissions.accessibility || !permissions.screen_recording {
-        let mut missing = Vec::new();
-        if !permissions.accessibility {
-            missing.push("accessibility");
-        }
-        if !permissions.screen_recording {
-            missing.push("screen_recording");
-        }
-        return Err(DriverError::new(
-            "test.driver.gui.permission_missing",
-            format!(
-                "CUA is missing required permissions: {}",
-                missing.join(", ")
-            ),
-        ));
-    }
-    Ok(())
 }
 
 pub(crate) async fn bind_application(

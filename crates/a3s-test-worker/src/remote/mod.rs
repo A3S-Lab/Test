@@ -13,7 +13,7 @@ pub use service::*;
 use schemars::Schema;
 use serde::Serialize;
 
-pub const REMOTE_WORKER_PROTOCOL: &str = "a3s.test.remote-worker/2";
+pub const REMOTE_WORKER_PROTOCOL: &str = "a3s.test.remote-worker/3";
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
 pub struct RemoteWorkerProtocolInvariants {
@@ -21,6 +21,8 @@ pub struct RemoteWorkerProtocolInvariants {
     pub tls_termination_external: bool,
     pub external_image_identity_required: bool,
     pub request_cannot_select_executables: bool,
+    pub request_cannot_select_applications: bool,
+    pub exact_host_permission_binding: bool,
     pub deadline_and_lease_required: bool,
     pub idempotent_dispatch_required: bool,
     pub scenario_selection_digest_bound: bool,
@@ -45,6 +47,8 @@ pub fn remote_worker_protocol_schema() -> RemoteWorkerProtocolSchema {
             tls_termination_external: true,
             external_image_identity_required: true,
             request_cannot_select_executables: true,
+            request_cannot_select_applications: true,
+            exact_host_permission_binding: true,
             deadline_and_lease_required: true,
             idempotent_dispatch_required: true,
             scenario_selection_digest_bound: true,
