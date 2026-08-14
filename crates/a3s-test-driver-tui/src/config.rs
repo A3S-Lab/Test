@@ -7,8 +7,9 @@ use a3s_test_core::DriverError;
 
 pub const MAX_TUI_COLUMNS: u16 = 1_000;
 pub const MAX_TUI_ROWS: u16 = 500;
-const MAX_SCROLLBACK_ROWS: usize = 10_000;
-const MAX_TERMINAL_CELLS: usize = 2_000_000;
+pub const MAX_TUI_SCROLLBACK_ROWS: usize = 10_000;
+pub const MAX_TUI_OUTPUT_BYTES: usize = 16 * 1024 * 1024;
+pub const MAX_TUI_TERMINAL_CELLS: usize = 2_000_000;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct TuiSize {
@@ -105,12 +106,12 @@ impl TuiDriverConfig {
                 "TUI cleanup timeout must be greater than zero",
             ));
         }
-        if !(1..=MAX_SCROLLBACK_ROWS).contains(&self.scrollback_rows) {
+        if !(1..=MAX_TUI_SCROLLBACK_ROWS).contains(&self.scrollback_rows) {
             return Err(config_error(
                 "TUI scrollback rows must be between 1 and 10000",
             ));
         }
-        if !(1_024..=16 * 1024 * 1024).contains(&self.max_output_bytes) {
+        if !(1_024..=MAX_TUI_OUTPUT_BYTES).contains(&self.max_output_bytes) {
             return Err(config_error(
                 "TUI output budget must be between 1024 and 16777216 bytes",
             ));
@@ -127,9 +128,9 @@ pub(crate) fn validate_terminal_budget(
 ) -> Result<(), DriverError> {
     let retained_rows = scrollback_rows.saturating_add(usize::from(size.rows));
     let cells = retained_rows.saturating_mul(usize::from(size.columns));
-    if cells > MAX_TERMINAL_CELLS {
+    if cells > MAX_TUI_TERMINAL_CELLS {
         return Err(config_error(format!(
-            "terminal viewport and scrollback exceed the {MAX_TERMINAL_CELLS} cell state budget"
+            "terminal viewport and scrollback exceed the {MAX_TUI_TERMINAL_CELLS} cell state budget"
         )));
     }
     Ok(())

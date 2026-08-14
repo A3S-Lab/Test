@@ -706,6 +706,59 @@ is bounded from 0 through 10. Only errors marked retryable because a command
 was not dispatched can be retried; assertions, command timeouts, and non-zero
 browser action exits are never retried.
 
+## Worker capability inventory
+
+The worker capability protocol is `a3s.test.worker-capabilities/1`. Its CLI
+projection always emits JSON:
+
+```bash
+a3s-test worker schema
+a3s-test worker inventory --max-parallel-scenarios 1
+a3s-test worker inventory \
+  --browser-driver standalone \
+  --browser-executable agent-browser
+```
+
+The inventory has four required fields:
+
+- `protocol` is the exact worker capability protocol identifier;
+- `runtime` contains a bounded implementation name, semantic version,
+  operating system, and architecture;
+- `max_parallel_scenarios` is an integer from 1 through 64;
+- `surfaces` is a non-empty, unique, canonically ordered list of typed Web or
+  TUI capability entries.
+
+Web is canonically ordered before TUI. A Web entry declares headless execution
+and embeds the admitted `BrowserCapabilities`. It is emitted only when the
+caller explicitly selects `a3s` or `standalone` and the selected executable's
+real `--version` probe succeeds. The feature set must exactly match the
+reviewed integration. In particular, standalone 0.26.x reports hostname
+containment and must not report exact-origin containment. Supplying a browser
+executable without a typed integration is invalid, and a requested probe
+failure fails the complete command.
+
+A TUI entry embeds protocol `a3s.test.driver-tui/1`, the backend compiled for
+the host (`unix_pty` or `windows_con_pty`), the reviewed feature set, and hard
+limits for columns, rows, scrollback, retained output, and terminal cells. A
+platform without a reviewed compiled backend fails closed. The hermetic
+Linux/amd64 runner advertises Web and TUI only; it never advertises GUI.
+
+`a3s-test worker schema` returns the generated strict JSON Schema and these
+authority invariants:
+
+- the inventory is self-reported scheduling evidence;
+- it is not authenticated and does not authorize execution;
+- Web evidence requires a real executable probe;
+- TUI evidence must match the compiled backend projection;
+- an external image identity is required.
+
+Unknown fields, duplicate surfaces, non-canonical order, unsupported protocol
+or browser versions, feature overclaims, invalid protocol revisions, and
+concurrency outside 1 through 64 are rejected by local admission. An external
+scheduler must bind the release image digest and apply its own identity,
+authorization, network, filesystem, credential, and resource policy. This
+protocol does not define remote dispatch or artifact transport.
+
 ## Agent-run configuration
 
 An agent-run config is a separate A3S ACL document for

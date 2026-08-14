@@ -1,0 +1,30 @@
+suite "runner-web-smoke" {
+    version = 1
+
+    scenario "local-page" {
+        name = "Exercise the loopback-only Web surface"
+        surface = "web"
+        timeout_ms = 45000
+
+        navigate "open" {
+            url = "http://127.0.0.1:43117/"
+        }
+
+        wait "loaded" {
+            load = "domcontentloaded"
+        }
+
+        expect "heading" {
+            text = "Hermetic runner ready"
+        }
+
+        accessibility "tree" {
+            path = "evidence/accessibility.json"
+            interactive = true
+        }
+
+        screenshot "page" {
+            path = "evidence/page.png"
+        }
+    }
+}

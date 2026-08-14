@@ -1,5 +1,50 @@
 # Changelog
 
+## 0.10.0 - 2026-08-14
+
+### Added
+
+- Added a Linux/amd64 hermetic runner image with the matching CLI, standalone
+  browser 0.26.0, pinned Chrome Headless Shell, and the native Unix PTY
+  backend. CI exercises Web and TUI ACL suites inside the restricted image and
+  release automation publishes it as
+  `ghcr.io/a3s-lab/a3s-test-runner:<version>`.
+- Added `a3s-test-worker` and protocol
+  `a3s.test.worker-capabilities/1` for strict, canonically ordered scheduling
+  evidence covering runtime identity, concurrency, Web capabilities, TUI
+  capabilities, backend features, and hard limits.
+- Added `a3s-test worker inventory` and `a3s-test worker schema`. Web is
+  advertised only after an explicitly selected real executable passes its
+  version probe; the compiled TUI projection is available by default.
+- Added strict JSON Schemas and local admission for Web and TUI capability
+  projections. Standalone browser 0.26.x cannot overclaim exact-origin
+  containment, and the runner image does not claim GUI execution.
+- Each release now includes `a3s-test-runner-image.txt` with the immutable GHCR
+  manifest reference used to bind the published runner independently of its
+  mutable tag.
+
+### Safety
+
+- Runner inputs bind the Dockerfile frontend and Rust and Node base-image
+  digests, fixed Debian snapshots, npm integrity, and the Chrome archive
+  SHA-256. The final image runs as a non-root user and supports a read-only
+  root filesystem.
+- Image smoke tests use no external network, drop every Linux capability,
+  enable `no-new-privileges`, bound PIDs, memory, CPU, and temporary storage,
+  and verify screenshot, accessibility, and terminal evidence plus complete
+  process, socket, and runtime cleanup.
+- Worker inventories explicitly declare that they are self-reported,
+  unauthenticated scheduling evidence and cannot authorize execution. A
+  scheduler must independently bind the image digest and execution policy.
+- Requested Web probes fail closed instead of silently omitting a surface, and
+  unknown fields, duplicate surfaces, feature overclaims, invalid protocol
+  revisions, and concurrency outside 1 through 64 are rejected.
+
+### Changed
+
+- Raised the Rust workspace release to `0.10.0`. The unchanged Test Kit remains
+  `0.2.0`.
+
 ## 0.9.0 - 2026-08-14
 
 ### Added

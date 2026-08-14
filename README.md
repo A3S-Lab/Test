@@ -405,8 +405,44 @@ tagged Rust package:
 
 ```bash
 cargo install --git https://github.com/A3S-Lab/Test \
-  --tag v0.9.0 --locked a3s-test-cli
+  --tag v0.10.0 --locked a3s-test-cli
 ```
+
+### Hermetic runner image
+
+Each release also publishes a Linux/amd64 runner image at
+`ghcr.io/a3s-lab/a3s-test-runner:<version>`. The release asset
+`a3s-test-runner-image.txt` contains the immutable
+`ghcr.io/a3s-lab/a3s-test-runner@sha256:...` reference to use in CI or a
+worker scheduler. The image contains the matching `a3s-test` CLI, standalone
+browser 0.26.0, pinned Chrome Headless Shell, and the native TUI backend. It
+does not include a GUI runtime and never advertises GUI execution.
+
+Inspect scheduling capabilities without opening a surface:
+
+```bash
+runner_image="$(curl -fsSL \
+  https://github.com/A3S-Lab/Test/releases/latest/download/a3s-test-runner-image.txt)"
+
+docker run --rm --platform linux/amd64 \
+  --network none --read-only --cap-drop ALL \
+  --security-opt no-new-privileges \
+  --pids-limit 256 --memory 2g --cpus 2 \
+  --tmpfs /tmp:rw,nosuid,nodev,noexec,size=512m,mode=1777 \
+  --tmpfs /workspace:rw,nosuid,nodev,noexec,size=256m,uid=1000,gid=1000,mode=700 \
+  "${runner_image}" \
+  a3s-test worker inventory \
+    --browser-driver standalone \
+    --browser-executable agent-browser
+```
+
+The inventory is strict, versioned, self-reported scheduling evidence. It is
+not authentication or execution authorization. A scheduler must independently
+bind the image digest, network, filesystem, credentials, and concurrency
+policy. The release smoke test runs the image as its non-root user with no
+external network, a read-only root filesystem, dropped capabilities, and
+bounded temporary filesystems, then proves both loopback-only Web and owned
+TUI execution plus evidence and cleanup.
 
 ## Turn a proven path into a regression
 
@@ -613,6 +649,8 @@ a3s-test agent schema
 a3s-test provider schema contract-generation
 a3s-test provider schema llm
 a3s-test provider schema visual-grounding
+a3s-test worker schema
+a3s-test worker inventory
 ```
 
 ## Architecture
@@ -634,6 +672,7 @@ crates/
 ├── a3s-test-core/        # Typed suites, actions, observations, and surface contracts
 ├── a3s-test-runner/      # Deadlines, cancellation, retries, and reports
 ├── a3s-test-session/     # Surface-neutral long-lived session application layer
+├── a3s-test-worker/      # Typed, self-reported scheduling capability inventory
 ├── a3s-test-driver-gui/  # Locked MCP adapter boundary for A3S CUA
 ├── a3s-test-driver-tui/  # Owned PTY/ConPTY and bounded VT semantics
 ├── a3s-test-driver-web/  # A3S Browser / agent-browser adapter

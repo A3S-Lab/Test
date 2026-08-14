@@ -20,6 +20,7 @@ a3s-test-driver-tui = { path = "../a3s-test-driver-tui" }
 a3s-test-driver-web = { path = "../a3s-test-driver-web" }
 a3s-test-runner = { path = "../a3s-test-runner" }
 a3s-test-session = { path = "../a3s-test-session" }
+a3s-test-worker = { path = "../a3s-test-worker" }
 anyhow.workspace = true
 async-trait.workspace = true
 clap.workspace = true

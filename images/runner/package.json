@@ -1,0 +1,8 @@
+{
+  "name": "a3s-test-runner-runtime",
+  "private": true,
+  "version": "0.0.0",
+  "dependencies": {
+    "agent-browser": "0.26.0"
+  }
+}

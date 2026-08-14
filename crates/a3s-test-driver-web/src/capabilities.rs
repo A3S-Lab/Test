@@ -1,20 +1,23 @@
 use std::collections::BTreeSet;
 use std::ffi::OsString;
 
-use a3s_test_core::{DriverError, ACTION_PROTOCOL_REVISION};
+use a3s_test_core::{DriverError, ACTION_PROTOCOL_REVISION, PAGE_CONTEXT_PROTOCOL};
+use schemars::{JsonSchema, Schema, SchemaGenerator};
 use semver::Version;
 use serde::{Deserialize, Serialize};
 
 use crate::{AgentBrowserConfig, BrowserCommand, CommandExecutor, CommandInvocation};
 
-#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum BrowserIntegration {
     A3s,
     Standalone,
 }
 
-#[derive(Clone, Copy, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
+#[derive(
+    Clone, Copy, Debug, Deserialize, Eq, JsonSchema, Ord, PartialEq, PartialOrd, Serialize,
+)]
 #[serde(rename_all = "snake_case")]
 pub enum WebCapability {
     Accessibility,
@@ -40,15 +43,84 @@ pub enum WebCapability {
     Viewport,
 }
 
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct BrowserCapabilities {
     pub integration: BrowserIntegration,
+    #[schemars(length(min = 1, max = 128))]
     pub version: String,
+    #[schemars(schema_with = "action_protocol_revision_schema")]
     pub protocol_revision: u32,
     pub features: BTreeSet<WebCapability>,
     /// Runtime page capability discovered independently after navigation.
     /// `None` means no page was probed by this executable-only command.
+    #[schemars(schema_with = "page_context_protocol_schema")]
     pub page_context_protocol: Option<String>,
+}
+
+impl BrowserCapabilities {
+    pub fn validate(&self) -> Result<(), DriverError> {
+        if self.version.is_empty() || self.version.len() > 128 {
+            return Err(DriverError::new(
+                "test.driver.web.version_invalid",
+                "browser capability version must be bounded and non-empty",
+            ));
+        }
+        let version = Version::parse(&self.version).map_err(|_| {
+            DriverError::new(
+                "test.driver.web.version_invalid",
+                "browser capability version is not semantic",
+            )
+        })?;
+        admit_version(self.integration, &version)?;
+        if self.protocol_revision != ACTION_PROTOCOL_REVISION {
+            return Err(DriverError::new(
+                "test.driver.web.protocol_unsupported",
+                format!(
+                    "browser action protocol {} is unsupported; expected {}",
+                    self.protocol_revision, ACTION_PROTOCOL_REVISION
+                ),
+            ));
+        }
+        if self.features != expected_features(self.integration) {
+            return Err(DriverError::new(
+                "test.driver.web.capability_invalid",
+                "browser feature projection does not match the admitted integration",
+            ));
+        }
+        if self
+            .page_context_protocol
+            .as_deref()
+            .is_some_and(|protocol| protocol != PAGE_CONTEXT_PROTOCOL)
+        {
+            return Err(DriverError::new(
+                "test.driver.web.page_context_protocol_unsupported",
+                "browser capability declared an unsupported page-context protocol",
+            ));
+        }
+        Ok(())
+    }
+}
+
+fn action_protocol_revision_schema(_: &mut SchemaGenerator) -> Schema {
+    schemars::json_schema!({
+        "type": "integer",
+        "const": ACTION_PROTOCOL_REVISION
+    })
+}
+
+fn page_context_protocol_schema(_: &mut SchemaGenerator) -> Schema {
+    schemars::json_schema!({
+        "oneOf": [
+            {
+                "type": "string",
+                "const": PAGE_CONTEXT_PROTOCOL
+            },
+            {
+                "type": "null"
+            }
+        ]
+    })
 }
 
 pub(crate) async fn discover(
@@ -92,6 +164,18 @@ pub(crate) async fn discover(
     };
     admit_version(integration, &version)?;
 
+    let capabilities = BrowserCapabilities {
+        integration,
+        version: version.to_string(),
+        protocol_revision: ACTION_PROTOCOL_REVISION,
+        features: expected_features(integration),
+        page_context_protocol: None,
+    };
+    capabilities.validate()?;
+    Ok(capabilities)
+}
+
+fn expected_features(integration: BrowserIntegration) -> BTreeSet<WebCapability> {
     let mut features: BTreeSet<_> = [
         WebCapability::Accessibility,
         WebCapability::Console,
@@ -119,14 +203,7 @@ pub(crate) async fn discover(
     if integration == BrowserIntegration::A3s {
         features.insert(WebCapability::ExactOriginContainment);
     }
-
-    Ok(BrowserCapabilities {
-        integration,
-        version: version.to_string(),
-        protocol_revision: ACTION_PROTOCOL_REVISION,
-        features,
-        page_context_protocol: None,
-    })
+    features
 }
 
 fn parse_version(output: &str) -> Result<Version, DriverError> {
@@ -160,7 +237,11 @@ fn admit_version(integration: BrowserIntegration, version: &Version) -> Result<(
 
 #[cfg(test)]
 mod tests {
-    use super::{admit_version, parse_version, BrowserIntegration};
+    use super::{
+        admit_version, expected_features, parse_version, BrowserCapabilities, BrowserIntegration,
+        WebCapability,
+    };
+    use a3s_test_core::ACTION_PROTOCOL_REVISION;
     use semver::Version;
 
     #[test]
@@ -185,5 +266,50 @@ mod tests {
         let error = admit_version(BrowserIntegration::A3s, &Version::new(0, 3, 2))
             .expect_err("hostname-only Browser version");
         assert_eq!(error.code(), "test.driver.web.version_unsupported");
+    }
+
+    #[test]
+    fn capability_wire_shape_is_strict_and_locally_admitted() {
+        let capabilities = BrowserCapabilities {
+            integration: BrowserIntegration::Standalone,
+            version: "0.26.0".to_string(),
+            protocol_revision: ACTION_PROTOCOL_REVISION,
+            features: expected_features(BrowserIntegration::Standalone),
+            page_context_protocol: None,
+        };
+        capabilities.validate().expect("valid capabilities");
+
+        let schema = serde_json::to_value(schemars::schema_for!(BrowserCapabilities))
+            .expect("browser capability schema");
+        assert_eq!(schema["additionalProperties"], false);
+        assert_eq!(
+            schema["properties"]["protocol_revision"]["const"],
+            ACTION_PROTOCOL_REVISION
+        );
+
+        let mut value = serde_json::to_value(capabilities).expect("browser capability JSON");
+        value
+            .as_object_mut()
+            .expect("capability object")
+            .insert("trusted".to_string(), serde_json::Value::Bool(true));
+        serde_json::from_value::<BrowserCapabilities>(value).expect_err("unknown field must fail");
+    }
+
+    #[test]
+    fn capability_admission_rejects_features_not_proven_by_the_integration() {
+        let mut features = expected_features(BrowserIntegration::Standalone);
+        features.insert(WebCapability::ExactOriginContainment);
+        let capabilities = BrowserCapabilities {
+            integration: BrowserIntegration::Standalone,
+            version: "0.26.0".to_string(),
+            protocol_revision: ACTION_PROTOCOL_REVISION,
+            features,
+            page_context_protocol: None,
+        };
+
+        let error = capabilities
+            .validate()
+            .expect_err("standalone exact-origin overclaim");
+        assert_eq!(error.code(), "test.driver.web.capability_invalid");
     }
 }

@@ -1,0 +1,19 @@
+[package]
+name = "a3s-test-worker"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+description = "Typed worker capability inventory for A3S Test"
+
+[dependencies]
+a3s-test-driver-tui = { path = "../a3s-test-driver-tui" }
+a3s-test-driver-web = { path = "../a3s-test-driver-web" }
+schemars.workspace = true
+semver.workspace = true
+serde.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+serde_json.workspace = true

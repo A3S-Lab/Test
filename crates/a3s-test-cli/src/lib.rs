@@ -33,6 +33,7 @@ mod gui_certification;
 mod mcp;
 mod mcp_web;
 mod provider_schema;
+mod worker_command;
 
 #[derive(Debug, Parser)]
 #[command(
@@ -65,6 +66,8 @@ enum Commands {
     Provider(provider_schema::ProviderArgs),
     /// Run a test suite.
     Run(RunArgs),
+    /// Inspect this executable's worker scheduling capabilities.
+    Worker(worker_command::WorkerArgs),
 }
 
 #[derive(Debug, Args)]
@@ -273,6 +276,7 @@ pub fn execute(cli: Cli) -> Pin<Box<dyn Future<Output = Result<ExitCode>>>> {
         Commands::Mcp(args) => Box::pin(serve_mcp(args)),
         Commands::Provider(args) => Box::pin(async move { provider_schema::execute(args) }),
         Commands::Run(args) => Box::pin(run(args)),
+        Commands::Worker(args) => Box::pin(worker_command::execute(args)),
     }
 }
 

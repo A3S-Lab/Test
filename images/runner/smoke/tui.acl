@@ -1,0 +1,38 @@
+suite "runner-tui-smoke" {
+    version = 1
+
+    scenario "terminal" {
+        name = "Exercise the owned PTY surface"
+        surface = "tui"
+        timeout_ms = 15000
+
+        wait "ready" {
+            text = "runner-ready"
+        }
+
+        terminal_resize "resize" {
+            columns = 100
+            rows = 30
+        }
+
+        terminal_paste "input" {
+            text = "hello"
+        }
+
+        press "submit" {
+            key = "Enter"
+        }
+
+        wait "echoed" {
+            regex = "input:hello"
+        }
+
+        expect "visible" {
+            text = "input:hello"
+        }
+
+        terminal_recording "recording" {
+            path = "evidence/terminal.vt"
+        }
+    }
+}

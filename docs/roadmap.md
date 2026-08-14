@@ -112,7 +112,9 @@
 
 ## M5: Distributed execution
 
-- [ ] Hermetic runner image and capability inventory
+- [x] Hermetic Linux/amd64 runner image and strict, self-reported Web/TUI
+      capability inventory, with digest-pinned inputs, non-root restricted
+      smoke tests, and externally bound release image identity
 - [ ] Remote worker protocol
 - [ ] Artifact retention and report indexing
 - [ ] Sharding, quarantine, flake accounting, and historical comparison

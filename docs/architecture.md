@@ -325,6 +325,58 @@ both the interactive session protocol and deterministic ACL workflow. The MCP
 stdio server projects the same `a3s-test-session` application layer; it does
 not own a second driver or runner implementation.
 
+## Hermetic runner and capability inventory
+
+The distributed-execution foundation separates a reproducible execution
+environment from the authority that schedules it. The release runner is a
+Linux/amd64 image containing the matching CLI, standalone browser 0.26.0,
+pinned Chrome Headless Shell, and the compiled Unix PTY backend. The Dockerfile
+frontend and Rust and Node base images are digest-bound, Debian packages come
+from fixed snapshots, the browser package is locked by npm integrity, and the
+Chrome archive is verified by SHA-256 before the image build. The final image
+is non-root, supports a read-only root filesystem, includes no GUI runtime,
+and never advertises GUI execution.
+
+The image exposes protocol `a3s.test.worker-capabilities/1` through two CLI
+commands:
+
+```text
+a3s-test worker inventory [explicit Web probe]
+a3s-test worker schema
+```
+
+`a3s-test-worker` owns the transport-neutral inventory model. It records the
+CLI implementation and semantic version, operating system, architecture,
+maximum scenario concurrency, and one strictly typed entry per available
+surface. Entries use canonical Web-then-TUI order and reject duplicates. The
+concurrency claim is limited to 1 through 64.
+
+TUI capability evidence comes from the backend compiled for the current
+platform and lists its protocol, semantic features, and hard viewport,
+scrollback, output, and terminal-state limits. Web capability evidence is
+absent by default. It appears only after the caller explicitly selects a typed
+browser integration and the real executable passes its version probe and
+local feature admission. A requested probe failure aborts the inventory
+command; it cannot silently degrade to TUI-only output. Standalone 0.26.0 does
+not claim exact-origin containment, and the runner does not claim GUI support.
+
+An inventory is deliberately self-reported scheduling evidence. Its generated
+schema states that it is unauthenticated, does not authorize execution, and
+requires an external image identity. A scheduler must bind the release image
+digest and independently enforce worker identity, network, filesystem,
+credentials, and resource policy before dispatch. The remote worker protocol
+is a later milestone and cannot infer execution authority from this document.
+
+CI builds the exact image and runs it with no external network, a read-only
+root, all Linux capabilities dropped, `no-new-privileges`, bounded memory,
+CPU, PIDs, and temporary filesystems. The smoke path validates inventory and
+schema, runs a loopback-only Web ACL with accessibility and screenshot
+evidence, runs a TUI ACL with terminal recording, and rejects surviving owned
+processes, sockets, or private runtime directories. Release automation repeats
+that smoke before pushing the version and `latest` tags, resolves their remote
+manifest digest, requires both tags to match, and uploads the immutable image
+reference with the GitHub Release.
+
 ## Core contracts
 
 `a3s-test-core` contains framework-independent types:
@@ -670,20 +722,6 @@ boundary and synchronously reap the direct proxy on final Drop. A failure to
 establish that boundary aborts transport admission and reaps the just-started
 process tree.
 
-## TUI driver plan
-
-The TUI driver will own a PTY session and expose semantic terminal state:
-
-- viewport text and cursor position;
-- alternate-screen and raw-mode state;
-- process exit status;
-- key chords and pasted text;
-- bounded waits over exact text or regular expressions;
-- terminal recording as evidence.
-
-It must launch the tested program in a dedicated process group and restore the
-terminal even when the runner is cancelled.
-
 ## Coding-agent interface
 
 Coding agents need a persistent, inspectable control loop rather than a
@@ -864,7 +902,8 @@ Relative artifact paths are admission-checked and cannot escape this root. The
 Web adapter currently records screenshots, accessibility JSON, console and
 page-error JSON, downloads, HAR, traces, and WebM video. The GUI adapter
 records explicit window screenshots and digest-bound grounding evidence.
-Terminal recordings remain planned with the TUI driver.
+The TUI adapter records bounded raw VT evidence beneath the scenario artifact
+root.
 
 Reports separate assertion failure from infrastructure failure and cleanup
 failure. This distinction is required for an agent to choose whether to repair
