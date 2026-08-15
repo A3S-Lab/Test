@@ -1,7 +1,37 @@
 import type { RepairIntent, RepairSeverity, Rect } from "./types";
-import type { LayoutCanvas, LayoutSource, SelectionMode } from "./review-model";
+import { MODE_LABEL, type LayoutCanvas, type LayoutSource, type OverlayTheme, type SelectionMode } from "./review-model";
 import { validLayoutRect } from "./review-utils";
 import { ComponentCatalogView } from "./component-catalog-view";
+import { REVIEW_KEY_SHORTCUTS } from "./review-input-policy";
+
+export type ReviewMarkingToolbarProps = {
+  marking: boolean;
+  mode: SelectionMode;
+  layoutMode: boolean;
+  paused: boolean;
+  markersVisible: boolean;
+  autoSendEnabled: boolean;
+  theme: OverlayTheme;
+  onStartMarking(value: SelectionMode): void;
+  onToggleLayout(): void;
+  onTogglePause(): void;
+  onToggleMarkers(): void;
+  onToggleAutoSend(): void;
+  onCycleTheme(): void;
+  onCancelMarking(): void;
+};
+
+export function ReviewMarkingToolbar(props: ReviewMarkingToolbarProps) {
+  return <section className="a3s-tools" aria-label="Mark page">
+    {(["element", "text", "multi", "area", "draw"] as SelectionMode[]).map((value) => <button key={value} type="button" aria-label={`Mark ${MODE_LABEL[value].toLowerCase()}`} aria-pressed={props.marking && props.mode === value} className={props.marking && props.mode === value ? "selected" : ""} onClick={() => props.onStartMarking(value)}>{MODE_LABEL[value]}</button>)}
+    <button type="button" title="Toggle Layout Mode (L)" aria-keyshortcuts={REVIEW_KEY_SHORTCUTS.layout} aria-pressed={props.layoutMode} className={props.layoutMode ? "selected" : ""} onClick={props.onToggleLayout}>Layout</button>
+    <button type="button" title="Pause or resume page motion (P)" aria-label={props.paused ? "Resume page animations" : "Pause page animations"} aria-keyshortcuts={REVIEW_KEY_SHORTCUTS.pause} aria-pressed={props.paused} className={props.paused ? "selected" : ""} onClick={props.onTogglePause}>{props.paused ? "Resume" : "Pause"}</button>
+    <button type="button" title="Show or hide finding markers (H)" aria-label={props.markersVisible ? "Hide markers" : "Show markers"} aria-keyshortcuts={REVIEW_KEY_SHORTCUTS.markers} aria-pressed={props.markersVisible} className={props.markersVisible ? "selected" : ""} onClick={props.onToggleMarkers}>{props.markersVisible ? "Hide markers" : "Show markers"}</button>
+    <button type="button" aria-label={`Turn auto-send ${props.autoSendEnabled ? "off" : "on"}`} aria-pressed={props.autoSendEnabled} className={props.autoSendEnabled ? "selected" : ""} onClick={props.onToggleAutoSend}>Auto-send · {props.autoSendEnabled ? "on" : "off"}</button>
+    <button type="button" aria-label={`Change overlay theme; current theme is ${props.theme}`} onClick={props.onCycleTheme}>Theme · {props.theme}</button>
+    {props.marking && <button type="button" className="danger" onClick={props.onCancelMarking}>Cancel</button>}
+  </section>;
+}
 
 export type FindingEditorProps = {
   label: string;

@@ -7,11 +7,129 @@ const EDITED_DRAFT: &str = "Edit this restored draft from its marker";
 
 pub fn run_review_workflow(command: &impl Fn(&[&str]) -> Output) {
     verify_shortcut_discoverability(command);
+    exercise_keyboard_multi_selection(command);
     create_and_restore_draft(command);
     edit_draft_from_spatial_marker(command);
     exercise_keyboard_controls(command);
     exercise_host_interaction_blocking(command);
     author_searchable_layout_placement(command);
+}
+
+fn exercise_keyboard_multi_selection(command: &impl Fn(&[&str]) -> Output) {
+    run(
+        command,
+        "focus the first keyboard multi-select target",
+        &["focus", "#sticky"],
+    );
+    click_accessible(
+        command,
+        "start keyboard multi-selection",
+        "button",
+        "Mark multi",
+    );
+    wait_for(
+        command,
+        "keep keyboard multi-selection in the application",
+        "document.activeElement?.id==='sticky'&&!document.querySelector('[data-a3s-testkit-overlay]').shadowRoot.querySelector('.a3s-editor')",
+    );
+
+    run(
+        command,
+        "add the first keyboard multi-select target",
+        &["press", "Enter"],
+    );
+    let first = encoded_eval(
+        command,
+        "inspect the first keyboard multi-selection",
+        "(()=>{const shadow=document.querySelector('[data-a3s-testkit-overlay]').shadowRoot;return JSON.stringify({focus:document.activeElement?.id,editor:Boolean(shadow.querySelector('.a3s-editor')),announcement:shadow.querySelector('.a3s-announcer')?.textContent})})()",
+    );
+    assert_eq!(first["focus"], "sticky");
+    assert_eq!(first["editor"], false);
+    assert!(
+        first["announcement"]
+            .as_str()
+            .is_some_and(|value| value.contains("1 selected element")),
+        "the first keyboard multi-selection was not announced: {first}"
+    );
+
+    run(
+        command,
+        "focus the second keyboard multi-select target",
+        &["focus", "#host-probe"],
+    );
+    run(
+        command,
+        "add the second keyboard multi-select target",
+        &["press", "Enter"],
+    );
+    let second = encoded_eval(
+        command,
+        "inspect the second keyboard multi-selection",
+        "(()=>{const shadow=document.querySelector('[data-a3s-testkit-overlay]').shadowRoot;return JSON.stringify({focus:document.activeElement?.id,editor:Boolean(shadow.querySelector('.a3s-editor')),announcement:shadow.querySelector('.a3s-announcer')?.textContent,hostClicks:window.testkitHostClicks})})()",
+    );
+    assert_eq!(second["focus"], "host-probe");
+    assert_eq!(second["editor"], false);
+    assert_eq!(second["hostClicks"], 0);
+    assert!(
+        second["announcement"]
+            .as_str()
+            .is_some_and(|value| value.contains("2 selected elements")),
+        "the second keyboard multi-selection was not announced: {second}"
+    );
+
+    run(
+        command,
+        "finish keyboard multi-selection",
+        &["press", "Shift+Enter"],
+    );
+    wait_for(
+        command,
+        "open the completed keyboard multi-select editor",
+        "(()=>{const shadow=document.querySelector('[data-a3s-testkit-overlay]').shadowRoot;return shadow.querySelector('.a3s-editor')?.textContent.includes('2 selected elements')&&shadow.activeElement?.matches('textarea')})()",
+    );
+    click_accessible(
+        command,
+        "discard the completed keyboard multi-selection",
+        "button",
+        "Cancel",
+    );
+    wait_for(
+        command,
+        "remove the completed keyboard multi-select editor",
+        "!document.querySelector('[data-a3s-testkit-overlay]').shadowRoot.querySelector('.a3s-editor')",
+    );
+
+    run(
+        command,
+        "focus before cancelling keyboard multi-selection",
+        &["focus", "#sticky"],
+    );
+    click_accessible(
+        command,
+        "start keyboard multi-selection for cancellation",
+        "button",
+        "Mark multi",
+    );
+    wait_for(
+        command,
+        "restore application focus before keyboard multi-select cancellation",
+        "document.activeElement?.id==='sticky'&&!document.querySelector('[data-a3s-testkit-overlay]').shadowRoot.querySelector('.a3s-editor')",
+    );
+    run(
+        command,
+        "add a keyboard multi-select target before cancellation",
+        &["press", "Enter"],
+    );
+    run(
+        command,
+        "cancel keyboard multi-selection with Escape",
+        &["press", "Escape"],
+    );
+    wait_for(
+        command,
+        "clear cancelled keyboard multi-selection",
+        "(()=>{const shadow=document.querySelector('[data-a3s-testkit-overlay]').shadowRoot;return document.activeElement?.id==='sticky'&&!shadow.querySelector('.a3s-editor')&&!shadow.querySelector('.a3s-hint')})()",
+    );
 }
 
 fn verify_shortcut_discoverability(command: &impl Fn(&[&str]) -> Output) {

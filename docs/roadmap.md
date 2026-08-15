@@ -226,6 +226,10 @@ snapshot. Pages without the SDK retain the existing Web behavior.
       evidence; they must never become hidden agent instructions
 - [x] Provide keyboard element marking, Escape focus restoration, and explicit
       fail-closed production enablement for both runtime and overlay
+- [x] Keep keyboard multi-selection on application controls until explicit
+      `Shift+Enter` completion, announce each bounded addition without
+      activating the host control, and discard incomplete candidates on
+      Escape or visible cancellation with React and real-Chromium regressions
 - [x] Expose a named non-modal review dialog, finding-specific control names,
       focused live announcements, visible focus indicators, and durable focus
       restoration, with React and real-Chromium accessibility-tree regressions
@@ -359,8 +363,9 @@ The completion work intentionally preserves these product boundaries:
       callbacks, catalog filtering, marker editing, clear-on-copy, docking,
       and hide-until-restart
 - [x] Extend the real Chromium Test Kit suite to prove restored drafts,
-      keyboard-only review controls, host-interaction blocking, searchable
-      Layout authoring, and accessible spatial marker editing
+      keyboard-only review controls and multi-selection, host-interaction
+      blocking, searchable Layout authoring, and accessible spatial marker
+      editing
 - [x] Re-run Test Kit typecheck/tests/build, Rust formatting/tests/clippy, the
       real Chromium Test Kit suite, and the complete repair lifecycle matrix
 

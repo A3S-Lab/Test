@@ -453,6 +453,15 @@ The launcher and active controls expose the same bindings through
 that remains available to keyboard and screen-reader navigation and explicitly
 states that commands are ignored while typing in an editable control.
 
+Keyboard multi-selection remains in the host application until it is ready to
+describe. Focus an application element and press `Enter` to add it; the polite
+announcer reports the bounded count without mounting the finding editor or
+activating the host control. Move focus to each additional element and repeat,
+then press `Shift+Enter` to finish and move into the two-textarea finding
+editor. `Escape`, the marking Cancel control, panel toggling, and Layout Mode
+discard an incomplete selection and restore application focus instead of
+leaving a zero-target or stale editor behind.
+
 Marker rectangles remain pointer-transparent page evidence. A draft marker
 adds only a 28 CSS-pixel edit button at its top-start corner; activating it
 opens the normal editor, where the draft can be updated or deleted. Reviewers
@@ -496,12 +505,13 @@ Automated React tests cover dialog naming, control names, live-region messages,
 shortcut metadata and help content, and Shadow DOM focus restoration. The
 ignored real Chromium Test Kit suite also captures the browser accessibility
 tree, verifies the keyboard reference, and checks the launcher-to-dialog focus
-round trip plus the hide-to-application focus transfer. These checks are
-regression evidence for DOM and accessibility-tree semantics; they are not a
-substitute for completing every workflow with an actual screen reader. M8
-remains open until an independent reviewer audits the full review lifecycle
-with VoiceOver, NVDA, or an equivalent supported screen reader in an
-environment that permits assistive-technology inspection.
+round trip, keyboard multi-selection focus and cancellation, plus the
+hide-to-application focus transfer. These checks are regression evidence for
+DOM and accessibility-tree semantics; they are not a substitute for completing
+every workflow with an actual screen reader. M8 remains open until an
+independent reviewer audits the full review lifecycle with VoiceOver, NVDA, or
+an equivalent supported screen reader in an environment that permits
+assistive-technology inspection.
 
 At submission time, the Test Kit enriches a repair with a fresh context
 revision and bounded page context. A submitted target contains current private
@@ -681,9 +691,9 @@ cargo test -p a3s-test-cli --test repair_e2e --locked -- \
 
 The real Test Kit browser suite runs separately. It proves page-local draft
 restoration and semantic rebinding, spatial marker editing, keyboard-only
-review controls, explicit host-interaction blocking, searchable component
-selection, pointer-authored Layout placement, and the accessibility-tree and
-focus contracts:
+review controls and multi-selection, explicit host-interaction blocking,
+searchable component selection, pointer-authored Layout placement, and the
+accessibility-tree and focus contracts:
 
 ```bash
 A3S_TEST_AGENT_BROWSER="$(command -v agent-browser)" \

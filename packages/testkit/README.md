@@ -128,6 +128,12 @@ or style application DOM itself. Submitted findings support human/agent
 replies, accept/reject/reopen review actions, and per-finding lifecycle
 projection.
 
+For keyboard multi-selection, focus an application element and press `Enter`
+to add it without activating the host control or moving focus into the review
+Shadow DOM. Repeat for additional elements, then press `Shift+Enter` to open
+the finding editor. `Escape` or the visible marking Cancel control discards an
+incomplete selection and restores application focus.
+
 The review preferences section persists only bounded presentation choices:
 theme, marker color, clear-after-copy, explicit host pointer blocking, panel
 dock, and wireframe page fade. Auto-send and animation pause reset on mount.

@@ -26,7 +26,7 @@ import {
   saveReviewDrafts,
   type ReviewDraftItem,
 } from "./review-storage";
-import { FindingEditor, LayoutComposer } from "./review-components";
+import { FindingEditor, LayoutComposer, ReviewMarkingToolbar } from "./review-components";
 import { ReviewSettings } from "./review-settings";
 import { useTestKitContext } from "./react-provider";
 export {
@@ -67,7 +67,6 @@ import {
 } from "./review-preferences";
 import {
   MODE_HINT,
-  MODE_LABEL,
   type LayoutCanvas,
   type LayoutSource,
   type SelectionMode,
@@ -100,7 +99,6 @@ import type {
   SubmittedRepair,
 } from "./types";
 
-type DraftItem = ReviewDraftItem;
 type CandidateSource =
   | { kind: "quality"; selection: QualitySelection }
   | { kind: "design_audit"; selection: DesignAuditSelection };
@@ -155,7 +153,7 @@ export function A3SReviewOverlay({
   const [layoutComponentType, setLayoutComponentType] = useState("Section");
   const [layoutSource, setLayoutSource] = useState<LayoutSource | null>(null);
   const [layoutTarget, setLayoutTarget] = useState<Rect>({ x: 40, y: 120, width: 640, height: 240 });
-  const [drafts, setDrafts] = useState<DraftItem[]>([]);
+  const [drafts, setDrafts] = useState<ReviewDraftItem[]>([]);
   const [repairs, setRepairs] = useState<SubmittedRepair[]>([]);
   const [qualityReports, setQualityReports] = useState<QualityReportRecord[]>([]);
   const [designAuditReports, setDesignAuditReports] = useState<DesignAuditReportRecord[]>([]);
@@ -196,6 +194,11 @@ export function A3SReviewOverlay({
     queueMicrotask(() => launchRef.current?.focus());
   }
 
+  function closeOverlayFromControl() {
+    if (marking) cancelMarking(false);
+    closeOverlay();
+  }
+
   function openOverlay(focusPanel = false) {
     if (focusPanel) focusPanelOnOpenRef.current = true;
     setOpen(true);
@@ -214,7 +217,7 @@ export function A3SReviewOverlay({
     setMarking(true);
     setKeyboardNodeIds([]);
     setConflictingDraftIds([]);
-    setCandidate(value === "multi" ? { kind: "node", nodeIds: [] } : null);
+    setCandidate(null);
     updateArea(null);
     updateDrawing(null);
     setHighlight(null);
@@ -225,7 +228,7 @@ export function A3SReviewOverlay({
 
   function toggleLayoutMode() {
     const next = !layoutMode;
-    if (marking) stopMarking(false);
+    if (marking) cancelMarking(false);
     if (!next) setLayoutSource(null);
     setLayoutMode(next);
     announce(next ? "Layout mode enabled" : "Layout mode disabled");
@@ -263,7 +266,7 @@ export function A3SReviewOverlay({
     if (typeof window !== "undefined") {
       saveReviewTabHidden(true);
     }
-    stopMarking(false);
+    cancelMarking(false);
     bridge?.setAnimationsPaused(false);
     setPaused(false);
     setTabHidden(true);
@@ -282,6 +285,22 @@ export function A3SReviewOverlay({
     setKeyboardNodeIds([]);
     setPendingCandidateSource(null);
     if (restoreFocus) queueMicrotask(() => restoreFocusRef.current?.focus());
+  }
+
+  function clearCandidate() {
+    setCandidate(null);
+    setCandidateSource(null);
+    setEditingDraftId(null);
+    setCandidateLabel("");
+    setInstruction("");
+    setSuccessCriteria("");
+    setConflictingDraftIds([]);
+  }
+
+  function cancelMarking(restoreFocus = true) {
+    stopMarking(restoreFocus);
+    clearCandidate();
+    if (marking) announce("Marking cancelled");
   }
 
   useEffect(() => {
@@ -373,12 +392,9 @@ export function A3SReviewOverlay({
     candidate: candidate !== null,
     hasDrafts: drafts.length > 0,
     onToggleOverlay: () => open ? closeOverlay() : openOverlay(true),
-    onCancelMarking: stopMarking,
+    onCancelMarking: cancelMarking,
     onCancelCandidate: () => {
-      setCandidate(null);
-      setCandidateSource(null);
-      setEditingDraftId(null);
-      setConflictingDraftIds([]);
+      clearCandidate();
       focusPanel();
     },
     onCloseOverlay: closeOverlay,
@@ -563,8 +579,8 @@ export function A3SReviewOverlay({
         }
         const next = Array.from(new Set([...keyboardNodeIds, node.id]));
         setKeyboardNodeIds(next);
-        setCandidate({ kind: "node", nodeIds: next });
         setCandidateLabel(`${next.length} selected element${next.length === 1 ? "" : "s"}`);
+        announce(`${next.length} selected element${next.length === 1 ? "" : "s"}; press Shift+Enter to finish`);
       } else {
         if (pendingCandidateSource) {
           stagePendingCandidate(pendingCandidateSource, node.id);
@@ -795,7 +811,7 @@ export function A3SReviewOverlay({
     focusPanel();
   }
 
-  function editDraft(item: DraftItem) {
+  function editDraft(item: ReviewDraftItem) {
     const layout = item.draft.target.layout;
     if (layout) {
       setLayoutMode(true);
@@ -910,21 +926,13 @@ export function A3SReviewOverlay({
       {layoutMode && layoutSource && !candidate && <div className="a3s-layout-target-preview" style={rectStyle(layoutTarget)} aria-hidden="true" />}
       {drawingPath && <svg className="a3s-drawing" aria-hidden="true"><path d={drawingPath} /></svg>}
       <ReviewMarkers visible={markersVisible} bridge={bridge} drafts={drafts} repairs={repairs} qualityReports={qualityReports} designAuditReports={designAuditReports} onEditDraft={editDraft} />
-      <button ref={launchRef} className={`a3s-launch ${marking ? "is-active" : ""}`} type="button" title="Toggle review overlay (Ctrl/Command+Shift+F)" onClick={() => open ? closeOverlay() : openOverlay(true)} aria-expanded={open} aria-controls={`${idPrefix}-review-panel`} aria-keyshortcuts={REVIEW_KEY_SHORTCUTS.toggle}>
+      <button ref={launchRef} className={`a3s-launch ${marking ? "is-active" : ""}`} type="button" title="Toggle review overlay (Ctrl/Command+Shift+F)" onClick={() => open ? closeOverlayFromControl() : openOverlay(true)} aria-expanded={open} aria-controls={`${idPrefix}-review-panel`} aria-keyshortcuts={REVIEW_KEY_SHORTCUTS.toggle}>
         A3S Review{drafts.length + repairs.length > 0 ? ` · ${drafts.length + repairs.length}` : ""}
       </button>
       <div className="a3s-announcer" role="status" aria-live="polite" aria-atomic="true">{announcement}</div>
       {open && <aside ref={panelRef} id={`${idPrefix}-review-panel`} className="a3s-panel" aria-labelledby={`${idPrefix}-review-title`} aria-describedby={`${idPrefix}-review-description`} aria-keyshortcuts={REVIEW_KEY_SHORTCUTS.escape} role="dialog" aria-modal="false" tabIndex={-1}>
-        <header><strong id={`${idPrefix}-review-title`} className="a3s-panel-title">Review</strong><small id={`${idPrefix}-review-description`} className="a3s-panel-description">Local until sent</small><button type="button" className="a3s-close" onClick={closeOverlay} aria-label="Close review overlay"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3.5 3.5 12.5 12.5M12.5 3.5 3.5 12.5" /></svg></button></header>
-        <section className="a3s-tools" aria-label="Mark page">
-          {(["element", "text", "multi", "area", "draw"] as SelectionMode[]).map((value) => <button key={value} type="button" aria-label={`Mark ${MODE_LABEL[value].toLowerCase()}`} aria-pressed={marking && mode === value} className={marking && mode === value ? "selected" : ""} onClick={() => startMarking(value)}>{MODE_LABEL[value]}</button>)}
-          <button type="button" title="Toggle Layout Mode (L)" aria-keyshortcuts={REVIEW_KEY_SHORTCUTS.layout} aria-pressed={layoutMode} className={layoutMode ? "selected" : ""} onClick={toggleLayoutMode}>Layout</button>
-          <button type="button" title="Pause or resume page motion (P)" aria-label={paused ? "Resume page animations" : "Pause page animations"} aria-keyshortcuts={REVIEW_KEY_SHORTCUTS.pause} aria-pressed={paused} className={paused ? "selected" : ""} onClick={togglePause}>{paused ? "Resume" : "Pause"}</button>
-          <button type="button" title="Show or hide finding markers (H)" aria-label={markersVisible ? "Hide markers" : "Show markers"} aria-keyshortcuts={REVIEW_KEY_SHORTCUTS.markers} aria-pressed={markersVisible} className={markersVisible ? "selected" : ""} onClick={toggleMarkers}>{markersVisible ? "Hide markers" : "Show markers"}</button>
-          <button type="button" aria-label={`Turn auto-send ${autoSendEnabled ? "off" : "on"}`} aria-pressed={autoSendEnabled} className={autoSendEnabled ? "selected" : ""} onClick={() => setAutoSendEnabled((current) => !current)}>Auto-send · {autoSendEnabled ? "on" : "off"}</button>
-          <button type="button" aria-label={`Change overlay theme; current theme is ${preferences.theme}`} onClick={cycleTheme}>Theme · {preferences.theme}</button>
-          {marking && <button type="button" className="danger" onClick={() => stopMarking()}>Cancel</button>}
-        </section>
+        <header><strong id={`${idPrefix}-review-title`} className="a3s-panel-title">Review</strong><small id={`${idPrefix}-review-description`} className="a3s-panel-description">Local until sent</small><button type="button" className="a3s-close" onClick={closeOverlayFromControl} aria-label="Close review overlay"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3.5 3.5 12.5 12.5M12.5 3.5 3.5 12.5" /></svg></button></header>
+        <ReviewMarkingToolbar marking={marking} mode={mode} layoutMode={layoutMode} paused={paused} markersVisible={markersVisible} autoSendEnabled={autoSendEnabled} theme={preferences.theme} onStartMarking={startMarking} onToggleLayout={toggleLayoutMode} onTogglePause={togglePause} onToggleMarkers={toggleMarkers} onToggleAutoSend={() => setAutoSendEnabled((current) => !current)} onCycleTheme={cycleTheme} onCancelMarking={cancelMarking} />
         <ReviewSettings preferences={preferences} onChange={changePreferences} onHideUntilRestart={hideUntilTabRestart} />
         {layoutMode && <LayoutComposer
           idPrefix={idPrefix}
@@ -965,7 +973,7 @@ export function A3SReviewOverlay({
             ? [...new Set([...current, findingId])]
             : current.filter((candidate) => candidate !== findingId))}
           editing={Boolean(editingDraftId)}
-          onCancel={() => { setCandidate(null); setCandidateSource(null); setEditingDraftId(null); setConflictingDraftIds([]); }}
+          onCancel={clearCandidate}
           {...(editingDraftId ? { onDelete: () => { const item = drafts.find((candidate) => candidate.draft.id === editingDraftId); if (item) deleteDraft(item.draft); } } : {})}
           onSave={() => saveDraft(false)}
           onSend={() => saveDraft(true)}

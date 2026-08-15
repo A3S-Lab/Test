@@ -613,6 +613,79 @@ describe("React adapter and review overlay", () => {
     expect(document.querySelector<HTMLElement>("[data-a3s-testkit-overlay]")!.shadowRoot!.querySelector(".a3s-hint")).toBeNull();
   });
 
+  it("keeps keyboard multi-select in the application until explicit completion", async () => {
+    const onSubmitted = vi.fn();
+    render(<A3STestKit enabled page={{ id: "keyboard-multi" }} repairStorage="memory"><button id="keyboard-multi-one">One</button><button id="keyboard-multi-two">Two</button><A3SReviewOverlay enabled defaultOpen onSubmitted={onSubmitted} /></A3STestKit>);
+    await waitFor(() => expect(shadowQuery(".a3s-panel")).toBeTruthy());
+    const first = document.querySelector<HTMLButtonElement>("#keyboard-multi-one")!;
+    const second = document.querySelector<HTMLButtonElement>("#keyboard-multi-two")!;
+    const shadow = document.querySelector<HTMLElement>("[data-a3s-testkit-overlay]")!.shadowRoot!;
+    setRect(first, { x: 20, y: 20, width: 80, height: 32 });
+    setRect(second, { x: 120, y: 20, width: 80, height: 32 });
+
+    first.focus();
+    first.dispatchEvent(new FocusEvent("focusin", { bubbles: true, composed: true }));
+    fireEvent.click(shadowButton("Multi"));
+    await waitFor(() => expect(document.activeElement).toBe(first));
+    expect(shadow.querySelector(".a3s-editor")).toBeNull();
+
+    fireEvent.keyDown(first, { key: "Enter" });
+    await waitFor(() => expect(document.activeElement).toBe(first));
+    expect(shadow.querySelector(".a3s-editor")).toBeNull();
+
+    second.focus();
+    second.dispatchEvent(new FocusEvent("focusin", { bubbles: true, composed: true }));
+    fireEvent.keyDown(second, { key: "Enter" });
+    expect(shadow.querySelector(".a3s-editor")).toBeNull();
+    fireEvent.keyDown(second, { key: "Enter", shiftKey: true });
+
+    await waitFor(() => expect(shadowQuery(".a3s-editor").textContent).toContain("2 selected elements"));
+    fireEvent.change(shadowQuery(".a3s-editor textarea"), { target: { value: "Align both keyboard actions" } });
+    fireEvent.click(shadowButton("Send and auto-fix"));
+    await waitFor(() => expect(onSubmitted).toHaveBeenCalledTimes(1));
+    expect(onSubmitted.mock.calls[0]![0][0].target.nodeIds).toHaveLength(2);
+  });
+
+  it("removes an incomplete multi-select candidate when marking is cancelled", async () => {
+    render(<A3STestKit enabled page={{ id: "cancel-multi" }} repairStorage="memory"><button id="cancel-multi-target">Target</button><A3SReviewOverlay enabled defaultOpen /></A3STestKit>);
+    await waitFor(() => expect(shadowQuery(".a3s-panel")).toBeTruthy());
+    const target = document.querySelector<HTMLButtonElement>("#cancel-multi-target")!;
+    const shadow = document.querySelector<HTMLElement>("[data-a3s-testkit-overlay]")!.shadowRoot!;
+    setRect(target, { x: 20, y: 20, width: 120, height: 32 });
+    target.focus();
+    target.dispatchEvent(new FocusEvent("focusin", { bubbles: true, composed: true }));
+
+    fireEvent.click(shadowButton("Multi"));
+    fireEvent.keyDown(target, { key: "Enter" });
+    fireEvent.keyDown(target, { key: "Escape" });
+    await waitFor(() => expect(document.activeElement).toBe(target));
+    expect(shadow.querySelector(".a3s-editor")).toBeNull();
+    expect(shadow.querySelector(".a3s-hint")).toBeNull();
+
+    target.focus();
+    target.dispatchEvent(new FocusEvent("focusin", { bubbles: true, composed: true }));
+    fireEvent.click(shadowButton("Multi"));
+    target.dispatchEvent(pointerEventWithPath(target, 40, 30));
+    await waitFor(() => expect(shadow.querySelector(".a3s-editor")).not.toBeNull());
+    fireEvent.click(shadowQuery(".a3s-tools .danger"));
+
+    await waitFor(() => expect(document.activeElement).toBe(target));
+    expect(shadow.querySelector(".a3s-editor")).toBeNull();
+    expect(shadow.querySelector(".a3s-hint")).toBeNull();
+
+    target.focus();
+    target.dispatchEvent(new FocusEvent("focusin", { bubbles: true, composed: true }));
+    fireEvent.click(shadowButton("Multi"));
+    target.dispatchEvent(pointerEventWithPath(target, 40, 30));
+    await waitFor(() => expect(shadow.querySelector(".a3s-editor")).not.toBeNull());
+    fireEvent.click(shadowQuery(".a3s-launch"));
+    await waitFor(() => expect(shadow.querySelector(".a3s-panel")).toBeNull());
+    fireEvent.click(shadowQuery(".a3s-launch"));
+    await waitFor(() => expect(shadow.querySelector(".a3s-panel")).not.toBeNull());
+    expect(shadow.querySelector(".a3s-editor")).toBeNull();
+    expect(shadow.querySelector(".a3s-hint")).toBeNull();
+  });
+
   it("exposes a named dialog, stable control names, and focused status announcements", async () => {
     render(<A3STestKit enabled page={{ id: "accessible-overlay" }} repairStorage="memory"><button id="accessible-target">Accessible target</button><A3SReviewOverlay enabled defaultOpen /></A3STestKit>);
     const panel = await waitFor(() => shadowQuery(".a3s-panel"));

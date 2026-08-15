@@ -18,6 +18,13 @@
 
 ### Fixed
 
+- Kept keyboard multi-selection on application controls until explicit
+  `Shift+Enter` completion. Starting or extending a selection no longer opens
+  an empty editor or steals focus into the review Shadow DOM, and `Escape`,
+  the marking Cancel control, panel toggling, and Layout Mode now discard
+  incomplete candidates consistently. React and real Chromium regressions
+  cover focus, selection announcements, host-action suppression, completion,
+  and cancellation.
 - Restored keyboard focus without scrolling to the last connected application
   control when `Hide until tab restart` removes the review Shadow DOM. React
   and real Chromium regressions cover the complete focus transfer.
