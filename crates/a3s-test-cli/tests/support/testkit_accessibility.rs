@@ -79,7 +79,18 @@ pub fn exercise_review_candidate_accessibility(command: &impl Fn(&[&str]) -> Out
     );
     wait_for(
         command,
-        "clear review candidates",
+        "clear the contract finding",
+        "window[Symbol.for('a3s.test.page-context')].listQualityReports().length===0&&window[Symbol.for('a3s.test.page-context')].listDesignAuditReports().length===1",
+    );
+    click_accessible(
+        command,
+        "dismiss the design suggestion",
+        "button",
+        "Dismiss design suggestion: The primary action lacks emphasis",
+    );
+    wait_for(
+        command,
+        "clear the design suggestion",
         "window[Symbol.for('a3s.test.page-context')].listQualityReports().length===0&&window[Symbol.for('a3s.test.page-context')].listDesignAuditReports().length===0",
     );
 }

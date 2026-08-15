@@ -1,4 +1,6 @@
 use std::process::Output;
+use std::thread;
+use std::time::{Duration, Instant};
 
 use serde_json::Value;
 
@@ -844,7 +846,44 @@ fn snapshot_ref(line: &str) -> Option<&str> {
 }
 
 pub(super) fn wait_for(command: &impl Fn(&[&str]) -> Output, context: &str, condition: &str) {
-    run(command, context, &["wait", "--fn", condition]);
+    const TIMEOUT: Duration = Duration::from_secs(25);
+    const POLL_INTERVAL: Duration = Duration::from_millis(100);
+
+    let expression = format!("Boolean({condition})");
+    let deadline = Instant::now() + TIMEOUT;
+    let mut attempts = 0_u32;
+
+    loop {
+        attempts += 1;
+        let output = command(&["eval", &expression]);
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        let stderr = String::from_utf8_lossy(&output.stderr);
+
+        if output.status.success() {
+            let satisfied: bool = serde_json::from_slice(&output.stdout).unwrap_or_else(|error| {
+                panic!(
+                    "{context} returned an invalid condition result: {error}\nstdout:\n{stdout}\nstderr:\n{stderr}"
+                )
+            });
+            if satisfied {
+                return;
+            }
+        } else if !is_transient_browser_read_failure(&stderr) {
+            panic!("{context} failed\nstdout:\n{stdout}\nstderr:\n{stderr}");
+        }
+
+        if Instant::now() >= deadline {
+            panic!(
+                "{context} timed out after {attempts} condition polls\nstdout:\n{stdout}\nstderr:\n{stderr}"
+            );
+        }
+        thread::sleep(POLL_INTERVAL);
+    }
+}
+
+fn is_transient_browser_read_failure(stderr: &str) -> bool {
+    stderr.contains("Resource temporarily unavailable")
+        || stderr.contains("daemon may be busy or unresponsive")
 }
 
 pub(super) fn eval(command: &impl Fn(&[&str]) -> Output, context: &str, script: &str) -> Value {
