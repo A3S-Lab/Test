@@ -6,11 +6,92 @@ const RESTORED_DRAFT: &str = "Keep this browser draft across reload";
 const EDITED_DRAFT: &str = "Edit this restored draft from its marker";
 
 pub fn run_review_workflow(command: &impl Fn(&[&str]) -> Output) {
+    verify_shortcut_discoverability(command);
     create_and_restore_draft(command);
     edit_draft_from_spatial_marker(command);
     exercise_keyboard_controls(command);
     exercise_host_interaction_blocking(command);
     author_searchable_layout_placement(command);
+}
+
+fn verify_shortcut_discoverability(command: &impl Fn(&[&str]) -> Output) {
+    let attributes = encoded_eval(
+        command,
+        "inspect review shortcut attributes",
+        "(()=>{const shadow=document.querySelector('[data-a3s-testkit-overlay]').shadowRoot;const button=(name)=>[...shadow.querySelectorAll('button')].find(candidate=>candidate.textContent.trim()===name||candidate.getAttribute('aria-label')===name);return JSON.stringify({launcher:shadow.querySelector('.a3s-launch')?.getAttribute('aria-keyshortcuts'),panel:shadow.querySelector('.a3s-panel')?.getAttribute('aria-keyshortcuts'),layout:button('Layout')?.getAttribute('aria-keyshortcuts'),pause:button('Pause page animations')?.getAttribute('aria-keyshortcuts'),markers:button('Hide markers')?.getAttribute('aria-keyshortcuts')})})()",
+    );
+    assert_eq!(attributes["launcher"], "Control+Shift+F Meta+Shift+F");
+    assert_eq!(attributes["panel"], "Escape");
+    assert_eq!(attributes["layout"], "L");
+    assert_eq!(attributes["pause"], "P");
+    assert_eq!(attributes["markers"], "H");
+
+    run(
+        command,
+        "set a compact viewport for shortcut help",
+        &["set", "viewport", "390", "667", "1"],
+    );
+    activate_accessible_with_enter(
+        command,
+        "open shortcut help through review preferences",
+        "button",
+        "Review preferences",
+    );
+    let snapshot = run(
+        command,
+        "capture shortcut help accessibility",
+        &["snapshot"],
+    );
+    let snapshot = String::from_utf8_lossy(&snapshot.stdout);
+    assert!(
+        snapshot.contains("heading \"Keyboard shortcuts\"")
+            && snapshot.contains("Toggle review")
+            && snapshot.contains("Copy selected drafts")
+            && snapshot.contains("Ignored while typing in an editable control"),
+        "review shortcut help was not exposed through the accessibility tree: {snapshot}"
+    );
+    let hide = accessible_ref(
+        command,
+        "locate the final compact review preference",
+        "button",
+        "Hide until tab restart",
+    );
+    run(
+        command,
+        "scroll the final compact review preference into view",
+        &["scrollintoview", &hide],
+    );
+    let compact_layout = encoded_eval(
+        command,
+        "inspect compact shortcut help layout",
+        "(()=>{const shadow=document.querySelector('[data-a3s-testkit-overlay]').shadowRoot;const settings=shadow.querySelector('.a3s-settings');const panel=shadow.querySelector('.a3s-panel');const hide=[...shadow.querySelectorAll('button')].find(candidate=>candidate.textContent.trim()==='Hide until tab restart');const bounds=hide.getBoundingClientRect();const panelBounds=panel.getBoundingClientRect();return JSON.stringify({settingsHeight:settings.clientHeight,viewportHeight:innerHeight,reachable:bounds.top>=panelBounds.top&&bounds.bottom<=panelBounds.bottom})})()",
+    );
+    assert!(
+        compact_layout["settingsHeight"]
+            .as_u64()
+            .is_some_and(|height| height <= 401),
+        "compact review preferences exceeded their viewport share: {compact_layout}"
+    );
+    assert_eq!(
+        compact_layout["reachable"], true,
+        "the final review preference was clipped on a compact viewport: {compact_layout}"
+    );
+    activate_accessible_with_enter(
+        command,
+        "close shortcut help after inspection",
+        "button",
+        "Review preferences",
+    );
+    wait_for(
+        command,
+        "wait for compact shortcut help to close",
+        "document.querySelector('[data-a3s-testkit-overlay]').shadowRoot.querySelector('[aria-label=\"Review preferences\"]')?.getAttribute('aria-expanded')==='false'",
+    );
+    run(
+        command,
+        "restore the Test Kit browser viewport after shortcut help",
+        &["set", "viewport", "1280", "720", "2"],
+    );
 }
 
 fn create_and_restore_draft(command: &impl Fn(&[&str]) -> Output) {
@@ -124,6 +205,13 @@ fn edit_draft_from_spatial_marker(command: &impl Fn(&[&str]) -> Output) {
 }
 
 fn exercise_keyboard_controls(command: &impl Fn(&[&str]) -> Output) {
+    let draft_shortcuts = encoded_eval(
+        command,
+        "inspect draft shortcut attributes",
+        "(()=>{const shadow=document.querySelector('[data-a3s-testkit-overlay]').shadowRoot;const button=(name)=>[...shadow.querySelectorAll('button')].find(candidate=>candidate.textContent.trim()===name);return JSON.stringify({copy:button('Copy Markdown')?.getAttribute('aria-keyshortcuts'),clear:button('Clear drafts')?.getAttribute('aria-keyshortcuts')})})()",
+    );
+    assert_eq!(draft_shortcuts["copy"], "C");
+    assert_eq!(draft_shortcuts["clear"], "X");
     run(
         command,
         "close the review panel with its global shortcut",
@@ -230,17 +318,22 @@ fn exercise_host_interaction_blocking(command: &impl Fn(&[&str]) -> Output) {
         "observe the unblocked host click",
         "window.testkitHostClicks===1",
     );
-    click_accessible(
+    activate_accessible_with_enter(
         command,
         "open review preferences",
         "button",
         "Review preferences",
     );
-    click_accessible(
+    wait_for(
+        command,
+        "wait for review preferences to open",
+        "document.querySelector('[data-a3s-testkit-overlay]').shadowRoot.querySelector('[aria-label=\"Review preferences\"]')?.getAttribute('aria-expanded')==='true'",
+    );
+    set_checkbox_accessible(
         command,
         "enable host pointer blocking",
-        "checkbox",
         "Block page pointer input",
+        true,
     );
     wait_for(
         command,
@@ -254,11 +347,11 @@ fn exercise_host_interaction_blocking(command: &impl Fn(&[&str]) -> Output) {
         "window.testkitHostClicks",
     );
     assert_eq!(blocked_count, 1, "blocked host click reached the page");
-    click_accessible(
+    set_checkbox_accessible(
         command,
         "disable host pointer blocking from the overlay",
-        "checkbox",
         "Block page pointer input",
+        false,
     );
     wait_for(
         command,
@@ -271,7 +364,7 @@ fn exercise_host_interaction_blocking(command: &impl Fn(&[&str]) -> Output) {
         "observe the second unblocked host click",
         "window.testkitHostClicks===2",
     );
-    click_accessible(
+    activate_accessible_with_enter(
         command,
         "close review preferences after interaction blocking",
         "button",
@@ -433,6 +526,21 @@ fn click_accessible(command: &impl Fn(&[&str]) -> Output, context: &str, role: &
     run(command, context, &["click", &reference]);
 }
 
+fn activate_accessible_with_enter(
+    command: &impl Fn(&[&str]) -> Output,
+    context: &str,
+    role: &str,
+    name: &str,
+) {
+    let reference = accessible_ref(command, context, role, name);
+    run(
+        command,
+        &format!("focus before {context}"),
+        &["focus", &reference],
+    );
+    run(command, context, &["press", "Enter"]);
+}
+
 fn scroll_and_click_accessible(
     command: &impl Fn(&[&str]) -> Output,
     context: &str,
@@ -469,6 +577,26 @@ fn select_accessible(
 ) {
     let reference = accessible_ref(command, context, role, name);
     run(command, context, &["select", &reference, value]);
+}
+
+fn set_checkbox_accessible(
+    command: &impl Fn(&[&str]) -> Output,
+    context: &str,
+    name: &str,
+    checked: bool,
+) {
+    let reference = accessible_ref(command, context, "checkbox", name);
+    run(
+        command,
+        &format!("scroll before {context}"),
+        &["scrollintoview", &reference],
+    );
+    let reference = accessible_ref(command, context, "checkbox", name);
+    run(
+        command,
+        context,
+        &[if checked { "check" } else { "uncheck" }, &reference],
+    );
 }
 
 fn accessible_ref(

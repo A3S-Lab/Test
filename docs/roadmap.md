@@ -332,6 +332,9 @@ The completion work intentionally preserves these product boundaries:
       Layout Mode, pause, marker visibility, copy, and clear, and ignore
       commands originating in inputs, textareas, selects, contenteditable
       regions, or ARIA text-entry controls
+- [x] Expose the same commands through `aria-keyshortcuts` and an in-overlay
+      keyboard reference, with direct unit and real-browser accessibility-tree
+      evidence while keeping the independent screen-reader audit open
 - [x] Add global marker visibility, clear-all, direct marker-to-editor access,
       and deletion from the active editor without making the full marker
       rectangle intercept normal page input

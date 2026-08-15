@@ -1,5 +1,21 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- Exposed every global Test Kit review shortcut through `aria-keyshortcuts`
+  and a keyboard-reference section inside Review preferences. Unit and real
+  Chromium coverage verify both the control metadata and accessibility-tree
+  help content.
+
+### Changed
+
+- Split review-overlay host lifecycle and global input policy out of the React
+  overlay module so rendering, page input blocking, focus tracking, and
+  shortcut dispatch retain explicit ownership below the repository file-size
+  limit.
+
 ## 0.16.2 - 2026-08-15
 
 ### Fixed

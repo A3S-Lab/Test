@@ -136,6 +136,8 @@ context bridge. Clipboard failure never clears local drafts.
 
 The overlay exposes a named non-modal dialog, finding-specific action names,
 one polite status announcer, visible keyboard focus, and focus restoration when
-controls disappear. Unit and real-Chromium accessibility-tree checks protect
-these semantics. A separate hands-on screen-reader audit of every workflow is
-still required before claiming complete assistive-technology coverage.
+controls disappear. Global review commands are published through
+`aria-keyshortcuts` and a keyboard-reference section in Review preferences.
+Unit and real-Chromium accessibility-tree checks protect these semantics. A
+separate hands-on screen-reader audit of every workflow is still required
+before claiming complete assistive-technology coverage.

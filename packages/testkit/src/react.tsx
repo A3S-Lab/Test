@@ -8,7 +8,6 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import { getPageContextBridge } from "./runtime";
-import { OVERLAY_CSS } from "./overlay-style";
 import {
   DesignAuditCandidates,
   resolveDesignAuditCandidate,
@@ -38,19 +37,24 @@ export {
 } from "./react-provider";
 import {
   invokeCallback,
-  isEditableEvent,
   useLatest,
   writeClipboard,
 } from "./review-integration";
 import {
   bridgeIsCompatible,
   deepActiveElement,
-  isOverlayElement,
   isOverlayEvent,
   nodeForElement,
   selectionElement,
   targetElement,
 } from "./review-dom";
+import {
+  REVIEW_KEY_SHORTCUTS,
+  useGlobalReviewShortcuts,
+  useHostPointerBlocking,
+  useLastApplicationFocus,
+} from "./review-input-policy";
+import { useReviewOverlayHost } from "./review-overlay-host";
 import type { A3SReviewOverlayProps } from "./review-overlay-types";
 export type { A3SReviewCopyEvent, A3SReviewOverlayProps } from "./review-overlay-types";
 import {
@@ -127,8 +131,6 @@ export function A3SReviewOverlay({
     ? context.bridge
     : getPageContextBridge();
   const bridge = bridgeIsCompatible(candidateBridge) ? candidateBridge : null;
-  const [host, setHost] = useState<HTMLElement | null>(null);
-  const [mount, setMount] = useState<HTMLElement | null>(null);
   const [open, setOpen] = useState(defaultOpen);
   const [marking, setMarking] = useState(false);
   const [paused, setPaused] = useState(false);
@@ -143,6 +145,10 @@ export function A3SReviewOverlay({
   const [tabHidden, setTabHidden] = useState(() => (
     typeof window !== "undefined" && loadReviewTabHidden()
   ));
+  const { host, mount } = useReviewOverlayHost(
+    enabled && Boolean(bridge) && !tabHidden,
+    bridge,
+  );
   const [layoutMode, setLayoutMode] = useState(false);
   const [layoutPurpose, setLayoutPurpose] = useState("");
   const [layoutCanvas, setLayoutCanvas] = useState<LayoutCanvas>("page");
@@ -179,7 +185,7 @@ export function A3SReviewOverlay({
   const replyTriggerRefs = useRef(new Map<string, HTMLButtonElement>());
   const focusPanelOnOpenRef = useRef(false);
   const restoreFocusRef = useRef<HTMLElement | null>(null);
-  const lastApplicationFocusRef = useRef<HTMLElement | null>(null);
+  const lastApplicationFocusRef = useLastApplicationFocus(enabled, host);
   const idPrefix = useId().replace(/:/g, "");
 
   areaRef.current = area;
@@ -273,27 +279,6 @@ export function A3SReviewOverlay({
   }
 
   useEffect(() => {
-    if (!enabled || !bridge || tabHidden || !document.body) return;
-    const element = document.createElement("div");
-    element.dataset.a3sTestkitOverlay = "";
-    element.setAttribute("aria-label", "A3S Test review overlay");
-    const shadow = element.attachShadow({ mode: "open" });
-    const style = document.createElement("style");
-    style.textContent = OVERLAY_CSS;
-    const root = document.createElement("div");
-    root.dataset.a3sTestkitOverlay = "";
-    shadow.append(style, root);
-    document.body.append(element);
-    setHost(element);
-    setMount(root);
-    return () => {
-      setMount(null);
-      setHost(null);
-      element.remove();
-    };
-  }, [bridge, enabled, tabHidden]);
-
-  useEffect(() => {
     if (!bridge) return;
     setRepairs(bridge.listRepairs());
     setQualityReports(bridge.listQualityReports());
@@ -371,92 +356,32 @@ export function A3SReviewOverlay({
     setRestoreReplyFocusId(null);
   }, [repairs, replyFindingId, restoreReplyFocusId]);
 
-  useEffect(() => {
-    if (!enabled) return;
-    const rememberApplicationFocus = (event: FocusEvent) => {
-      const target = event.composedPath()[0];
-      if (target instanceof HTMLElement && !isOverlayElement(target, host)) {
-        lastApplicationFocusRef.current = target;
-      }
-    };
-    document.addEventListener("focusin", rememberApplicationFocus, true);
-    return () => document.removeEventListener("focusin", rememberApplicationFocus, true);
-  }, [enabled, host]);
-
-  useEffect(() => {
-    if (!enabled || !bridge || !host || tabHidden || !preferences.blockInteractions) return;
-    const blockHostPointerInput = (event: Event) => {
-      if (isOverlayEvent(event, host)) return;
-      if (event.cancelable) event.preventDefault();
-      event.stopPropagation();
-    };
-    const eventTypes = [
-      "pointerdown",
-      "pointermove",
-      "pointerup",
-      "mousedown",
-      "mouseup",
-      "click",
-      "dblclick",
-      "auxclick",
-      "contextmenu",
-      "touchstart",
-      "touchmove",
-      "touchend",
-      "wheel",
-    ];
-    const options: AddEventListenerOptions = { capture: true, passive: false };
-    for (const type of eventTypes) {
-      document.addEventListener(type, blockHostPointerInput, options);
-    }
-    return () => {
-      for (const type of eventTypes) {
-        document.removeEventListener(type, blockHostPointerInput, options);
-      }
-    };
-  }, [bridge, enabled, host, preferences.blockInteractions, tabHidden]);
-
-  useEffect(() => {
-    if (!enabled || !bridge || tabHidden) return;
-    const onGlobalKeyDown = (event: KeyboardEvent) => {
-      if (event.defaultPrevented || isEditableEvent(event)) return;
-      const key = event.key.toLowerCase();
-      if ((event.metaKey || event.ctrlKey) && event.shiftKey && key === "f") {
-        event.preventDefault();
-        event.stopPropagation();
-        if (marking) stopMarking(false);
-        if (open) closeOverlay();
-        else openOverlay(true);
-        return;
-      }
-      if (event.metaKey || event.ctrlKey || event.altKey || event.shiftKey) return;
-      if (event.key === "Escape") {
-        if (marking) stopMarking();
-        else if (candidate) {
-          setCandidate(null);
-          setCandidateSource(null);
-          setEditingDraftId(null);
-          setConflictingDraftIds([]);
-          focusPanel();
-        } else if (open) closeOverlay();
-        else return;
-        event.preventDefault();
-        event.stopPropagation();
-        return;
-      }
-      if (!open) return;
-      if (key === "l") toggleLayoutMode();
-      else if (key === "p") togglePause();
-      else if (key === "h") toggleMarkers();
-      else if (key === "c" && drafts.length > 0) void copyDraftsMarkdown();
-      else if (key === "x" && drafts.length > 0) clearDrafts();
-      else return;
-      event.preventDefault();
-      event.stopPropagation();
-    };
-    document.addEventListener("keydown", onGlobalKeyDown, true);
-    return () => document.removeEventListener("keydown", onGlobalKeyDown, true);
-  }, [bridge, candidate, drafts, enabled, marking, open, paused, markersVisible, layoutMode, preferences.clearOnCopy, tabHidden]);
+  useHostPointerBlocking(
+    enabled && Boolean(bridge) && !tabHidden && preferences.blockInteractions,
+    host,
+  );
+  useGlobalReviewShortcuts({
+    active: enabled && Boolean(bridge) && !tabHidden,
+    open,
+    marking,
+    candidate: candidate !== null,
+    hasDrafts: drafts.length > 0,
+    onToggleOverlay: () => open ? closeOverlay() : openOverlay(true),
+    onCancelMarking: stopMarking,
+    onCancelCandidate: () => {
+      setCandidate(null);
+      setCandidateSource(null);
+      setEditingDraftId(null);
+      setConflictingDraftIds([]);
+      focusPanel();
+    },
+    onCloseOverlay: closeOverlay,
+    onToggleLayout: toggleLayoutMode,
+    onTogglePause: togglePause,
+    onToggleMarkers: toggleMarkers,
+    onCopyDrafts: () => void copyDraftsMarkdown(),
+    onClearDrafts: clearDrafts,
+  });
 
   useEffect(() => {
     if (!marking || !bridge) return;
@@ -979,17 +904,17 @@ export function A3SReviewOverlay({
       {layoutMode && layoutSource && !candidate && <div className="a3s-layout-target-preview" style={rectStyle(layoutTarget)} aria-hidden="true" />}
       {drawingPath && <svg className="a3s-drawing" aria-hidden="true"><path d={drawingPath} /></svg>}
       <ReviewMarkers visible={markersVisible} bridge={bridge} drafts={drafts} repairs={repairs} qualityReports={qualityReports} designAuditReports={designAuditReports} onEditDraft={editDraft} />
-      <button ref={launchRef} className={`a3s-launch ${marking ? "is-active" : ""}`} type="button" title="Toggle review overlay (Ctrl/Command+Shift+F)" onClick={() => open ? closeOverlay() : openOverlay(true)} aria-expanded={open} aria-controls={`${idPrefix}-review-panel`}>
+      <button ref={launchRef} className={`a3s-launch ${marking ? "is-active" : ""}`} type="button" title="Toggle review overlay (Ctrl/Command+Shift+F)" onClick={() => open ? closeOverlay() : openOverlay(true)} aria-expanded={open} aria-controls={`${idPrefix}-review-panel`} aria-keyshortcuts={REVIEW_KEY_SHORTCUTS.toggle}>
         A3S Review{drafts.length + repairs.length > 0 ? ` · ${drafts.length + repairs.length}` : ""}
       </button>
       <div className="a3s-announcer" role="status" aria-live="polite" aria-atomic="true">{announcement}</div>
-      {open && <aside ref={panelRef} id={`${idPrefix}-review-panel`} className="a3s-panel" aria-labelledby={`${idPrefix}-review-title`} aria-describedby={`${idPrefix}-review-description`} role="dialog" aria-modal="false" tabIndex={-1}>
+      {open && <aside ref={panelRef} id={`${idPrefix}-review-panel`} className="a3s-panel" aria-labelledby={`${idPrefix}-review-title`} aria-describedby={`${idPrefix}-review-description`} aria-keyshortcuts={REVIEW_KEY_SHORTCUTS.escape} role="dialog" aria-modal="false" tabIndex={-1}>
         <header><strong id={`${idPrefix}-review-title`} className="a3s-panel-title">Review</strong><small id={`${idPrefix}-review-description`} className="a3s-panel-description">Local until sent</small><button type="button" className="a3s-close" onClick={closeOverlay} aria-label="Close review overlay"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3.5 3.5 12.5 12.5M12.5 3.5 3.5 12.5" /></svg></button></header>
         <section className="a3s-tools" aria-label="Mark page">
           {(["element", "text", "multi", "area", "draw"] as SelectionMode[]).map((value) => <button key={value} type="button" aria-label={`Mark ${MODE_LABEL[value].toLowerCase()}`} aria-pressed={marking && mode === value} className={marking && mode === value ? "selected" : ""} onClick={() => startMarking(value)}>{MODE_LABEL[value]}</button>)}
-          <button type="button" title="Toggle Layout Mode (L)" aria-pressed={layoutMode} className={layoutMode ? "selected" : ""} onClick={toggleLayoutMode}>Layout</button>
-          <button type="button" title="Pause or resume page motion (P)" aria-label={paused ? "Resume page animations" : "Pause page animations"} aria-pressed={paused} className={paused ? "selected" : ""} onClick={togglePause}>{paused ? "Resume" : "Pause"}</button>
-          <button type="button" title="Show or hide finding markers (H)" aria-label={markersVisible ? "Hide markers" : "Show markers"} aria-pressed={markersVisible} className={markersVisible ? "selected" : ""} onClick={toggleMarkers}>{markersVisible ? "Hide markers" : "Show markers"}</button>
+          <button type="button" title="Toggle Layout Mode (L)" aria-keyshortcuts={REVIEW_KEY_SHORTCUTS.layout} aria-pressed={layoutMode} className={layoutMode ? "selected" : ""} onClick={toggleLayoutMode}>Layout</button>
+          <button type="button" title="Pause or resume page motion (P)" aria-label={paused ? "Resume page animations" : "Pause page animations"} aria-keyshortcuts={REVIEW_KEY_SHORTCUTS.pause} aria-pressed={paused} className={paused ? "selected" : ""} onClick={togglePause}>{paused ? "Resume" : "Pause"}</button>
+          <button type="button" title="Show or hide finding markers (H)" aria-label={markersVisible ? "Hide markers" : "Show markers"} aria-keyshortcuts={REVIEW_KEY_SHORTCUTS.markers} aria-pressed={markersVisible} className={markersVisible ? "selected" : ""} onClick={toggleMarkers}>{markersVisible ? "Hide markers" : "Show markers"}</button>
           <button type="button" aria-label={`Turn auto-send ${autoSendEnabled ? "off" : "on"}`} aria-pressed={autoSendEnabled} className={autoSendEnabled ? "selected" : ""} onClick={() => setAutoSendEnabled((current) => !current)}>Auto-send · {autoSendEnabled ? "on" : "off"}</button>
           <button type="button" aria-label={`Change overlay theme; current theme is ${preferences.theme}`} onClick={cycleTheme}>Theme · {preferences.theme}</button>
           {marking && <button type="button" className="danger" onClick={() => stopMarking()}>Cancel</button>}
@@ -1052,7 +977,7 @@ export function A3SReviewOverlay({
           })}
           {drafts.length === 0 && repairs.length === 0 && qualityReports.length === 0 && designAuditReports.length === 0 && !candidate && <p className="a3s-empty">Mark an element to describe a fix. Contract findings and advisory design suggestions appear here when available.</p>}
         </section>
-        {drafts.length > 0 && <footer><button type="button" className="quiet" title="Clear all local drafts (X)" onClick={clearDrafts}>Clear drafts</button><button type="button" className="quiet" title="Copy selected drafts as Markdown (C)" onClick={() => void copyDraftsMarkdown()}>Copy Markdown</button><button type="button" className="quiet" onClick={() => void copyDrafts()}>Copy JSON</button><button type="button" disabled={selectedCount === 0} onClick={() => submit(drafts.filter((item) => item.selected).map((item) => item.draft))}>Send selected ({selectedCount})</button><button type="button" onClick={() => submit(drafts.map((item) => item.draft))}>Send all</button></footer>}
+        {drafts.length > 0 && <footer><button type="button" className="quiet" title="Clear all local drafts (X)" aria-keyshortcuts={REVIEW_KEY_SHORTCUTS.clear} onClick={clearDrafts}>Clear drafts</button><button type="button" className="quiet" title="Copy selected drafts as Markdown (C)" aria-keyshortcuts={REVIEW_KEY_SHORTCUTS.copy} onClick={() => void copyDraftsMarkdown()}>Copy Markdown</button><button type="button" className="quiet" onClick={() => void copyDrafts()}>Copy JSON</button><button type="button" disabled={selectedCount === 0} onClick={() => submit(drafts.filter((item) => item.selected).map((item) => item.draft))}>Send selected ({selectedCount})</button><button type="button" onClick={() => submit(drafts.map((item) => item.draft))}>Send all</button></footer>}
       </aside>}
     </div>
   );

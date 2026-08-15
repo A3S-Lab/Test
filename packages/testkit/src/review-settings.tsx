@@ -1,4 +1,5 @@
 import { useId, useState } from "react";
+import { REVIEW_SHORTCUT_HELP } from "./review-input-policy";
 import type { ReviewPreferences } from "./review-preferences";
 
 export type ReviewSettingsProps = {
@@ -13,7 +14,9 @@ export function ReviewSettings({
   onHideUntilRestart,
 }: ReviewSettingsProps) {
   const [open, setOpen] = useState(false);
-  const panelId = `${useId().replace(/:/g, "")}-review-preferences`;
+  const idPrefix = useId().replace(/:/g, "");
+  const panelId = `${idPrefix}-review-preferences`;
+  const shortcutsTitleId = `${idPrefix}-review-shortcuts-title`;
   const update = <Key extends keyof ReviewPreferences>(
     key: Key,
     value: ReviewPreferences[Key],
@@ -30,6 +33,11 @@ export function ReviewSettings({
       </div>
       <label className="a3s-setting-toggle"><input type="checkbox" aria-label="Clear drafts after copy" checked={preferences.clearOnCopy} onChange={(event) => update("clearOnCopy", event.target.checked)} /><span>Clear copied drafts after a successful copy</span></label>
       <label className="a3s-setting-toggle"><input type="checkbox" aria-label="Block page pointer input" checked={preferences.blockInteractions} onChange={(event) => update("blockInteractions", event.target.checked)} /><span>Block page pointer input while the overlay is available</span></label>
+      <section className="a3s-shortcuts" aria-labelledby={shortcutsTitleId}>
+        <h3 id={shortcutsTitleId} className="a3s-shortcuts-title">Keyboard shortcuts</h3>
+        <dl>{REVIEW_SHORTCUT_HELP.map((shortcut) => <div key={shortcut.action}><dt>{shortcut.action}</dt><dd><kbd>{shortcut.keys}</kbd></dd></div>)}</dl>
+        <p>Ignored while typing in an editable control.</p>
+      </section>
       <button type="button" className="quiet" onClick={onHideUntilRestart}>Hide until tab restart</button>
     </div>}
   </section>;

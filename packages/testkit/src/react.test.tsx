@@ -620,6 +620,18 @@ describe("React adapter and review overlay", () => {
     expect(shadowQuery(".a3s-list").hasAttribute("aria-live")).toBe(false);
 
     const launcher = shadowQuery(".a3s-launch");
+    expect(launcher.getAttribute("aria-keyshortcuts")).toBe("Control+Shift+F Meta+Shift+F");
+    expect(panel.getAttribute("aria-keyshortcuts")).toBe("Escape");
+    expect(shadowButton("Layout").getAttribute("aria-keyshortcuts")).toBe("L");
+    expect(shadowButton("Pause").getAttribute("aria-keyshortcuts")).toBe("P");
+    expect(shadowButton("Hide markers").getAttribute("aria-keyshortcuts")).toBe("H");
+    fireEvent.click(shadowButton("Review preferences"));
+    const shortcutHelp = shadowQuery(".a3s-shortcuts");
+    expect(shortcutHelp.getAttribute("aria-labelledby")).toBe(shadowQuery(".a3s-shortcuts-title").id);
+    expect(shortcutHelp.textContent).toContain("Toggle review");
+    expect(shortcutHelp.textContent).toContain("Copy selected drafts");
+    expect(shortcutHelp.textContent).toContain("Ignored while typing in an editable control");
+
     fireEvent.click(shadowQuery("header button"));
     await waitFor(() => expect(document.querySelector<HTMLElement>("[data-a3s-testkit-overlay]")!.shadowRoot!.activeElement).toBe(launcher));
     fireEvent.click(launcher);
@@ -632,6 +644,8 @@ describe("React adapter and review overlay", () => {
     fireEvent.change(await waitFor(() => shadowQuery(".a3s-editor textarea")), { target: { value: "Name every finding action" } });
     fireEvent.click(shadowButton("Add draft"));
     await waitFor(() => expect(shadowQuery(".a3s-announcer").textContent).toBe("Draft added: Name every finding action"));
+    expect(shadowButton("Clear drafts").getAttribute("aria-keyshortcuts")).toBe("X");
+    expect(shadowButton("Copy Markdown").getAttribute("aria-keyshortcuts")).toBe("C");
     expect(shadowButton("Edit").getAttribute("aria-label")).toBe("Edit draft: Name every finding action");
     expect(shadowButton("Delete").getAttribute("aria-label")).toBe("Delete draft: Name every finding action");
     fireEvent.click(shadowButton("Send and auto-fix"));

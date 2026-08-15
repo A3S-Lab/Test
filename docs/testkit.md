@@ -446,6 +446,10 @@ local drafts. `Escape` cancels the active marking/editor state first, then
 closes the panel. Commands are ignored inside inputs, textareas, selects,
 contenteditable regions, and ARIA textbox, searchbox, combobox, or spinbutton
 controls. Each command also has a named button and visible shortcut tooltip.
+The launcher and active controls expose the same bindings through
+`aria-keyshortcuts`. Review preferences includes a keyboard-reference section
+that remains available to keyboard and screen-reader navigation and explicitly
+states that commands are ignored while typing in an editable control.
 
 Marker rectangles remain pointer-transparent page evidence. A draft marker
 adds only a 28 CSS-pixel edit button at its top-start corner; activating it
@@ -486,8 +490,9 @@ polite live region so a screen reader does not announce the entire finding list
 again.
 
 Automated React tests cover dialog naming, control names, live-region messages,
-and Shadow DOM focus restoration. The ignored real Chromium Test Kit suite also
-captures the browser accessibility tree and checks the launcher-to-dialog focus
+shortcut metadata and help content, and Shadow DOM focus restoration. The
+ignored real Chromium Test Kit suite also captures the browser accessibility
+tree, verifies the keyboard reference, and checks the launcher-to-dialog focus
 round trip. These checks are regression evidence for DOM and accessibility-tree
 semantics; they are not a substitute for completing every workflow with an
 actual screen reader. M8 remains open until an independent reviewer audits the
