@@ -116,7 +116,11 @@ provider is disabled or the protocol is unavailable.
 
 For CI, keep `A3STestKit` enabled and omit `A3SReviewOverlay`. For Next.js,
 mount both from a client component and gate them with
-`process.env.NODE_ENV !== "production"`. The overlay supports element, text,
+`process.env.NODE_ENV !== "production"`. Server rendering does not access the
+DOM or emit layout-effect warnings; boundary registration and focus effects
+begin after the browser hydrates. `getPageContextBridge()` returns `null` on
+the server, while direct enabled installation reports that it requires a
+browser. The overlay supports element, text,
 click/drag multi-selection, rectangular and freehand findings, persistent
 markers, draft editing/hiding, animation pause, system/light/dark themes,
 bounded structured copy, and typed Layout Mode. Layout Mode can draw the

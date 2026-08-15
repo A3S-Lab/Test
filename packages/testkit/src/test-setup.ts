@@ -16,6 +16,7 @@ class ResizeObserverStub implements ResizeObserver {
 }
 
 beforeEach(() => {
+  if (typeof window === "undefined") return;
   Object.defineProperty(globalThis, "ResizeObserver", { value: ResizeObserverStub, configurable: true });
   Object.defineProperty(window, "innerWidth", { value: 1000, configurable: true });
   Object.defineProperty(window, "innerHeight", { value: 800, configurable: true });
@@ -30,6 +31,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  if (typeof window === "undefined") return;
   cleanup();
   getPageContextBridge()?.dispose();
   document.querySelectorAll("[data-a3s-testkit-overlay]").forEach((element) => element.remove());

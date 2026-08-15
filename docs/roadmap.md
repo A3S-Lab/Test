@@ -167,9 +167,10 @@ snapshot. Pages without the SDK retain the existing Web behavior.
       and revision notifications instead of polling
 - [x] Isolate optional overlay styles and events from host-page CSS and avoid
       changing application behavior when review mode is disabled
-- [x] Cover SSR/hydration, route changes, portals, transforms, fixed/sticky
-      content, nested scroll containers, open Shadow DOM, virtualized lists,
-      dialogs, and teardown in unit and real-browser tests
+- [x] Cover warning-free SSR/hydration, route changes, portals, transforms,
+      fixed/sticky content, nested scroll containers, open Shadow DOM,
+      virtualized lists, dialogs, and teardown in unit and real-browser tests;
+      verify built ESM and CommonJS React consumers independently
 - [x] Add an explicit browser-zoom geometry regression covering layout and
       visual viewports, DPR, CSS-pixel element rectangles, visible ratio, and
       normalized coordinates in the real Test Kit browser suite

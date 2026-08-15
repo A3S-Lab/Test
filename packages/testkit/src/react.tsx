@@ -1,12 +1,12 @@
 import {
   useEffect,
   useId,
-  useLayoutEffect,
   useRef,
   useState,
   type CSSProperties,
 } from "react";
 import { createPortal } from "react-dom";
+import { useBrowserLayoutEffect } from "./react-effect";
 import { getPageContextBridge } from "./runtime";
 import {
   DesignAuditCandidates,
@@ -368,13 +368,13 @@ export function A3SReviewOverlay({
     saveReviewDrafts(bridge, drafts);
   }, [bridge, drafts, enabled, mount]);
 
-  useLayoutEffect(() => {
+  useBrowserLayoutEffect(() => {
     if (!open || !focusPanelOnOpenRef.current) return;
     focusPanelOnOpenRef.current = false;
     panelRef.current?.focus();
   }, [mount, open]);
 
-  useLayoutEffect(() => {
+  useBrowserLayoutEffect(() => {
     if (!restoreReplyFocusId || replyFindingId !== null) return;
     const trigger = replyTriggerRefs.current.get(restoreReplyFocusId);
     (trigger ?? panelRef.current)?.focus();

@@ -26,6 +26,7 @@
   ],
   "scripts": {
     "build": "tsup",
+    "check:package": "node scripts/check-package.mjs && tsc -p scripts/tsconfig.json",
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit"

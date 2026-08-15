@@ -61,8 +61,8 @@ jobs:
       - name: Build package
         run: npm run build
 
-      - name: Verify package contents
-        run: npm pack --dry-run
+      - name: Verify package consumers
+        run: npm run check:package
 
   quality:
     name: Rust quality (${{ matrix.os }})

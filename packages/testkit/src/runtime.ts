@@ -635,6 +635,9 @@ let currentRuntime: Runtime | null = null;
 
 export function installTestKit(options: TestKitOptions): TestKitRuntime {
   if (options.enabled !== true) return disabledBridge();
+  if (typeof window === "undefined" || typeof document === "undefined") {
+    throw new Error("A3S Test Kit can only be enabled in a browser");
+  }
   if (currentRuntime) currentRuntime.dispose();
   const runtime = new Runtime({
     page: options.page,
@@ -656,6 +659,7 @@ export function installTestKit(options: TestKitOptions): TestKitRuntime {
 }
 
 export function getPageContextBridge(): PageContextBridge | null {
+  if (typeof window === "undefined") return null;
   return ((window as unknown as Record<PropertyKey, unknown>)[PAGE_CONTEXT_SYMBOL] as PageContextBridge | undefined) ?? null;
 }
 

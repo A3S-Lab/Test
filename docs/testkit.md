@@ -244,10 +244,15 @@ export function TestProvider({ children }: { children: React.ReactNode }) {
 }
 ```
 
-The headless runtime tolerates SSR markup and hydration. Both components
-require an explicit `enabled` value; the overlay additionally refuses to
-mount without a compatible live bridge. It is created only in the browser and
-remains isolated in its own Shadow DOM.
+The headless runtime tolerates SSR markup and hydration. The provider,
+boundaries, and overlay render on the server without accessing the DOM or
+emitting layout-effect warnings; synchronous boundary registration and focus
+effects begin in the browser. Both components require an explicit `enabled`
+value, and the overlay additionally refuses to mount without a compatible live
+bridge. It is created only in the browser and remains isolated in its own
+Shadow DOM. Direct framework-neutral bridge inspection returns `null` on the
+server; enabling the runtime directly remains a browser-only operation and
+fails with a contextual error.
 
 ## Human review and repair submission
 

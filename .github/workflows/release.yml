@@ -218,6 +218,7 @@ jobs:
           npm run typecheck
           npm test
           npm run build
+          npm run check:package
 
       - name: Package Test Kit
         working-directory: packages/testkit

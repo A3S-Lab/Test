@@ -2,7 +2,6 @@ import {
   createContext,
   useContext,
   useEffect,
-  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -10,6 +9,7 @@ import {
   type PropsWithChildren,
 } from "react";
 import { installTestKit } from "./runtime";
+import { useBrowserLayoutEffect } from "./react-effect";
 import { stableList } from "./review-utils";
 import type {
   PageContextBridge,
@@ -91,7 +91,7 @@ export function A3STestBoundary({
   const { bridge } = useTestKitContext();
   const ref = useRef<HTMLElement | null>(null);
   const latest = useLatest({ ready, facts, roots });
-  useLayoutEffect(() => {
+  useBrowserLayoutEffect(() => {
     const element = ref.current;
     if (!element || !bridge || !("registerBoundary" in bridge)) return;
     return (bridge as TestKitRuntime).registerBoundary({
