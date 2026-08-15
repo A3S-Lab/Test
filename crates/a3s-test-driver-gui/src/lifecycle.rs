@@ -9,6 +9,8 @@ use crate::{ApplicationIdentity, GuiAppTarget, LaunchSpec, WindowSelector};
 
 const WINDOW_DISCOVERY_ATTEMPTS: usize = 5;
 const WINDOW_DISCOVERY_INTERVAL: Duration = Duration::from_millis(100);
+const APPLICATION_EXIT_ATTEMPTS: usize = 50;
+const APPLICATION_EXIT_INTERVAL: Duration = Duration::from_millis(100);
 
 #[derive(Clone, Debug)]
 pub(crate) struct ApplicationBinding {
@@ -289,6 +291,11 @@ pub(crate) async fn cleanup_resources(
                             if let Err(error) = api.kill_app(application.pid).await {
                                 return Err(retryable_cleanup_error(error));
                             }
+                            match wait_for_application_exit(&api, &application).await {
+                                Ok(()) => {}
+                                Err(error) if error.retryable() => return Err(error),
+                                Err(error) => first_error = Some(error),
+                            }
                         }
                         _ => {
                             first_error = Some(DriverError::new(
@@ -313,6 +320,38 @@ pub(crate) async fn cleanup_resources(
         first_error.get_or_insert(error.with_retryable(false));
     }
     first_error.map_or(Ok(()), Err)
+}
+
+async fn wait_for_application_exit(
+    api: &CuaApi,
+    application: &ApplicationBinding,
+) -> Result<(), DriverError> {
+    for attempt in 0..APPLICATION_EXIT_ATTEMPTS {
+        let apps = api.list_apps().await.map_err(retryable_cleanup_error)?;
+        let Some(current) = apps
+            .iter()
+            .find(|app| app.running && app.pid == application.pid)
+        else {
+            return Ok(());
+        };
+        if matching_running_apps(std::slice::from_ref(current), &application.identity)?.len() != 1 {
+            return Err(DriverError::new(
+                "test.driver.gui.app_ownership_lost",
+                "owned process id was reused before application termination could be confirmed",
+            ));
+        }
+        if attempt + 1 < APPLICATION_EXIT_ATTEMPTS {
+            tokio::time::sleep(APPLICATION_EXIT_INTERVAL).await;
+        }
+    }
+    Err(DriverError::new(
+        "test.driver.gui.app_cleanup_incomplete",
+        format!(
+            "CUA acknowledged termination of owned process {} but the application is still running",
+            application.pid
+        ),
+    )
+    .with_retryable(true))
 }
 
 fn retryable_cleanup_error(error: DriverError) -> DriverError {

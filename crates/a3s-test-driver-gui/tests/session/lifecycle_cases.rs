@@ -59,6 +59,30 @@ async fn transient_owned_app_cleanup_can_be_retried_without_losing_the_session()
 }
 
 #[tokio::test]
+async fn cleanup_waits_until_the_owned_application_is_no_longer_running() {
+    let temp = TempDir::new().expect("temp dir");
+    let transport = FakeTransport::new(FakeOptions {
+        kill_visibility_polls: 2,
+        ..FakeOptions::default()
+    });
+    let mut session = driver(launch_config(&temp), Arc::clone(&transport))
+        .open(&context(&temp))
+        .await
+        .expect("GUI session");
+
+    session
+        .close()
+        .await
+        .expect("confirmed application cleanup");
+
+    assert!(!transport.running().await);
+    assert_eq!(transport.calls_for("kill_app").await.len(), 1);
+    assert_eq!(transport.calls_for("end_session").await.len(), 1);
+    assert!(transport.calls_for("list_apps").await.len() >= 5);
+    assert!(transport.closed().await);
+}
+
+#[tokio::test]
 async fn transient_session_end_failure_retries_without_killing_the_app_twice() {
     let temp = TempDir::new().expect("temp dir");
     let transport = FakeTransport::new(FakeOptions {

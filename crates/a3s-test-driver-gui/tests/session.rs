@@ -30,6 +30,7 @@ struct FakeOptions {
     ambiguous_elements: bool,
     launch_response_delay: Duration,
     kill_failures: usize,
+    kill_visibility_polls: usize,
     end_session_failures: usize,
 }
 
@@ -44,6 +45,7 @@ impl Default for FakeOptions {
             ambiguous_elements: false,
             launch_response_delay: Duration::ZERO,
             kill_failures: 0,
+            kill_visibility_polls: 0,
             end_session_failures: 0,
         }
     }
@@ -58,6 +60,7 @@ struct FakeState {
     notifications: Vec<String>,
     closed: bool,
     kill_failures_remaining: usize,
+    shutdown_polls_remaining: Option<usize>,
     end_session_failures_remaining: usize,
 }
 
@@ -77,6 +80,7 @@ impl FakeTransport {
                 notifications: Vec::new(),
                 closed: false,
                 kill_failures_remaining: options.kill_failures,
+                shutdown_polls_remaining: None,
                 end_session_failures_remaining: options.end_session_failures,
             }),
         })
@@ -263,7 +267,15 @@ fn dispatch_tool(
             "source": { "attribution": state.options.permission_attribution },
         }),
         "list_apps" => {
-            if state.running {
+            if state.shutdown_polls_remaining == Some(0) {
+                state.running = false;
+                state.shutdown_polls_remaining = None;
+            }
+            let running = state.running;
+            if let Some(remaining) = &mut state.shutdown_polls_remaining {
+                *remaining = remaining.saturating_sub(1);
+            }
+            if running {
                 json!({
                     "apps": [{
                         "pid": APP_PID,
@@ -285,6 +297,7 @@ fn dispatch_tool(
         }
         "launch_app" => {
             state.running = true;
+            state.shutdown_polls_remaining = None;
             json!({
                 "pid": APP_PID,
                 "bundle_id": BUNDLE_ID,
@@ -322,7 +335,7 @@ fn dispatch_tool(
                     "structuredContent": { "code": "temporary_failure" },
                 }));
             }
-            state.running = false;
+            state.shutdown_polls_remaining = Some(state.options.kill_visibility_polls);
             return Ok(tool_result(None));
         }
         other => {
