@@ -431,7 +431,7 @@ tagged Rust package:
 
 ```bash
 cargo install --git https://github.com/A3S-Lab/Test \
-  --tag v0.16.1 --locked a3s-test-cli
+  --tag v0.16.2 --locked a3s-test-cli
 ```
 
 ### Hermetic runner image

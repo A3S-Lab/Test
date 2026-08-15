@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.16.2 - 2026-08-15
+
+### Fixed
+
+- Bound the checkout-free GUI certification asset upload to the explicit
+  GitHub repository so the release workflow can publish its signed evidence.
+- Raised the Rust workspace patch release to `0.16.2`. The unchanged Test Kit
+  remains `0.3.0`.
+
 ## 0.16.1 - 2026-08-15
 
 ### Added
