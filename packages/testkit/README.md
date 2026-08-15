@@ -161,3 +161,10 @@ and the major review, Layout, candidate, clarification, human-review, and
 terminal states, including the open Shadow DOM. A separate hands-on VoiceOver,
 NVDA, or equivalent screen-reader audit of every workflow is still required
 before claiming complete assistive-technology coverage.
+
+The
+[independent screen-reader audit guide](../../docs/screen-reader-audit.md)
+provides the loopback fixture command, canonical 15-workflow manifest,
+evidence rules, strict audit JSON contract, and separate structural and
+all-passed verification commands. The harness makes the audit reproducible;
+it does not close M8 or grant repair authority.

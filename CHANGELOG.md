@@ -4,6 +4,12 @@
 
 ### Added
 
+- Added a loopback-only independent screen-reader audit fixture, canonical
+  15-workflow manifest, strict revision-bound audit artifact, bounded evidence
+  verifier, and separate all-passed closure gate. The shared real-browser
+  fixture exposes candidate, clarification, human-review, terminal, and reset
+  states without DevTools while keeping M8 open for an actual independent
+  VoiceOver, NVDA, or equivalent hands-on audit.
 - Added an independent `axe-core` WCAG A/AA gate to the real Chromium Test Kit
   suite. It scans the open review Shadow DOM across system, light, and dark
   themes plus preferences, marking and Layout editors, restored drafts,

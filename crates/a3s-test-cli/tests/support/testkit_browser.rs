@@ -778,7 +778,7 @@ fn fill_accessible(
     run(command, context, &["fill", &reference, value]);
 }
 
-fn select_accessible(
+pub(super) fn select_accessible(
     command: &impl Fn(&[&str]) -> Output,
     context: &str,
     role: &str,

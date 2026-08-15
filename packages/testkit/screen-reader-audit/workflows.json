@@ -1,0 +1,202 @@
+{
+  "protocol": "a3s.test.screen-reader-workflows/1",
+  "workflows": [
+    {
+      "id": "dialog-navigation",
+      "title": "Launcher and non-modal dialog navigation",
+      "setup": "Reset the fixture and start at the application heading.",
+      "steps": [
+        "Navigate to the review launcher using only the screen reader and keyboard.",
+        "Open the review surface and traverse its heading, description, controls, and findings region.",
+        "Move between the review Shadow DOM and the host application without using DevTools."
+      ],
+      "expected": [
+        "The launcher exposes its expanded state and the review surface is announced as a named non-modal dialog.",
+        "Reading order is stable, no interactive control is skipped, and navigation can return to the host page."
+      ]
+    },
+    {
+      "id": "shortcut-help-and-preferences",
+      "title": "Shortcut help and presentation preferences",
+      "setup": "Open Review preferences from a fresh fixture.",
+      "steps": [
+        "Read the keyboard shortcut reference and ownership notes.",
+        "Operate theme, marker color, clear-after-copy, interaction blocking, docking, and wireframe fade controls.",
+        "Close and reopen preferences using keyboard navigation."
+      ],
+      "expected": [
+        "Every control has a stable name, current state, and reachable help text.",
+        "Letter shortcut guards and Escape ownership are understandable without relying on visual tooltips."
+      ]
+    },
+    {
+      "id": "element-draft-lifecycle",
+      "title": "Element finding draft lifecycle",
+      "setup": "Reset the fixture and focus Broken action.",
+      "steps": [
+        "Start element marking and select the focused host button.",
+        "Complete the requested-fix and success-criteria fields, then save the draft.",
+        "Open the draft from its marker, update it, and delete it from the editor."
+      ],
+      "expected": [
+        "Marking instructions, editor labels, save confirmation, marker action, update, deletion, and focus restoration are announced once and in context."
+      ]
+    },
+    {
+      "id": "text-region-and-drawing-capture",
+      "title": "Text, rectangular region, and freehand capture",
+      "setup": "Reset the fixture before each capture type.",
+      "steps": [
+        "Create a finding from selected text and inspect the resulting editor.",
+        "Create a rectangular region finding and inspect its geometry description.",
+        "Create a freehand finding and cancel or save it from the normal editor."
+      ],
+      "expected": [
+        "Each capture mode announces activation, cancellation, and the correct target kind without trapping focus or activating the host control."
+      ]
+    },
+    {
+      "id": "keyboard-multi-selection",
+      "title": "Keyboard multi-selection",
+      "setup": "Focus Broken action before choosing Mark multi.",
+      "steps": [
+        "Press Enter to add the first target and move to Host interaction probe for the second.",
+        "Confirm the bounded count announcements and finish with Shift+Enter.",
+        "Cancel once during collection and once from the completed editor using Escape."
+      ],
+      "expected": [
+        "Host controls are not activated, focus remains in the application during collection, counts are announced once, and cancellation restores the documented focus owner."
+      ]
+    },
+    {
+      "id": "layout-authoring",
+      "title": "Layout placement and rearrangement authoring",
+      "setup": "Reset the fixture and enter Layout Mode.",
+      "steps": [
+        "Search the component catalog, choose a component type, and create a page or wireframe placement.",
+        "Select Layout source section, choose rearrangement, and describe a destination region.",
+        "Adjust wireframe fade and cancel an incomplete layout operation."
+      ],
+      "expected": [
+        "Catalog results, source selection, canvas, geometry, purpose, mode state, and cancellation are operable and announced without implying that the page DOM was mutated."
+      ]
+    },
+    {
+      "id": "marker-copy-and-clear-controls",
+      "title": "Marker visibility, structured copy, and clear controls",
+      "setup": "Create at least two local drafts.",
+      "steps": [
+        "Hide and show one marker, then hide and show all markers.",
+        "Select drafts and invoke Copy Markdown and Copy JSON.",
+        "Toggle clear-after-copy and use Clear drafts."
+      ],
+      "expected": [
+        "Marker state, selected count, copy success or failure, and destructive clear scope are announced with finding-specific control names."
+      ]
+    },
+    {
+      "id": "contract-and-design-candidates",
+      "title": "Deterministic contract and advisory design candidates",
+      "setup": "Activate Seed contract and design candidates in the fixture controls.",
+      "steps": [
+        "Review, cancel, and dismiss the contract candidate.",
+        "Review, retarget, save as a draft, and dismiss the advisory design suggestion.",
+        "Confirm the two candidate sources remain distinguishable."
+      ],
+      "expected": [
+        "Candidate source, authority, target, action names, editor context, and dismissal are announced without presenting advisory output as a verdict or repair authorization."
+      ]
+    },
+    {
+      "id": "single-and-batch-submission",
+      "title": "Single, selected, and all finding submission",
+      "setup": "Create three drafts and leave at least two selected.",
+      "steps": [
+        "Submit one draft with Send and auto-fix.",
+        "Submit the selected drafts in visible order.",
+        "Create new drafts and submit all."
+      ],
+      "expected": [
+        "The submitted scope and result are announced once, controls do not claim an agent outcome, and remaining independent drafts retain their state."
+      ]
+    },
+    {
+      "id": "clarification-and-reply",
+      "title": "Agent clarification and human reply",
+      "setup": "Submit one finding, choose Clarification needed in fixture controls, and apply the state.",
+      "steps": [
+        "Read the agent question and open its finding-specific reply editor.",
+        "Cancel once, then reopen, enter a response, and send it.",
+        "Return to the repair item and review the thread order."
+      ],
+      "expected": [
+        "Question attribution, reply label, cancellation, send confirmation, thread order, and restored focus are announced without replaying the complete finding list."
+      ]
+    },
+    {
+      "id": "human-review-actions",
+      "title": "Review-ready human actions",
+      "setup": "Submit one finding, choose Human review ready in fixture controls, and apply the state.",
+      "steps": [
+        "Navigate the Accept, Reject, and Reopen actions for the specific finding.",
+        "Exercise each action on a reset copy of the fixture.",
+        "Confirm the action remains a request until an authoritative repair event arrives."
+      ],
+      "expected": [
+        "Each action includes the finding instruction in its name, confirmation is scoped, and no action announces a terminal state before the fixture applies one."
+      ]
+    },
+    {
+      "id": "terminal-repair-states",
+      "title": "Resolved, dismissed, cancelled, and failed repair states",
+      "setup": "Submit one finding and use Reset fixture between each target state.",
+      "steps": [
+        "Apply Resolved, Dismissed, Cancelled, and Failed from the fixture controls in separate runs.",
+        "Read the actor, status, available follow-up action, and thread for each state.",
+        "Reopen a terminal finding where the product permits it."
+      ],
+      "expected": [
+        "Every terminal state is announced once with its finding context and only valid follow-up actions remain reachable."
+      ]
+    },
+    {
+      "id": "focus-restoration-and-tab-hiding",
+      "title": "Focus restoration and hide-until-restart",
+      "setup": "Focus Host interaction probe before opening the review surface.",
+      "steps": [
+        "Close the idle panel with Escape and confirm application focus.",
+        "Delete or send a focused draft and confirm a durable review control receives focus.",
+        "Activate Hide until tab restart and reload the tab."
+      ],
+      "expected": [
+        "Focus returns without scrolling to a connected application control when the Shadow DOM disappears, and the launcher returns only after a tab restart."
+      ]
+    },
+    {
+      "id": "live-announcement-scope",
+      "title": "Polite live-announcement scope",
+      "setup": "Create drafts and one submitted repair before changing states.",
+      "steps": [
+        "Trigger selection counts, draft saves, submissions, repair updates, and copy results one at a time.",
+        "Listen after each update without moving the virtual cursor.",
+        "Navigate the findings list after the announcements finish."
+      ],
+      "expected": [
+        "Each bounded status message is announced once, unrelated findings are not replayed, and the findings list remains independently navigable."
+      ]
+    },
+    {
+      "id": "host-interaction-blocking",
+      "title": "Explicit host interaction blocking",
+      "setup": "Open Review preferences and focus Host interaction probe.",
+      "steps": [
+        "Verify normal host interaction with blocking disabled.",
+        "Enable page pointer blocking and attempt pointer, wheel, and context-menu interaction on the host page.",
+        "Continue keyboard and screen-reader navigation through both host and review controls."
+      ],
+      "expected": [
+        "The blocking state is announced, only documented pointer-class input is suppressed, and keyboard or screen-reader navigation is not trapped."
+      ]
+    }
+  ]
+}

@@ -328,8 +328,9 @@ an English locale and immutable historical snapshots:
 Repository specifications remain the source of truth for exhaustive protocol
 details: [architecture](docs/architecture.md),
 [agentic contract](docs/agentic.md), [ACL specification](docs/specification.md),
-[Test Kit contract](docs/testkit.md), [roadmap](docs/roadmap.md), and
-[changelog](CHANGELOG.md).
+[Test Kit contract](docs/testkit.md),
+[screen-reader audit](docs/screen-reader-audit.md),
+[roadmap](docs/roadmap.md), and [changelog](CHANGELOG.md).
 
 ## Development
 

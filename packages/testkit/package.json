@@ -25,9 +25,12 @@
     "README.md"
   ],
   "scripts": {
+    "audit:check": "node scripts/check-screen-reader-audit.mjs",
+    "audit:screen-reader": "node scripts/serve-screen-reader-audit.mjs",
     "build": "tsup",
     "check:package": "node scripts/check-package.mjs && tsc -p scripts/tsconfig.json",
-    "test": "vitest run",
+    "test": "npm run test:node && vitest run src",
+    "test:node": "node --test scripts/*.test.mjs",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit"
   },
@@ -48,6 +51,7 @@
     "@types/react": "^18.3.0",
     "@types/react-dom": "^18.3.0",
     "axe-core": "^4.13.0",
+    "esbuild": "^0.27.7",
     "jsdom": "^26.1.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",

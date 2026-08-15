@@ -9,6 +9,7 @@ use std::time::Duration;
 use support::browser_process::bounded_output;
 use support::testkit_accessibility::{
     exercise_repair_status_accessibility, exercise_review_candidate_accessibility,
+    verify_audit_fixture_reset,
 };
 use support::testkit_browser::{
     assert_wcag_accessibility, assert_wcag_accessibility_across_themes, run_review_workflow,
@@ -210,6 +211,26 @@ fn real_agent_browser_runs_the_embedded_testkit_suite() {
     );
     let (_bundle_workspace, bundle) = bundle_browser_fixture("bundle TestKit fixture");
     let fixture = start_testkit_fixture(bundle).expect("start TestKit fixture");
+    let workflow_manifest = get(&fixture.origin(), "/screen-reader-workflows.json")
+        .expect("read screen-reader workflow manifest from shared fixture");
+    assert_eq!(workflow_manifest.status, 200);
+    assert_eq!(
+        workflow_manifest
+            .headers
+            .get("content-type")
+            .map(String::as_str),
+        Some("application/json; charset=utf-8")
+    );
+    let workflow_manifest: serde_json::Value = serde_json::from_slice(&workflow_manifest.body)
+        .expect("screen-reader workflow manifest JSON");
+    assert_eq!(
+        workflow_manifest["protocol"],
+        "a3s.test.screen-reader-workflows/1"
+    );
+    assert_eq!(
+        workflow_manifest["workflows"].as_array().map(Vec::len),
+        Some(15)
+    );
     let session = format!("a3s-testkit-e2e-{}", std::process::id());
     let mut cleanup = StandaloneBrowserSessionCleanup::new(&browser, &session);
     let command = |arguments: &[&str]| {
@@ -257,6 +278,12 @@ fn real_agent_browser_runs_the_embedded_testkit_suite() {
         "button \"Change overlay theme; current theme is system\"",
         "button \"Layout\"",
         "button \"Close review overlay\"",
+        "heading \"Screen-reader audit controls\"",
+        "button \"Seed contract and design candidates\"",
+        "combobox \"Repair state\"",
+        "button \"Apply repair state\"",
+        "button \"Reset fixture\"",
+        "link \"Audit workflow manifest\"",
     ] {
         assert!(
             accessibility.contains(expected),
@@ -465,6 +492,7 @@ fn real_agent_browser_runs_the_embedded_testkit_suite() {
     );
 
     verify_hide_until_restart_focus(&command);
+    verify_audit_fixture_reset(&command);
 
     let teardown = command(&[
         "eval",

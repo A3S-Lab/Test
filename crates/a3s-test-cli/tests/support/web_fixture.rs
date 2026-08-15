@@ -12,6 +12,9 @@ const IO_TIMEOUT: Duration = Duration::from_secs(2);
 
 const HERMETIC_HTML: &str = include_str!("../../../../fixtures/web/hermetic.html");
 const ADVANCED_HTML: &str = include_str!("../../../../fixtures/web/advanced.html");
+const TESTKIT_HTML: &str = include_str!("../../../../packages/testkit/src/browser-fixture.html");
+const SCREEN_READER_WORKFLOWS: &str =
+    include_str!("../../../../packages/testkit/screen-reader-audit/workflows.json");
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct RecordedRequest {
@@ -305,34 +308,11 @@ fn route_testkit(path: &str, bundle: &[u8], repaired: bool) -> Response {
                 ),
         ),
         "/testkit.js" => Response::javascript_bytes(bundle.to_vec()),
+        "/screen-reader-workflows.json" => Response::json(SCREEN_READER_WORKFLOWS.to_string()),
         "/health" => Response::text("200 OK", "ready"),
         _ => Response::text("404 Not Found", "not found"),
     }
 }
-
-const TESTKIT_HTML: &str = r#"<!doctype html>
-<html lang="en" data-hydrated="false">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>A3S TestKit browser fixture</title>
-    <style>
-      body { font: 16px/1.5 system-ui, sans-serif; margin: 24px; min-height: 1400px; }
-      #nested { width: 420px; height: 140px; overflow: auto; border: 1px solid #999; }
-      .virtual-space { height: 400px; }
-      #sticky { position: sticky; top: 0; transform: scale(1); }
-      #zoom-edge { position: absolute; left: 1000px; top: 140px; width: 180px; height: 40px; }
-      #layout-section { width: 560px; height: 180px; }
-      #portal { position: fixed; right: 24px; top: 24px; }
-    </style>
-  </head>
-  <body>
-    <div id="root"><main><h1>Embedded TestKit E2E</h1><button id="sticky" data-testid="repair-target">__ACTION_LABEL__</button><button id="host-probe">Host interaction probe</button><button id="zoom-edge" data-testid="zoom-edge">Zoom edge target</button><section id="layout-section" data-testid="layout-section" tabindex="-1">Layout source section</section><div id="nested"><div class="virtual-space"><button id="virtual-row">Virtual row 1</button></div></div><div id="shadow-host"></div></main></div>
-    <div id="portal"></div>
-    <script>window.testkitInitialRepaired = __INITIAL_REPAIRED__;</script>
-    <script type="module" src="/testkit.js"></script>
-  </body>
-</html>"#;
 
 fn route_primary(path: &str, blocked_origin: &str) -> Response {
     match path {
@@ -422,6 +402,15 @@ impl Response {
             content_type: "text/javascript; charset=utf-8",
             headers: Vec::new(),
             body,
+        }
+    }
+
+    fn json(body: String) -> Self {
+        Self {
+            status: "200 OK",
+            content_type: "application/json; charset=utf-8",
+            headers: Vec::new(),
+            body: body.into_bytes(),
         }
     }
 

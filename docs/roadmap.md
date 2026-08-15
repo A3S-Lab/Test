@@ -245,8 +245,11 @@ snapshot. Pages without the SDK retain the existing Web behavior.
   marking and Layout editors, restored drafts, deterministic and advisory
   candidates, clarification replies, human review actions, and terminal repair
   states. It also verifies that scrollable findings remain keyboard reachable.
-  This does not close the item: an independent VoiceOver, NVDA, or equivalent
-  hands-on lifecycle audit is still required.
+  A committed 15-workflow manifest, loopback-only shared fixture, strict
+  revision-bound audit artifact, evidence verifier, and closure gate now make
+  the remaining manual audit reproducible. This does not close the item: an
+  independent VoiceOver, NVDA, or equivalent hands-on lifecycle audit is still
+  required.
 
 ## M9: Repair queue and coding-agent handoff
 

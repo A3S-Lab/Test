@@ -530,6 +530,13 @@ reviewer audits the full review lifecycle with VoiceOver, NVDA, or an
 equivalent supported screen reader in an environment that permits
 assistive-technology inspection.
 
+Use the [independent screen-reader audit procedure](screen-reader-audit.md) to
+run the loopback fixture, execute the canonical 15-workflow manifest, preserve
+bounded evidence, and verify the revision-bound audit artifact. Structural
+verification accepts documented failures or blockers; the separate
+`--require-pass` gate requires every workflow to pass. Neither gate grants
+repair authority, and the harness alone does not close M8.
+
 At submission time, the Test Kit enriches a repair with a fresh context
 revision and bounded page context. A submitted target contains current private
 node IDs, component/source hints, semantic locator candidates, geometry,

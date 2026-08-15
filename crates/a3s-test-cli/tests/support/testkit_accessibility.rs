@@ -1,20 +1,21 @@
 use std::process::Output;
 
 use super::testkit_browser::{
-    accessible_ref, assert_wcag_accessibility, click_accessible, encoded_eval, eval, wait_for,
+    accessible_ref, assert_wcag_accessibility, click_accessible, encoded_eval, eval,
+    select_accessible, wait_for,
 };
 
 pub fn exercise_review_candidate_accessibility(command: &impl Fn(&[&str]) -> Output) {
-    let seeded = eval(
+    click_accessible(
         command,
-        "seed contract and design review candidates",
-        "window.testkitFixture.seedReviewCandidates()",
+        "seed contract and design review candidates from the audit fixture",
+        "button",
+        "Seed contract and design candidates",
     );
-    assert_eq!(seeded, true, "review candidates were not accepted");
     wait_for(
         command,
         "wait for review candidates",
-        "Boolean(document.querySelector('[data-a3s-testkit-overlay]').shadowRoot.querySelector('.a3s-quality'))&&Boolean(document.querySelector('[data-a3s-testkit-overlay]').shadowRoot.querySelector('.a3s-design-audit'))",
+        "document.querySelector('#audit-status')?.textContent==='Candidate seeding requested. Both candidates will appear in Review.'&&Boolean(document.querySelector('[data-a3s-testkit-overlay]').shadowRoot.querySelector('.a3s-quality'))&&Boolean(document.querySelector('[data-a3s-testkit-overlay]').shadowRoot.querySelector('.a3s-design-audit'))",
     );
     assert_wcag_accessibility(command, "audit contract and design review candidates");
 
@@ -84,16 +85,23 @@ pub fn exercise_review_candidate_accessibility(command: &impl Fn(&[&str]) -> Out
 }
 
 pub fn exercise_repair_status_accessibility(command: &impl Fn(&[&str]) -> Output) {
-    let needs_input = encoded_eval(
+    select_accessible(
         command,
-        "move a repair to needs input",
-        "(()=>{const bridge=window[Symbol.for('a3s.test.page-context')];const repair=bridge.listRepairs()[0];const timestamp=new Date().toISOString();bridge.applyRepairEvent({requestId:'a11y-status-1',findingId:repair.id,sequence:1,status:'claimed',actor:'agent',timestamp});bridge.applyRepairEvent({requestId:'a11y-status-2',findingId:repair.id,sequence:2,status:'needs_input',actor:'agent',timestamp,message:'Should the label remain unchanged?'});return JSON.stringify(bridge.listRepairs()[0])})()",
+        "select the clarification repair state",
+        "combobox",
+        "Repair state",
+        "needs_input",
     );
-    assert_eq!(needs_input["status"], "needs_input");
+    click_accessible(
+        command,
+        "apply the clarification repair state",
+        "button",
+        "Apply repair state",
+    );
     wait_for(
         command,
         "wait for the repair clarification state",
-        "Boolean(document.querySelector('[data-a3s-testkit-overlay]').shadowRoot.querySelector('[aria-label^=\"Reply about repair:\"]'))",
+        "document.querySelector('#audit-status')?.textContent==='Repair state is now needs_input.'&&Boolean(document.querySelector('[data-a3s-testkit-overlay]').shadowRoot.querySelector('[aria-label^=\"Reply about repair:\"]'))",
     );
     assert_wcag_accessibility(command, "audit the repair clarification state");
     click_accessible(
@@ -115,12 +123,24 @@ pub fn exercise_repair_status_accessibility(command: &impl Fn(&[&str]) -> Output
         "Cancel reply",
     );
 
-    let review_ready = encoded_eval(
+    select_accessible(
         command,
-        "move a repair to human review",
-        "(()=>{const bridge=window[Symbol.for('a3s.test.page-context')];const repair=bridge.listRepairs()[0];const timestamp=new Date().toISOString();for(const [sequence,status,actor] of [[3,'queued','a3s-test'],[4,'claimed','agent'],[5,'repairing','agent'],[6,'verifying','agent'],[7,'review_ready','a3s-test']])bridge.applyRepairEvent({requestId:`a11y-status-${sequence}`,findingId:repair.id,sequence,status,actor,timestamp});return JSON.stringify(bridge.listRepairs()[0])})()",
+        "select the human-review repair state",
+        "combobox",
+        "Repair state",
+        "review_ready",
     );
-    assert_eq!(review_ready["status"], "review_ready");
+    click_accessible(
+        command,
+        "apply the human-review repair state",
+        "button",
+        "Apply repair state",
+    );
+    wait_for(
+        command,
+        "wait for the human-review repair state",
+        "document.querySelector('#audit-status')?.textContent==='Repair state is now review_ready.'",
+    );
     for name in [
         "Accept repair: Repair the broken action",
         "Reject repair: Repair the broken action",
@@ -130,17 +150,57 @@ pub fn exercise_repair_status_accessibility(command: &impl Fn(&[&str]) -> Output
     }
     assert_wcag_accessibility(command, "audit the human repair review state");
 
-    let resolved = encoded_eval(
+    for status in ["resolved", "dismissed", "cancelled", "failed"] {
+        select_accessible(
+            command,
+            &format!("select the {status} terminal repair state"),
+            "combobox",
+            "Repair state",
+            status,
+        );
+        click_accessible(
+            command,
+            &format!("apply the {status} terminal repair state"),
+            "button",
+            "Apply repair state",
+        );
+        wait_for(
+            command,
+            &format!("wait for the {status} terminal repair state"),
+            &format!(
+                "document.querySelector('#audit-status')?.textContent==='Repair state is now {status}.'"
+            ),
+        );
+        accessible_ref(
+            command,
+            &format!("locate the {status} terminal repair action"),
+            "button",
+            "Reopen repair: Repair the broken action",
+        );
+        assert_wcag_accessibility(command, &format!("audit the {status} repair state"));
+    }
+}
+
+pub fn verify_audit_fixture_reset(command: &impl Fn(&[&str]) -> Output) {
+    click_accessible(
         command,
-        "move a repair to resolved",
-        "(()=>{const bridge=window[Symbol.for('a3s.test.page-context')];const repair=bridge.listRepairs()[0];bridge.applyRepairEvent({requestId:'a11y-status-8',findingId:repair.id,sequence:8,status:'resolved',actor:'a3s-test',timestamp:new Date().toISOString()});return JSON.stringify(bridge.listRepairs()[0])})()",
-    );
-    assert_eq!(resolved["status"], "resolved");
-    accessible_ref(
-        command,
-        "locate the terminal repair action",
+        "reset the screen-reader audit fixture",
         "button",
-        "Reopen repair: Repair the broken action",
+        "Reset fixture",
     );
-    assert_wcag_accessibility(command, "audit the terminal repair state");
+    wait_for(
+        command,
+        "wait for the reset screen-reader audit fixture",
+        "document.documentElement.dataset.hydrated==='true'&&Boolean(document.querySelector('[data-a3s-testkit-overlay]'))&&window[Symbol.for('a3s.test.page-context')].listRepairs().length===0",
+    );
+    let reset = encoded_eval(
+        command,
+        "inspect the reset screen-reader audit fixture",
+        "JSON.stringify({url:location.pathname,local:Object.keys(localStorage).filter(key=>key.startsWith('a3s-test.')||key.startsWith('a3s-testkit-')),session:Object.keys(sessionStorage).filter(key=>key.startsWith('a3s-test.')||key.startsWith('a3s-testkit-')),status:document.querySelector('#audit-status')?.textContent})",
+    );
+    assert_eq!(reset["url"], "/testkit.html");
+    assert_eq!(reset["local"], serde_json::json!([]));
+    assert_eq!(reset["session"], serde_json::json!([]));
+    assert_eq!(reset["status"], "");
+    assert_wcag_accessibility(command, "audit the reset screen-reader fixture");
 }
