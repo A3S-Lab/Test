@@ -560,6 +560,9 @@ describe("React adapter and review overlay", () => {
     const first = render(<A3STestKit enabled page={{ id: "interaction-policy" }} repairStorage="memory"><button id="host-action" onClick={hostClick}>Host action</button><A3SReviewOverlay enabled defaultOpen /></A3STestKit>);
     await waitFor(() => expect(shadowQuery(".a3s-panel")).toBeTruthy());
     const action = document.querySelector<HTMLElement>("#host-action")!;
+    action.focus();
+    expect(document.activeElement).toBe(action);
+    const restoredFocus = vi.spyOn(action, "focus");
     fireEvent.click(action);
     expect(hostClick).toHaveBeenCalledTimes(1);
     fireEvent.click(shadowButton("Review preferences"));
@@ -568,8 +571,13 @@ describe("React adapter and review overlay", () => {
     expect(hostClick).toHaveBeenCalledTimes(1);
     fireEvent.click(shadowButton("Pause"));
     fireEvent.click(shadowButton("Element"));
-    fireEvent.click(shadowButton("Hide until tab restart"));
+    const hideUntilRestart = shadowButton("Hide until tab restart");
+    hideUntilRestart.focus();
+    expect(document.querySelector<HTMLElement>("[data-a3s-testkit-overlay]")!.shadowRoot!.activeElement).toBe(hideUntilRestart);
+    fireEvent.click(hideUntilRestart);
     await waitFor(() => expect(document.querySelector("[data-a3s-testkit-overlay]")).toBeNull());
+    await waitFor(() => expect(document.activeElement).toBe(action));
+    expect(restoredFocus).toHaveBeenCalledWith({ preventScroll: true });
     expect(getPageContextBridge()?.animationsPaused()).toBe(false);
     fireEvent.click(action);
     expect(hostClick).toHaveBeenCalledTimes(2);

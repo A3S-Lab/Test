@@ -517,6 +517,45 @@ fn author_searchable_layout_placement(command: &impl Fn(&[&str]) -> Output) {
     );
 }
 
+pub fn verify_hide_until_restart_focus(command: &impl Fn(&[&str]) -> Output) {
+    run(
+        command,
+        "focus the host application before hiding review",
+        &["focus", "#host-probe"],
+    );
+    activate_accessible_with_enter(
+        command,
+        "open review preferences before hiding review",
+        "button",
+        "Review preferences",
+    );
+    wait_for(
+        command,
+        "wait for review preferences before hiding review",
+        "document.querySelector('[data-a3s-testkit-overlay]').shadowRoot.querySelector('[aria-label=\"Review preferences\"]')?.getAttribute('aria-expanded')==='true'",
+    );
+    activate_accessible_with_enter(
+        command,
+        "hide review until the tab restarts",
+        "button",
+        "Hide until tab restart",
+    );
+    wait_for(
+        command,
+        "wait for the hidden review overlay",
+        "!document.querySelector('[data-a3s-testkit-overlay]')",
+    );
+    let focused = eval(
+        command,
+        "inspect focus after hiding review",
+        "document.activeElement?.id",
+    );
+    assert_eq!(
+        focused, "host-probe",
+        "hiding review did not restore application focus"
+    );
+}
+
 fn click_host_probe(command: &impl Fn(&[&str]) -> Output, context: &str) {
     click_accessible(command, context, "button", "Host interaction probe");
 }

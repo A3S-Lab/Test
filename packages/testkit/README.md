@@ -132,12 +132,14 @@ The review preferences section persists only bounded presentation choices:
 theme, marker color, clear-after-copy, explicit host pointer blocking, panel
 dock, and wireframe page fade. Auto-send and animation pause reset on mount.
 `Hide until tab restart` is tab-scoped and does not disable the headless page
-context bridge. Clipboard failure never clears local drafts.
+context bridge. Activating it returns focus without scrolling to the last
+connected application control. Clipboard failure never clears local drafts.
 
 The overlay exposes a named non-modal dialog, finding-specific action names,
 one polite status announcer, visible keyboard focus, and focus restoration when
-controls disappear. Global review commands are published through
-`aria-keyshortcuts` and a keyboard-reference section in Review preferences.
-Unit and real-Chromium accessibility-tree checks protect these semantics. A
-separate hands-on screen-reader audit of every workflow is still required
-before claiming complete assistive-technology coverage.
+controls disappear, including when tab-scoped hiding removes the Shadow DOM.
+Global review commands are published through `aria-keyshortcuts` and a
+keyboard-reference section in Review preferences. Unit and real-Chromium
+accessibility-tree checks protect these semantics. A separate hands-on
+screen-reader audit of every workflow is still required before claiming
+complete assistive-technology coverage.

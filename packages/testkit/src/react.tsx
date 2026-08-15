@@ -259,6 +259,7 @@ export function A3SReviewOverlay({
   }
 
   function hideUntilTabRestart() {
+    const applicationFocus = lastApplicationFocusRef.current;
     if (typeof window !== "undefined") {
       saveReviewTabHidden(true);
     }
@@ -266,6 +267,11 @@ export function A3SReviewOverlay({
     bridge?.setAnimationsPaused(false);
     setPaused(false);
     setTabHidden(true);
+    queueMicrotask(() => {
+      if (applicationFocus?.isConnected) {
+        applicationFocus.focus({ preventScroll: true });
+      }
+    });
   }
 
   function stopMarking(restoreFocus = true) {

@@ -229,6 +229,9 @@ snapshot. Pages without the SDK retain the existing Web behavior.
 - [x] Expose a named non-modal review dialog, finding-specific control names,
       focused live announcements, visible focus indicators, and durable focus
       restoration, with React and real-Chromium accessibility-tree regressions
+- [x] Restore focus without scrolling to the last connected application
+      control when tab-scoped hiding removes the review Shadow DOM, with direct
+      React and real-Chromium active-element regressions
 - [ ] Complete and independently audit every review workflow with a screen
       reader
 
@@ -340,7 +343,8 @@ The completion work intentionally preserves these product boundaries:
       rectangle intercept normal page input
 - [x] Persist bounded presentation preferences for theme, marker color,
       clear-on-copy, interaction blocking, panel dock, wireframe fade, and
-      hide-until-tab-restart; keep auto-send and animation pause non-persistent
+      hide-until-tab-restart; restore application focus when hiding the UI and
+      keep auto-send and animation pause non-persistent
 - [x] Add an independently defined, categorized, searchable catalog of at
       least 65 common Web component types while retaining an explicit
       free-form component field

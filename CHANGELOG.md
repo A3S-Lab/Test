@@ -16,6 +16,12 @@
   shortcut dispatch retain explicit ownership below the repository file-size
   limit.
 
+### Fixed
+
+- Restored keyboard focus without scrolling to the last connected application
+  control when `Hide until tab restart` removes the review Shadow DOM. React
+  and real Chromium regressions cover the complete focus transfer.
+
 ## 0.16.2 - 2026-08-15
 
 ### Fixed

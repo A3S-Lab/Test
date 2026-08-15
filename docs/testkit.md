@@ -429,7 +429,9 @@ clear-after-copy, page pointer blocking, left/right dock, and wireframe page
 fade. Records are schema-checked, limited to 2 KiB, and discarded atomically
 when corrupt or unknown. Auto-send and animation pause are deliberately absent
 from that record. `Hide until tab restart` uses `sessionStorage`, removes only
-the overlay UI, and leaves the headless page-context bridge active.
+the overlay UI, and leaves the headless page-context bridge active. When the
+reviewer activates it, keyboard focus returns without scrolling to the last
+connected application control.
 
 Page pointer blocking is an explicit reviewer choice. When enabled, the Test
 Kit cancels pointer, mouse, touch, wheel, and context-menu input headed for the
@@ -485,19 +487,21 @@ Every repeated draft and repair action includes the finding instruction in its
 accessible name. Pause, marker visibility, auto-send, and theme controls expose
 stable state-aware names, and keyboard focus returns to a durable control when
 closing the dialog, sending or deleting a draft, or completing a clarification
-reply. Repair state changes and submission results use one visually hidden
-polite live region so a screen reader does not announce the entire finding list
-again.
+reply. Hiding the overlay until the tab restarts returns focus to the last
+connected application control before the Shadow DOM disappears. Repair state
+changes and submission results use one visually hidden polite live region so a
+screen reader does not announce the entire finding list again.
 
 Automated React tests cover dialog naming, control names, live-region messages,
 shortcut metadata and help content, and Shadow DOM focus restoration. The
 ignored real Chromium Test Kit suite also captures the browser accessibility
 tree, verifies the keyboard reference, and checks the launcher-to-dialog focus
-round trip. These checks are regression evidence for DOM and accessibility-tree
-semantics; they are not a substitute for completing every workflow with an
-actual screen reader. M8 remains open until an independent reviewer audits the
-full review lifecycle with VoiceOver, NVDA, or an equivalent supported screen
-reader in an environment that permits assistive-technology inspection.
+round trip plus the hide-to-application focus transfer. These checks are
+regression evidence for DOM and accessibility-tree semantics; they are not a
+substitute for completing every workflow with an actual screen reader. M8
+remains open until an independent reviewer audits the full review lifecycle
+with VoiceOver, NVDA, or an equivalent supported screen reader in an
+environment that permits assistive-technology inspection.
 
 At submission time, the Test Kit enriches a repair with a fresh context
 revision and bounded page context. A submitted target contains current private

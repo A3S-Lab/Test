@@ -7,7 +7,7 @@ use std::process::Command;
 use std::time::Duration;
 
 use support::browser_process::bounded_output;
-use support::testkit_browser::run_review_workflow;
+use support::testkit_browser::{run_review_workflow, verify_hide_until_restart_focus};
 use support::testkit_bundle::bundle_browser_fixture;
 use support::web_fixture::{get, start_testkit_fixture, WebFixture};
 
@@ -452,6 +452,8 @@ fn real_agent_browser_runs_the_embedded_testkit_suite() {
         changed.contains("Virtual row 50"),
         "virtual window update missing: {changed}"
     );
+
+    verify_hide_until_restart_focus(&command);
 
     let teardown = command(&[
         "eval",
