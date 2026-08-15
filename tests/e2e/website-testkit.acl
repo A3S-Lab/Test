@@ -24,6 +24,18 @@ suite "website-testkit-experience" {
             text = "CLI + Agent Skill · v0.16.2"
         }
 
+        expect "motion-sequence-active" {
+            visible = css(".test-experience-stage.is-motion-active")
+        }
+
+        click "pause-motion-sequence" {
+            target = role("button", "暂停自动演示")
+        }
+
+        click "resume-motion-sequence" {
+            target = role("button", "继续自动演示")
+        }
+
         wheel "show-release-disclosure" {
             delta_y = 900
         }
@@ -42,18 +54,6 @@ suite "website-testkit-experience" {
 
         expect "rendered-context" {
             text = "a3s-experience-submit"
-        }
-
-        expect "motion-sequence-active" {
-            visible = css(".test-experience-stage.is-motion-active")
-        }
-
-        click "pause-motion-sequence" {
-            target = role("button", "暂停自动演示")
-        }
-
-        click "resume-motion-sequence" {
-            target = role("button", "继续自动演示")
         }
 
         click "open-review" {
