@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.16.1 - 2026-08-15
 
 ### Added
 
@@ -11,6 +11,12 @@
 - Added a detached SHA-256 record and GitHub OIDC/Sigstore provenance for the
   certification attestation. Release tags publish the record and checksum as
   release assets.
+
+### Fixed
+
+- GUI cleanup now confirms that the exact owned application PID has stopped
+  before reporting success, while preserving bounded retries and PID-reuse
+  protection.
 
 ### Safety
 
@@ -26,6 +32,8 @@
 
 - Advanced the locked CUA 0.10.0 revision to the reviewed background-launch
   identity fix while retaining the existing MCP and capability contracts.
+- Raised the Rust workspace patch release to `0.16.1`. The unchanged Test Kit
+  remains `0.3.0`.
 
 ## 0.16.0 - 2026-08-15
 
