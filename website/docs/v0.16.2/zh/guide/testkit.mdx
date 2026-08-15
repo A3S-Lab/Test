@@ -1,0 +1,81 @@
+---
+title: 嵌入式 Web Test Kit
+description: 在浏览器渲染后发布版本化页面上下文，并提供人工标记与修复交接。
+---
+
+# 嵌入式 Web Test Kit
+
+`@a3s-lab/testkit` 是开发期页面上下文与人工评审 SDK。它在浏览器完成渲染后读取语义 DOM、开放 Shadow DOM、表单状态、布局和视口事实，不会向业务元素写入测试属性。
+
+## 安装
+
+每个 GitHub Release 都发布匹配的包：
+
+```bash
+npm install https://github.com/A3S-Lab/Test/releases/latest/download/a3s-testkit.tgz
+```
+
+## React 接入
+
+```tsx
+import {
+  A3SReviewOverlay,
+  A3STestBoundary,
+  A3STestKit,
+} from '@a3s-lab/testkit/react';
+
+export function App() {
+  return (
+    <A3STestKit
+      enabled={import.meta.env.DEV}
+      page={{ id: 'checkout' }}
+      repairEndpoint="/__a3s-test/repairs"
+      redact={['[data-payment-field]']}
+    >
+      <A3STestBoundary
+        id="checkout-form"
+        name="Checkout form"
+        source={{ file: 'src/Checkout.tsx' }}
+      >
+        <Checkout />
+      </A3STestBoundary>
+      <A3SReviewOverlay enabled={import.meta.env.DEV} />
+    </A3STestKit>
+  );
+}
+```
+
+框架无关入口导出 `installTestKit`、`getPageContextBridge` 和协议类型。React 入口增加 provider、组件边界与可选的 Shadow DOM overlay。`enabled` 必须明确为 `true`，否则运行时关闭并拒绝工作。
+
+## A3S Test 能看到什么
+
+每个快照带有单调递增修订号，并把以下事实绑定在一起：
+
+- 角色、可访问名称、状态和 DOM 层级。
+- Test Kit 边界、组件标识和有界源码提示。
+- 优先语义定位器与明确退化顺序。
+- 视口、文档和标准化坐标中的元素几何。
+- 布局视口、设备像素比，以及可选 visual viewport 的偏移与缩放。
+- 有界 computed style、页面事实和脱敏后的表单状态。
+
+MutationObserver、ResizeObserver、滚动、视口和导航信号会推进修订号。没有变化的页面不会被轮询。任何旧修订上的目标都会失效，避免 Agent 对热更新前的坐标或 DOM 引用执行动作。
+
+## 人工标记与批量修复
+
+Overlay 支持元素、文本、点击或拖动多选、矩形和自由手绘标记。评审者可以：
+
+1. 选择一个目标或按顺序组织一批目标。
+2. 添加修复说明、回复、冲突关系与验收决定。
+3. 先保存本地草稿，或明确发送到拥有该会话的 A3S Test。
+4. 等待编码 Agent 修改源码并执行新浏览器验证。
+5. 接受、拒绝或重新打开修复结果。
+
+Layout Mode 只生成类型化 `placement` 或 `rearrange` 意图和视口 CSS 像素目标。它不会直接移动、重排或修改宿主 DOM。
+
+## 安全边界
+
+Test Kit 不接收工作区、Shell、MCP 或源码编辑凭据。DOM 上下文被明确标记为不可信证据。Quality Store、Design Audit Store 和 Repair Ledger 分开保存，查看建议或打开编辑器不会自动授予修复权限。
+
+确定性 Surface Contract 差异可以阻断套件，但投影到 overlay 只作为评审候选。设计审计结果始终是建议。只有人工保存或发送后，候选才进入现有单项或批量修复流程。
+
+生产构建通常关闭 Test Kit。CI 如需页面上下文，可以保留 `A3STestKit` 并省略 `A3SReviewOverlay`。Next.js 中应从客户端组件挂载，并以 `process.env.NODE_ENV !== "production"` 明确控制。

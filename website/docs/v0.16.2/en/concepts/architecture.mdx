@@ -1,0 +1,59 @@
+---
+title: Architecture and authority boundaries
+description: How A3S Test separates planning, typed execution, surface adapters, evidence, and repair authority.
+---
+
+# Architecture and authority boundaries
+
+A3S Test starts from one principle: a test verdict must come from verifiable facts, and advice must never silently become action authority. The architecture is organized around factual sources, action admission, runtime ownership, and reproducible evidence.
+
+## Two planning entries, one execution core
+
+```text
+Calling coding agent                  Closed ACL suite
+  observe → decide → one action         admit → execute → assert
+              \                         /
+                 typed A3S Test Core
+          Action · Session · Policy · Lifecycle
+                           |
+                Web · GUI · TUI adapters
+                           |
+             events · evidence · JSON · cleanup
+```
+
+The core does not depend on a browser, desktop perception, terminal emulation, CLI, or concrete LLM provider. It defines typed actions, observations, sessions, policy, results, and lifecycle. Injected adapters own concrete runtimes.
+
+## Understanding happens after rendering
+
+The browser accessibility tree is an important fact source, but it does not express component ownership, bounded source hints, multi-space geometry, visual viewport state, controlled product facts, or human repair state. Embedded Test Kit adds that information after rendering and publishes bounded Page Context under a monotonic revision.
+
+Page context does not mutate the host DOM or replace browser observation. A3S Test checks driver semantics and the Test Kit revision inside one observation so it cannot combine state from different moments.
+
+## Four authority layers
+
+1. **Deterministic facts**: driver observations, Test Kit context, file digests, local assertions, and evidence.
+2. **Model advice**: visual grounding, design audit, and source-to-contract candidates with provenance, budget, and confidence.
+3. **Human authorization**: target confirmation, candidate selection, conflict decisions, and single or batch repair submission.
+4. **Repair execution**: the workspace-owning coding agent edits source and A3S Test verifies it in a fresh browser.
+
+Model output cannot decide a verdict, claim browser-observed state, or authorize workspace mutation. Projecting a report into the overlay never changes the runner result.
+
+## Runtime ownership
+
+Every launched program belongs to a process group, Windows Job, or equivalent owned tree created by A3S Test. Cancellation and timeout kill and reap the complete tree. Graceful shutdown is bounded and retains an emergency path. A3S Test never closes unrelated developer browser sessions.
+
+Web sessions use an isolated namespace and non-zero idle timeout. Evidence paths must resolve to fresh regular files inside the session artifact root. GUI and TUI adapters carry the same exact-ownership requirement.
+
+## Surface adapters
+
+| Surface | Current boundary                                                                                                                                                   |
+| ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Web     | A3S Browser or a compatible standalone browser. Persistent agent sessions, ACL, semantic refs, evidence, and isolated network policy.                              |
+| GUI     | Contract-tested on macOS through locked A3S CUA `0.10.0`. Release workflow verifies permissions, both perception profiles, and exact cleanup on a real arm64 host. |
+| TUI     | Native PTY / ConPTY, bounded VT semantics, and an owned command process tree. Currently driven through ACL suites.                                                 |
+
+## Deployment-owned providers
+
+Provider protocols define data exchange only. They do not bundle model weights or select backends with raw strings in public APIs. Deployments inject typed implementations and own model licensing, privacy, capacity, and runtime.
+
+The HTTP adapters disable redirects and environment proxies, require HTTPS except for explicit loopback HTTP, bound request and response bodies, enforce transport and wire deadlines, and redact authorization values from errors. The surrounding services still verify identity, provenance, geometry, usage, and authority independently.

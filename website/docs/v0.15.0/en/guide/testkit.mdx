@@ -1,0 +1,43 @@
+---
+title: Test Kit 0.3.0
+description: Page context, human review, and advisory design-audit boundaries paired with v0.15.0.
+---
+
+# Test Kit 0.3.0
+
+:::warning Historical snapshot
+A3S Test v0.15.0 pairs with `@a3s-lab/testkit` 0.3.0.
+:::
+
+```bash
+npm install https://github.com/A3S-Lab/Test/releases/download/v0.15.0/a3s-testkit.tgz
+```
+
+```tsx
+import {
+  A3SReviewOverlay,
+  A3STestBoundary,
+  A3STestKit,
+} from '@a3s-lab/testkit/react';
+
+export function App() {
+  return (
+    <A3STestKit enabled={import.meta.env.DEV} page={{ id: 'checkout' }}>
+      <A3STestBoundary
+        id="checkout-form"
+        name="Checkout form"
+        source={{ file: 'src/Checkout.tsx' }}
+      >
+        <Checkout />
+      </A3STestBoundary>
+      <A3SReviewOverlay enabled={import.meta.env.DEV} />
+    </A3STestKit>
+  );
+}
+```
+
+Version 0.3.0 raises bounded page-context inspection from 500 to 5,000 nodes so design audit can assemble a complete paginated snapshot. The snapshot still binds semantics, components, locators, multi-space geometry, styles, page revision, and redaction rules.
+
+Design-audit output lives in a separate Design Audit Store with no verdict or repair authority. A person may edit, retarget, save a draft, or explicitly send it into the existing Repair Ledger. Single selection, batches, Layout Mode, and fresh-browser repair verification retain the same human authorization boundary.
+
+Test Kit receives no workspace, shell, MCP, or source-editing credentials. Disable it explicitly in production. CI may keep the provider while omitting the overlay.

@@ -1,47 +1,40 @@
 <p align="center">
-  <img src="./assets/readme/hero.svg" width="100%" alt="A3S Test turns coding-agent observations and typed ACL suites into policy-checked actions, evidence, and reports">
+  <img src="./assets/readme/hero.svg" width="100%" alt="A3S Test connects fresh interface context to typed actions and inspectable evidence">
 </p>
 
 <p align="center">
-  <a href="https://github.com/A3S-Lab/Test/releases/latest"><img src="https://img.shields.io/github/v/release/A3S-Lab/Test?style=flat-square&color=6ee7b7&label=release" alt="Latest release"></a>
+  <a href="https://github.com/A3S-Lab/Test/releases/latest"><img src="https://img.shields.io/github/v/release/A3S-Lab/Test?style=flat-square&color=55d6a5&label=release" alt="Latest release"></a>
   <a href="https://github.com/A3S-Lab/Test/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/A3S-Lab/Test/ci.yml?branch=main&style=flat-square&label=CI" alt="CI status"></a>
-  <img src="https://img.shields.io/badge/Rust-1.85%2B-303846?style=flat-square" alt="Rust 1.85 or newer">
-  <a href="./LICENSE"><img src="https://img.shields.io/badge/license-MIT-303846?style=flat-square" alt="MIT License"></a>
+  <a href="https://a3s-lab.github.io/Test/"><img src="https://img.shields.io/badge/docs-中文%20%7C%20English-303a35?style=flat-square" alt="Chinese and English documentation"></a>
+  <img src="https://img.shields.io/badge/Rust-1.85%2B-303a35?style=flat-square" alt="Rust 1.85 or newer">
+  <a href="./LICENSE"><img src="https://img.shields.io/badge/license-MIT-303a35?style=flat-square" alt="MIT License"></a>
 </p>
 
-<h3 align="center">Explore unknown paths with a coding agent. Lock proven paths into typed regressions.</h3>
+<h3 align="center">Explore unknown interface paths. Preserve proven paths as typed regressions.</h3>
 
 <p align="center">
-  A3S Test is an AI-native test engine delivered as the <code>a3s-test</code> CLI.<br>
-  Agent sessions and deterministic ACL suites share one action model, evidence format, and cleanup contract.
+  A3S Test is an evidence-first test engine for coding agents and deterministic ACL suites.<br>
+  Web, GUI, and TUI runs share one typed action model, result format, and cleanup contract.
 </p>
 
 <p align="center">
-  <a href="#from-a-goal-to-inspectable-evidence">See the loop</a> ·
+  <a href="https://a3s-lab.github.io/Test/"><strong>Documentation</strong></a> ·
   <a href="#install">Install</a> ·
-  <a href="#turn-a-proven-path-into-a-regression">Write a regression</a> ·
-  <a href="#surfaces">Check surfaces</a> ·
-  <a href="#documentation">Read the contracts</a>
+  <a href="#start-with-one-real-path">Quick start</a> ·
+  <a href="#embed-rendered-page-context">Test Kit</a> ·
+  <a href="#architecture">Architecture</a>
 </p>
 
-In the primary workflow, the coding agent remains the planner. A3S Code,
-Codex, Claude Code, or another Agent Skills-compatible tool observes the
-surface and chooses one action at a time; A3S Test validates that action,
-keeps the surface alive, records the turn, and closes only the runtime it
-owns. There is no nested model, keyword router, or second hidden test engine
-in this workflow. Deployments that intentionally want a one-shot embedded
-planner can instead use `a3s-test agent run` with ACL, a deployment-supplied
-HTTP LLM provider, and deterministic local verification.
+The calling coding agent remains the planner during exploration. It observes a
+surface, chooses one action, and asks A3S Test to validate and execute that
+action. A3S Test owns the surface lifecycle, records provenance and evidence,
+and closes only the runtime it created. Once a path is stable, the same action
+and evidence contracts run from a closed ACL suite in local development or CI.
 
-Web testing is available through
-[A3S Browser](https://github.com/A3S-Lab/Browser) or a compatible standalone
-`agent-browser`. GUI testing is contract-tested on macOS through A3S CUA. The
-deterministic runner also owns native PTY/ConPTY sessions for TUI suites.
+## Start with one real path
 
-## From a goal to inspectable evidence
-
-Start a persistent Web session against a local product and state what success
-must look like:
+Start a persistent Web session against a local product and state an observable
+success condition:
 
 ```bash
 a3s-test agent start http://127.0.0.1:3000/checkout \
@@ -49,24 +42,19 @@ a3s-test agent start http://127.0.0.1:3000/checkout \
   --goal "Complete checkout with the fixture account" \
   --success "The confirmation heading is visible" \
   --json
-```
 
-Observe the semantic UI, decide from that state, then execute one typed action:
-
-```bash
 a3s-test agent observe --session checkout --interactive --json
 ```
 
-The repository's CLI integration fixture exercises the same contract and
-returns a fresh observation plus an actionable semantic ref:
+The observation returns a new generation and actionable semantic refs:
 
 ```text
 observation_id: 1
 @e1 [button] Continue
 ```
 
-Bind ref-based actions to that observation, observe again after every
-state-changing turn, and finish only when the evidence proves the result:
+Bind every action to the observation that produced its ref, then observe again
+after state changes:
 
 ```bash
 a3s-test agent click @e1 \
@@ -85,7 +73,7 @@ a3s-test agent finish \
   --json
 ```
 
-Each workspace keeps an append-only execution record:
+Each session keeps an append-only record under the workspace:
 
 ```text
 .a3s-test/agent-sessions/checkout/
@@ -96,569 +84,66 @@ Each workspace keeps an append-only execution record:
     └── screenshots/confirmation.png
 ```
 
-`agent open` aliases `agent start`, and `agent snapshot` aliases
-`agent observe`. Compact commands cover common browser turns; `agent act
---action-json` exposes the complete generated action schema.
-
-### Run one workflow with a deployment planner
-
-The direct host keeps ACL as the only product configuration language and owns
-the complete Web lifecycle:
-
-```bash
-a3s-test provider schema llm
-a3s-test agent run examples/agent-web.acl --json
-```
-
-The ACL declares the initial URL, observable goal, exact action capability
-set, origin and network scope, turn/token/cost/context/time budgets, provider
-endpoint, and read-only verification. The provider can propose one typed
-action or finish/fail; it cannot determine the verdict, claim browser
-observation, or authorize repair. A model finish succeeds only after at least
-one local `expect` passes and the exact browser session closes successfully.
-
-Complete, redacted reports are atomically written even when surface opening
-fails:
-
-```text
-.a3s-test/agent-runs/<run-id>/
-├── report.json
-└── artifacts/
-```
-
-The workflow deadline covers surface open, initial navigation, model turns,
-actions, Test Kit revision checks, and deterministic verification. Cleanup
-uses a separate bounded deadline so timed-out work still retains exact process
-reaping responsibility. See the [agentic contract](docs/agentic.md) and
-[agent-run ACL specification](docs/specification.md#agent-run-configuration).
-
-### Embed page context and human repair review
-
-Development frontends can embed [`@a3s-lab/testkit`](packages/testkit) to
-publish bounded component/source hints, semantic locators, and element geometry
-in viewport, document, and normalized coordinates. Its Shadow DOM overlay lets
-reviewers mark one element or an ordered batch, add repair instructions, and
-send the findings to the coding agent through the owning A3S Test session.
-Layout Mode adds typed component placement and section rearrangement with
-viewport CSS-pixel targets while leaving the host DOM unchanged.
-
-Deterministic Surface Contracts compare that observed context with reviewed
-expectations derived from a PRD, design reference, manual decision, or official
-documentation. Blocking differences fail the suite; advisory differences stay
-in the report without blocking. A compatible overlay receives the report as a
-review candidate, where a human can confirm the target and authorize one or a
-batch of repairs. Report projection is optional and can never change the
-runner verdict.
-
-SDK hosts can inject a typed contract-generation provider from
-`a3s-test-agent`. PRD candidates retain exact UTF-8 byte spans, confidence, and
-unresolved product decisions; design candidates retain the source image digest,
-coordinate space, regions, hierarchy, and confidence. Conflicting sources stay
-explicit until a reviewer selects candidates. Only that reviewed selection is
-rendered as the existing ACL Surface Contract, with no parallel DSL and no
-claim that source-derived expectations were browser-observed.
-
-For canvas, image-only controls, remote desktops, and design references, SDK
-hosts can inject a typed visual-grounding provider from `a3s-test-agent`. It
-accepts an observation- and SHA-256-bound screenshot plus an explicit deadline
-and cost ceiling. Screenshot bytes are rehashed before dispatch. Returned
-points or boxes are strictly admitted and hit-tested
-against current Test Kit geometry. A unique hit can become a current semantic
-target; ambiguous or unmapped results remain advisory, image-bound candidates.
-This path is an explicit request or semantic fallback, never the default Web
-locator.
-
-Persistent Web sessions can use that boundary directly without granting the
-provider action authority:
-
-```bash
-a3s-test agent ground "Checkout button" \
-  --session checkout \
-  --observation 1 \
-  --config examples/visual-grounding.acl \
-  --reason no-semantic-match \
-  --json
-```
-
-The command admits the ACL and credentials before connecting to the browser,
-captures one PNG while the latest Test Kit revision remains stable, sends the
-digest-bound bytes in the version 2 HTTP envelope, and revalidates the page
-revision after provider inference. It never clicks. A unique hit may return a
-current `@cN` ref; zero or multiple hits remain image-bound advisory evidence.
-
-Design-quality review is a separate advisory path. It combines one
-revision-bound PNG with the complete forensic Test Kit context, including
-semantic structure, geometry, component ownership, locators, and bounded
-computed styles. A deployment-owned provider may return typed observations
-about hierarchy, composition, spacing, typography, color use, consistency,
-interaction clarity, content clarity, and responsive composition:
-
-```bash
-a3s-test agent audit \
-  --session checkout \
-  --observation 1 \
-  --config examples/design-audit.acl \
-  --dimension visual-hierarchy,spacing-rhythm \
-  --json
-```
-
-Every response is re-admitted against the exact provider identity,
-observation, surface revision, screenshot and page-context digests, requested
-dimensions, current node geometry, deadline, and cost ceiling. It contains no
-test outcome and grants no action or repair authority. A compatible Test Kit
-shows admitted findings in a separate Design Audit store; only a human review,
-edit, or retarget can promote one into the existing single or batch repair
-flow.
-
-All provider boundaries have stable, transport-neutral protocol identifiers
-and generated JSON Schemas. Inspect the exact request, response, authority, and
-safety contract before implementing a local-process or remote-service adapter:
-
-```bash
-a3s-test provider schema contract-generation
-a3s-test provider schema design-audit
-a3s-test provider schema llm
-a3s-test provider schema visual-grounding
-```
-
-The protocols describe data exchange only. They do not select a backend,
-bundle model weights, grant verdict authority, or authorize workspace repair.
-
-For deployment-owned inference services, `a3s-test-agent` also provides
-`HttpContractGenerationProvider`, `HttpDesignAuditProvider`, and
-`HttpVisualGroundingProvider`. Configure them with a typed
-`HttpProviderConfig` and an explicit provider/model identity:
-
-```rust
-use std::sync::Arc;
-use a3s_test_agent::{
-    GroundingProviderIdentity, HttpProviderConfig, HttpProviderEndpoint,
-    HttpVisualGroundingProvider, VisualGroundingService,
-};
-
-let endpoint: HttpProviderEndpoint =
-    "http://127.0.0.1:8080/v1/ground".parse()?;
-let transport = HttpProviderConfig::new(endpoint);
-let provider = Arc::new(HttpVisualGroundingProvider::new(
-    GroundingProviderIdentity {
-        provider: "deployment-gateway".into(),
-        model: "ui-grounding-model".into(),
-    },
-    transport,
-)?);
-let service = VisualGroundingService::new(provider, Default::default())?;
-```
-
-The visual-grounding version 2 envelope carries a logical image name plus the
-admitted PNG bytes, so remote services do not need access to a client-local
-filesystem path. The adapter uses one `POST application/json` version
-envelope, disables redirects and environment proxies, requires HTTPS except
-for explicit loopback HTTP, bounds request/response bodies, enforces both
-transport and wire deadlines, and redacts configured authorization values from
-remote error messages. The surrounding service still rehashes evidence and
-independently admits identity, provenance, geometry, usage, and authority.
-
-### Generate a reviewed contract from sources
-
-The CLI provides an operational two-stage workflow for a deployment-owned
-contract-generation endpoint. Generation writes a versioned JSON artifact that
-contains candidates, conflicts, open decisions, provider usage, and source
-digests, but no executable contract:
-
-```acl
-contract_generation "checkout" {
-    max_cost_microusd = 50000
-
-    context {
-        mode = "operate"
-        audience = ["customer"]
-        primary_outcome = "place_order"
-    }
-
-    provider {
-        name = "deployment-gateway"
-        model = "interface-contract-model"
-        endpoint = "https://inference.example.test/v1/contracts"
-        authorization_env = "A3S_TEST_PROVIDER_AUTHORIZATION_CONTRACTS"
-    }
-
-    source "requirements" {
-        kind = "prd"
-        path = "./checkout.md"
-        uri = "./checkout.md"
-    }
-
-    source "desktop-design" {
-        kind = "design"
-        path = "./checkout.png"
-        uri = "./checkout.png"
-        media_type = "image/png"
-        width = 1440
-        height = 900
-    }
-}
-```
-
-```bash
-export A3S_TEST_PROVIDER_AUTHORIZATION_CONTRACTS='Bearer ...'
-a3s-test contract generate \
-  --config tests/contracts/checkout.generate.acl \
-  --output tests/contracts/checkout.draft.json
-```
-
-Inspect the draft, then author explicit candidate and conflict decisions in
-ACL. Candidate IDs and stable conflict IDs come from the generated artifact:
-
-```acl
-contract_review {
-    reviewer = "product-owner@example.test"
-
-    candidate "requirements:desktop:place-order" {
-        action = "approve"
-    }
-
-    conflict "conflict:0123456789abcdef" {
-        select = "requirements:desktop:place-order"
-        rationale = "Approved product terminology"
-    }
-}
-```
-
-```bash
-a3s-test contract review \
-  --draft tests/contracts/checkout.draft.json \
-  --review tests/contracts/checkout.review.acl \
-  --output tests/contracts/checkout.acl \
-  --audit tests/contracts/checkout.reviewed.json
-```
-
-The review command regenerates the contract locally, admits the canonical ACL,
-and publishes it with the complete audit artifact. Missing decisions,
-unresolved applicable conflicts or product questions, altered workflow data,
-unsafe source paths, stale source bytes, or existing outputs fail closed.
-Workflow artifacts carry a full-payload SHA-256 checksum for accidental or
-unreviewed mutation detection, retain the generation limits and local source
-manifest, and rehash every source before review. The checksum is not a digital
-signature; repository review and normal access controls remain authoritative.
-Credentials are accepted only through a named
-`A3S_TEST_PROVIDER_AUTHORIZATION_*` environment variable and are never stored
-in ACL or workflow artifacts. Source-derived expectations remain distinct from
-the browser-observed accessibility and layout projection.
-
-Install the package tarball published with every GitHub Release:
-
-```bash
-npm install https://github.com/A3S-Lab/Test/releases/latest/download/a3s-testkit.tgz
-```
-
-A3S Test captures owned before/after evidence, serializes workspace mutation
-across sessions and processes, and proves an admitted ACL candidate in a fresh
-browser before a repair becomes review-ready. Human acceptance is the default;
-session-scoped automatic resolution must be enabled explicitly. See the
-[Test Kit design and security contract](docs/testkit.md) and
-[roadmap](docs/roadmap.md).
-
-The real-browser repair matrix independently covers single and ordered batch
-work, clarification, cancellation, disconnect recovery, stale refs after hot
-reload, verification failure, process restart, typed Layout Mode handoff, and
-fresh-browser ACL promotion.
-
-Human-marked repairs use the owning session's append-only ledger through MCP
-or the equivalent `agent repair-*` commands. One persistent mutation slot
-prevents concurrent sessions or processes from editing the workspace, while
-the connected coding agent remains the only planner and source editor.
+[Read the full quick start](https://a3s-lab.github.io/Test/guide/)
 
 ## Install
 
-The release installers select the matching CLI archive, verify its SHA-256
-checksum, and install the same portable `a3s-test` Skill for the coding agent
-you use. Re-run the installer to upgrade both.
+The release installers download the matching CLI archive, verify its SHA-256,
+and install the same portable `a3s-test` Skill for detected coding agents.
+Run the command again to upgrade both.
 
 ### macOS and Linux
 
 ```bash
-# Detect installed coding agents and install the CLI + Skill
 curl -fsSL https://github.com/A3S-Lab/Test/releases/latest/download/install.sh | sh
-
-# Or target one agent explicitly
-curl -fsSL https://github.com/A3S-Lab/Test/releases/latest/download/install.sh |
-  sh -s -- --agent codex
 ```
 
 ### Windows PowerShell
 
 ```powershell
-# Detect installed coding agents and install the CLI + Skill
 & ([scriptblock]::Create((irm 'https://github.com/A3S-Lab/Test/releases/latest/download/install.ps1')))
-
-# Or target one agent explicitly
-& ([scriptblock]::Create((irm 'https://github.com/A3S-Lab/Test/releases/latest/download/install.ps1'))) -Agent codex
 ```
 
-<details>
-<summary><strong>Agent targets and controlled installation options</strong></summary>
+Target one agent or pin a release when reproducibility matters:
 
-| Coding agent | Target | User-level Skill directory |
-| --- | --- | --- |
-| A3S Code | `a3s-code` | `~/.a3s/skills` |
-| Codex | `codex` | `~/.codex/skills` (`CODEX_HOME` supported) |
-| Claude Code | `claude-code` | `~/.claude/skills` |
-| Cursor | `cursor` | `~/.cursor/skills` |
-| Gemini CLI | `gemini-cli` | `~/.gemini/skills` |
-| GitHub Copilot CLI | `github-copilot` | `~/.copilot/skills` |
-| OpenCode | `opencode` | `~/.config/opencode/skills` |
-| Cline | `cline` | `~/.cline/skills` |
-| Roo Code | `roo` | `~/.roo/skills` |
-| Windsurf | `windsurf` | `~/.codeium/windsurf/skills` |
-| Agent Skills-compatible tools | `universal` | `~/.agents/skills` |
+```bash
+curl -fsSL https://github.com/A3S-Lab/Test/releases/latest/download/install.sh |
+  sh -s -- --agent codex --version v0.16.2
+```
 
-`auto` installs only for detected agents and falls back to the universal
-directory when none is recognized. Use `all` for every target, or
-`--skill-dir <path>` / `-SkillDir <path>` for a custom Agent Skills-compatible
-directory. The installers also support `--skill-only`, `--cli-only`,
-`--version`, and `--install-dir`.
+```powershell
+& ([scriptblock]::Create((irm 'https://github.com/A3S-Lab/Test/releases/latest/download/install.ps1'))) -Agent codex -Version v0.16.2
+```
 
-Each release also publishes
-[`a3s-test.skill`](https://github.com/A3S-Lab/Test/releases/latest/download/a3s-test.skill)
-for manual installation. Its source lives in
-[`skills/a3s-test`](skills/a3s-test).
+Supported targets include A3S Code, Codex, Claude Code, Cursor, Gemini CLI,
+GitHub Copilot CLI, OpenCode, Cline, Roo Code, Windsurf, and the universal
+Agent Skills directory. The installers also support CLI-only, Skill-only, and
+custom installation directories.
 
-</details>
-
-You can instead download a prebuilt archive from
-[Releases](https://github.com/A3S-Lab/Test/releases/latest), or install the
-tagged Rust package:
+You can instead use a prebuilt archive from
+[Releases](https://github.com/A3S-Lab/Test/releases/latest) or build the tagged
+Rust package:
 
 ```bash
 cargo install --git https://github.com/A3S-Lab/Test \
   --tag v0.16.2 --locked a3s-test-cli
 ```
 
-### Hermetic runner image
+[See every installation option](https://a3s-lab.github.io/Test/guide/installation.html)
 
-Each release also publishes a Linux/amd64 runner image at
-`ghcr.io/a3s-lab/a3s-test-runner:<version>`. The release asset
-`a3s-test-runner-image.txt` contains the immutable
-`ghcr.io/a3s-lab/a3s-test-runner@sha256:...` reference to use in CI or a
-worker scheduler. The image contains the matching `a3s-test` CLI, standalone
-browser 0.26.0, pinned Chrome Headless Shell, and the native TUI backend. It
-does not include a GUI runtime and never advertises GUI execution.
+## One core, two primary workflows
 
-Inspect scheduling capabilities without opening a surface:
+| Workflow | Planner | Best for | Interface |
+| --- | --- | --- | --- |
+| Agent session | Calling coding agent | Exploration, bug reproduction, unknown paths, UX review | Persistent Web CLI or GUI MCP |
+| ACL suite | Closed typed manifest | Stable regression, CI, cross-surface testing | `check` and `run` |
+| Embedded agent loop | Host-injected `LlmProvider` | Products embedding A3S Test | `a3s-test-agent` library |
 
-```bash
-runner_image="$(curl -fsSL \
-  https://github.com/A3S-Lab/Test/releases/latest/download/a3s-test-runner-image.txt)"
+All three paths use the same typed `Action`, `SurfaceDriver`, evidence, result,
+and lifecycle contracts. The portable Skill is an instruction adapter around
+the CLI, not another test runner.
 
-docker run --rm --platform linux/amd64 \
-  --network none --read-only --cap-drop ALL \
-  --security-opt no-new-privileges \
-  --pids-limit 256 --memory 2g --cpus 2 \
-  --tmpfs /tmp:rw,nosuid,nodev,noexec,size=512m,mode=1777 \
-  --tmpfs /workspace:rw,nosuid,nodev,noexec,size=256m,uid=1000,gid=1000,mode=700 \
-  "${runner_image}" \
-  a3s-test worker inventory \
-    --browser-driver standalone \
-    --browser-executable agent-browser
-```
-
-The inventory is strict, versioned, self-reported scheduling evidence. It is
-not authentication or execution authorization. A scheduler must independently
-bind the image digest, network, filesystem, credentials, and concurrency
-policy. The release smoke test runs the image as its non-root user with no
-external network, a read-only root filesystem, dropped capabilities, and
-bounded temporary filesystems, then proves both loopback-only Web and owned
-TUI execution plus evidence and cleanup.
-
-### Serve a remote worker
-
-Remote dispatch uses the separate, authenticated
-`a3s.test.remote-worker/3` protocol. Inspect the strict request, response, and
-worker descriptor before integrating a scheduler. Report discovery and byte
-transport use the companion `a3s.test.remote-artifacts/1` protocol:
-
-```bash
-a3s-test worker remote schema
-a3s-test worker artifacts schema
-```
-
-The reference host listens on loopback only. Its expected `Authorization`
-header comes from an environment variable, while its image identity, Web
-network policy, browser integration, GUI host profile, and TUI command are
-fixed by the deployment at startup:
-
-```bash
-export A3S_TEST_WORKER_AUTHORIZATION='Bearer replace-with-a-secret'
-export A3S_TEST_WORKER_IMAGE_DIGEST='sha256:replace-with-64-lowercase-hex-digits'
-
-a3s-test worker serve \
-  --listen 127.0.0.1:9400 \
-  --state-root /var/lib/a3s-test-worker \
-  --instance-id runner-west-1 \
-  --image-digest "$A3S_TEST_WORKER_IMAGE_DIGEST" \
-  --authorization-env A3S_TEST_WORKER_AUTHORIZATION \
-  --browser-driver standalone \
-  --browser-executable agent-browser \
-  --web-allow-origin https://preview.example.test \
-  --tui-executable /opt/example-app/bin/test-console
-```
-
-A GUI worker is one deployment-owned desktop slot and must advertise exactly
-one parallel scenario. Its application, launch or attach target, CUA endpoint,
-policy, perception profile, and complete permission declaration live in a
-separate bounded ACL file:
-
-```acl
-gui_host "desktop-primary" {
-  endpoint = "installed_daemon"
-  proxy_executable = "/opt/a3s/bin/cua-driver"
-  policy_file = "/etc/a3s-test/cua-policy.yaml"
-  macos_bundle_id = "com.example.Editor"
-  target = "launch"
-  arguments = ["--safe-mode"]
-  profile = "window_vision"
-  permission_source = "driver_daemon"
-  permissions = ["accessibility", "screen_recording"]
-}
-```
-
-```bash
-a3s-test worker serve \
-  --instance-id desktop-primary \
-  --image-digest "$A3S_TEST_WORKER_IMAGE_DIGEST" \
-  --authorization-env A3S_TEST_WORKER_AUTHORIZATION \
-  --gui-host-profile /etc/a3s-test/gui-host.acl \
-  --max-parallel-scenarios 1
-```
-
-Startup admits the locked CUA contract and calls its read-only permission
-probe without launching the configured application. The inventory records the
-exact application and endpoint profile, configuration and policy digests,
-permission source, `accessibility` and `screen_recording` grant, and its
-canonical digest. Installed-daemon permissions must be attributed to the
-driver daemon; embedded-socket permissions must be attributed to the host.
-Every GUI session rechecks the permissions before application launch or
-attachment.
-
-Each request is bound to that exact instance, image digest, and full
-capability-inventory digest. Submitted ACL files use a bounded, sorted,
-SHA-256-verified inline bundle. Dispatch IDs are immutable and idempotent;
-deadlines and renewable leases are mandatory. The service persists a bounded
-sequential queue, cancellation, restart interruption, and digest-bound report
-summaries beneath its exclusive private state root.
-
-The artifact service shares the reference host's transport authentication at
-`POST /v1/artifacts`. It can inspect the service, query terminal reports, list
-one job's report and evidence descriptors, and read a SHA-256-bound artifact
-in chunks of at most 1 MiB. Every list or read binds the job ID, dispatch ID,
-and immutable request digest; reads additionally bind the artifact digest and
-a bounded offset. Query cursors are canonical, bounded, and tied to their
-original query or job request.
-
-Retention is deployment-owned and enforced during idle periods, after job
-completion, and during restart. By default, complete job inputs, reports, and
-evidence retain the newest 256 jobs within an aggregate 20 GiB and seven-day
-window. Compact report indexes retain up to 10,000 jobs for 90 days. The five
-`worker serve` flags prefixed by `--retention-` or `--report-index-` can lower
-or raise those reviewed bounds. Payload pruning is crash-recoverable; the
-longer-lived index continues to expose immutable descriptors with a `pruned`
-state. Once the index expires, the job and dispatch idempotency window ends.
-
-Requests cannot select executables, applications, backends, credentials, or
-network policy.
-The deployment must still treat the configured TUI as an authority boundary:
-selecting a shell, or an application with a shell escape, intentionally grants
-that authority to authenticated jobs. Use a dedicated least-privilege test
-target. TLS termination and external client authentication belong in the
-deployment proxy. The execution protocol never carries report or evidence
-bytes; only the independently versioned artifact protocol does.
-
-The authorization environment variable is consumed only by the reference
-host. It is explicitly removed from browser capability probes, Web driver
-commands, CUA proxy children, and TUI child processes before those
-deployment-owned programs are started.
-
-### Run a distributed suite
-
-The coordinator uses ACL for deployment configuration and protocol
-`a3s.test.distributed-run/2` for immutable plans and verified analyses:
-
-```bash
-a3s-test distributed schema
-a3s-test distributed plan distributed.acl --compact
-a3s-test distributed run distributed.acl --json
-```
-
-```acl
-distributed_run "ci" {
-  input_root = "."
-  manifest = "tests/e2e/smoke.acl"
-  history_root = ".a3s-test/distributed/ci"
-  history_window = 20
-  job_timeout_ms = 600000
-  lease_ms = 60000
-
-  worker "runner-west" {
-    endpoint = "https://runner-west.example.test"
-    image_digest = "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-    inventory_digest = "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
-    authorization_env = "A3S_TEST_WORKER_AUTHORIZATION_WEST"
-    max_parallel_scenarios = 4
-  }
-
-  quarantine "known-checkout-race" {
-    reason = "Known checkout state race"
-    owner = "checkout-team"
-    issue = "https://issues.example.test/123"
-    expires_at_ms = 4102444800000
-  }
-}
-```
-
-A worker that advertises GUI must also be pinned to the exact permission
-digest reported by its inspected capability inventory:
-
-```acl
-  worker "desktop-primary" {
-    endpoint = "https://desktop-primary.example.test"
-    image_digest = "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
-    inventory_digest = "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
-    host_permission_digest = "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
-    authorization_env = "A3S_TEST_WORKER_AUTHORIZATION_DESKTOP"
-    max_parallel_scenarios = 1
-  }
-```
-
-Planning inspects execution and artifact endpoints concurrently, verifies the
-exact instance, image, inventory, and any GUI host-permission binding, then
-assigns scarce surfaces first. GUI shards remain exclusive and repeat that
-permission digest in the immutable submission. Within those constraints the
-planner uses recent median durations and deterministic lane balancing. Every
-scenario appears exactly once, and the complete plan is SHA-256-bound.
-Uploads, referenced Surface Contracts, provenance files, and explicit
-additional inputs are included automatically in one contained, link-safe
-bundle.
-
-Run dispatch is concurrent and idempotent. Lease renewal is independent of
-status polling, and the first interrupt cancels each exact submitted job. A
-terminal report is accepted only after its job, dispatch, request digest,
-suite, run ID, media type, byte length, SHA-256, counts, scenario set, and
-surface bindings all match. Report bytes are fetched only through bounded
-digest-bound artifact chunks.
-
-Quarantine is accountable and frozen into the admitted plan: every entry
-requires a reason, owner, issue, and future expiry. It can suppress only an
-explicit assertion failure or a proven Surface Contract mismatch. Driver,
-cleanup, timeout, cancellation, interruption, and infrastructure failures are
-always required. Reports retain dispositions, flake counts, the latest-run
-comparison, removed scenarios, and shard issues under the configured history
-root. Flake accounting uses the exact suite digest; change comparison also
-works across suite revisions within the same distributed-run history root.
-
-## Turn a proven path into a regression
-
-Once an exploratory session reveals the stable path, express it as a closed,
-typed ACL suite:
+Turn a proven path into a regression:
 
 ```acl
 suite "product-smoke" {
@@ -688,201 +173,159 @@ suite "product-smoke" {
 }
 ```
 
-Validate the suite without launching a surface, then run it through the same
-driver and evidence boundary used by agent sessions:
+Validate before opening a surface, then run through the same driver boundary:
 
 ```bash
 a3s-test check tests/e2e/smoke.acl --json
 a3s-test run tests/e2e/smoke.acl --json
 ```
 
-Admission rejects unknown blocks and attributes, duplicate identifiers,
-ambiguous conditions, invalid locators, and unsafe artifact paths before a
-browser launches. Runs retry only explicitly retryable infrastructure failures
-that occurred before dispatch; assertions, timeouts, and ambiguous dispatched
-actions are never replayed automatically.
+Unknown blocks and attributes, ambiguous conditions, invalid locators, and
+unsafe artifact paths fail during admission. Assertions, timeouts, and
+ambiguously dispatched actions are never replayed automatically.
 
-### Verify reviewed interface expectations
+[Compare both workflows](https://a3s-lab.github.io/Test/guide/workflows.html)
 
-Expected interface structure uses the same ACL language rather than a second
-DSL. A PRD or design reference can generate a Surface Contract draft, but it
-cannot claim to be a browser accessibility tree. Blocking expectations become
-admissible only after authoritative human review and source digest verification.
+## Embed rendered page context
 
-```acl
-surface_contract "checkout" {
-    version = 1
+Development frontends can embed `@a3s-lab/testkit` so A3S Test can understand
+the rendered page without guessing from pixels alone:
 
-    context {
-        mode = "operate"
-        audience = ["customer"]
-        primary_outcome = "place_order"
-    }
+```bash
+npm install https://github.com/A3S-Lab/Test/releases/latest/download/a3s-testkit.tgz
+```
 
-    provenance "requirements" {
-        kind = "prd"
-        uri = "./checkout.md"
-        digest = "sha256:56ea72bad66743f4dadee9515096bb39a200bf9ca8d5669293f41912c55ec14e"
-        status = "reviewed"
-        confidence = 100
-    }
+```tsx
+import {
+  A3SReviewOverlay,
+  A3STestBoundary,
+  A3STestKit,
+} from "@a3s-lab/testkit/react";
 
-    variant "desktop" {
-        state = "ready"
-
-        element "submit" {
-            test_id = "place-order"
-            role = "button"
-            name = "Place order"
-            severity = "blocking"
-
-            citation "prd-submit" {
-                provenance = "requirements"
-                quote = "Customers can place an order."
-                start = 128
-                end = 157
-            }
-        }
-    }
+export function App() {
+  return (
+    <A3STestKit
+      enabled={import.meta.env.DEV}
+      page={{ id: "checkout" }}
+      repairEndpoint="/__a3s-test/repairs"
+      redact={["[data-payment-field]"]}
+    >
+      <A3STestBoundary
+        id="checkout-form"
+        name="Checkout form"
+        source={{ file: "src/Checkout.tsx" }}
+      >
+        <Checkout />
+      </A3STestBoundary>
+      <A3SReviewOverlay enabled={import.meta.env.DEV} />
+    </A3STestKit>
+  );
 }
 ```
 
-Reference it from a deterministic suite:
+After browser rendering, Test Kit publishes bounded, revisioned context:
 
-```acl
-verify_contract "checkout-ready" {
-    contract = "./contracts/checkout.acl"
-    variant = "desktop"
-    state = "ready"
-}
+- Accessible semantics, DOM and open Shadow DOM structure, and form state.
+- Component identity, bounded source hints, and preferred semantic locators.
+- Element geometry in viewport, document, and normalized coordinate spaces.
+- Layout viewport, device pixel ratio, and optional visual-viewport state.
+- Bounded computed styles, product facts, and explicit redaction.
+
+Mutation, resize, scroll, viewport, and navigation signals advance the surface
+revision. An unchanged page is not polled, and stale refs fail closed.
+
+The Shadow DOM overlay lets a reviewer mark one element or an ordered batch,
+add repair instructions, save drafts, and explicitly send findings to the
+owning A3S Test session. Layout Mode emits typed placement or rearrangement
+intent without changing host DOM. The coding agent remains the only source
+editor, and A3S Test verifies admitted changes in a fresh browser before human
+acceptance.
+
+[Integrate Test Kit](https://a3s-lab.github.io/Test/guide/testkit.html)
+
+## Generate contracts without inventing observations
+
+PRDs, designs, and browser page context describe different facts:
+
+| Source | Authoritative for | Never treated as |
+| --- | --- | --- |
+| PRD | Product intent, copy, outcomes, business constraints | Browser-observed state |
+| Design | Regions, hierarchy, geometry, image digest | Accessibility semantics |
+| Page context | Current rendered semantics, state, components, locators, geometry | Product intent |
+
+A deployment-owned provider can generate cited candidates and explicit
+conflicts from PRDs or design images. A person reviews those candidates before
+the CLI renders a Surface Contract in ACL. The deterministic runner then
+reconciles that reviewed expectation with current browser and Test Kit facts.
+
+```bash
+a3s-test contract generate \
+  --config tests/contracts/checkout.generate.acl \
+  --output tests/contracts/checkout.draft.json
+
+a3s-test contract review \
+  --draft tests/contracts/checkout.draft.json \
+  --review tests/contracts/checkout.review.acl \
+  --output tests/contracts/checkout.acl \
+  --audit tests/contracts/checkout.reviewed.json
 ```
 
-The CLI loads every referenced contract, verifies its local provenance digest,
-and checks each citation against the exact source byte range before opening a
-browser. Reconciliation prefers test ID, component identity, role plus
-accessible name, and finally role. Missing or truncated Test Kit context is
-inconclusive and fails closed. See the [ACL specification](docs/specification.md)
-for the complete grammar and verdict rules.
+Optional visual grounding returns digest-bound point or box candidates and
+never clicks. Optional design audit remains advisory and cannot set a verdict
+or authorize repair. Provider protocols describe transport only; A3S Test
+does not bundle model weights or select a backend with a raw string.
 
-## One engine, two primary workflows
+[Read the source-to-contract workflow](https://a3s-lab.github.io/Test/guide/contracts.html)
 
-| Workflow | Planner | Best for | Interface |
-| --- | --- | --- | --- |
-| Agent session | The calling coding agent | Exploration, bug reproduction, UX review, unknown paths | Persistent Web CLI or GUI MCP |
-| ACL suite | Closed typed manifest | Stable regressions and CI | `check` and `run` |
-| Embedded agent loop | Host-injected `LlmProvider` | Products embedding A3S Test as an SDK | `a3s-test-agent` library |
+## What the runtime guarantees
 
-All three paths use the same typed `Action`, `SurfaceDriver`, evidence, result,
-and lifecycle contracts. The portable Skill is an instruction adapter around
-the CLI; it is not another runner.
-
-## Why the boundary is trustworthy
-
-- **Fresh observations.** Semantic refs such as `@e1` carry provenance and
-  require the latest `observation_id`; failed or state-changing turns
-  invalidate the previous generation.
-- **Typed actions.** The generated JSON Schema is authoritative. Unknown
-  variants and fields fail before reaching a driver.
-- **Scoped navigation and network.** Explicit URL actions stay inside the
-  initial origin plus `--allow-origin` entries. A3S Browser 0.4.x enforces
-  exact scheme, host, and effective port before requests are sent;
-  `--allow-domain` adds an intentional hostname-wide network exception without
-  granting top-level navigation permission. Standalone 0.26.x projects the
-  same policy to its hostname-only boundary and reports that limitation.
-- **Contained evidence.** Screenshot, accessibility, console, HAR, trace,
-  video, and download paths must resolve to fresh regular files inside the
-  canonical session artifact root.
-- **Owned cleanup.** Process groups, Windows Job Objects, private runtime
-  directories, identity checks, bounded shutdown, and recovery metadata keep
-  cleanup attached to the exact surface created by the test.
-- **Stable automation contract.** JSON fields, business error codes, and exit
+- **Fresh observations.** Semantic refs carry provenance and require the
+  latest `observation_id`; state-changing turns invalidate prior generations.
+- **Typed actions.** Generated JSON Schema is authoritative. Unknown variants
+  and fields fail before reaching a driver.
+- **Scoped navigation and network.** URL actions stay inside the initial
+  origin plus explicit policy exceptions.
+- **Contained evidence.** Screenshots, accessibility trees, console, HAR,
+  traces, video, and downloads stay inside the canonical artifact root.
+- **Owned cleanup.** Process groups, Windows Jobs, private runtime directories,
+  bounded shutdown, and identity checks bind cleanup to the exact test surface.
+- **Stable automation results.** JSON fields, error codes, and process exit
   codes stay machine-readable across interactive and deterministic runs.
-
-Read the [Agentic CLI contract](docs/agentic.md) and
-[Architecture](docs/architecture.md) for the complete policy, cancellation,
-and cleanup invariants.
+- **Separate authority layers.** Deterministic facts, model advice, human
+  authorization, and workspace mutation cannot impersonate one another.
 
 ## Surfaces
 
-| Surface | Status | Interface | Backing adapter |
-| --- | --- | --- | --- |
-| Web | Available | Persistent agent CLI, direct embedded-planner CLI, and ACL suites | A3S Browser or compatible standalone `agent-browser` |
-| GUI | Contract-tested and release-certified on macOS | Surface-neutral MCP agent sessions and ACL runner boundary | Locked A3S CUA `0.10.0` semantic and window-vision profiles |
-| TUI | Available | Deterministic ACL suites | Owned PTY/ConPTY process tree and bounded VT semantic viewport |
+| Surface | Status | Backing adapter |
+| --- | --- | --- |
+| Web | Available for persistent Agent sessions and ACL suites | [A3S Browser](https://github.com/A3S-Lab/Browser) or compatible standalone `agent-browser` |
+| GUI | Contract-tested and release-certified on macOS | Locked A3S CUA `0.10.0` semantic and window-vision profiles |
+| TUI | Available for deterministic ACL suites | Owned PTY / ConPTY process tree and bounded VT semantics |
 
-Inspect the reviewed GUI platform matrix without starting CUA:
-
-```bash
-a3s-test gui-certification --json
-```
-
-The macOS installed-daemon and embedded-socket profiles are contract-tested.
-Windows and Linux GUI combinations currently fail closed as unsupported. A
-macOS host can run `a3s-test gui-certify` to exercise real permission,
-observation, evidence, and owned cleanup before enabling a worker. The `mcp`
-command exposes `test_session_start`, `test_observe`, `test_act`,
-`test_finish`, `test_abort`, and `test_schema` after the exact MCP `2025-06-18`
-handshake.
-
-Version tags are gated by the reusable real macOS GUI certification workflow.
-On a dedicated macOS arm64 runner, it rebuilds the exact locked CUA revision,
-requires the runtime-reported source revision and Accessibility plus Screen
-Recording grants, runs both perception profiles, and proves that no fixture
-process remains. The resulting `a3s.test.gui-host-certification/1` record binds
-the A3S Test and CUA revisions, executable and policy SHA-256 digests, host,
-observations, and cleanup. GitHub signs SLSA provenance for that record, and a
-successful release publishes the JSON record and detached checksum.
-
-Run a terminal suite by fixing the executable and its arguments at the CLI
-host boundary:
-
-```bash
-a3s-test run tests/tui/editor.acl \
-  --tui-executable ./target/debug/editor \
-  --tui-arg --fixture-mode \
-  --json
-```
-
-TUI ACL uses shared `snapshot`, `press`, `wait`, and `expect` actions plus
-`terminal_paste`, `terminal_resize`, and `terminal_recording`. Text and regex
-waits search the bounded semantic viewport and retained scrollback. Raw VT
-recordings are confined to the scenario artifact root.
-
-## Web testing depth
-
-| Concern | Available capabilities |
-| --- | --- |
-| Interaction | Navigate, semantic snapshots and targets, click, hover, focus, fill/type, selection-scoped text insertion, check/select, double/context click, drag, key press, modifier wheel, viewport |
-| Synchronization | Typed load, text, URL, and visibility waits; text, URL, and visibility assertions |
-| Browser state | Stable tab IDs and labels, frame context, browser dialogs |
-| Files | Upload fixtures and keep downloads inside the session artifact root |
-| Network | Domain containment, route mocks, aborts, cleanup, and HAR capture |
-| Evidence | Screenshots, accessibility trees, console logs, page errors, Chrome traces, and WebM video |
-| Execution | Persistent agent turns, bounded deterministic concurrency, command deadlines, and owned cleanup |
-
-Browser execution is headless by default. `--headed` is the explicit debugging
-opt-in. Inspect the exact protocol installed on the machine with:
+Inspect capabilities without opening a surface:
 
 ```bash
 a3s-test capabilities --json
 a3s-test agent schema
-a3s-test provider schema contract-generation
 a3s-test provider schema design-audit
-a3s-test provider schema llm
 a3s-test provider schema visual-grounding
-a3s-test worker schema
 a3s-test worker inventory
-a3s-test worker remote schema
 ```
+
+The macOS release certification rebuilds the locked CUA revision on a dedicated
+arm64 host, verifies Accessibility and Screen Recording grants, exercises both
+perception profiles, proves exact fixture cleanup, and publishes signed
+`a3s.test.gui-host-certification/1` evidence. Windows and Linux GUI combinations
+currently fail closed as unsupported.
 
 ## Architecture
 
 <p align="center">
-  <img src="./assets/readme/architecture.svg" width="100%" alt="Coding-agent sessions and deterministic ACL suites converge on the same typed A3S Test core, surface drivers, evidence ledger, and owned cleanup boundary">
+  <img src="./assets/readme/architecture.svg" width="100%" alt="Coding-agent sessions and ACL suites converge on one typed core, surface adapters, evidence ledger, and owned cleanup boundary">
 </p>
 
 The CLI and MCP server are product boundaries, not backend selectors. Browser,
-desktop-perception, terminal-emulation, and LLM implementations remain typed
+desktop perception, terminal emulation, and LLM implementations remain typed
 adapters outside the framework-independent core.
 
 <details>
@@ -890,57 +333,73 @@ adapters outside the framework-independent core.
 
 ```text
 crates/
-├── a3s-test-cli/         # Sessions, local/distributed runs, MCP, and CI
-├── a3s-test-core/        # Typed suites, actions, observations, and surface contracts
-├── a3s-test-runner/      # Deadlines, cancellation, retries, and reports
-├── a3s-test-session/     # Surface-neutral long-lived session application layer
-├── a3s-test-worker/      # Capability inventory and persistent remote worker service
-├── a3s-test-driver-gui/  # Locked MCP adapter boundary for A3S CUA
-├── a3s-test-driver-tui/  # Owned PTY/ConPTY and bounded VT semantics
+├── a3s-test-cli/         # Sessions, local and distributed runs, MCP, CI
+├── a3s-test-core/        # Typed suites, actions, observations, contracts
+├── a3s-test-runner/      # Deadlines, cancellation, retries, reports
+├── a3s-test-session/     # Surface-neutral long-lived session layer
+├── a3s-test-worker/      # Inventory and persistent remote worker service
+├── a3s-test-driver-gui/  # Locked MCP adapter for A3S CUA
+├── a3s-test-driver-tui/  # Owned PTY / ConPTY and bounded VT semantics
 ├── a3s-test-driver-web/  # A3S Browser / agent-browser adapter
-└── a3s-test-agent/       # Embedded model loop, contract generation, grounding, and design audit
+└── a3s-test-agent/       # Providers, grounding, contracts, design audit
+
+packages/
+└── testkit/              # Rendered page context and human review SDK
 
 skills/
-└── a3s-test/             # Portable Coding Agent Skill
+└── a3s-test/             # Portable coding-agent Skill
 ```
 
 </details>
 
-## Results and lifecycle
+[Study the architecture](https://a3s-lab.github.io/Test/concepts/architecture.html)
 
-Process exit codes are stable:
+## Advanced execution paths
 
-| Exit | Meaning |
-| ---: | --- |
-| `0` | Passed |
-| `1` | Test or action failed |
-| `2` | Invalid invocation/configuration or distributed infrastructure failure |
-| `124` | Timed out |
-| `130` | Cancelled |
-
-For deterministic runs, the first `Ctrl+C` requests cancellation and bounded
-surface cleanup. A second `Ctrl+C` terminates only browser and CUA process
-boundaries and TUI process trees owned by the current process.
+| Capability | Boundary | Source documentation |
+| --- | --- | --- |
+| Direct embedded planner | Deployment HTTP `LlmProvider`; local verification decides the verdict | [Agentic contract](docs/agentic.md) |
+| Hermetic runner | Immutable Linux/amd64 image reference with strict capability inventory | [Architecture](docs/architecture.md#hermetic-runner-and-capability-inventory) |
+| Remote workers | Authenticated execution and separate digest-bound artifact protocols | [ACL specification](docs/specification.md#remote-worker-protocol) |
+| Distributed suites | Immutable plans, capability pinning, leases, quarantine, report verification | [ACL specification](docs/specification.md#distributed-run-configuration) |
+| Surface Contracts | Reviewed expectations with source digest and citation verification | [ACL specification](docs/specification.md#expected-surface-contracts) |
 
 ## Documentation
 
-- [Architecture](docs/architecture.md) — layers, ownership, process safety,
-  driver boundaries, and lifecycle state machines.
-- [Agentic CLI and SDK contract](docs/agentic.md) — external-planner sessions,
-  MCP tools, action provenance, policy, and embedded LLM budgets.
-- [ACL specification](docs/specification.md) — the complete typed manifest
-  grammar and validation rules.
-- [Roadmap](docs/roadmap.md) — shipped milestones and remaining platform work.
-- [Changelog](CHANGELOG.md) — release-by-release behavior and safety changes.
+The Rspress site is versioned and available in Chinese by default:
+
+- [中文文档](https://a3s-lab.github.io/Test/)
+- [English documentation](https://a3s-lab.github.io/Test/en/)
+- [v0.15.0 historical snapshot](https://a3s-lab.github.io/Test/v0.15.0/)
+
+Repository-level specifications remain the source for exhaustive protocol
+details:
+
+- [Architecture](docs/architecture.md)
+- [Agentic CLI and SDK contract](docs/agentic.md)
+- [ACL specification](docs/specification.md)
+- [Embedded Test Kit contract](docs/testkit.md)
+- [Roadmap](docs/roadmap.md)
+- [Changelog](CHANGELOG.md)
 
 ## Development
 
-Run the repository gates from this workspace:
+Run Rust gates from the repository root:
 
 ```bash
 cargo +1.85.0 fmt --all -- --check
 cargo +1.85.0 test --workspace --all-targets --locked
 cargo +1.85.0 clippy --workspace --all-targets --locked -- -D warnings
+```
+
+Run documentation gates from `website/`:
+
+```bash
+npm ci
+npm run format:check
+npm run check
+npm run build
+npm run check:site
 ```
 
 ## License

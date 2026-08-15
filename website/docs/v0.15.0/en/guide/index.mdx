@@ -1,0 +1,47 @@
+---
+title: v0.15.0 quick start
+description: Install the pinned release and run a persistent Web agent session.
+---
+
+# v0.15.0 quick start
+
+:::warning Historical snapshot
+This page describes A3S Test v0.15.0. Use the version selector above for current v0.16.2 documentation.
+:::
+
+## Install the pinned release
+
+On macOS or Linux:
+
+```bash
+curl -fsSL https://github.com/A3S-Lab/Test/releases/latest/download/install.sh |
+  sh -s -- --version v0.15.0
+```
+
+On Windows PowerShell:
+
+```powershell
+& ([scriptblock]::Create((irm 'https://github.com/A3S-Lab/Test/releases/latest/download/install.ps1'))) -Version v0.15.0
+```
+
+## Run a session
+
+```bash
+a3s-test agent start http://127.0.0.1:3000/checkout \
+  --session checkout \
+  --goal "Complete checkout" \
+  --success "The confirmation heading is visible" \
+  --json
+
+a3s-test agent observe --session checkout --interactive --json
+```
+
+Bind the action to the latest `observation_id` in the response:
+
+```bash
+a3s-test agent click @e1 --session checkout --observation 1 --json
+a3s-test agent finish --session checkout --status passed \
+  --summary "Checkout completed" --json
+```
+
+Workspace `events.jsonl`, `report.json`, and `artifacts/` form the append-only evidence record. v0.15.0 includes advisory design audit and Test Kit 0.3.0, but not the selection-scoped `insert_text` action introduced in v0.16.0.

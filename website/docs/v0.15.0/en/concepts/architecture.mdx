@@ -1,0 +1,32 @@
+---
+title: v0.15.0 architecture
+description: The typed core, surface adapters, authority layers, and runtime ownership in v0.15.0.
+---
+
+# v0.15.0 architecture
+
+:::warning Historical snapshot
+v0.15.0 predates the real macOS GUI release-certification workflow. It contains GUI contract tests and fixed host profiles, but must not be described as carrying the v0.16.1 release attestation assets.
+:::
+
+```text
+Calling coding agent                  Closed ACL suite
+  observe → decide → one action         admit → execute → assert
+              \                         /
+                 typed A3S Test Core
+          Action · Session · Policy · Lifecycle
+                           |
+                Web · GUI · TUI adapters
+                           |
+             events · evidence · JSON · cleanup
+```
+
+The core does not depend on a browser, GUI, TUI, CLI, or concrete LLM provider. It defines shared types and requires adapters to own their runtimes.
+
+Test Kit publishes revisioned Page Context after rendering, including semantic structure, open Shadow DOM, component identity, bounded source hints, locators, styles, and multi-space geometry. Browser observation and Test Kit revision must represent the same stable moment.
+
+Authority remains split into deterministic facts, model advice, human authorization, and coding-agent repair execution. Design audit added in v0.15.0 belongs to the advice layer and has no verdict, action, or repair authority.
+
+Every launched program belongs to an A3S Test process group, Windows Job, or equivalent owned tree. Cancellation and timeout kill and reap the complete tree. Web, GUI, and TUI adapters must not clean up unrelated developer processes.
+
+GUI is contract-tested on macOS through locked A3S CUA `0.10.0` semantic and window-vision profiles. Windows and Linux GUI combinations fail closed. TUI uses owned PTY / ConPTY execution and bounded VT semantics.

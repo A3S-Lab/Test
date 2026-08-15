@@ -1,0 +1,51 @@
+---
+title: v0.15.0 CLI 参考
+description: v0.15.0 的常用命令、provider schema 和退出码。
+---
+
+# v0.15.0 CLI 参考
+
+:::warning 历史快照
+本页不包含 v0.16.0 的 `insert_text` 动作和 v0.16.1 的 GUI 认证命令行为。
+:::
+
+## Schema 与能力
+
+```bash
+a3s-test capabilities --json
+a3s-test agent schema
+a3s-test provider schema contract-generation
+a3s-test provider schema design-audit
+a3s-test provider schema llm
+a3s-test provider schema visual-grounding
+a3s-test worker inventory
+a3s-test worker remote schema
+a3s-test worker artifacts schema
+a3s-test distributed schema
+```
+
+## 常用工作流
+
+```bash
+a3s-test agent start <url> --session <name> --goal <goal> --success <condition>
+a3s-test agent observe --session <name> --interactive --json
+a3s-test agent audit --session <name> --observation <id> --config <audit.acl> --json
+a3s-test check <suite.acl> --json
+a3s-test run <suite.acl> --json
+a3s-test distributed plan <distributed.acl> --compact
+a3s-test distributed run <distributed.acl> --json
+```
+
+设计审计没有 verdict 或动作权限。远程 worker 请求不能选择 executable、应用、后端、凭据或网络策略。
+
+## 退出码
+
+| 退出码 | 含义                                 |
+| -----: | ------------------------------------ |
+|    `0` | 通过                                 |
+|    `1` | 测试或动作失败                       |
+|    `2` | 调用或配置无效，或分布式基础设施失败 |
+|  `124` | 超时                                 |
+|  `130` | 已取消                               |
+
+第一次中断请求有界取消与清理，第二次只终止当前进程拥有的界面进程边界。

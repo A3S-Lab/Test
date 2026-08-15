@@ -1,0 +1,51 @@
+---
+title: v0.15.0 CLI reference
+description: Common commands, provider schemas, and exit codes for v0.15.0.
+---
+
+# v0.15.0 CLI reference
+
+:::warning Historical snapshot
+This page excludes the v0.16.0 `insert_text` action and v0.16.1 GUI certification behavior.
+:::
+
+## Schemas and capabilities
+
+```bash
+a3s-test capabilities --json
+a3s-test agent schema
+a3s-test provider schema contract-generation
+a3s-test provider schema design-audit
+a3s-test provider schema llm
+a3s-test provider schema visual-grounding
+a3s-test worker inventory
+a3s-test worker remote schema
+a3s-test worker artifacts schema
+a3s-test distributed schema
+```
+
+## Common workflows
+
+```bash
+a3s-test agent start <url> --session <name> --goal <goal> --success <condition>
+a3s-test agent observe --session <name> --interactive --json
+a3s-test agent audit --session <name> --observation <id> --config <audit.acl> --json
+a3s-test check <suite.acl> --json
+a3s-test run <suite.acl> --json
+a3s-test distributed plan <distributed.acl> --compact
+a3s-test distributed run <distributed.acl> --json
+```
+
+Design audit has no verdict or action authority. Remote worker requests cannot select executables, applications, backends, credentials, or network policy.
+
+## Exit codes
+
+|  Exit | Meaning                                                                    |
+| ----: | -------------------------------------------------------------------------- |
+|   `0` | Passed                                                                     |
+|   `1` | Test or action failed                                                      |
+|   `2` | Invalid invocation or configuration, or distributed infrastructure failure |
+| `124` | Timed out                                                                  |
+| `130` | Cancelled                                                                  |
+
+The first interrupt requests bounded cancellation and cleanup. A second interrupt terminates only surface process boundaries owned by the current process.

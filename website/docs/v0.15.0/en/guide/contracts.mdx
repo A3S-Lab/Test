@@ -1,0 +1,30 @@
+---
+title: v0.15.0 Surface Contracts
+description: Source candidates, human review, visual grounding, and advisory design audit in v0.15.0.
+---
+
+# v0.15.0 Surface Contracts
+
+:::warning Historical snapshot
+This page describes v0.15.0 provider and contract boundaries.
+:::
+
+PRDs, designs, and page context remain distinct sources. A generation provider returns cited candidates, conflicts, open decisions, usage, and digests without executable authority. Only after a person selects candidates and resolves conflicts through `contract_review` does the CLI generate canonical ACL locally.
+
+```bash
+a3s-test contract generate \
+  --config tests/contracts/checkout.generate.acl \
+  --output tests/contracts/checkout.draft.json
+
+a3s-test contract review \
+  --draft tests/contracts/checkout.draft.json \
+  --review tests/contracts/checkout.review.acl \
+  --output tests/contracts/checkout.acl \
+  --audit tests/contracts/checkout.reviewed.json
+```
+
+Surface Contracts reconcile against current Test Kit context through test ID, component identity, role plus accessible name, and finally role. A mismatched source digest or cited byte range fails before browser launch.
+
+Version 0.15.0 adds `a3s.test.design-audit-provider/1` and `a3s-test agent audit`. Advice binds provider identity, observation, surface revision, screenshot and page-context digests, requested dimensions, current geometry, deadline, and cost. It remains non-blocking and reaches the Repair Ledger only after human review.
+
+Visual grounding still returns point or box candidates without executing actions. A unique current-node hit may become a semantic target. Ambiguous output stays image-bound advice.

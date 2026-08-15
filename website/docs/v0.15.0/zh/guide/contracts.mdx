@@ -1,0 +1,30 @@
+---
+title: v0.15.0 Surface Contract
+description: v0.15.0 的来源候选、人工评审、视觉定位和建议式设计审计。
+---
+
+# v0.15.0 Surface Contract
+
+:::warning 历史快照
+本页描述 v0.15.0 的 provider 与契约边界。
+:::
+
+PRD、设计稿和页面上下文保持不同来源。生成 provider 输出带引用的候选、冲突、开放决策、用量和摘要，不直接输出可执行授权。人工通过 `contract_review` 选择候选并解决冲突后，CLI 才在本地生成规范 ACL。
+
+```bash
+a3s-test contract generate \
+  --config tests/contracts/checkout.generate.acl \
+  --output tests/contracts/checkout.draft.json
+
+a3s-test contract review \
+  --draft tests/contracts/checkout.draft.json \
+  --review tests/contracts/checkout.review.acl \
+  --output tests/contracts/checkout.acl \
+  --audit tests/contracts/checkout.reviewed.json
+```
+
+Surface Contract 通过 test ID、组件身份、角色与可访问名称，以及最终角色退化，与当前 Test Kit 页面上下文对账。来源摘要或引用字节范围不匹配会在浏览器启动前失败。
+
+v0.15.0 新增 `a3s.test.design-audit-provider/1` 和 `a3s-test agent audit`。设计建议绑定 provider 身份、观察、界面修订、截图和页面上下文摘要、请求维度、当前几何、deadline 与费用。结果始终非阻断，只有人工评审后才能进入 Repair Ledger。
+
+视觉定位仍只产生点或矩形候选，不执行动作。唯一当前节点命中可转换为语义目标，歧义结果保持图像绑定建议。

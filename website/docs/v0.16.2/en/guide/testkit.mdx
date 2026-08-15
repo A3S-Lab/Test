@@ -1,0 +1,81 @@
+---
+title: Embedded Web Test Kit
+description: Publish revisioned page context after browser rendering and add human marking with repair handoff.
+---
+
+# Embedded Web Test Kit
+
+`@a3s-lab/testkit` is a development-time page-context and human-review SDK. After browser rendering, it reads semantic DOM, open Shadow DOM, form state, layout, and viewport facts without writing test attributes onto product elements.
+
+## Install
+
+Every GitHub Release publishes the matching package:
+
+```bash
+npm install https://github.com/A3S-Lab/Test/releases/latest/download/a3s-testkit.tgz
+```
+
+## React integration
+
+```tsx
+import {
+  A3SReviewOverlay,
+  A3STestBoundary,
+  A3STestKit,
+} from '@a3s-lab/testkit/react';
+
+export function App() {
+  return (
+    <A3STestKit
+      enabled={import.meta.env.DEV}
+      page={{ id: 'checkout' }}
+      repairEndpoint="/__a3s-test/repairs"
+      redact={['[data-payment-field]']}
+    >
+      <A3STestBoundary
+        id="checkout-form"
+        name="Checkout form"
+        source={{ file: 'src/Checkout.tsx' }}
+      >
+        <Checkout />
+      </A3STestBoundary>
+      <A3SReviewOverlay enabled={import.meta.env.DEV} />
+    </A3STestKit>
+  );
+}
+```
+
+The framework-neutral entry exports `installTestKit`, `getPageContextBridge`, and protocol types. The React entry adds the provider, component boundary, and optional Shadow DOM overlay. `enabled` must explicitly be `true`; otherwise the runtime stays closed and rejects work.
+
+## What A3S Test can observe
+
+Each snapshot carries a monotonic revision and binds these facts together:
+
+- Roles, accessible names, state, and DOM hierarchy.
+- Test Kit boundaries, component identity, and bounded source hints.
+- Preferred semantic locators with an explicit fallback order.
+- Element geometry in viewport, document, and normalized coordinate spaces.
+- Layout viewport, device pixel ratio, and optional visual-viewport offset and scale.
+- Bounded computed style, page facts, and redacted form state.
+
+MutationObserver, ResizeObserver, scrolling, viewport, and navigation signals advance the revision. An unchanged page is not polled. Targets from an older revision expire so an agent cannot act on coordinates or DOM refs from before a hot reload.
+
+## Human marking and batch repair
+
+The overlay supports element, text, click or drag multi-selection, rectangular findings, and freehand findings. A reviewer can:
+
+1. Select one target or assemble an ordered batch.
+2. Add repair instructions, replies, conflict relationships, and review decisions.
+3. Save a local draft or explicitly send it to the owning A3S Test session.
+4. Wait for the coding agent to edit source and run fresh-browser verification.
+5. Accept, reject, or reopen the result.
+
+Layout Mode emits only typed `placement` or `rearrange` intent with viewport CSS-pixel targets. It never moves, reorders, or styles the host DOM.
+
+## Security boundary
+
+Test Kit receives no workspace, shell, MCP, or source-editing credentials. DOM context is explicitly marked as untrusted evidence. The Quality Store, Design Audit Store, and Repair Ledger remain separate. Viewing advice or opening an editor does not grant repair authority.
+
+Deterministic Surface Contract differences may block a suite, but their overlay projection remains a review candidate. Design-audit output is always advisory. A candidate reaches the existing single or batch repair flow only after a person saves or sends it.
+
+Production builds normally disable Test Kit. CI may keep `A3STestKit` enabled while omitting `A3SReviewOverlay`. In Next.js, mount both from a client component and gate them explicitly with `process.env.NODE_ENV !== "production"`.

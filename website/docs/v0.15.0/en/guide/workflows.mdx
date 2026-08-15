@@ -1,0 +1,45 @@
+---
+title: v0.15.0 workflows
+description: External-planner sessions, ACL suites, and embedded provider boundaries in v0.15.0.
+---
+
+# v0.15.0 workflows
+
+:::warning Historical snapshot
+This page freezes v0.15.0 behavior. Its action protocol does not include selection-scoped `insert_text`, added in v0.16.0.
+:::
+
+## External-planner agent sessions
+
+The calling coding agent observes current state and selects one action. A3S Test validates schema, capability, provenance, and policy. The driver executes only admitted actions, and state changes invalidate stale refs.
+
+```bash
+a3s-test agent start <url> --session <name> --goal <goal> --success <condition>
+a3s-test agent observe --session <name> --interactive --json
+a3s-test agent click <ref> --session <name> --observation <id> --json
+a3s-test agent finish --session <name> --status passed --summary <text> --json
+```
+
+## Deterministic ACL
+
+```acl
+suite "smoke" {
+    version = 1
+
+    scenario "home" {
+        name = "Open home"
+        surface = "web"
+        timeout_ms = 30000
+
+        navigate "open" { url = "https://example.com" }
+        expect "heading" { text = "Example Domain" }
+    }
+}
+```
+
+```bash
+a3s-test check smoke.acl --json
+a3s-test run smoke.acl --json
+```
+
+Agent sessions and ACL share typed `Action`, `SurfaceDriver`, evidence, result, and lifecycle contracts. A deployment-owned embedded LLM provider may advise actions, but cannot decide a verdict, fabricate observation, or authorize repair.

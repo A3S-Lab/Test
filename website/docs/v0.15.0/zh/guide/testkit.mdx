@@ -1,0 +1,43 @@
+---
+title: Test Kit 0.3.0
+description: v0.15.0 配套 Test Kit 的页面上下文、人工评审和建议式设计审计边界。
+---
+
+# Test Kit 0.3.0
+
+:::warning 历史快照
+A3S Test v0.15.0 配套 `@a3s-lab/testkit` 0.3.0。
+:::
+
+```bash
+npm install https://github.com/A3S-Lab/Test/releases/download/v0.15.0/a3s-testkit.tgz
+```
+
+```tsx
+import {
+  A3SReviewOverlay,
+  A3STestBoundary,
+  A3STestKit,
+} from '@a3s-lab/testkit/react';
+
+export function App() {
+  return (
+    <A3STestKit enabled={import.meta.env.DEV} page={{ id: 'checkout' }}>
+      <A3STestBoundary
+        id="checkout-form"
+        name="Checkout form"
+        source={{ file: 'src/Checkout.tsx' }}
+      >
+        <Checkout />
+      </A3STestBoundary>
+      <A3SReviewOverlay enabled={import.meta.env.DEV} />
+    </A3STestKit>
+  );
+}
+```
+
+0.3.0 把页面上下文上限从 500 节点提高到 5,000 节点，以便设计审计通过有界分页读取完整快照。快照仍绑定语义、组件、定位器、多坐标空间几何、样式、页面修订和脱敏规则。
+
+设计审计结果保存在独立 Design Audit Store 中，没有 verdict 或修复权限。人工可以编辑、重新定位、保存草稿或明确发送到现有 Repair Ledger。单选、批量、Layout Mode 和新浏览器修复验证遵循相同人工授权边界。
+
+Test Kit 不接收工作区、Shell、MCP 或源码编辑凭据。生产环境应明确关闭；CI 可保留 provider 而省略 overlay。

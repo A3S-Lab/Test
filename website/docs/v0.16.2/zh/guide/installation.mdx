@@ -1,0 +1,70 @@
+---
+title: 安装与升级
+description: 安装 A3S Test CLI 和便携式 Agent Skill，并固定版本或目标目录。
+---
+
+# 安装与升级
+
+官方发布安装器会选择当前平台的预编译归档，验证发布的 SHA-256，再安装 CLI 和同版本 Agent Skill。重复执行同一条命令即可升级。
+
+## macOS 与 Linux
+
+```bash
+curl -fsSL https://github.com/A3S-Lab/Test/releases/latest/download/install.sh | sh
+```
+
+只为 Codex 安装 Skill：
+
+```bash
+curl -fsSL https://github.com/A3S-Lab/Test/releases/latest/download/install.sh |
+  sh -s -- --agent codex
+```
+
+固定版本：
+
+```bash
+curl -fsSL https://github.com/A3S-Lab/Test/releases/latest/download/install.sh |
+  sh -s -- --version v0.16.2
+```
+
+## Windows PowerShell
+
+```powershell
+& ([scriptblock]::Create((irm 'https://github.com/A3S-Lab/Test/releases/latest/download/install.ps1')))
+```
+
+指定 Agent 或版本：
+
+```powershell
+& ([scriptblock]::Create((irm 'https://github.com/A3S-Lab/Test/releases/latest/download/install.ps1'))) -Agent codex
+& ([scriptblock]::Create((irm 'https://github.com/A3S-Lab/Test/releases/latest/download/install.ps1'))) -Version v0.16.2
+```
+
+## 支持的 Agent 目标
+
+| 工具                  | 参数值           | 默认用户级目录               |
+| --------------------- | ---------------- | ---------------------------- |
+| A3S Code              | `a3s-code`       | `~/.a3s/skills`              |
+| Codex                 | `codex`          | `~/.codex/skills`            |
+| Claude Code           | `claude-code`    | `~/.claude/skills`           |
+| Cursor                | `cursor`         | `~/.cursor/skills`           |
+| Gemini CLI            | `gemini-cli`     | `~/.gemini/skills`           |
+| GitHub Copilot CLI    | `github-copilot` | `~/.copilot/skills`          |
+| OpenCode              | `opencode`       | `~/.config/opencode/skills`  |
+| Cline                 | `cline`          | `~/.cline/skills`            |
+| Roo Code              | `roo`            | `~/.roo/skills`              |
+| Windsurf              | `windsurf`       | `~/.codeium/windsurf/skills` |
+| Agent Skills 兼容工具 | `universal`      | `~/.agents/skills`           |
+
+`auto` 只安装到检测到的工具，没有命中时回退到通用目录。`all` 安装到所有目标。安装器也支持 `--skill-only`、`--cli-only`、`--install-dir` 和 `--skill-dir`，PowerShell 使用对应的 PascalCase 参数。
+
+## 其他安装方式
+
+从 Git 标签构建 CLI：
+
+```bash
+cargo install --git https://github.com/A3S-Lab/Test \
+  --tag v0.16.2 --locked a3s-test-cli
+```
+
+每个发布还包含可手动安装的 `a3s-test.skill`、各平台归档、校验文件、Test Kit 包和 Linux runner 镜像引用。不要跳过校验文件或用未固定的镜像标签代替发布的 digest。

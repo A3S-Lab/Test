@@ -1,0 +1,71 @@
+---
+title: CLI 与稳定契约参考
+description: 常用命令、界面能力、provider schema 与进程退出码。
+---
+
+# CLI 与稳定契约参考
+
+## 发现能力
+
+这些命令不会根据文档猜测本机能力，而是输出已安装协议和调度边界：
+
+```bash
+a3s-test capabilities --json
+a3s-test agent schema
+a3s-test provider schema contract-generation
+a3s-test provider schema design-audit
+a3s-test provider schema llm
+a3s-test provider schema visual-grounding
+a3s-test worker schema
+a3s-test worker inventory
+a3s-test worker remote schema
+a3s-test worker artifacts schema
+a3s-test distributed schema
+```
+
+Provider schema 描述请求、响应、来源和权限字段，不代表仓库捆绑了某个推理后端。
+
+## Agent 会话
+
+| 命令                              | 作用                                              |
+| --------------------------------- | ------------------------------------------------- |
+| `agent start`                     | 创建持久 Web 会话，声明目标、成功条件和策略边界。 |
+| `agent observe`                   | 返回新观察、语义引用和 `observation_id`。         |
+| `agent click`、`fill`、`press` 等 | 执行绑定最新观察的紧凑动作。                      |
+| `agent act --action-json`         | 执行完整生成式动作 Schema。                       |
+| `agent screenshot`                | 在会话 artifact 根中保存受约束 PNG。              |
+| `agent ground`                    | 请求视觉定位候选，不执行点击。                    |
+| `agent audit`                     | 请求建议式设计审计，不改变 verdict。              |
+| `agent finish`                    | 写入终态报告并关闭自有界面。                      |
+| `agent abort`                     | 取消会话并执行有界清理。                          |
+
+`agent open` 是 `agent start` 的别名，`agent snapshot` 是 `agent observe` 的别名。
+
+## ACL 与分布式运行
+
+```bash
+a3s-test check <suite.acl> --json
+a3s-test run <suite.acl> --json
+a3s-test distributed plan <distributed.acl> --compact
+a3s-test distributed run <distributed.acl> --json
+```
+
+远程 worker 使用独立的 `a3s.test.remote-worker/3` 执行协议和 `a3s.test.remote-artifacts/1` artifact 协议。请求不能选择 executable、应用、后端、凭据或网络策略，这些必须由部署启动参数固定。
+
+## 退出码
+
+| 退出码 | 含义                                 |
+| -----: | ------------------------------------ |
+|    `0` | 通过                                 |
+|    `1` | 测试或动作失败                       |
+|    `2` | 调用或配置无效，或分布式基础设施失败 |
+|  `124` | 超时                                 |
+|  `130` | 已取消                               |
+
+第一次 `Ctrl+C` 请求取消并清理自有界面。第二次只终止当前进程拥有的浏览器、CUA 进程边界和 TUI 进程树。
+
+## Web 能力摘要
+
+Web 驱动支持导航、语义快照、点击、悬停、聚焦、填写与输入、选择范围文本插入、勾选、选择、双击、右键、拖动、按键、修饰键滚轮与视口设置。同步操作包括 load、文本、URL 与可见性 wait 或 expect。证据包括截图、可访问树、console、页面错误、HAR、Chrome trace、WebM 视频和受约束下载。
+
+浏览器默认 headless，`--headed` 是明确的调试选项。网络和导航范围分别受初始 origin、`--allow-origin` 与显式 hostname 例外约束。

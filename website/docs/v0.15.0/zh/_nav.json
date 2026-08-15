@@ -1,0 +1,23 @@
+[
+  { "text": "文档", "link": "/guide/", "activeMatch": "^/guide/" },
+  {
+    "text": "架构",
+    "link": "/concepts/architecture",
+    "activeMatch": "^/concepts/"
+  },
+  { "text": "参考", "link": "/reference/cli", "activeMatch": "^/reference/" },
+  {
+    "text": "资源",
+    "items": [
+      {
+        "text": "v0.15.0 发布",
+        "link": "https://github.com/A3S-Lab/Test/releases/tag/v0.15.0"
+      },
+      { "text": "GitHub", "link": "https://github.com/A3S-Lab/Test" },
+      {
+        "text": "更新日志",
+        "link": "https://github.com/A3S-Lab/Test/blob/main/CHANGELOG.md"
+      }
+    ]
+  }
+]

@@ -1,0 +1,32 @@
+---
+title: v0.15.0 架构
+description: v0.15.0 的类型化核心、界面适配器、权限层和运行时所有权。
+---
+
+# v0.15.0 架构
+
+:::warning 历史快照
+v0.15.0 早于真实 macOS GUI 发布认证流程。它已经包含 GUI 契约测试与固定 host profile，但不应被描述为具备 v0.16.1 的发布认证资产。
+:::
+
+```text
+调用方编码 Agent                    关闭式 ACL 套件
+  观察 → 决策 → 一个动作              准入 → 执行 → 断言
+             \                       /
+              类型化 A3S Test Core
+       Action · Session · Policy · Lifecycle
+                         |
+              Web · GUI · TUI 驱动适配器
+                         |
+          事件 · 证据 · JSON 结果 · 自有清理
+```
+
+Core 不依赖浏览器、GUI、TUI、CLI 或具体 LLM provider。它定义共享类型并要求适配器承担运行时所有权。
+
+Test Kit 在渲染后发布带修订的 Page Context，包括语义结构、开放 Shadow DOM、组件身份、源码提示、定位器、样式和多坐标空间几何。浏览器观察与 Test Kit 修订必须来自同一稳定时刻。
+
+权限仍分四层：确定性事实、模型建议、人工授权、编码 Agent 修复执行。v0.15.0 新增的设计审计属于第二层，没有 verdict、动作或修复权限。
+
+每个启动的程序属于 A3S Test 自有进程组、Windows Job 或等价树。取消和超时必须终止并回收完整树。Web、GUI 与 TUI 适配器都不能清理无关开发者进程。
+
+GUI 通过锁定 A3S CUA `0.10.0` 的语义和 window-vision profile 在 macOS 上进行契约测试。Windows 与 Linux GUI 组合关闭失败。TUI 使用自有 PTY / ConPTY 与有界 VT 语义窗口。

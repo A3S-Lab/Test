@@ -1,0 +1,27 @@
+[
+  { "text": "Docs", "link": "/guide/", "activeMatch": "^/guide/" },
+  {
+    "text": "Architecture",
+    "link": "/concepts/architecture",
+    "activeMatch": "^/concepts/"
+  },
+  {
+    "text": "Reference",
+    "link": "/reference/cli",
+    "activeMatch": "^/reference/"
+  },
+  {
+    "text": "Resources",
+    "items": [
+      {
+        "text": "v0.15.0 release",
+        "link": "https://github.com/A3S-Lab/Test/releases/tag/v0.15.0"
+      },
+      { "text": "GitHub", "link": "https://github.com/A3S-Lab/Test" },
+      {
+        "text": "Changelog",
+        "link": "https://github.com/A3S-Lab/Test/blob/main/CHANGELOG.md"
+      }
+    ]
+  }
+]

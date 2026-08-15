@@ -2,3 +2,4 @@
 /.a3s-test
 **/node_modules/
 **/dist/
+**/doc_build/

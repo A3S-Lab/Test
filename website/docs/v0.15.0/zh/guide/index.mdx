@@ -1,0 +1,47 @@
+---
+title: v0.15.0 快速开始
+description: 安装固定版本并运行持久 Web Agent 会话。
+---
+
+# v0.15.0 快速开始
+
+:::warning 历史快照
+本页描述 A3S Test v0.15.0。当前版本请通过顶部版本选择器切换到 v0.16.2。
+:::
+
+## 安装固定版本
+
+macOS 或 Linux：
+
+```bash
+curl -fsSL https://github.com/A3S-Lab/Test/releases/latest/download/install.sh |
+  sh -s -- --version v0.15.0
+```
+
+Windows PowerShell：
+
+```powershell
+& ([scriptblock]::Create((irm 'https://github.com/A3S-Lab/Test/releases/latest/download/install.ps1'))) -Version v0.15.0
+```
+
+## 运行会话
+
+```bash
+a3s-test agent start http://127.0.0.1:3000/checkout \
+  --session checkout \
+  --goal "Complete checkout" \
+  --success "The confirmation heading is visible" \
+  --json
+
+a3s-test agent observe --session checkout --interactive --json
+```
+
+把动作绑定到响应中的最新 `observation_id`：
+
+```bash
+a3s-test agent click @e1 --session checkout --observation 1 --json
+a3s-test agent finish --session checkout --status passed \
+  --summary "Checkout completed" --json
+```
+
+工作区中的 `events.jsonl`、`report.json` 与 `artifacts/` 构成追加式证据记录。v0.15.0 包含建议式设计审计和 Test Kit 0.3.0，但不包含 v0.16.0 新增的选择范围 `insert_text` 动作。

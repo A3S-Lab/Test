@@ -1,0 +1,36 @@
+---
+title: v0.15.0 安装
+description: 从官方安装器、Cargo 或固定发布资产安装 A3S Test v0.15.0。
+---
+
+# v0.15.0 安装
+
+:::warning 历史快照
+所有命令都固定到 v0.15.0。不要把本页的版本号用于当前文档。
+:::
+
+```bash
+curl -fsSL https://github.com/A3S-Lab/Test/releases/latest/download/install.sh |
+  sh -s -- --version v0.15.0
+```
+
+```powershell
+& ([scriptblock]::Create((irm 'https://github.com/A3S-Lab/Test/releases/latest/download/install.ps1'))) -Version v0.15.0
+```
+
+安装器仍支持 `--agent`、`--skill-only`、`--cli-only`、`--install-dir` 与 `--skill-dir`。PowerShell 使用对应的 PascalCase 参数。
+
+从 Git 标签构建：
+
+```bash
+cargo install --git https://github.com/A3S-Lab/Test \
+  --tag v0.15.0 --locked a3s-test-cli
+```
+
+固定 Test Kit 资产：
+
+```bash
+npm install https://github.com/A3S-Lab/Test/releases/download/v0.15.0/a3s-testkit.tgz
+```
+
+发布归档与 runner 镜像必须使用该版本提供的 SHA-256 或不可变 digest 校验。

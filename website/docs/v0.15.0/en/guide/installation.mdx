@@ -1,0 +1,36 @@
+---
+title: v0.15.0 installation
+description: Install A3S Test v0.15.0 through the official installer, Cargo, or pinned release assets.
+---
+
+# v0.15.0 installation
+
+:::warning Historical snapshot
+Every command on this page pins v0.15.0. Do not carry this version into current documentation.
+:::
+
+```bash
+curl -fsSL https://github.com/A3S-Lab/Test/releases/latest/download/install.sh |
+  sh -s -- --version v0.15.0
+```
+
+```powershell
+& ([scriptblock]::Create((irm 'https://github.com/A3S-Lab/Test/releases/latest/download/install.ps1'))) -Version v0.15.0
+```
+
+The installer still accepts `--agent`, `--skill-only`, `--cli-only`, `--install-dir`, and `--skill-dir`, with corresponding PascalCase PowerShell parameters.
+
+Build from the Git tag:
+
+```bash
+cargo install --git https://github.com/A3S-Lab/Test \
+  --tag v0.15.0 --locked a3s-test-cli
+```
+
+Pin the Test Kit asset:
+
+```bash
+npm install https://github.com/A3S-Lab/Test/releases/download/v0.15.0/a3s-testkit.tgz
+```
+
+Verify release archives and runner images with the SHA-256 or immutable digest published for this version.

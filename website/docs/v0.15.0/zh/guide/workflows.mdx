@@ -1,0 +1,45 @@
+---
+title: v0.15.0 工作流
+description: v0.15.0 的外部规划 Agent 会话、ACL 套件与嵌入式 provider 边界。
+---
+
+# v0.15.0 工作流
+
+:::warning 历史快照
+本页冻结 v0.15.0 行为。动作协议不包含 v0.16.0 新增的选择范围 `insert_text`。
+:::
+
+## 外部规划 Agent 会话
+
+调用方编码 Agent 观察当前状态并选择一个动作。A3S Test 负责 Schema、能力、来源与策略校验，驱动只执行通过准入的动作。状态改变后旧引用失效。
+
+```bash
+a3s-test agent start <url> --session <name> --goal <goal> --success <condition>
+a3s-test agent observe --session <name> --interactive --json
+a3s-test agent click <ref> --session <name> --observation <id> --json
+a3s-test agent finish --session <name> --status passed --summary <text> --json
+```
+
+## 确定性 ACL
+
+```acl
+suite "smoke" {
+    version = 1
+
+    scenario "home" {
+        name = "Open home"
+        surface = "web"
+        timeout_ms = 30000
+
+        navigate "open" { url = "https://example.com" }
+        expect "heading" { text = "Example Domain" }
+    }
+}
+```
+
+```bash
+a3s-test check smoke.acl --json
+a3s-test run smoke.acl --json
+```
+
+Agent 会话与 ACL 共享类型化 `Action`、`SurfaceDriver`、证据、结果和生命周期。部署方嵌入式 LLM provider 可以建议动作，不能决定 verdict、伪造观察或授权修复。

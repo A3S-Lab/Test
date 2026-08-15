@@ -1,81 +1,54 @@
-<svg xmlns="http://www.w3.org/2000/svg"
-     width="1200" height="500" viewBox="0 0 1200 500"
-     role="img" aria-labelledby="title desc">
-  <title id="title">A3S Test — AI-native test engine</title>
-  <desc id="desc">A persistent test ledger shows a goal becoming observation 1, a provenance-bound click on ref e1, and a passing evidence report. Agent sessions and ACL suites share the same typed core.</desc>
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="440" viewBox="0 0 1200 440" role="img" aria-labelledby="title desc">
+  <title id="title">A3S Test, typed autonomous interface testing</title>
+  <desc id="desc">Fresh interface context flows through a typed action into inspectable evidence.</desc>
+  <rect width="1200" height="440" rx="24" fill="#0d1210"/>
+  <rect x="1" y="1" width="1198" height="438" rx="23" fill="none" stroke="#2b3932" stroke-width="2"/>
+  <line x1="650" y1="0" x2="650" y2="440" stroke="#2b3932"/>
 
-  <rect width="1200" height="500" rx="24" fill="#080A0D"/>
-  <path d="M0 72H1200" stroke="#242A33"/>
-
-  <g id="repository-metadata"
-     font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">
-    <circle cx="57" cy="36" r="5" fill="#6EE7B7"/>
-    <text x="72" y="43" fill="#B7C0CC" font-size="18" font-weight="700" letter-spacing="1.8">A3S / TEST ENGINE</text>
-
-    <g transform="translate(692 20)" font-size="18" font-weight="700">
-      <rect width="174" height="34" rx="17" fill="#10241D" stroke="#2E755B"/>
-      <text x="87" y="23" text-anchor="middle" fill="#8DF0C5">AGENT SESSION</text>
-
-      <rect x="186" width="132" height="34" rx="17" fill="#2A2112" stroke="#81632D"/>
-      <text x="252" y="23" text-anchor="middle" fill="#F7C873">ACL SUITE</text>
-
-      <rect x="330" width="122" height="34" rx="17" fill="#131820" stroke="#343D49"/>
-      <text x="391" y="23" text-anchor="middle" fill="#B7C0CC">RUST CLI</text>
-    </g>
+  <g transform="translate(54 42)">
+    <rect width="34" height="34" rx="8" fill="#183e30"/>
+    <path d="M8 14V8h6M20 8h6v6M26 20v6h-6M14 26H8v-6" fill="none" stroke="#69ddb0" stroke-width="2" stroke-linecap="round"/>
+    <circle cx="17" cy="17" r="3" fill="#eef5f1"/>
+    <text x="48" y="24" fill="#a7b5ae" font-family="ui-monospace,SFMono-Regular,Menlo,monospace" font-size="18" font-weight="650" letter-spacing="2">A3S / TEST ENGINE</text>
   </g>
 
-  <g id="title-block" transform="translate(56 108)">
-    <text x="0" y="82"
-          fill="#F6F8F7" font-size="88" font-weight="780" letter-spacing="-3"
-          font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">A3S TEST</text>
-    <text x="3" y="132"
-          fill="#6EE7B7" font-size="22" font-weight="750" letter-spacing="3.8"
-          font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">AI-NATIVE · CROSS-SURFACE · EVIDENCE-FIRST</text>
-    <text x="3" y="184"
-          fill="#DCE2E7" font-size="29" font-weight="520"
-          font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">Agents explore. Typed ACL replays. Every turn leaves proof.</text>
+  <text x="54" y="174" fill="#eef5f1" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC',sans-serif" font-size="72" font-weight="680" letter-spacing="-3">A3S TEST</text>
+  <text x="56" y="225" fill="#69ddb0" font-family="ui-monospace,SFMono-Regular,Menlo,monospace" font-size="22" font-weight="650" letter-spacing="2">UNDERSTAND / ACT / PROVE</text>
+  <text x="56" y="280" fill="#d7e1dc" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC',sans-serif" font-size="27" font-weight="560">Agent exploration and ACL regression</text>
+  <text x="56" y="318" fill="#d7e1dc" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC',sans-serif" font-size="27" font-weight="560">share one typed evidence boundary.</text>
+  <g transform="translate(56 360)">
+    <text x="0" y="20" fill="#7b8b83" font-family="ui-monospace,SFMono-Regular,Menlo,monospace" font-size="18">WEB</text>
+    <line x1="56" y1="14" x2="92" y2="14" stroke="#46584f"/>
+    <text x="112" y="20" fill="#7b8b83" font-family="ui-monospace,SFMono-Regular,Menlo,monospace" font-size="18">GUI</text>
+    <line x1="168" y1="14" x2="204" y2="14" stroke="#46584f"/>
+    <text x="224" y="20" fill="#7b8b83" font-family="ui-monospace,SFMono-Regular,Menlo,monospace" font-size="18">TUI</text>
   </g>
 
-  <g id="execution-ledger" transform="translate(56 318)">
-    <g id="start-step">
-      <rect width="260" height="142" rx="14" fill="#0F1318" stroke="#303844"/>
-      <text x="20" y="34" fill="#8E99A8" font-size="18" font-weight="700" letter-spacing="1.4"
-            font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">01 / START</text>
-      <text x="20" y="76" fill="#F6F8F7" font-size="23" font-weight="700"
-            font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">goal + success</text>
-      <text x="20" y="111" fill="#AAB4C0" font-size="19"
-            font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">session: checkout</text>
+  <g transform="translate(694 36)">
+    <rect width="452" height="368" rx="16" fill="#090d0b" stroke="#46584f" stroke-width="2"/>
+    <g transform="translate(24 22)">
+      <text x="0" y="18" fill="#8fa198" font-family="ui-monospace,SFMono-Regular,Menlo,monospace" font-size="18">PAGE CONTEXT / REVISION 7</text>
+      <text x="354" y="18" fill="#69ddb0" font-family="ui-monospace,SFMono-Regular,Menlo,monospace" font-size="18">42</text>
     </g>
-
-    <g id="observe-step" transform="translate(276 0)">
-      <rect width="260" height="142" rx="14" fill="#0D1714" stroke="#3A8B6C"/>
-      <text x="20" y="34" fill="#6EE7B7" font-size="18" font-weight="700" letter-spacing="1.4"
-            font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">02 / OBSERVE</text>
-      <text x="20" y="76" fill="#F6F8F7" font-size="22" font-weight="700"
-            font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">observation_id: 1</text>
-      <text x="20" y="111" fill="#9EDDBF" font-size="18"
-            font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">@e1 [button] Continue</text>
+    <line x1="0" y1="62" x2="452" y2="62" stroke="#2b3932"/>
+    <g transform="translate(24 86)">
+      <text x="0" y="20" fill="#69ddb0" font-family="ui-monospace,SFMono-Regular,Menlo,monospace" font-size="20">@c1</text>
+      <text x="66" y="20" fill="#7b8b83" font-family="ui-monospace,SFMono-Regular,Menlo,monospace" font-size="20">main</text>
+      <text x="142" y="20" fill="#eef5f1" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" font-size="21" font-weight="650">Checkout</text>
+      <text x="24" y="70" fill="#69ddb0" font-family="ui-monospace,SFMono-Regular,Menlo,monospace" font-size="20">@c4</text>
+      <text x="90" y="70" fill="#7b8b83" font-family="ui-monospace,SFMono-Regular,Menlo,monospace" font-size="20">form</text>
+      <text x="158" y="70" fill="#eef5f1" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" font-size="21" font-weight="650">Payment details</text>
+      <rect x="16" y="94" width="388" height="68" rx="9" fill="#183e30" stroke="#69ddb0" stroke-width="2"/>
+      <text x="34" y="136" fill="#69ddb0" font-family="ui-monospace,SFMono-Regular,Menlo,monospace" font-size="20">@c7</text>
+      <text x="100" y="136" fill="#b8f3db" font-family="ui-monospace,SFMono-Regular,Menlo,monospace" font-size="20">button</text>
+      <text x="198" y="136" fill="#eef5f1" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" font-size="21" font-weight="650">Place order</text>
+      <text x="18" y="192" fill="#7b8b83" font-family="ui-monospace,SFMono-Regular,Menlo,monospace" font-size="18">x 1048  y 716  w 168  h 44</text>
     </g>
-
-    <g id="act-step" transform="translate(552 0)">
-      <rect width="260" height="142" rx="14" fill="#18140C" stroke="#80632F"/>
-      <text x="20" y="34" fill="#F7C873" font-size="18" font-weight="700" letter-spacing="1.4"
-            font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">03 / ACT</text>
-      <text x="20" y="76" fill="#F6F8F7" font-size="23" font-weight="700"
-            font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">click @e1</text>
-      <text x="20" y="111" fill="#D8BF8B" font-size="18"
-            font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">schema + policy checked</text>
-    </g>
-
-    <g id="prove-step" transform="translate(828 0)">
-      <rect width="260" height="142" rx="14" fill="#0F1318" stroke="#3A8B6C"/>
-      <text x="20" y="34" fill="#6EE7B7" font-size="18" font-weight="700" letter-spacing="1.4"
-            font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">04 / PROVE</text>
-      <rect x="20" y="54" width="86" height="36" rx="18" fill="#6EE7B7"/>
-      <text x="63" y="79" text-anchor="middle" fill="#07110D" font-size="18" font-weight="850"
-            font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">PASS</text>
-      <text x="20" y="121" fill="#AAB4C0" font-size="18"
-            font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">events.jsonl + report.json</text>
+    <line x1="24" y1="294" x2="428" y2="294" stroke="#2b3932"/>
+    <g transform="translate(24 320)">
+      <text x="0" y="20" fill="#69ddb0" font-family="ui-monospace,SFMono-Regular,Menlo,monospace" font-size="18">click @c7</text>
+      <text x="150" y="20" fill="#7b8b83" font-family="ui-monospace,SFMono-Regular,Menlo,monospace" font-size="18">→</text>
+      <text x="184" y="20" fill="#eef5f1" font-family="ui-monospace,SFMono-Regular,Menlo,monospace" font-size="18">events + report</text>
     </g>
   </g>
 </svg>

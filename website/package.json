@@ -1,0 +1,30 @@
+{
+  "name": "a3s-test-website",
+  "version": "0.0.0",
+  "description": "Official multilingual website and versioned documentation for A3S Test.",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "rspress build",
+    "check": "npm run typecheck && npm run check:docs",
+    "check:docs": "node scripts/check-docs.mjs",
+    "check:site": "node scripts/check-built-site.mjs",
+    "dev": "rspress dev",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "preview": "rspress preview",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@rspress/core": "^2.0.17"
+  },
+  "devDependencies": {
+    "@types/node": "^22.8.1",
+    "@types/react": "^19.2.17",
+    "@types/react-dom": "^19.2.3",
+    "prettier": "^3.8.3",
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7",
+    "typescript": "^6.0.3"
+  }
+}

@@ -1,0 +1,70 @@
+---
+title: Installation and upgrades
+description: Install the A3S Test CLI and portable Agent Skill with explicit version and destination controls.
+---
+
+# Installation and upgrades
+
+The release installers select a prebuilt archive for the current platform, verify the published SHA-256, then install the CLI and matching Agent Skill. Run the same command again to upgrade.
+
+## macOS and Linux
+
+```bash
+curl -fsSL https://github.com/A3S-Lab/Test/releases/latest/download/install.sh | sh
+```
+
+Target Codex explicitly:
+
+```bash
+curl -fsSL https://github.com/A3S-Lab/Test/releases/latest/download/install.sh |
+  sh -s -- --agent codex
+```
+
+Pin a version:
+
+```bash
+curl -fsSL https://github.com/A3S-Lab/Test/releases/latest/download/install.sh |
+  sh -s -- --version v0.16.2
+```
+
+## Windows PowerShell
+
+```powershell
+& ([scriptblock]::Create((irm 'https://github.com/A3S-Lab/Test/releases/latest/download/install.ps1')))
+```
+
+Select an agent or version:
+
+```powershell
+& ([scriptblock]::Create((irm 'https://github.com/A3S-Lab/Test/releases/latest/download/install.ps1'))) -Agent codex
+& ([scriptblock]::Create((irm 'https://github.com/A3S-Lab/Test/releases/latest/download/install.ps1'))) -Version v0.16.2
+```
+
+## Supported agent targets
+
+| Tool                          | Target           | Default user directory       |
+| ----------------------------- | ---------------- | ---------------------------- |
+| A3S Code                      | `a3s-code`       | `~/.a3s/skills`              |
+| Codex                         | `codex`          | `~/.codex/skills`            |
+| Claude Code                   | `claude-code`    | `~/.claude/skills`           |
+| Cursor                        | `cursor`         | `~/.cursor/skills`           |
+| Gemini CLI                    | `gemini-cli`     | `~/.gemini/skills`           |
+| GitHub Copilot CLI            | `github-copilot` | `~/.copilot/skills`          |
+| OpenCode                      | `opencode`       | `~/.config/opencode/skills`  |
+| Cline                         | `cline`          | `~/.cline/skills`            |
+| Roo Code                      | `roo`            | `~/.roo/skills`              |
+| Windsurf                      | `windsurf`       | `~/.codeium/windsurf/skills` |
+| Agent Skills-compatible tools | `universal`      | `~/.agents/skills`           |
+
+`auto` installs only for detected tools and falls back to the universal directory. `all` targets every supported directory. The installers also accept `--skill-only`, `--cli-only`, `--install-dir`, and `--skill-dir`, with corresponding PascalCase PowerShell parameters.
+
+## Other installation paths
+
+Build the CLI from a Git tag:
+
+```bash
+cargo install --git https://github.com/A3S-Lab/Test \
+  --tag v0.16.2 --locked a3s-test-cli
+```
+
+Each release also contains `a3s-test.skill`, platform archives, checksum files, the Test Kit package, and an immutable Linux runner image reference. Do not bypass checksums or replace the released image digest with a floating tag.

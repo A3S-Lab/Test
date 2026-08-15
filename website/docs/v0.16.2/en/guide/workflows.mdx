@@ -1,0 +1,84 @@
+---
+title: Exploration and regression workflows
+description: Understand the responsibility boundaries between external-planner sessions, deterministic ACL suites, and embedded planners.
+---
+
+# Exploration and regression workflows
+
+A3S Test has two primary workflows. They are two planning entries into one typed execution core, not separate test engines.
+
+| Workflow            | Planner                     | Best for                                            | Entry point                   |
+| ------------------- | --------------------------- | --------------------------------------------------- | ----------------------------- |
+| Agent session       | The calling coding agent    | Exploration, reproduction, unknown paths, UX review | Persistent Web CLI or GUI MCP |
+| ACL suite           | A closed typed manifest     | Stable regression, CI, cross-surface testing        | `check` and `run`             |
+| Embedded agent loop | Host-injected `LlmProvider` | Products embedding A3S Test                         | `a3s-test-agent` library      |
+
+## Agent sessions
+
+The calling agent retains planning authority. Every turn follows the same sequence:
+
+1. Obtain a fresh observation and `observation_id` from A3S Test.
+2. Choose one action from visible state.
+3. Let A3S Test validate the action schema, capability, provenance, and policy.
+4. Execute through the driver and invalidate stale refs after state changes.
+5. Observe again until local evidence proves success or failure.
+
+Semantic refs are not durable locators. `@e1` or a Test Kit `@c7` must bind to the latest observation that produced it. A model cannot claim state that the driver or Test Kit did not record.
+
+Common commands:
+
+```bash
+a3s-test agent start <url> --session <name> --goal <goal> --success <condition>
+a3s-test agent observe --session <name> --interactive --json
+a3s-test agent click <ref> --session <name> --observation <id> --json
+a3s-test agent finish --session <name> --status passed --summary <text> --json
+```
+
+`agent act --action-json` exposes the complete action schema. In v0.16.2, action protocol revision 7 supports selection-scoped `insert_text` inside an editing context established by an earlier action. It carries no target or locator authority of its own.
+
+## ACL suites
+
+Express a stable path in ACL:
+
+```acl
+suite "product-smoke" {
+    version = 1
+
+    scenario "home-page" {
+        name = "Open the home page"
+        surface = "web"
+        timeout_ms = 30000
+
+        navigate "open" {
+            url = "https://example.com"
+        }
+
+        wait "loaded" {
+            load = "networkidle"
+        }
+
+        expect "heading" {
+            text = "Example Domain"
+        }
+
+        screenshot "evidence" {
+            path = "home.png"
+        }
+    }
+}
+```
+
+Run static admission before opening a surface:
+
+```bash
+a3s-test check tests/e2e/smoke.acl --json
+a3s-test run tests/e2e/smoke.acl --json
+```
+
+Unknown blocks or attributes, duplicate identifiers, ambiguous conditions, invalid locators, and unsafe artifact paths fail before launch. Assertion failures, timeouts, and ambiguously dispatched actions are never replayed automatically.
+
+## Local verification still decides the result
+
+A deployment may inject a schema-constrained HTTP LLM provider through `a3s-test agent run`, but the provider can only propose one typed action or request completion. It cannot decide the verdict, fabricate observation, or authorize repair. Success still requires at least one local `expect` and clean closure of the exact owned surface.
+
+Continue with [Test Kit](./testkit.mdx) for rendered page context and human repair review.
