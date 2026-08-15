@@ -1,7 +1,7 @@
 cua_stack "gui" {
     schema_version = 2
     repository = "https://github.com/A3S-Lab/cua"
-    revision = "7ac41be61e6b1c0034cd9d4de48ac2d5f7bf6b13"
+    revision = "96103fe14da7ca960a092a234d0b20081707e3ff"
     driver_version = "0.10.0"
     mcp_protocol = "2025-06-18"
     tools_schema = "1"

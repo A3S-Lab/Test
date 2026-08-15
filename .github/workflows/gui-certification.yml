@@ -1,0 +1,133 @@
+name: Real macOS GUI certification
+
+on:
+  workflow_call:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+  attestations: write
+
+concurrency:
+  group: gui-certification-${{ github.repository }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  certify:
+    name: Semantic, vision, and owned cleanup
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v'))
+    runs-on: [self-hosted, macOS, ARM64, a3s-gui-certification]
+    timeout-minutes: 45
+
+    steps:
+      - name: Check out A3S Test
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Install A3S Test Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: 1.85.0
+
+      - name: Build the A3S Test CLI
+        env:
+          A3S_TEST_SOURCE_REVISION: ${{ github.sha }}
+        run: cargo build --locked --release --package a3s-test-cli
+
+      - name: Resolve the locked CUA source
+        id: cua-lock
+        shell: bash
+        run: |
+          set -euo pipefail
+          target/release/a3s-test gui-certification --json > "$RUNNER_TEMP/cua-lock.json"
+          test "$(jq -r '.cua_repository' "$RUNNER_TEMP/cua-lock.json")" = \
+            "https://github.com/A3S-Lab/cua"
+          revision="$(jq -er '.cua_revision' "$RUNNER_TEMP/cua-lock.json")"
+          [[ "$revision" =~ ^[0-9a-f]{40}$ ]]
+          printf 'revision=%s\n' "$revision" >> "$GITHUB_OUTPUT"
+
+      - name: Check out the locked CUA source
+        uses: actions/checkout@v6
+        with:
+          repository: A3S-Lab/cua
+          ref: ${{ steps.cua-lock.outputs.revision }}
+          path: .gui-certification/cua
+          persist-credentials: false
+
+      - name: Install the locked CUA Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: 1.97.1
+
+      - name: Build the revision-identified CUA driver and AppKit fixture
+        env:
+          CUA_DRIVER_SOURCE_SHA: ${{ steps.cua-lock.outputs.revision }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          cua_root="$GITHUB_WORKSPACE/.gui-certification/cua"
+          cargo clean \
+            --manifest-path "$cua_root/libs/cua-driver/rust/Cargo.toml" \
+            --package platform-macos
+          cargo build \
+            --manifest-path "$cua_root/libs/cua-driver/rust/Cargo.toml" \
+            --locked \
+            --release \
+            --package cua-driver
+          bash "$cua_root/libs/cua-driver/tests/fixtures/build/macos.sh" --only appkit
+
+      - name: Run real-host certification
+        shell: bash
+        run: |
+          .github/scripts/run-gui-certification-macos.sh \
+            "$GITHUB_WORKSPACE/target/release/a3s-test" \
+            "$GITHUB_WORKSPACE/.gui-certification/cua" \
+            "$GITHUB_WORKSPACE/.gui-certification/records" \
+            "$GITHUB_SHA"
+
+      - name: Attest the certification record
+        uses: actions/attest-build-provenance@v3
+        with:
+          subject-path: .gui-certification/records/attestation.json
+
+      - name: Upload certification evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: gui-certification-${{ github.sha }}
+          path: |
+            .gui-certification/records/attestation.json
+            .gui-certification/records/attestation.json.sha256
+            .gui-certification/records/cua-config.json
+            .gui-certification/records/cua-lock.json
+            .gui-certification/records/cua-permissions.json
+            .gui-certification/records/semantic.json
+            .gui-certification/records/semantic-artifacts
+            .gui-certification/records/semantic-fixture-inventory.json
+            .gui-certification/records/window-vision.json
+            .gui-certification/records/window-vision-artifacts
+            .gui-certification/records/window-vision-fixture-inventory.json
+          if-no-files-found: error
+          retention-days: 90
+
+      - name: Upload bounded failure diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gui-certification-failure-${{ github.sha }}-${{ github.run_attempt }}
+          path: |
+            .gui-certification/records/cua-daemon.log
+            .gui-certification/records/cleanup.log
+            .gui-certification/records/cua-config.json
+            .gui-certification/records/cua-lock.json
+            .gui-certification/records/cua-permissions.json
+            .gui-certification/records/preflight-fixture-inventory.json
+            .gui-certification/records/semantic.json
+            .gui-certification/records/semantic-fixture-inventory.json
+            .gui-certification/records/window-vision.json
+            .gui-certification/records/window-vision-fixture-inventory.json
+          if-no-files-found: ignore
+          retention-days: 30

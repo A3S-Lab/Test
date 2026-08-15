@@ -9,8 +9,17 @@ permissions:
   contents: read
 
 jobs:
+  gui-certification:
+    name: Real macOS GUI certification
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+    uses: ./.github/workflows/gui-certification.yml
+
   create-release:
     name: Create GitHub Release
+    needs: gui-certification
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -23,6 +32,29 @@ jobs:
         uses: taiki-e/create-gh-release-action@v1
         with:
           changelog: CHANGELOG.md
+
+  upload-gui-certification:
+    name: GUI certification attestation
+    needs: create-release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download GUI certification evidence
+        uses: actions/download-artifact@v5
+        with:
+          name: gui-certification-${{ github.sha }}
+          path: gui-certification
+
+      - name: Upload the attestation to the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >-
+          gh release upload "${GITHUB_REF_NAME}"
+          gui-certification/attestation.json
+          gui-certification/attestation.json.sha256
+          --clobber
 
   upload-cli:
     name: CLI (${{ matrix.target }})

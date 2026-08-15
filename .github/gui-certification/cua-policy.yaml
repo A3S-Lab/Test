@@ -1,0 +1,12 @@
+allow:
+  tools:
+    - get_config
+    - check_permissions
+    - start_session
+    - get_session_state
+    - end_session
+    - list_apps
+    - launch_app
+    - list_windows
+    - get_window_state
+    - kill_app
