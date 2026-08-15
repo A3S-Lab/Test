@@ -33,6 +33,8 @@
 
 ### Fixed
 
+- Raised the documentation mobile navigation and installer copy controls to a
+  44-pixel minimum target without changing the compact desktop layout.
 - Removed collapsed mobile documentation-menu groups from the accessibility
   tree while preserving keyboard focus restoration and disclosure semantics.
   Language, version, and resource links are now exposed only while their

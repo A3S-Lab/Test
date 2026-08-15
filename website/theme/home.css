@@ -202,7 +202,7 @@
 }
 
 .test-install-meta button {
-  min-height: 34px;
+  min-height: 44px;
   padding: 0 12px;
   border: 1px solid #425349;
   border-radius: var(--test-control-radius);
