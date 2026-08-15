@@ -631,7 +631,7 @@ ${OVERLAY_MARKING_CSS}
     bottom: 72px;
     left: 8px;
     width: auto;
-    max-height: calc(100vh - 82px);
+    max-height: calc(100% - 80px);
   }
 
   .a3s-editor-popover {
@@ -640,7 +640,7 @@ ${OVERLAY_MARKING_CSS}
     bottom: 72px;
     left: 8px;
     width: auto;
-    max-height: calc(100vh - 82px);
+    max-height: calc(100% - 80px);
   }
 
   .a3s-editor-popover::before {
