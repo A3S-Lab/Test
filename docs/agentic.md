@@ -119,6 +119,9 @@ the current standalone browser protocol. This is a protocol capability
 boundary, not keyword routing or locator inference. Context-click dispatches a
 page-scoped, cancelable `contextmenu` event at the visible target instead of
 opening the browser-native menu, which is outside the observable page.
+`insert_text` is selection-scoped rather than target-scoped: it preserves the
+current focused editing context established by an earlier action and inserts
+text without refocusing the page element.
 
 ## External-planner MCP
 

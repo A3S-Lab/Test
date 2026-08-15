@@ -154,6 +154,7 @@ impl ProvenanceRedactor {
                 self.redact_target(target);
                 value.clone_from(&self.replacement);
             }
+            Action::InsertText { value } => value.clone_from(&self.replacement),
             Action::Select { target, values } => {
                 self.redact_target(target);
                 for value in values {

@@ -68,6 +68,9 @@ pub enum Action {
         target: Target,
         value: String,
     },
+    InsertText {
+        value: String,
+    },
     Check {
         target: Target,
     },

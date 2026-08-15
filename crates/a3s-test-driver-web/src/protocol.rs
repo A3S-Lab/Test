@@ -324,8 +324,10 @@ pub(crate) fn scalar_string(value: &Value) -> Option<&str> {
 pub(crate) fn scalar_bool(value: &Value) -> Option<bool> {
     value
         .as_bool()
+        .or_else(|| value.get("visible").and_then(Value::as_bool))
         .or_else(|| value.get("data").and_then(Value::as_bool))
         .or_else(|| value.pointer("/data/value").and_then(Value::as_bool))
+        .or_else(|| value.pointer("/data/visible").and_then(Value::as_bool))
 }
 
 pub(crate) fn bounded(value: &str, max_chars: usize) -> String {
@@ -339,8 +341,9 @@ mod tests {
     use std::time::Duration;
 
     use a3s_test_core::{LoadState, Target, WaitCondition};
+    use serde_json::json;
 
-    use super::{invocation, visibility_args, wait_args};
+    use super::{invocation, scalar_bool, visibility_args, wait_args};
     use crate::{AgentBrowserConfig, BrowserCommand, BrowserNetworkPolicy};
 
     #[test]
@@ -412,6 +415,26 @@ mod tests {
                 OsString::from("networkidle"),
             ]
         );
+    }
+
+    #[test]
+    fn scalar_bool_accepts_browser_visibility_envelopes() {
+        assert_eq!(scalar_bool(&json!(true)), Some(true));
+        assert_eq!(scalar_bool(&json!({ "visible": false })), Some(false));
+        assert_eq!(scalar_bool(&json!({ "data": true })), Some(true));
+        assert_eq!(
+            scalar_bool(&json!({ "data": { "value": false } })),
+            Some(false)
+        );
+        assert_eq!(
+            scalar_bool(&json!({
+                "success": true,
+                "data": { "visible": true },
+                "error": null
+            })),
+            Some(true)
+        );
+        assert_eq!(scalar_bool(&json!({ "data": {} })), None);
     }
 
     #[test]

@@ -476,6 +476,10 @@ impl DriverSession for AgentBrowserSession {
                     .await
                     .map(|data| StepOutput::new("text typed into target").with_data(data))
             }
+            Action::InsertText { value } => self
+                .execute_command(vec!["keyboard".into(), "inserttext".into(), value.into()])
+                .await
+                .map(|data| StepOutput::new("text inserted at current focus").with_data(data)),
             Action::Check { target } => {
                 let args = target_action(target, "check", None)?;
                 self.execute_command(args)

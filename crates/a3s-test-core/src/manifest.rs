@@ -298,6 +298,12 @@ fn parse_step(block: &Block, scenario_path: &str) -> Result<TestStep, SpecError>
                 value: required_string(block, "value", &path)?.to_string(),
             }
         }
+        "insert_text" => {
+            ensure_attributes(block, &["value"], &path)?;
+            Action::InsertText {
+                value: required_string(block, "value", &path)?.to_string(),
+            }
+        }
         "check" => {
             ensure_attributes(block, &["target"], &path)?;
             Action::Check {

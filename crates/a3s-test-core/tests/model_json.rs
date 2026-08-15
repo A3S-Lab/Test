@@ -67,6 +67,9 @@ fn advanced_web_actions_round_trip_through_agent_action_json() {
             target: target.clone(),
             value: "more text".to_string(),
         },
+        Action::InsertText {
+            value: "text at the current caret".to_string(),
+        },
         Action::Check {
             target: target.clone(),
         },

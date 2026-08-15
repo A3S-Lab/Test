@@ -45,6 +45,8 @@ pub(super) enum AgentCommand {
     Fill(TargetValueArgs),
     /// Type without clearing a ref or CSS target.
     Type(TargetValueArgs),
+    /// Insert text at the current caret without changing focus.
+    InsertText(ValueArgs),
     /// Check a target in an active session.
     Check(TargetArgs),
     /// Uncheck a ref or CSS target in an active session.
@@ -294,6 +296,18 @@ pub(super) struct TargetValueArgs {
     /// Observation identifier that supplied a ref target.
     #[arg(long)]
     pub(super) observation: Option<u64>,
+    /// Emit machine-readable JSON.
+    #[arg(long)]
+    pub(super) json: bool,
+}
+
+#[derive(Debug, Args)]
+pub(super) struct ValueArgs {
+    /// Text value.
+    pub(super) value: String,
+    /// Active session identifier.
+    #[arg(long)]
+    pub(super) session: String,
     /// Emit machine-readable JSON.
     #[arg(long)]
     pub(super) json: bool,

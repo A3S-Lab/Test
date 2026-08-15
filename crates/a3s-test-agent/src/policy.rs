@@ -56,7 +56,7 @@ impl From<&Action> for ActionKind {
             Action::DoubleClick { .. } => Self::DoubleClick,
             Action::ContextClick { .. } => Self::ContextClick,
             Action::Fill { .. } => Self::Fill,
-            Action::Type { .. } => Self::Type,
+            Action::Type { .. } | Action::InsertText { .. } => Self::Type,
             Action::Check { .. } => Self::Check,
             Action::Uncheck { .. } => Self::Uncheck,
             Action::Select { .. } => Self::Select,

@@ -138,6 +138,15 @@ pub(crate) async fn execute(args: AgentArgs) -> Result<ExitCode> {
             )
             .await
         }
+        AgentCommand::InsertText(args) => {
+            perform_action(
+                args.session,
+                Action::InsertText { value: args.value },
+                None,
+                args.json,
+            )
+            .await
+        }
         AgentCommand::Check(args) => {
             perform_action(
                 args.session,

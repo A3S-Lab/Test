@@ -127,6 +127,9 @@ async fn maps_advanced_interactions_to_the_verified_browser_protocol() {
             },
             value: "more text".to_string(),
         },
+        Action::InsertText {
+            value: " at caret".to_string(),
+        },
         Action::Check {
             target: Target::TestId {
                 value: "comments".to_string(),
@@ -196,6 +199,7 @@ async fn maps_advanced_interactions_to_the_verified_browser_protocol() {
             os(&["mouse", "move", "60", "45"]),
             os(&["eval", "<context-menu-script>"]),
             os(&["type", "#title", "more text"]),
+            os(&["keyboard", "inserttext", " at caret"]),
             os(&["find", "testid", "comments", "check"]),
             os(&["uncheck", "#readonly"]),
             os(&["select", "@e8", "draft", "review"]),

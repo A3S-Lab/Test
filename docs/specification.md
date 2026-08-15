@@ -63,6 +63,10 @@ type "append-title" {
     value = " plan"
 }
 
+insert_text "append-at-caret" {
+    value = " additional text"
+}
+
 check "comments-on" {
     target = label("Comments")
 }
@@ -617,6 +621,11 @@ assertions, non-main frame switching, uploads, downloads, focus, double-click,
 context-click, type, uncheck, select, drag, and target-scoped wheel require
 `ref()` or `css()` because those map directly to the browser protocol. Click,
 hover, fill, and check accept every target form.
+
+`insert_text` writes into the current focused editing context without moving
+the caret. Use it only after an explicit focus, click, or key action establishes
+the intended insertion point. Unlike `type`, it has no target and therefore
+does not refocus a contenteditable root or reset an existing selection.
 
 `automation_id()` is a GUI semantic target. `visual_point()` is a GUI-only,
 observation-scoped pixel target: its first argument must be the latest visual

@@ -573,6 +573,7 @@ suite "advanced-web" {
         }
     }
 }
+
 "##,
     )
     .expect("advanced Web suite");
@@ -643,6 +644,52 @@ suite "advanced-web" {
             scale: Some(2),
         }
     );
+}
+
+#[test]
+fn parses_selection_scoped_text_insertion_without_a_target() {
+    let suite = TestSuite::from_acl(
+        r#"
+suite "selection-scoped-input" {
+    scenario "editor" {
+        surface = "web"
+
+        insert_text "append-at-caret" {
+            value = " additional text"
+        }
+    }
+}
+"#,
+    )
+    .expect("selection-scoped input suite");
+
+    assert_eq!(
+        suite.scenarios[0].steps[0].action,
+        Action::InsertText {
+            value: " additional text".to_string(),
+        }
+    );
+}
+
+#[test]
+fn rejects_a_target_on_selection_scoped_text_insertion() {
+    let error = TestSuite::from_acl(
+        r#"
+suite "selection-scoped-input" {
+    scenario "editor" {
+        surface = "web"
+
+        insert_text "append-at-caret" {
+            target = css(".editor")
+            value = " additional text"
+        }
+    }
+}
+"#,
+    )
+    .expect_err("selection-scoped input must not refocus a target");
+
+    assert_eq!(error.code(), "test.spec.attribute_unknown");
 }
 
 #[test]
