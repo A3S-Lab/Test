@@ -105,8 +105,8 @@ ${OVERLAY_SHELL_CSS}
 }
 
 .a3s-workspace > footer button:not(.quiet) {
-  border-color: var(--a3s-blue);
-  background: var(--a3s-blue);
+  border-color: var(--a3s-blue-strong);
+  background: var(--a3s-blue-strong);
   color: #ffffff;
 }
 
@@ -478,8 +478,8 @@ ${OVERLAY_SHELL_CSS}
 .a3s-quality-item button:first-child,
 .a3s-human-actions button:first-of-type,
 .a3s-item > div button:first-child {
-  border-color: var(--a3s-blue);
-  background: var(--a3s-blue);
+  border-color: var(--a3s-blue-strong);
+  background: var(--a3s-blue-strong);
   color: #ffffff;
 }
 
@@ -614,7 +614,7 @@ ${OVERLAY_SHELL_CSS}
 .a3s-catalog-results button.selected {
   border-color: var(--a3s-blue);
   background: var(--a3s-blue-soft);
-  color: var(--a3s-blue);
+  color: var(--a3s-blue-ink);
 }
 
 .a3s-catalog-empty {
@@ -753,7 +753,7 @@ ${OVERLAY_SHELL_CSS}
 
 .status-suggestion {
   background: var(--a3s-blue-soft);
-  color: var(--a3s-blue);
+  color: var(--a3s-blue-ink);
 }
 
 .status-resolved,

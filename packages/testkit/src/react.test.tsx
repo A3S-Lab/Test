@@ -740,6 +740,7 @@ describe("React adapter and review overlay", () => {
     expect(panel.getAttribute("role")).toBe("dialog");
     expect(panel.getAttribute("aria-labelledby")).toBe(title.id);
     expect(panel.getAttribute("aria-describedby")).toBe(description.id);
+    expect(shadowButton("Layout").getAttribute("aria-label")).toBe("Layout");
     expect(shadowButton("Pause").getAttribute("aria-label")).toBe("Pause page animations");
     expect(shadowButton("Auto-send · off").getAttribute("aria-label")).toBe("Turn auto-send on");
     expect(shadowButton("Theme · system").getAttribute("aria-label")).toBe("Change overlay theme; current theme is system");

@@ -31,8 +31,9 @@ button, input, textarea, select {
   --a3s-muted: #aab7ca;
   --a3s-faint: #8190a7;
   --a3s-blue: #4c87ff;
-  --a3s-blue-strong: #2b70ff;
+  --a3s-blue-strong: #1d60db;
   --a3s-blue-soft: #19376c;
+  --a3s-blue-ink: #b8cdff;
   --a3s-violet: #9c87e8;
   --a3s-violet-soft: #2d2750;
   --a3s-green: #3bc89b;
@@ -53,13 +54,14 @@ button, input, textarea, select {
   --a3s-line-strong: #bfd0e8;
   --a3s-text: #101827;
   --a3s-muted: #56657b;
-  --a3s-faint: #718096;
+  --a3s-faint: #5f6f84;
   --a3s-blue: #1264ff;
   --a3s-blue-strong: #084ed0;
   --a3s-blue-soft: #eaf2ff;
+  --a3s-blue-ink: #084ed0;
   --a3s-violet: #7157c9;
   --a3s-violet-soft: #f0edfb;
-  --a3s-green: #0c9b70;
+  --a3s-green: #087858;
   --a3s-green-soft: #e9f8f2;
   --a3s-danger: #c9343f;
   --a3s-danger-soft: #fff0f1;
@@ -78,13 +80,14 @@ button, input, textarea, select {
     --a3s-line-strong: #bfd0e8;
     --a3s-text: #101827;
     --a3s-muted: #56657b;
-    --a3s-faint: #718096;
+    --a3s-faint: #5f6f84;
     --a3s-blue: #1264ff;
     --a3s-blue-strong: #084ed0;
     --a3s-blue-soft: #eaf2ff;
+    --a3s-blue-ink: #084ed0;
     --a3s-violet: #7157c9;
     --a3s-violet-soft: #f0edfb;
-    --a3s-green: #0c9b70;
+    --a3s-green: #087858;
     --a3s-green-soft: #e9f8f2;
     --a3s-danger: #c9343f;
     --a3s-danger-soft: #fff0f1;
@@ -164,7 +167,7 @@ button.danger {
   padding: 0;
   border: 1px solid rgb(255 255 255 / 42%);
   border-radius: 12px;
-  background: var(--a3s-blue);
+  background: var(--a3s-blue-strong);
   color: #ffffff;
   box-shadow: 0 12px 30px rgb(18 100 255 / 30%);
   pointer-events: auto;
@@ -173,7 +176,7 @@ button.danger {
 
 .a3s-launch:hover {
   border-color: #ffffff;
-  background: var(--a3s-blue-strong);
+  background: color-mix(in srgb, var(--a3s-blue-strong) 88%, #000000);
   transform: translateY(-2px);
 }
 
@@ -248,7 +251,7 @@ button.danger {
   width: 27px;
   height: 27px;
   border-radius: 8px;
-  background: var(--a3s-blue);
+  background: var(--a3s-blue-strong);
   color: #ffffff;
   font: 780 8px/1 ui-sans-serif, sans-serif;
   letter-spacing: -.03em;
@@ -356,7 +359,7 @@ button.danger {
 .a3s-settings > .a3s-disclosure[aria-expanded="true"] {
   border-color: color-mix(in srgb, var(--a3s-blue) 28%, transparent);
   background: var(--a3s-blue-soft);
-  color: var(--a3s-blue);
+  color: var(--a3s-blue-ink);
 }
 
 .a3s-tools button.danger {

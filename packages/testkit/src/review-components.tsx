@@ -33,7 +33,7 @@ export function ReviewMarkingToolbar(props: ReviewMarkingToolbarProps) {
     </div>
     <div className="a3s-tool-group">
       {(["text", "draw"] as SelectionMode[]).map((value) => <ToolButton key={value} label={MODE_LABEL[value]} ariaLabel={`Mark ${MODE_LABEL[value].toLowerCase()}`} icon={value} pressed={props.marking && props.mode === value} onClick={() => props.onStartMarking(value)} />)}
-      <ToolButton label="Layout" ariaLabel="Toggle layout mode" icon="layout" pressed={props.layoutMode} title="Toggle Layout Mode (L)" keyShortcut={REVIEW_KEY_SHORTCUTS.layout} onClick={props.onToggleLayout} />
+      <ToolButton label="Layout" ariaLabel="Layout" icon="layout" pressed={props.layoutMode} title="Toggle Layout Mode (L)" keyShortcut={REVIEW_KEY_SHORTCUTS.layout} onClick={props.onToggleLayout} />
     </div>
     <span className="a3s-tool-divider" aria-hidden="true" />
     <div className="a3s-tool-group">
