@@ -38,6 +38,26 @@
       #audit-status:empty {
         display: none;
       }
+      #motion-probe {
+        position: absolute;
+        overflow: hidden;
+        width: 1px;
+        height: 1px;
+        opacity: 0;
+        pointer-events: none;
+      }
+      #motion-probe > span {
+        display: block;
+        animation: fixture-motion 60s linear infinite;
+      }
+      #motion-probe > #paused-motion {
+        animation-play-state: paused;
+      }
+      @keyframes fixture-motion {
+        to {
+          transform: translateX(1px);
+        }
+      }
       #nested {
         width: 420px;
         height: 140px;
@@ -72,7 +92,7 @@
   </head>
   <body>
     <!-- prettier-ignore -->
-    <div id="root"><main><h1>Embedded TestKit E2E</h1><section id="audit-controls" aria-labelledby="audit-controls-title"><h2 id="audit-controls-title">Screen-reader audit controls</h2><p>These controls expose test-only candidate and repair states without DevTools.</p><div class="audit-actions"><button type="button">Seed contract and design candidates</button><label for="audit-repair-state">Repair state</label><select id="audit-repair-state"><option value="needs_input">Clarification needed</option><option value="review_ready">Human review ready</option><option value="resolved">Resolved</option><option value="dismissed">Dismissed</option><option value="cancelled">Cancelled</option><option value="failed">Failed</option></select><button type="button">Apply repair state</button><button type="button">Reset fixture</button><a href="/screen-reader-workflows.json">Audit workflow manifest</a></div><p id="audit-status" role="status" aria-live="polite" aria-atomic="true"></p></section><button id="sticky" data-testid="repair-target">__ACTION_LABEL__</button><button id="host-probe">Host interaction probe</button><button id="zoom-edge" data-testid="zoom-edge">Zoom edge target</button><section id="layout-section" data-testid="layout-section" tabindex="-1">Layout source section</section><div id="nested"><div class="virtual-space"><button id="virtual-row">Virtual row 1</button></div></div><div id="shadow-host"></div></main></div>
+    <div id="root"><main><h1>Embedded TestKit E2E</h1><div id="motion-probe" aria-hidden="true"><span id="running-motion"></span><span id="paused-motion"></span></div><section id="audit-controls" aria-labelledby="audit-controls-title"><h2 id="audit-controls-title">Screen-reader audit controls</h2><p>These controls expose test-only candidate and repair states without DevTools.</p><div class="audit-actions"><button type="button">Seed contract and design candidates</button><label for="audit-repair-state">Repair state</label><select id="audit-repair-state"><option value="needs_input">Clarification needed</option><option value="review_ready">Human review ready</option><option value="resolved">Resolved</option><option value="dismissed">Dismissed</option><option value="cancelled">Cancelled</option><option value="failed">Failed</option></select><button type="button">Apply repair state</button><button type="button">Reset fixture</button><a href="/screen-reader-workflows.json">Audit workflow manifest</a></div><p id="audit-status" role="status" aria-live="polite" aria-atomic="true"></p></section><button id="sticky" data-testid="repair-target">__ACTION_LABEL__</button><button id="host-probe">Host interaction probe</button><button id="zoom-edge" data-testid="zoom-edge">Zoom edge target</button><section id="layout-section" data-testid="layout-section" tabindex="-1">Layout source section</section><div id="nested"><div class="virtual-space"><button id="virtual-row">Virtual row 1</button></div></div><div id="shadow-host"></div></main></div>
     <div id="portal"></div>
     <script>
       window.testkitInitialRepaired = __INITIAL_REPAIRED__;

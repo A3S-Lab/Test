@@ -132,6 +132,10 @@ or style application DOM itself. Submitted findings support human/agent
 replies, accept/reject/reopen review actions, and per-finding lifecycle
 projection.
 
+Animation pause is ownership-safe: Test Kit freezes running and newly started
+page motion while pause is active, then resumes only animations and media it
+actually paused. Motion already paused by the host application stays paused.
+
 For keyboard multi-selection, focus an application element and press `Enter`
 to add it without activating the host control or moving focus into the review
 Shadow DOM. Repeat for additional elements, then press `Shift+Enter` to open

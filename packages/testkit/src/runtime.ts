@@ -67,7 +67,9 @@ class Runtime implements TestKitRuntime, NodeIdentity {
   #pendingRevision = false;
   #shadowRoots = new WeakSet<ShadowRoot>();
   #animationsPaused = false;
+  #pausedAnimations = new Set<Animation>();
   #pausedMedia = new Set<HTMLMediaElement>();
+  #motionPauseFrame: number | null = null;
 
   constructor(options: NormalizedOptions) {
     this.#options = options;
@@ -324,16 +326,25 @@ class Runtime implements TestKitRuntime, NodeIdentity {
     this.#animationsPaused = paused;
     document.documentElement.toggleAttribute("data-a3s-testkit-animations-paused", paused);
     if (paused) {
-      for (const animation of document.getAnimations?.() ?? []) animation.pause();
-      for (const media of document.querySelectorAll<HTMLMediaElement>("video, audio")) {
-        if (!media.paused) {
-          media.pause();
-          this.#pausedMedia.add(media);
+      this.#pauseActiveMotion();
+    } else {
+      if (this.#motionPauseFrame !== null) {
+        window.cancelAnimationFrame(this.#motionPauseFrame);
+        this.#motionPauseFrame = null;
+      }
+      for (const animation of this.#pausedAnimations) {
+        if (animation.playState !== "paused") continue;
+        try {
+          animation.play();
+        } catch {
+          // The host may cancel or detach an animation while review motion is paused.
         }
       }
-    } else {
-      for (const animation of document.getAnimations?.() ?? []) void animation.play();
-      for (const media of this.#pausedMedia) void media.play().catch(() => undefined);
+      this.#pausedAnimations.clear();
+      for (const media of this.#pausedMedia) {
+        if (!media.isConnected || media.ended) continue;
+        void media.play().catch(() => undefined);
+      }
       this.#pausedMedia.clear();
     }
     this.#markChanged();
@@ -341,6 +352,32 @@ class Runtime implements TestKitRuntime, NodeIdentity {
 
   animationsPaused(): boolean {
     return this.#animationsPaused;
+  }
+
+  #pauseActiveMotion(): void {
+    if (!this.#animationsPaused) return;
+    for (const animation of document.getAnimations?.() ?? []) {
+      if (animation.playState !== "running") continue;
+      try {
+        animation.pause();
+        this.#pausedAnimations.add(animation);
+      } catch {
+        // One host animation must not prevent the remaining page motion from pausing.
+      }
+    }
+    for (const media of document.querySelectorAll<HTMLMediaElement>("video, audio")) {
+      if (media.paused) continue;
+      try {
+        media.pause();
+        this.#pausedMedia.add(media);
+      } catch {
+        // Media implementations can reject control while their source is changing.
+      }
+    }
+    this.#motionPauseFrame = window.requestAnimationFrame(() => {
+      this.#motionPauseFrame = null;
+      this.#pauseActiveMotion();
+    });
   }
 
   register(registration: BoundaryRegistration): () => void {

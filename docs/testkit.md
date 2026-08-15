@@ -461,6 +461,11 @@ bindings through `aria-keyshortcuts`. Review preferences includes a
 keyboard-reference section that remains available to keyboard and
 screen-reader navigation and states the same ownership boundary.
 
+Motion pause preserves host ownership. Test Kit pauses only animations and
+media that are actively running, continues to freeze new motion while the
+review pause is enabled, and resumes only the motion it recorded. Animations
+or media that the application had already paused are never started by Test Kit.
+
 Keyboard multi-selection remains in the host application until it is ready to
 describe. Focus an application element and press `Enter` to add it; the polite
 announcer reports the bounded count without mounting the finding editor or

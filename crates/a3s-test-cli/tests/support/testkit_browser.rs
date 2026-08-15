@@ -397,6 +397,11 @@ fn exercise_keyboard_controls(command: &impl Fn(&[&str]) -> Output) {
         "wait for the keyboard-opened panel",
         "Boolean(document.querySelector('[data-a3s-testkit-overlay]').shadowRoot.querySelector('.a3s-panel'))",
     );
+    wait_for(
+        command,
+        "wait for the fixture motion ownership baseline",
+        "(()=>{const state=(id)=>document.getAnimations().find(animation=>animation.effect?.target?.id===id)?.playState;return state('running-motion')==='running'&&state('paused-motion')==='paused'})()",
+    );
     run(
         command,
         "pause page motion from the keyboard",
@@ -405,7 +410,17 @@ fn exercise_keyboard_controls(command: &impl Fn(&[&str]) -> Output) {
     wait_for(
         command,
         "wait for the keyboard pause state",
-        "document.documentElement.hasAttribute('data-a3s-testkit-animations-paused')",
+        "(()=>{const state=(id)=>document.getAnimations().find(animation=>animation.effect?.target?.id===id)?.playState;return document.documentElement.hasAttribute('data-a3s-testkit-animations-paused')&&state('running-motion')==='paused'&&state('paused-motion')==='paused'})()",
+    );
+    encoded_eval(
+        command,
+        "start new page motion while review motion is paused",
+        "(()=>{const element=document.createElement('span');element.id='late-motion';document.querySelector('#motion-probe').append(element);return JSON.stringify(true)})()",
+    );
+    wait_for(
+        command,
+        "wait for newly started page motion to pause",
+        "document.getAnimations().find(animation=>animation.effect?.target?.id==='late-motion')?.playState==='paused'",
     );
     run(
         command,
@@ -415,7 +430,7 @@ fn exercise_keyboard_controls(command: &impl Fn(&[&str]) -> Output) {
     wait_for(
         command,
         "wait for the keyboard resume state",
-        "!document.documentElement.hasAttribute('data-a3s-testkit-animations-paused')",
+        "(()=>{const state=(id)=>document.getAnimations().find(animation=>animation.effect?.target?.id===id)?.playState;return !document.documentElement.hasAttribute('data-a3s-testkit-animations-paused')&&state('running-motion')==='running'&&state('late-motion')==='running'&&state('paused-motion')==='paused'})()",
     );
     run(command, "hide markers from the keyboard", &["press", "h"]);
     wait_for(

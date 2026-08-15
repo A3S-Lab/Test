@@ -184,16 +184,26 @@ fn real_agent_browser_runs_the_website_testkit_suite() {
     let report: serde_json::Value =
         serde_json::from_slice(&output.stdout).expect("website Test Kit JSON run report");
     assert_eq!(report["status"], "passed");
-    assert_eq!(report["scenarios"][0]["status"], "passed");
-    assert!(report["scenarios"][0]["cleanup_error"].is_null());
+    let scenarios = report["scenarios"]
+        .as_array()
+        .expect("website E2E scenarios");
+    assert_eq!(scenarios.len(), 2);
+    for scenario in scenarios {
+        assert_eq!(scenario["status"], "passed");
+        assert!(scenario["cleanup_error"].is_null());
+    }
 
-    for step in [
-        "review-evidence",
-        "semantic-evidence",
-        "console-evidence",
-        "page-error-evidence",
+    for (scenario_index, step) in [
+        (0, "review-evidence"),
+        (0, "semantic-evidence"),
+        (0, "console-evidence"),
+        (0, "page-error-evidence"),
+        (1, "mobile-layout-evidence"),
+        (1, "mobile-semantic-evidence"),
+        (1, "mobile-console-evidence"),
+        (1, "mobile-page-error-evidence"),
     ] {
-        let evidence_path = report["scenarios"][0]["steps"]
+        let evidence_path = report["scenarios"][scenario_index]["steps"]
             .as_array()
             .expect("website E2E steps")
             .iter()
@@ -1013,36 +1023,51 @@ fn assert_nonempty_artifact(workspace: &Path, path: &Path) {
 }
 
 fn assert_empty_browser_diagnostics(report: &serde_json::Value, workspace: &Path) {
-    for (step, pointer, label) in [
-        ("console-evidence", "/data/messages", "console messages"),
-        ("page-error-evidence", "/data/errors", "page errors"),
-    ] {
-        let evidence_path = report["scenarios"][0]["steps"]
-            .as_array()
-            .expect("website E2E steps")
-            .iter()
-            .find(|entry| entry["id"] == step)
-            .and_then(|entry| entry.pointer("/output/evidence/0/path"))
-            .and_then(serde_json::Value::as_str)
-            .map(PathBuf::from)
-            .unwrap_or_else(|| panic!("website E2E step {step} omitted its evidence path"));
-        let evidence_path = if evidence_path.is_absolute() {
-            evidence_path
-        } else {
-            workspace.join(evidence_path)
-        };
-        let evidence: serde_json::Value = serde_json::from_slice(
-            &std::fs::read(&evidence_path)
-                .unwrap_or_else(|error| panic!("read {label} evidence: {error}")),
-        )
-        .unwrap_or_else(|error| panic!("parse {label} evidence: {error}"));
-        assert_eq!(
-            evidence
-                .pointer(pointer)
-                .and_then(serde_json::Value::as_array),
-            Some(&Vec::new()),
-            "built website emitted unexpected {label}: {evidence}"
-        );
+    for scenario in report["scenarios"]
+        .as_array()
+        .expect("website E2E scenarios")
+    {
+        let scenario_id = scenario["id"].as_str().unwrap_or("unknown");
+        for (step_suffix, pointer, label) in [
+            ("console-evidence", "/data/messages", "console messages"),
+            ("page-error-evidence", "/data/errors", "page errors"),
+        ] {
+            let step = scenario["steps"]
+                .as_array()
+                .expect("website E2E steps")
+                .iter()
+                .find(|entry| {
+                    entry["id"]
+                        .as_str()
+                        .is_some_and(|id| id.ends_with(step_suffix))
+                })
+                .unwrap_or_else(|| {
+                    panic!("website E2E scenario {scenario_id} omitted {step_suffix}")
+                });
+            let step_id = step["id"].as_str().unwrap_or(step_suffix);
+            let evidence_path = step
+                .pointer("/output/evidence/0/path")
+                .and_then(serde_json::Value::as_str)
+                .map(PathBuf::from)
+                .unwrap_or_else(|| panic!("website E2E step {step_id} omitted its evidence path"));
+            let evidence_path = if evidence_path.is_absolute() {
+                evidence_path
+            } else {
+                workspace.join(evidence_path)
+            };
+            let evidence: serde_json::Value = serde_json::from_slice(
+                &std::fs::read(&evidence_path)
+                    .unwrap_or_else(|error| panic!("read {label} evidence: {error}")),
+            )
+            .unwrap_or_else(|error| panic!("parse {label} evidence: {error}"));
+            assert_eq!(
+                evidence
+                    .pointer(pointer)
+                    .and_then(serde_json::Value::as_array),
+                Some(&Vec::new()),
+                "built website scenario {scenario_id} emitted unexpected {label}: {evidence}"
+            );
+        }
     }
 }
 

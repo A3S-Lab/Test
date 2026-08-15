@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { installTestKit, registerBoundary } from "./runtime";
 import type { DesignAuditReport, QualityReport, RepairDraft, RepairEvent } from "./types";
 import { setRect } from "./test-setup";
@@ -551,6 +551,82 @@ describe("page context runtime", () => {
     expect(() => bridge.dispose()).not.toThrow();
     expect(document.documentElement.hasAttribute("data-a3s-testkit-animations-paused")).toBe(false);
     expect(() => bridge.dispose()).not.toThrow();
+  });
+
+  it("restores only motion paused by Test Kit and freezes motion started while paused", () => {
+    type MutableAnimation = Animation & { setPlayState(value: AnimationPlayState): void };
+    const animation = (initialState: AnimationPlayState): MutableAnimation => {
+      let playState = initialState;
+      return {
+        get playState() { return playState; },
+        pause: vi.fn(() => { playState = "paused"; }),
+        play: vi.fn(() => { playState = "running"; }),
+        setPlayState(value: AnimationPlayState) { playState = value; },
+      } as unknown as MutableAnimation;
+    };
+    const frameCallbacks = new Map<number, FrameRequestCallback>();
+    let frameSequence = 0;
+    vi.spyOn(window, "requestAnimationFrame").mockImplementation((callback) => {
+      const id = ++frameSequence;
+      frameCallbacks.set(id, callback);
+      return id;
+    });
+    vi.spyOn(window, "cancelAnimationFrame").mockImplementation((id) => {
+      frameCallbacks.delete(id);
+    });
+
+    const running = animation("running");
+    const alreadyPaused = animation("paused");
+    const later = animation("idle");
+    const animations = [running, alreadyPaused, later];
+    Object.defineProperty(document, "getAnimations", {
+      configurable: true,
+      value: vi.fn(() => animations),
+    });
+
+    const playingMedia = document.createElement("video");
+    const alreadyPausedMedia = document.createElement("audio");
+    let playingMediaPaused = false;
+    Object.defineProperty(playingMedia, "paused", {
+      configurable: true,
+      get: () => playingMediaPaused,
+    });
+    Object.defineProperty(alreadyPausedMedia, "paused", {
+      configurable: true,
+      get: () => true,
+    });
+    const pausePlayingMedia = vi.spyOn(playingMedia, "pause").mockImplementation(() => {
+      playingMediaPaused = true;
+    });
+    const playPlayingMedia = vi.spyOn(playingMedia, "play").mockImplementation(() => {
+      playingMediaPaused = false;
+      return Promise.resolve();
+    });
+    const playAlreadyPausedMedia = vi.spyOn(alreadyPausedMedia, "play").mockResolvedValue();
+    document.body.append(playingMedia, alreadyPausedMedia);
+
+    const bridge = installTestKit({ enabled: true, page: { id: "motion-ownership" }, repairStorage: "memory" });
+    bridge.setAnimationsPaused(true);
+
+    expect(running.pause).toHaveBeenCalledOnce();
+    expect(alreadyPaused.pause).not.toHaveBeenCalled();
+    expect(later.pause).not.toHaveBeenCalled();
+    expect(pausePlayingMedia).toHaveBeenCalledOnce();
+
+    later.setPlayState("running");
+    const nextFrame = frameCallbacks.values().next().value;
+    expect(nextFrame).toBeTypeOf("function");
+    frameCallbacks.clear();
+    nextFrame!(16);
+    expect(later.pause).toHaveBeenCalledOnce();
+
+    bridge.setAnimationsPaused(false);
+    expect(running.play).toHaveBeenCalledOnce();
+    expect(later.play).toHaveBeenCalledOnce();
+    expect(alreadyPaused.play).not.toHaveBeenCalled();
+    expect(playPlayingMedia).toHaveBeenCalledOnce();
+    expect(playAlreadyPausedMedia).not.toHaveBeenCalled();
+    expect(frameCallbacks).toHaveLength(0);
   });
 });
 

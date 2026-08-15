@@ -28,6 +28,10 @@ suite "website-testkit-experience" {
             text = "a3s-experience-submit"
         }
 
+        expect "motion-sequence-active" {
+            visible = css(".test-experience-stage.is-motion-active")
+        }
+
         click "open-review" {
             target = role("button", "打开点选模式")
         }
@@ -41,7 +45,7 @@ suite "website-testkit-experience" {
         }
 
         click "mark-single" {
-            target = ref("@e43")
+            target = role("button", "Mark element")
         }
 
         snapshot "single-marking-state" {
@@ -57,7 +61,7 @@ suite "website-testkit-experience" {
         }
 
         fill "single-instruction" {
-            target = ref("@e58")
+            target = role("textbox", "Requested fix")
             value = "Increase the action label contrast without changing layout"
         }
 
@@ -66,7 +70,7 @@ suite "website-testkit-experience" {
         }
 
         click "send-single" {
-            target = ref("@e44")
+            target = role("button", "Send and auto-fix")
         }
 
         wait "single-receipt" {
@@ -78,7 +82,7 @@ suite "website-testkit-experience" {
         }
 
         click "mark-first-batch-item" {
-            target = ref("@e44")
+            target = role("button", "Mark element")
         }
 
         snapshot "first-batch-marking-state" {
@@ -94,7 +98,7 @@ suite "website-testkit-experience" {
         }
 
         fill "first-batch-instruction" {
-            target = ref("@e60")
+            target = role("textbox", "Requested fix")
             value = "Clarify the context refresh state"
         }
 
@@ -103,7 +107,7 @@ suite "website-testkit-experience" {
         }
 
         click "save-first-batch-draft" {
-            target = ref("@e44")
+            target = role("button", "Add draft")
         }
 
         snapshot "after-first-batch-draft" {
@@ -111,7 +115,7 @@ suite "website-testkit-experience" {
         }
 
         click "mark-second-batch-item" {
-            target = ref("@e45")
+            target = role("button", "Mark element")
         }
 
         snapshot "second-batch-marking-state" {
@@ -127,7 +131,7 @@ suite "website-testkit-experience" {
         }
 
         fill "second-batch-instruction" {
-            target = ref("@e61")
+            target = role("textbox", "Requested fix")
             value = "Announce which installer command was copied"
         }
 
@@ -136,7 +140,7 @@ suite "website-testkit-experience" {
         }
 
         click "save-second-batch-draft" {
-            target = ref("@e45")
+            target = role("button", "Add draft")
         }
 
         snapshot "batch-ready" {
@@ -144,7 +148,7 @@ suite "website-testkit-experience" {
         }
 
         click "send-batch" {
-            target = ref("@e64")
+            target = role("button", "Send selected (2)")
         }
 
         wait "batch-receipt" {
@@ -167,6 +171,69 @@ suite "website-testkit-experience" {
 
         page_errors "page-error-evidence" {
             path = "evidence/page-errors.json"
+            clear = false
+        }
+    }
+
+    scenario "mobile-review-surface" {
+        name = "Use the embedded review controls on a narrow viewport"
+        surface = "web"
+        timeout_ms = 60000
+
+        viewport "mobile" {
+            width = 390
+            height = 844
+            scale = 1
+        }
+
+        navigate "open-mobile-homepage" {
+            url = "http://127.0.0.1:4173/Test/"
+        }
+
+        wait "mobile-homepage-ready" {
+            text = "让 Agent 看懂页面"
+        }
+
+        expect "mobile-rendered-context" {
+            text = "a3s-experience-submit"
+        }
+
+        click "mobile-open-review" {
+            target = role("button", "打开点选模式")
+        }
+
+        wait "mobile-overlay-mounted" {
+            text = "点选模式已打开"
+        }
+
+        snapshot "mobile-overlay-controls" {
+            interactive = true
+        }
+
+        click "mobile-open-layout" {
+            target = role("button", "Layout")
+        }
+
+        snapshot "mobile-layout-controls" {
+            interactive = true
+        }
+
+        screenshot "mobile-layout-evidence" {
+            path = "screenshots/website-testkit-mobile.png"
+        }
+
+        accessibility "mobile-semantic-evidence" {
+            path = "evidence/accessibility-mobile.json"
+            interactive = false
+        }
+
+        console "mobile-console-evidence" {
+            path = "evidence/console-mobile.json"
+            clear = false
+        }
+
+        page_errors "mobile-page-error-evidence" {
+            path = "evidence/page-errors-mobile.json"
             clear = false
         }
     }

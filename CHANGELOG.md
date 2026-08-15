@@ -39,6 +39,14 @@
 
 ### Fixed
 
+- Made page-motion pause ownership-safe. Test Kit now records only running
+  animations and playing media that it actually pauses, freezes motion that
+  starts while review pause remains active, and resumes only that owned set;
+  host animations or media that were already paused stay paused. Unit and real
+  Chromium regressions cover the initial, late-starting, resumed, and
+  pre-paused states. The production-website E2E now uses semantic Shadow DOM
+  targets and also retains mobile Layout screenshots, accessibility output,
+  and empty browser diagnostics.
 - Bound screen-reader audit verification to a real Git commit and read the
   canonical workflow manifest plus Test Kit version from that revision. The
   location-independent verification v2 record now includes byte length and

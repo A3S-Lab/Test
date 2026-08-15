@@ -232,6 +232,10 @@ function Fixture() {
         as="main"
       >
         <h1>Embedded TestKit E2E</h1>
+        <div id="motion-probe" aria-hidden="true">
+          <span id="running-motion" />
+          <span id="paused-motion" />
+        </div>
         <section id="audit-controls" aria-labelledby="audit-controls-title">
           <h2 id="audit-controls-title">Screen-reader audit controls</h2>
           <p>
