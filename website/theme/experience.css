@@ -687,36 +687,76 @@
   transform: rotate(45deg);
 }
 
+.test-stage-timeline {
+  position: relative;
+  min-height: 44px;
+  padding-right: 42px;
+}
+
+.test-stage-timeline::before,
+.test-stage-timeline::after {
+  position: absolute;
+  z-index: 0;
+  top: 50%;
+  left: 10%;
+  border-top: 1px solid var(--test-line-strong);
+  content: '';
+  pointer-events: none;
+  transform: translateY(-50%);
+}
+
+.test-stage-timeline::before {
+  right: calc(10% + 42px);
+}
+
+.test-stage-timeline::after {
+  width: 0;
+  border-top-width: 2px;
+  border-color: var(--test-accent);
+  transition: width 420ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.test-stage-timeline.is-motion-step-1::after {
+  width: 18%;
+}
+
+.test-stage-timeline.is-motion-step-2::after {
+  width: 36%;
+}
+
+.test-stage-timeline.is-motion-step-3::after {
+  width: 54%;
+}
+
+.test-stage-timeline.is-motion-step-4::after {
+  width: 72%;
+}
+
 .test-stage-status {
   position: relative;
   display: grid;
   margin: 0;
-  padding: 0 18px;
+  padding: 0 8px;
   list-style: none;
   grid-template-columns: repeat(5, minmax(0, 1fr));
-}
-
-.test-stage-status::before {
-  position: absolute;
-  top: 50%;
-  right: 10%;
-  left: 10%;
-  border-top: 1px solid var(--test-line-strong);
-  content: '';
 }
 
 .test-stage-status li {
   position: relative;
   z-index: 1;
   display: flex;
-  min-height: 42px;
-  padding: 0 16px;
+  min-height: 44px;
+  padding: 0 10px;
   background: var(--test-bg);
   align-items: center;
   justify-content: center;
   gap: 8px;
   color: var(--test-muted);
   font-size: 10px;
+  transition:
+    color 220ms ease,
+    font-weight 220ms ease,
+    transform 280ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .test-stage-status li > span {
@@ -729,18 +769,66 @@
   color: var(--test-faint);
   font: 650 8px/1 var(--test-mono);
   place-items: center;
+  transition:
+    background-color 220ms ease,
+    border-color 220ms ease,
+    color 220ms ease,
+    box-shadow 280ms ease;
 }
 
-.test-stage-status li:first-child > span,
-.test-stage-status li:nth-child(2) > span,
-.test-stage-status li:nth-child(3) > span {
+.test-stage-status li.is-complete > span {
   border-color: #9bb9eb;
   background: var(--test-accent-soft);
   color: var(--test-accent);
+}
+
+.test-stage-status li.is-current {
+  color: var(--test-accent);
+  font-weight: 680;
+  transform: translateY(-1px);
+}
+
+.test-stage-status li.is-current > span {
+  border-color: var(--test-accent);
+  background: var(--test-accent);
+  box-shadow: 0 4px 10px rgb(18 100 255 / 20%);
+  color: #ffffff;
 }
 
 .test-stage-status li.is-ready > span {
   border-color: var(--test-evidence);
   background: var(--test-evidence);
   color: #ffffff;
+}
+
+.test-motion-toggle {
+  position: absolute;
+  z-index: 2;
+  top: 7px;
+  right: 6px;
+  display: grid;
+  width: 30px;
+  height: 30px;
+  min-height: 30px;
+  padding: 0;
+  border: 1px solid var(--test-line-strong);
+  border-radius: 8px;
+  background: var(--test-surface);
+  color: var(--test-muted);
+  cursor: pointer;
+  place-items: center;
+  transition:
+    border-color 160ms ease,
+    color 160ms ease,
+    transform 160ms ease;
+}
+
+.test-motion-toggle:hover {
+  border-color: var(--test-accent);
+  color: var(--test-accent);
+  transform: translateY(-1px);
+}
+
+.test-motion-toggle:active {
+  transform: translateY(1px);
 }

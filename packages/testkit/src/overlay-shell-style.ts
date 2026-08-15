@@ -18,7 +18,7 @@ button, input, textarea, select {
   inset: 0;
   pointer-events: none;
   color: var(--a3s-text);
-  font: 13px/1.45 ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font: 12.5px/1.45 ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   --a3s-marker-color: #7157c9;
   --a3s-wireframe-fade: .16;
   --a3s-bg: #0b1426;
@@ -42,10 +42,10 @@ button, input, textarea, select {
   --a3s-danger-soft: #471f29;
   --a3s-warning: #f6c45b;
   --a3s-warning-soft: #3c3015;
-  --a3s-shadow: 0 24px 64px rgb(0 0 0 / 38%);
-  --a3s-toolbar: #17191f;
-  --a3s-toolbar-raised: #22252d;
-  --a3s-toolbar-line: rgb(255 255 255 / 11%);
+  --a3s-shadow: 0 28px 72px rgb(0 0 0 / 36%);
+  --a3s-toolbar: #15171c;
+  --a3s-toolbar-raised: #252830;
+  --a3s-toolbar-line: rgb(255 255 255 / 12%);
   --a3s-toolbar-text: #f7f8fb;
   --a3s-toolbar-muted: #a7afbd;
 }
@@ -72,7 +72,7 @@ button, input, textarea, select {
   --a3s-danger-soft: #fff0f1;
   --a3s-warning: #8a5200;
   --a3s-warning-soft: #fff3d4;
-  --a3s-shadow: 0 24px 64px rgb(36 76 137 / 20%);
+  --a3s-shadow: 0 28px 72px rgb(36 76 137 / 18%);
 }
 
 @media (prefers-color-scheme: light) {
@@ -98,7 +98,7 @@ button, input, textarea, select {
     --a3s-danger-soft: #fff0f1;
     --a3s-warning: #8a5200;
     --a3s-warning-soft: #fff3d4;
-    --a3s-shadow: 0 24px 64px rgb(36 76 137 / 20%);
+    --a3s-shadow: 0 28px 72px rgb(36 76 137 / 18%);
   }
 }
 
@@ -163,18 +163,18 @@ button.danger {
 
 .a3s-launch {
   position: fixed;
-  right: 18px;
-  bottom: 18px;
+  right: 20px;
+  bottom: 20px;
   display: grid;
   width: 44px;
   height: 44px;
   min-height: 44px;
   padding: 0;
   border: 1px solid var(--a3s-toolbar-line);
-  border-radius: 50%;
+  border-radius: 13px;
   background: var(--a3s-toolbar);
   color: #ffffff;
-  box-shadow: 0 12px 32px rgb(5 10 20 / 30%);
+  box-shadow: 0 14px 36px rgb(5 10 20 / 28%);
   pointer-events: auto;
   place-items: center;
   transform-origin: center;
@@ -184,7 +184,7 @@ button.danger {
 .a3s-launch:hover {
   border-color: rgb(255 255 255 / 26%);
   background: var(--a3s-toolbar-raised);
-  transform: translateY(-2px) scale(1.02);
+  transform: translateY(-2px);
 }
 
 .a3s-launch.is-active {
@@ -226,9 +226,9 @@ button.danger {
 
 .a3s-panel {
   position: fixed;
-  right: 18px;
-  bottom: 18px;
-  width: min(330px, calc(100vw - 36px));
+  right: 20px;
+  bottom: 20px;
+  width: min(346px, calc(100vw - 40px));
   overflow: visible;
   border: 0;
   background: transparent;
@@ -252,39 +252,50 @@ button.danger {
   display: flex;
   min-width: 0;
   height: 52px;
-  padding: 6px;
+  padding: 5px;
   border: 1px solid var(--a3s-toolbar-line);
-  border-radius: 17px;
-  background: color-mix(in srgb, var(--a3s-toolbar) 96%, transparent);
-  box-shadow: 0 18px 48px rgb(5 10 20 / 28%), 0 2px 8px rgb(5 10 20 / 20%);
+  border-radius: 15px;
+  background: color-mix(in srgb, var(--a3s-toolbar) 97%, transparent);
+  box-shadow: 0 20px 52px rgb(5 10 20 / 26%), 0 2px 8px rgb(5 10 20 / 18%);
   color: var(--a3s-toolbar-text);
   pointer-events: auto;
   align-items: center;
-  gap: 7px;
+  gap: 6px;
+  backdrop-filter: blur(14px);
 }
 
 .a3s-command-bar > header {
   display: grid;
-  min-width: 67px;
-  height: 40px;
-  padding: 0 4px 0 2px;
+  min-width: 66px;
+  height: 42px;
+  padding: 0 3px 0 1px;
   border-right: 1px solid var(--a3s-toolbar-line);
-  grid-template-columns: 30px 28px;
+  grid-template-columns: 32px 28px;
   align-items: center;
   gap: 3px;
 }
 
 .a3s-panel-mark {
   display: grid;
-  width: 28px;
-  height: 28px;
-  border-radius: 8px;
+  width: 30px;
+  height: 30px;
+  border-radius: 9px;
   background: #1264ff;
   color: #ffffff;
   font: 780 8px/1 ui-sans-serif, sans-serif;
   letter-spacing: -.03em;
   place-items: center;
-  box-shadow: inset 0 1px 0 rgb(255 255 255 / 24%);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 26%), 0 5px 12px rgb(18 100 255 / 22%);
+}
+
+.a3s-panel-mark > svg {
+  width: 19px;
+  height: 19px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.45;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 .a3s-command-bar > header > span:nth-child(2) {
@@ -371,8 +382,9 @@ button.danger {
 
 .a3s-tool-group-primary {
   padding: 2px;
+  border: 1px solid rgb(255 255 255 / 7%);
   border-radius: 10px;
-  background: rgb(255 255 255 / 7%);
+  background: rgb(255 255 255 / 5%);
 }
 
 .a3s-tool-divider {
@@ -386,9 +398,9 @@ button.danger {
 .a3s-settings > .a3s-disclosure {
   position: relative;
   display: grid;
-  width: 34px;
-  height: 34px;
-  min-height: 34px;
+  width: 36px;
+  height: 36px;
+  min-height: 36px;
   padding: 0;
   border-color: transparent;
   border-radius: 8px;
@@ -407,9 +419,10 @@ button.danger {
 }
 
 .a3s-tool-group-primary button.selected {
-  border-color: rgb(255 255 255 / 18%);
-  background: #1264ff;
+  border-color: rgb(255 255 255 / 19%);
+  background: #7157c9;
   color: #ffffff;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 18%);
 }
 
 .a3s-tools button.danger {
@@ -466,11 +479,11 @@ button.danger {
   right: 0;
   bottom: calc(100% + 12px);
   display: grid;
-  width: min(430px, calc(100vw - 36px));
+  width: min(416px, calc(100vw - 40px));
   min-height: 58px;
   padding: 8px;
   border: 1px solid var(--a3s-toolbar-line);
-  border-radius: 16px;
+  border-radius: 14px;
   background: color-mix(in srgb, var(--a3s-toolbar) 97%, transparent);
   box-shadow: 0 18px 48px rgb(5 10 20 / 30%);
   color: var(--a3s-toolbar-text);
@@ -537,12 +550,12 @@ button.danger {
 
 .a3s-root[data-dock="left"] .a3s-launch {
   right: auto;
-  left: 18px;
+  left: 20px;
 }
 
 .a3s-root[data-dock="left"] .a3s-panel {
   right: auto;
-  left: 18px;
+  left: 20px;
   transform-origin: left bottom;
 }
 

@@ -19,7 +19,7 @@ related_targets: ["website/theme/home-copy.ts","website/theme/home.css","website
 
 - Approved comp: `.impeccable/mocks/comp-b-wide-evidence-stage.png`.
 - Composition: a shallow promise band above one broad evidence stage. Rendered page occupies about 56%, live context about 24%, and review/evidence about 20%; a slim installer rail closes the viewport.
-- Memorable moment: the visitor opens the real review layer over the highlighted order action, while the adjacent inspector reports that rendered element's current revision, semantic identity, source boundary, locator, and geometry.
+- Memorable moment: a pausable five-stage walkthrough scans, locates, annotates, and dispatches the highlighted order action. The visitor can then open the real compact review dock, where the target-attached editor preserves the adjacent live inspector and batch workspace.
 
 ## Fidelity inventory
 

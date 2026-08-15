@@ -12,7 +12,7 @@ ${OVERLAY_SHELL_CSS}
   margin: 0;
   padding: 9px 12px;
   border: 1px solid var(--a3s-toolbar-line);
-  border-radius: 12px;
+  border-radius: 10px;
   background: var(--a3s-toolbar);
   box-shadow: 0 14px 36px rgb(5 10 20 / 28%);
   color: var(--a3s-toolbar-text);
@@ -42,10 +42,10 @@ ${OVERLAY_SHELL_CSS}
   right: 0;
   bottom: calc(100% + 10px);
   display: grid;
-  width: min(420px, calc(100vw - 24px));
+  width: min(440px, calc(100vw - 24px));
   max-height: min(680px, calc(100vh - 92px));
   overflow: hidden;
-  border: 1px solid var(--a3s-line);
+  border: 0;
   border-radius: 14px;
   background: var(--a3s-panel);
   box-shadow: var(--a3s-shadow);
@@ -65,7 +65,8 @@ ${OVERLAY_SHELL_CSS}
 .a3s-workspace-header {
   display: flex;
   min-width: 0;
-  padding: 0 10px 0 14px;
+  min-height: 52px;
+  padding: 0 11px 0 15px;
   border-bottom: 1px solid var(--a3s-line);
   align-items: center;
   justify-content: space-between;
@@ -83,7 +84,7 @@ ${OVERLAY_SHELL_CSS}
 
 .a3s-workspace-header strong {
   color: var(--a3s-text);
-  font-size: 13px;
+  font-size: 13.5px;
 }
 
 .a3s-workspace-header small {
@@ -100,7 +101,7 @@ ${OVERLAY_SHELL_CSS}
 
 .a3s-workspace > footer {
   display: flex;
-  padding: 9px 10px;
+  padding: 11px 12px;
   border-top: 1px solid var(--a3s-line);
   background: var(--a3s-bg);
   flex-wrap: wrap;
@@ -120,9 +121,9 @@ ${OVERLAY_SHELL_CSS}
 }
 
 .a3s-workspace > footer button {
-  min-height: 30px;
+  min-height: 32px;
   flex: 0 0 auto;
-  padding: 0 8px;
+  padding: 0 9px;
   font-size: 10px;
 }
 
@@ -147,7 +148,7 @@ ${OVERLAY_SHELL_CSS}
   max-height: min(610px, calc(100vh - 92px));
   padding: 14px;
   overflow: auto;
-  border: 1px solid var(--a3s-line);
+  border: 0;
   border-radius: 14px;
   background: var(--a3s-panel);
   box-shadow: var(--a3s-shadow);
@@ -193,6 +194,21 @@ ${OVERLAY_SHELL_CSS}
   border-radius: 8px;
   background: var(--a3s-bg);
   color: var(--a3s-text);
+}
+
+.a3s-editor textarea::placeholder,
+.a3s-reply-label textarea::placeholder,
+.a3s-settings input::placeholder,
+.a3s-layout input::placeholder,
+.a3s-catalog input::placeholder {
+  color: var(--a3s-faint);
+  opacity: 1;
+}
+
+.a3s-editor-request textarea:focus-visible {
+  border-color: var(--a3s-marker-color);
+  outline: 2px solid color-mix(in srgb, var(--a3s-marker-color) 28%, transparent);
+  outline-offset: 1px;
 }
 
 .a3s-settings input[type="color"] {
@@ -448,15 +464,15 @@ ${OVERLAY_MARKING_CSS}
   min-height: 88px;
   padding: 10px 12px 12px;
   flex-direction: column;
-  gap: 8px;
+  gap: 9px;
 }
 
 .a3s-item {
   display: flex;
-  padding: 10px;
+  padding: 11px;
   border: 1px solid var(--a3s-line);
   border-radius: 10px;
-  background: var(--a3s-soft);
+  background: var(--a3s-panel);
   flex-direction: column;
   gap: 7px;
 }
@@ -569,33 +585,40 @@ ${OVERLAY_MARKING_CSS}
   .a3s-launch,
   .a3s-root[data-dock="left"] .a3s-launch {
     right: 12px;
-    bottom: 12px;
+    bottom: max(12px, env(safe-area-inset-bottom));
     left: auto;
   }
 
   .a3s-panel,
   .a3s-root[data-dock="left"] .a3s-panel {
     right: 8px;
-    bottom: 12px;
+    bottom: max(8px, env(safe-area-inset-bottom));
     left: 8px;
     width: auto;
   }
 
   .a3s-command-bar {
-    height: 52px;
-    min-height: 52px;
+    height: 58px;
+    min-height: 58px;
     align-items: center;
   }
 
   .a3s-command-bar > header {
     min-width: 64px;
-    height: 40px;
+    height: 46px;
     align-self: center;
     grid-template-columns: 28px 28px;
   }
 
   .a3s-toolbar-core {
     flex-wrap: nowrap;
+  }
+
+  .a3s-tools button,
+  .a3s-settings > .a3s-disclosure {
+    width: 40px;
+    height: 40px;
+    min-height: 40px;
   }
 
   .a3s-tool-tray,
@@ -628,7 +651,7 @@ ${OVERLAY_MARKING_CSS}
   .a3s-root[data-dock="left"] .a3s-settings-content {
     position: fixed;
     right: 8px;
-    bottom: 72px;
+    bottom: calc(78px + env(safe-area-inset-bottom));
     left: 8px;
     width: auto;
     max-height: calc(100% - 80px);
@@ -637,7 +660,7 @@ ${OVERLAY_MARKING_CSS}
   .a3s-editor-popover {
     top: auto;
     right: 8px;
-    bottom: 72px;
+    bottom: calc(78px + env(safe-area-inset-bottom));
     left: 8px;
     width: auto;
     max-height: calc(100% - 80px);
@@ -672,8 +695,9 @@ ${OVERLAY_MARKING_CSS}
 
   .a3s-tools button,
   .a3s-settings > .a3s-disclosure {
-    width: 32px;
-    height: 34px;
+    width: 38px;
+    height: 38px;
+    min-height: 38px;
   }
 }
 

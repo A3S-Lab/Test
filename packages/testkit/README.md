@@ -132,6 +132,10 @@ or style application DOM itself. Submitted findings support human/agent
 replies, accept/reject/reopen review actions, and per-finding lifecycle
 projection.
 
+The compact review dock keeps marking controls available without covering the
+application. Target-attached editors preserve page context, while saved drafts
+move into a separate workspace with pinned single and batch send actions.
+
 Animation pause is ownership-safe: Test Kit freezes running and newly started
 page motion while pause is active, then resumes only animations and media it
 actually paused. Motion already paused by the host application stays paused.

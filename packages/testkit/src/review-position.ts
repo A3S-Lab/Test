@@ -17,7 +17,7 @@ export function reviewEditorPlacement(
 
   const gutter = 12;
   const gap = 14;
-  const width = Math.min(376, window.innerWidth - gutter * 2);
+  const width = Math.min(360, window.innerWidth - gutter * 2);
   const estimatedHeight = Math.min(430, window.innerHeight - gutter * 2);
   const roomOnRight = window.innerWidth - (rect.x + rect.width);
   const side = roomOnRight >= width + gap ? "right" : "left";

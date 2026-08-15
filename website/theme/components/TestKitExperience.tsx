@@ -5,6 +5,8 @@ import {
   CursorClick,
   Package,
   PaperPlaneTilt,
+  Pause,
+  Play,
   Scan,
   ShieldCheck,
   ShoppingCartSimple,
@@ -318,18 +320,40 @@ export function TestKitExperience({
   const [refreshKey, setRefreshKey] = useState(0);
   const [repairs, setRepairs] = useState<SubmittedRepair[]>([]);
   const [motionActive, setMotionActive] = useState(false);
+  const [motionPaused, setMotionPaused] = useState(false);
+  const [motionStep, setMotionStep] = useState(0);
   const stageRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const stage = stageRef.current;
     if (!stage || typeof IntersectionObserver === 'undefined') return;
     const observer = new IntersectionObserver(
-      ([entry]) => setMotionActive(Boolean(entry?.isIntersecting)),
+      ([entry]) => {
+        const active = Boolean(entry?.isIntersecting);
+        setMotionActive(active);
+        if (!active) setMotionStep(0);
+      },
       { threshold: 0.28 },
     );
     observer.observe(stage);
     return () => observer.disconnect();
   }, []);
+
+  useEffect(() => {
+    if (
+      !motionActive ||
+      motionPaused ||
+      reviewStarted ||
+      window.matchMedia('(prefers-reduced-motion: reduce), (max-width: 768px)')
+        .matches
+    ) {
+      return;
+    }
+    const interval = window.setInterval(() => {
+      setMotionStep((current) => (current + 1) % copy.motionSteps.length);
+    }, 2600);
+    return () => window.clearInterval(interval);
+  }, [copy.motionSteps.length, motionActive, motionPaused, reviewStarted]);
 
   const refreshAfterRender = () => {
     window.requestAnimationFrame(() => {
@@ -352,7 +376,8 @@ export function TestKitExperience({
         repairStorage="memory"
       >
         <div
-          className={`test-experience-stage${motionActive && !reviewStarted ? ' is-motion-active' : ''}`}
+          className={`test-experience-stage is-motion-step-${motionStep}${motionActive && !reviewStarted ? ' is-motion-active' : ''}`}
+          data-motion-step={motionStep + 1}
           ref={stageRef}
         >
           <CheckoutSurface
@@ -469,17 +494,50 @@ export function TestKitExperience({
             </div>
           </div>
         </div>
-        <ol className="test-stage-status" aria-label={copy.stageAria}>
-          {copy.motionSteps.map((step, index) => (
-            <li
-              className={repairs.length && index === 4 ? 'is-ready' : undefined}
-              key={step}
+        <div className={`test-stage-timeline is-motion-step-${motionStep}`}>
+          <ol className="test-stage-status" aria-label={copy.stageAria}>
+            {copy.motionSteps.map((step, index) => (
+              <li
+                aria-current={
+                  motionActive && !reviewStarted && index === motionStep
+                    ? 'step'
+                    : undefined
+                }
+                className={[
+                  motionActive && !reviewStarted && index === motionStep
+                    ? 'is-current'
+                    : '',
+                  motionActive && !reviewStarted && index < motionStep
+                    ? 'is-complete'
+                    : '',
+                  repairs.length && index === 4 ? 'is-ready' : '',
+                ]
+                  .filter(Boolean)
+                  .join(' ')}
+                key={step}
+              >
+                <span>{index + 1}</span>
+                {step}
+              </li>
+            ))}
+          </ol>
+          {!reviewStarted ? (
+            <button
+              aria-label={motionPaused ? copy.motionResume : copy.motionPause}
+              aria-pressed={motionPaused}
+              className="test-motion-toggle"
+              onClick={() => setMotionPaused((current) => !current)}
+              title={motionPaused ? copy.motionResume : copy.motionPause}
+              type="button"
             >
-              <span>{index + 1}</span>
-              {step}
-            </li>
-          ))}
-        </ol>
+              {motionPaused ? (
+                <Play aria-hidden="true" size={13} weight="fill" />
+              ) : (
+                <Pause aria-hidden="true" size={13} weight="fill" />
+              )}
+            </button>
+          ) : null}
+        </div>
         {reviewStarted ? (
           <A3SReviewOverlay
             defaultOpen

@@ -298,12 +298,20 @@
     min-height: 0;
   }
 
+  .test-stage-timeline {
+    padding-right: 0;
+  }
+
   .test-stage-status {
     padding: 0;
   }
 
-  .test-stage-status::before {
+  .test-stage-timeline::before {
     right: 15%;
+    left: 15%;
+  }
+
+  .test-stage-timeline::after {
     left: 15%;
   }
 
@@ -317,6 +325,10 @@
   }
 
   .test-product-motion {
+    display: none;
+  }
+
+  .test-motion-toggle {
     display: none;
   }
 

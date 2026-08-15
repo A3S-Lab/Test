@@ -20,6 +20,22 @@ suite "website-testkit-experience" {
             text = "让 Agent 看懂页面"
         }
 
+        expect "published-install-version" {
+            text = "CLI + Agent Skill · v0.16.2"
+        }
+
+        wheel "show-release-disclosure" {
+            delta_y = 900
+        }
+
+        expect "release-candidate-disclosure" {
+            text = "当前文档已进入下一版本准备阶段"
+        }
+
+        wheel "return-to-testkit" {
+            delta_y = -900
+        }
+
         expect "local-only-disclosure" {
             text = "这个演示只保存在当前页面"
         }
@@ -30,6 +46,14 @@ suite "website-testkit-experience" {
 
         expect "motion-sequence-active" {
             visible = css(".test-experience-stage.is-motion-active")
+        }
+
+        click "pause-motion-sequence" {
+            target = role("button", "暂停自动演示")
+        }
+
+        click "resume-motion-sequence" {
+            target = role("button", "继续自动演示")
         }
 
         click "open-review" {
@@ -61,7 +85,7 @@ suite "website-testkit-experience" {
         }
 
         fill "single-instruction" {
-            target = ref("@e52")
+            target = label("Requested fix")
             value = "Increase the action label contrast without changing layout"
         }
 
@@ -70,7 +94,7 @@ suite "website-testkit-experience" {
         }
 
         click "send-single" {
-            target = ref("@e44")
+            target = role("button", "Send and auto-fix")
         }
 
         wait "single-receipt" {
@@ -98,7 +122,7 @@ suite "website-testkit-experience" {
         }
 
         fill "first-batch-instruction" {
-            target = ref("@e54")
+            target = label("Requested fix")
             value = "Clarify the context refresh state"
         }
 
@@ -107,7 +131,7 @@ suite "website-testkit-experience" {
         }
 
         click "save-first-batch-draft" {
-            target = ref("@e44")
+            target = role("button", "Add draft")
         }
 
         snapshot "after-first-batch-draft" {
@@ -131,7 +155,7 @@ suite "website-testkit-experience" {
         }
 
         fill "second-batch-instruction" {
-            target = ref("@e55")
+            target = label("Requested fix")
             value = "Announce which installer command was copied"
         }
 
@@ -140,7 +164,7 @@ suite "website-testkit-experience" {
         }
 
         click "save-second-batch-draft" {
-            target = ref("@e45")
+            target = role("button", "Add draft")
         }
 
         snapshot "batch-ready" {
@@ -148,7 +172,7 @@ suite "website-testkit-experience" {
         }
 
         click "send-batch" {
-            target = ref("@e56")
+            target = role("button", "Send selected (2)")
         }
 
         wait "batch-receipt" {
