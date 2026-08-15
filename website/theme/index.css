@@ -5,9 +5,9 @@
   --rp-c-brand-light: #337aff;
   --rp-c-brand-lighter: #dbe8ff;
   --rp-c-brand-tint: rgb(18 100 255 / 10%);
-  --rp-c-bg: #f8fbff;
-  --rp-c-bg-soft: #ffffff;
-  --rp-c-bg-mute: #edf3fb;
+  --rp-c-bg: #ffffff;
+  --rp-c-bg-soft: #f6f8fc;
+  --rp-c-bg-mute: #eef3fb;
   --rp-c-divider: #dce4f0;
   --rp-c-divider-light: #e8edf5;
   --rp-c-text-1: #101827;
@@ -54,7 +54,7 @@ html {
 }
 
 body {
-  background: var(--test-bg);
+  background: #ffffff;
   color: var(--test-text);
   font-family: var(--test-font);
   text-rendering: optimizeLegibility;
@@ -93,9 +93,24 @@ textarea {
 
 .rp-nav__title__logo,
 .rspress-logo {
-  width: 30px;
-  height: 30px;
+  display: grid;
+  overflow: hidden;
+  width: 31px;
+  min-width: 31px;
+  height: 31px;
   margin-right: 0;
+  border-radius: 9px;
+  box-shadow: 0 6px 16px rgb(46 62 184 / 20%);
+  object-fit: contain;
+}
+
+.rp-nav__title__logo img,
+img.rspress-logo {
+  display: block;
+  width: 31px !important;
+  height: 31px !important;
+  max-height: none !important;
+  object-fit: contain !important;
 }
 
 .rp-nav__title__link > span {
@@ -127,12 +142,12 @@ textarea {
 }
 
 .rp-doc-layout__container {
-  background: var(--test-bg);
+  background: #ffffff;
 }
 
 .rp-doc-layout__sidebar {
   border-right: 1px solid var(--test-line);
-  background: var(--test-bg);
+  background: #f8fbff;
 }
 
 .rp-sidebar-item {
@@ -148,6 +163,8 @@ textarea {
 
 .rp-doc {
   color: var(--test-text);
+  font-size: 16px;
+  line-height: 1.76;
 }
 
 .rp-doc h1,
@@ -158,9 +175,44 @@ textarea {
   letter-spacing: -0.025em;
 }
 
+.rp-doc h1 {
+  font-size: clamp(36px, 3.2vw, 46px);
+  font-weight: 740;
+  letter-spacing: -0.04em;
+  line-height: 1.08;
+  text-wrap: balance;
+}
+
+.rp-doc h2 {
+  margin-top: 2.6em;
+  font-size: 28px;
+  font-weight: 710;
+}
+
+.rp-doc h3 {
+  margin-top: 2em;
+  font-size: 20px;
+  font-weight: 690;
+}
+
 .rp-doc p,
 .rp-doc li {
   color: var(--test-muted);
+}
+
+.rp-doc > h1:first-child + p {
+  max-width: 72ch;
+  margin-top: 26px;
+  margin-bottom: 52px;
+  padding-bottom: 46px;
+  border-bottom: 1px solid var(--test-line);
+  color: var(--test-muted);
+  font-size: 18px;
+  line-height: 1.72;
+}
+
+.rp-doc > h1:first-child + p + h2 {
+  margin-top: 0;
 }
 
 .rp-doc code,
@@ -168,10 +220,62 @@ textarea {
   font-family: var(--test-mono);
 }
 
+.rp-doc .rp-codeblock {
+  margin-top: 20px;
+  margin-bottom: 24px;
+  border-radius: 12px;
+}
+
 .rp-doc pre {
-  border: 1px solid #253657;
-  background: var(--test-code) !important;
-  box-shadow: 0 16px 40px rgb(14 27 53 / 9%);
+  border: 1px solid #2b3d5f;
+  background: #0d1b2f !important;
+  box-shadow: 0 16px 38px rgb(14 27 53 / 12%);
+  color: var(--shiki-foreground) !important;
+}
+
+.rp-doc pre code,
+.rp-doc pre code > span:not([style]) {
+  color: var(--shiki-foreground);
+}
+
+.rp-doc .shiki code .line {
+  min-width: max-content;
+  white-space: pre;
+}
+
+.rp-doc
+  .rp-codeblock:is(.language-bash, .language-powershell)
+  .shiki
+  code
+  .line {
+  min-width: 100%;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.rp-doc pre code {
+  font-size: 13px;
+  line-height: 1.7;
+}
+
+.rp-doc .rp-code-button-group__button {
+  color: #aebdd3;
+}
+
+.rp-doc .rp-code-button-group__button:hover {
+  color: #ffffff;
+}
+
+.rp-doc table {
+  overflow: hidden;
+  border: 1px solid var(--test-line);
+  border-radius: 12px;
+  background: #ffffff;
+}
+
+.rp-doc th {
+  background: #f6f8fc;
+  color: var(--test-text);
 }
 
 .rp-doc a {
@@ -181,6 +285,24 @@ textarea {
 .rp-doc-layout__sidebar[aria-hidden='true'] {
   visibility: hidden;
   pointer-events: none;
+}
+
+html:not(.rp-dark) {
+  --shiki-foreground: #e6edf3;
+  --shiki-background: transparent;
+  --shiki-token-constant: #79c0ff;
+  --shiki-token-string: #7ee787;
+  --shiki-token-comment: #9aa7ba;
+  --shiki-token-keyword: #ff7b72;
+  --shiki-token-parameter: #ffa657;
+  --shiki-token-function: #d2a8ff;
+  --shiki-token-string-expression: #7ee787;
+  --shiki-token-punctuation: #c9d1d9;
+  --shiki-token-link: #7ee787;
+  --shiki-token-deleted: #ff7b72;
+  --shiki-token-inserted: #7ee787;
+  --rp-code-block-color: #e6edf3;
+  --rp-code-block-bg: #0d1b2f;
 }
 
 @media (prefers-reduced-transparency: reduce) {

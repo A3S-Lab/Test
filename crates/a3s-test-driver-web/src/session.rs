@@ -10,7 +10,7 @@ use a3s_test_core::{
     PageContextObservation, PageContextSnapshot, RepairAclProof, RepairEvidenceBundle,
     RepairEvidencePhase, RepairEvidenceRequest, RepairFinding, RepairHumanAction,
     RepairStatusEvent, ScenarioContext, StepOutput, Surface, SurfaceDriver, SurfaceObservation,
-    Target, TestStep, TestSuite, VideoOperation, PAGE_CONTEXT_PROTOCOL,
+    Target, TestStep, TestSuite, VideoOperation, WaitCondition, PAGE_CONTEXT_PROTOCOL,
 };
 use async_trait::async_trait;
 use serde_json::Value;
@@ -29,7 +29,7 @@ use crate::capabilities;
 use crate::process::{create_runtime_directory, terminate_owned_session, SessionRegistration};
 use crate::protocol::{
     bounded, compact_component, direct_selector, invocation, scalar_bool, scalar_string,
-    target_action, validate_component, visibility_args, wait_args,
+    semantic_target_action_args, target_action, validate_component, visibility_args, wait_args,
 };
 use crate::runtime::RuntimeDirectory;
 use crate::{AgentBrowserConfig, BrowserCapabilities, CommandExecutor, TokioCommandExecutor};
@@ -440,8 +440,7 @@ impl DriverSession for AgentBrowserSession {
                     })
             }
             Action::Click { target } => {
-                let args = target_action(target, "click", None)?;
-                self.execute_command(args)
+                self.execute_target_action(target, "click", None)
                     .await
                     .map(|data| StepOutput::new("target clicked").with_data(data))
             }
@@ -465,8 +464,7 @@ impl DriverSession for AgentBrowserSession {
             }
             Action::ContextClick { target } => self.context_click(target).await,
             Action::Fill { target, value } => {
-                let args = target_action(target, "fill", Some(value))?;
-                self.execute_command(args)
+                self.execute_target_action(target, "fill", Some(value))
                     .await
                     .map(|data| StepOutput::new("target filled").with_data(data))
             }
@@ -481,8 +479,7 @@ impl DriverSession for AgentBrowserSession {
                 .await
                 .map(|data| StepOutput::new("text inserted at current focus").with_data(data)),
             Action::Check { target } => {
-                let args = target_action(target, "check", None)?;
-                self.execute_command(args)
+                self.execute_target_action(target, "check", None)
                     .await
                     .map(|data| StepOutput::new("target checked").with_data(data))
             }
@@ -1259,6 +1256,38 @@ impl AgentBrowserSession {
         prepare_artifact_path(&self.artifacts_dir, requested).await
     }
 
+    async fn execute_target_action(
+        &self,
+        target: &Target,
+        action: &str,
+        value: Option<&str>,
+    ) -> Result<Value, DriverError> {
+        if let Some(args) = semantic_target_action_args(target, action, value)? {
+            let mut shadow_result = self.execute_command(args.clone()).await?;
+            let mut state = browser_result(shadow_result.clone());
+            if state.get("handled").and_then(Value::as_bool) == Some(true) {
+                return Ok(shadow_result);
+            }
+            if let Some((x, y)) = semantic_pointer(&state)? {
+                return self.click_at(x, y).await;
+            }
+            if state.get("matched").and_then(Value::as_bool) == Some(false) {
+                self.execute_command(wait_args(&WaitCondition::Visible(target.clone()))?)
+                    .await?;
+                shadow_result = self.execute_command(args).await?;
+                state = browser_result(shadow_result.clone());
+                if state.get("handled").and_then(Value::as_bool) == Some(true) {
+                    return Ok(shadow_result);
+                }
+                if let Some((x, y)) = semantic_pointer(&state)? {
+                    return self.click_at(x, y).await;
+                }
+            }
+        }
+        self.execute_command(target_action(target, action, value)?)
+            .await
+    }
+
     async fn execute_command(&self, action_args: Vec<OsString>) -> Result<Value, DriverError> {
         self.runtime.verify().await?;
         let invocation = invocation(
@@ -1360,6 +1389,25 @@ fn browser_result(value: Value) -> Value {
         .cloned()
         .or_else(|| value.get("result").cloned())
         .unwrap_or(value)
+}
+
+fn semantic_pointer(value: &Value) -> Result<Option<(i32, i32)>, DriverError> {
+    let Some(pointer) = value.get("pointer") else {
+        return Ok(None);
+    };
+    let coordinate = |name: &str| {
+        pointer
+            .get(name)
+            .and_then(Value::as_i64)
+            .and_then(|value| i32::try_from(value).ok())
+            .ok_or_else(|| {
+                DriverError::new(
+                    "test.driver.web.box_invalid",
+                    format!("semantic target pointer is missing a supported '{name}' coordinate"),
+                )
+            })
+    };
+    Ok(Some((coordinate("x")?, coordinate("y")?)))
 }
 
 fn parse_page_context_value(mut value: Value) -> Result<PageContextObservation, DriverError> {

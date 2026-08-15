@@ -390,7 +390,7 @@ async fn maps_typed_actions_and_scopes_browser_lifecycle() {
     session.close().await.expect("close");
 
     let invocations = executor.invocations.lock().unwrap();
-    assert_eq!(invocations.len(), 4);
+    assert_eq!(invocations.len(), 5);
     assert_eq!(invocations[0].program, PathBuf::from("/opt/a3s"));
     assert_eq!(invocations[0].args, os(&["use", "browser", "--version"]));
     assert_eq!(
@@ -408,7 +408,26 @@ async fn maps_typed_actions_and_scopes_browser_lifecycle() {
         ])
     );
     assert_eq!(
-        invocations[2].args,
+        &invocations[2].args[..8],
+        os(&[
+            "use",
+            "browser",
+            "--session",
+            "word",
+            "--json",
+            "--headed",
+            "false",
+            "eval",
+        ])
+    );
+    let shadow_probe = invocations[2].args[8].to_string_lossy();
+    assert!(
+        shadow_probe.contains(r#"const target = {"type":"role","role":"button","name":"Word"}"#)
+    );
+    assert!(shadow_probe.contains("getBoundingClientRect"));
+    assert!(shadow_probe.contains("pointer:"));
+    assert_eq!(
+        invocations[3].args,
         os(&[
             "use",
             "browser",
@@ -426,7 +445,7 @@ async fn maps_typed_actions_and_scopes_browser_lifecycle() {
         ])
     );
     assert_eq!(
-        invocations[3].args,
+        invocations[4].args,
         os(&[
             "use",
             "browser",

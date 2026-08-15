@@ -1,11 +1,11 @@
 ---
-title: 嵌入式 Web Test Kit
-description: 在浏览器渲染后发布版本化页面上下文，并提供人工标记与修复交接。
+title: 接入 Web Test Kit
+description: 在页面渲染后读取语义、组件与坐标，让评审者点选问题并提交单条或批量修复任务。
 ---
 
-# 嵌入式 Web Test Kit
+# 接入 Web Test Kit
 
-`@a3s-lab/testkit` 是开发期页面上下文与人工评审 SDK。它在浏览器完成渲染后读取语义 DOM、开放 Shadow DOM、表单状态、布局和视口事实，不会向业务元素写入测试属性。
+把 `@a3s-lab/testkit` 接入开发环境后，A3S Test 能在页面渲染完成时读取当前 DOM、可访问语义、组件归属和坐标。评审者可以直接点选或框选问题，再把一条或一批修复任务交给拥有工作区的编码 Agent。SDK 不会给业务 DOM 写入测试属性。
 
 ## 安装
 

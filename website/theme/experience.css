@@ -1,19 +1,23 @@
 .test-experience-shell {
   position: relative;
   z-index: 1;
-  max-width: calc(var(--test-max-width) - 48px);
-  margin: 0 auto;
+  width: 100%;
+  min-width: 0;
+  max-width: none;
+  margin: 0;
 }
 
 .test-experience-stage {
   position: relative;
   display: grid;
   overflow: hidden;
-  min-height: 568px;
+  min-height: 680px;
+  border: 1px solid var(--test-line-strong);
   border-radius: var(--test-shell-radius);
   background: var(--test-surface);
-  box-shadow: var(--test-shadow);
-  grid-template-columns: minmax(0, 56fr) minmax(280px, 24fr) minmax(260px, 20fr);
+  box-shadow: 0 30px 72px rgb(36 76 137 / 16%);
+  grid-template-columns: minmax(390px, 1.46fr) minmax(230px, 0.74fr);
+  grid-template-rows: minmax(0, 1fr) 210px;
 }
 
 .test-demo-page,
@@ -23,6 +27,8 @@
 }
 
 .test-demo-page {
+  grid-column: 1;
+  grid-row: 1;
   border-right: 1px solid var(--test-line);
   background: #fbfdff;
 }
@@ -48,15 +54,12 @@
   font-weight: 700;
 }
 
-.test-demo-nav strong > span {
-  display: grid;
+.test-demo-nav strong > img {
+  display: block;
   width: 24px;
   height: 24px;
   border-radius: 7px;
-  background: var(--test-accent);
-  color: #ffffff;
-  font: 750 12px/1 var(--test-mono);
-  place-items: center;
+  box-shadow: 0 4px 10px rgb(55 70 188 / 18%);
 }
 
 .test-demo-content {
@@ -373,7 +376,8 @@
 }
 
 .test-context-panel {
-  border-right: 1px solid var(--test-line);
+  grid-column: 2;
+  grid-row: 1;
   background: var(--test-surface);
 }
 
@@ -533,11 +537,15 @@
 
 .test-review-rail {
   display: grid;
-  padding: 12px;
+  min-height: 0;
+  padding: 10px;
+  border-top: 1px solid var(--test-line);
   background: #fbfdff;
   align-content: stretch;
-  grid-template-rows: minmax(0, 1fr) minmax(0, 0.92fr);
-  gap: 12px;
+  grid-column: 1 / -1;
+  grid-row: 2;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
 }
 
 .test-review-panel,
@@ -566,7 +574,7 @@
 
 .test-review-panel > p {
   margin: 0;
-  padding: 16px 14px 12px;
+  padding: 12px 14px 9px;
   color: var(--test-muted);
   font-size: 10px;
   line-height: 1.55;
@@ -602,7 +610,7 @@
 
 .test-review-panel > small {
   display: block;
-  padding: 11px 14px 14px;
+  padding: 9px 14px 12px;
   color: var(--test-faint);
   font-size: 8px;
   line-height: 1.5;
@@ -660,8 +668,8 @@
 .test-evidence-path {
   position: absolute;
   z-index: 3;
-  top: 51%;
-  left: calc(80% - 7px);
+  top: calc(100% - 211px);
+  left: calc(50% - 13px);
   width: 26px;
   border-top: 2px solid var(--test-accent);
   pointer-events: none;
@@ -685,7 +693,7 @@
   margin: 0;
   padding: 0 18px;
   list-style: none;
-  grid-template-columns: 56fr 24fr 20fr;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
 .test-stage-status::before {

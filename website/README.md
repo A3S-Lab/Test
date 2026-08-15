@@ -26,6 +26,23 @@ npm run build
 npm run check:site
 ```
 
+The repository-level browser regression builds this production site, serves
+it from an isolated loopback origin, and drives the real embedded Test Kit
+experience through single and batch submissions. It also captures a
+screenshot and accessibility evidence, requires empty console and page-error
+evidence, and verifies owned browser and server cleanup. CI runs this path on
+macOS and Windows.
+
+From the repository root, after installing the website and Test Kit
+dependencies plus the admitted standalone browser, run:
+
+```bash
+A3S_TEST_AGENT_BROWSER="$(command -v agent-browser)" \
+  cargo test -p a3s-test-cli --test web_e2e \
+  real_agent_browser_runs_the_website_testkit_suite \
+  --locked -- --ignored --exact --nocapture
+```
+
 ## Documentation version policy
 
 `versions.mjs` is the source of truth for the public version selector. The

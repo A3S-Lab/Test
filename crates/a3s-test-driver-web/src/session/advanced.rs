@@ -8,6 +8,47 @@ use crate::actions::{drag_args, modifier_name};
 use crate::protocol::direct_selector;
 
 impl AgentBrowserSession {
+    pub(super) async fn click_at(&self, x: i32, y: i32) -> Result<Value, DriverError> {
+        let move_data = self
+            .execute_command(vec![
+                "mouse".into(),
+                "move".into(),
+                x.to_string().into(),
+                y.to_string().into(),
+            ])
+            .await?;
+        let down_data = match self
+            .execute_command(vec!["mouse".into(), "down".into(), "left".into()])
+            .await
+        {
+            Ok(data) => data,
+            Err(error) => {
+                let _ = self
+                    .execute_command(vec!["mouse".into(), "up".into(), "left".into()])
+                    .await;
+                return Err(error);
+            }
+        };
+        let up_data = match self
+            .execute_command(vec!["mouse".into(), "up".into(), "left".into()])
+            .await
+        {
+            Ok(data) => data,
+            Err(error) => {
+                let _ = self
+                    .execute_command(vec!["mouse".into(), "up".into(), "left".into()])
+                    .await;
+                return Err(error);
+            }
+        };
+        Ok(json!({
+            "pointer": { "x": x, "y": y },
+            "move": move_data,
+            "down": down_data,
+            "up": up_data,
+        }))
+    }
+
     pub(super) async fn context_click(&self, target: &Target) -> Result<StepOutput, DriverError> {
         let (x, y, box_data) = self.target_center(target).await?;
         let move_data = self

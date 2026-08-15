@@ -227,6 +227,11 @@ batch, attach repair intent, save a draft, and explicitly send it to the
 session-owning coding agent. A fresh browser run verifies admitted changes
 before acceptance.
 
+The Web adapter resolves role, label, test ID, and placeholder targets across
+light DOM and open Shadow DOM for click, fill, and check actions. Pointer
+clicks use the target's post-scroll coordinates so host-page smooth scrolling
+cannot invalidate the hit point.
+
 [Integrate Test Kit](https://a3s-lab.github.io/Test/guide/testkit.html)
 
 ## Generate reviewed expectations
@@ -350,6 +355,17 @@ npm run format:check
 npm run check
 npm run build
 npm run check:site
+```
+
+Run the production website and embedded Test Kit regression from the
+repository root after installing the website, Test Kit, and admitted
+`agent-browser` dependencies:
+
+```bash
+A3S_TEST_AGENT_BROWSER="$(command -v agent-browser)" \
+  cargo test -p a3s-test-cli --test web_e2e \
+  real_agent_browser_runs_the_website_testkit_suite \
+  --locked -- --ignored --exact --nocapture
 ```
 
 ## License

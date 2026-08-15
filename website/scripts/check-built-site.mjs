@@ -41,8 +41,7 @@ function routeForMdx(filename) {
 
 const requiredFiles = new Set([
   '404.html',
-  'a3s-test-mark.svg',
-  'favicon.svg',
+  'a3s-logo.png',
   'social-card.svg',
   'social-card.png',
 ]);
@@ -104,20 +103,20 @@ if (!englishHtml.includes('<html lang="en">')) {
   failures.push('English homepage does not declare English');
 }
 if (
-  !rootHtml.includes('让 Agent 看懂界面，') ||
-  !rootHtml.includes('证明每次操作')
+  !rootHtml.includes('让 Agent 看懂页面，') ||
+  !rootHtml.includes('点中问题，交给它修')
 ) {
   failures.push('default homepage lacks Chinese product copy');
 }
 if (
-  !englishHtml.includes('Help agents see interfaces.') ||
-  !englishHtml.includes('Prove every action.')
+  !englishHtml.includes('Agents understand the page.') ||
+  !englishHtml.includes('You point. They repair.')
 ) {
   failures.push('English homepage lacks English product copy');
 }
 if (
   !rootHtml.includes('data-testid="a3s-experience-submit"') ||
-  !rootHtml.includes('公共体验只写入当前页面内存')
+  !rootHtml.includes('这个演示只保存在当前页面')
 ) {
   failures.push('homepage lacks the local interactive Test Kit surface');
 }

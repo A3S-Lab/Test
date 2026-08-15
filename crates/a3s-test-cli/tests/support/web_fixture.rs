@@ -1,6 +1,7 @@
 use std::collections::BTreeMap;
 use std::io::{self, Read, Write};
 use std::net::{Ipv4Addr, Shutdown, SocketAddr, TcpListener, TcpStream};
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread::{self, JoinHandle};
@@ -77,9 +78,48 @@ pub fn start_testkit_fixture(bundle: Vec<u8>) -> io::Result<TestKitFixture> {
     .map(|server| TestKitFixture { server, repaired })
 }
 
+pub fn start_static_site_fixture(root: &Path, base: &str) -> io::Result<StaticSiteFixture> {
+    if !base.starts_with('/')
+        || !base.ends_with('/')
+        || base.contains('\\')
+        || base.split('/').any(|segment| segment == "..")
+    {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "static fixture base must be an absolute, trailing-slash URL path",
+        ));
+    }
+    let root = root.canonicalize()?;
+    if !root.is_dir() {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "static fixture root must be a directory",
+        ));
+    }
+    FixtureServer::start(Site::Static {
+        root,
+        base: base.to_string(),
+    })
+    .map(|server| StaticSiteFixture { server })
+}
+
 pub struct TestKitFixture {
     server: FixtureServer,
     repaired: Arc<AtomicBool>,
+}
+
+pub struct StaticSiteFixture {
+    server: FixtureServer,
+}
+
+impl StaticSiteFixture {
+    pub fn origin(&self) -> String {
+        self.server.origin()
+    }
+
+    pub fn address(&self) -> SocketAddr {
+        self.server.address
+    }
 }
 
 impl TestKitFixture {
@@ -184,6 +224,10 @@ enum Site {
         bundle: Vec<u8>,
         repaired: Arc<AtomicBool>,
     },
+    Static {
+        root: PathBuf,
+        base: String,
+    },
 }
 
 fn serve(
@@ -287,6 +331,54 @@ fn route(site: &Site, request: &RecordedRequest) -> Response {
         Site::TestKit { bundle, repaired } => {
             route_testkit(&request.path, bundle, repaired.load(Ordering::Acquire))
         }
+        Site::Static { root, base } => route_static(&request.path, root, base),
+    }
+}
+
+fn route_static(path: &str, root: &Path, base: &str) -> Response {
+    if path == "/health" {
+        return Response::text("200 OK", "ready");
+    }
+    let Some(relative) = path.strip_prefix(base) else {
+        return Response::text("404 Not Found", "not found");
+    };
+    if relative.contains('\\')
+        || relative
+            .split('/')
+            .any(|segment| segment == "." || segment == "..")
+    {
+        return Response::text("404 Not Found", "not found");
+    }
+
+    let relative = if relative.is_empty() || relative.ends_with('/') {
+        format!("{relative}index.html")
+    } else {
+        relative.to_string()
+    };
+    let candidate = root.join(&relative);
+    let Ok(candidate) = candidate.canonicalize() else {
+        return Response::text("404 Not Found", "not found");
+    };
+    if !candidate.starts_with(root) || !candidate.is_file() {
+        return Response::text("404 Not Found", "not found");
+    }
+    let Ok(body) = std::fs::read(&candidate) else {
+        return Response::text("500 Internal Server Error", "failed to read fixture asset");
+    };
+    Response::bytes(content_type(&candidate), body)
+}
+
+fn content_type(path: &Path) -> &'static str {
+    match path.extension().and_then(|extension| extension.to_str()) {
+        Some("css") => "text/css; charset=utf-8",
+        Some("html") => "text/html; charset=utf-8",
+        Some("js") | Some("mjs") => "text/javascript; charset=utf-8",
+        Some("json") | Some("map") => "application/json; charset=utf-8",
+        Some("md") | Some("txt") => "text/plain; charset=utf-8",
+        Some("png") => "image/png",
+        Some("svg") => "image/svg+xml",
+        Some("woff2") => "font/woff2",
+        _ => "application/octet-stream",
     }
 }
 
@@ -378,6 +470,15 @@ struct Response {
 }
 
 impl Response {
+    fn bytes(content_type: &'static str, body: Vec<u8>) -> Self {
+        Self {
+            status: "200 OK",
+            content_type,
+            headers: Vec::new(),
+            body,
+        }
+    }
+
     fn html(body: String) -> Self {
         Self {
             status: "200 OK",

@@ -174,6 +174,13 @@ snapshot. Pages without the SDK retain the existing Web behavior.
 - [x] Add an explicit browser-zoom geometry regression covering layout and
       visual viewports, DPR, CSS-pixel element rectangles, visible ratio, and
       normalized coordinates in the real Test Kit browser suite
+- [x] Resolve role, label, test ID, and placeholder targets across light DOM
+      and open Shadow DOM for click, fill, and check actions, including native
+      pointer clicks bound to post-scroll coordinates
+- [x] Build the production Rspress site inside the real-browser suite and
+      verify single submission, ordered batch submission, screenshot,
+      accessibility, empty browser diagnostics, and exact cleanup on macOS and
+      Windows CI
 
 ## M7: Page-context observation and targeting
 

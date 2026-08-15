@@ -35,6 +35,10 @@ import {
 const SDK_VERSION = "0.3.0";
 const DEFAULT_LIMITS: ContextLimits = { nodes: 500, stringBytes: 4_096, encodedBytes: 1_048_576 };
 const MAX_LIMITS: ContextLimits = { nodes: 5_000, stringBytes: 16_384, encodedBytes: 8_388_608 };
+const TRANSIENT_BROWSER_INSTRUMENTATION_ATTRIBUTES = new Set([
+  "data-__ab-ci",
+  "data-agent-browser-located",
+]);
 
 type NormalizedOptions = Required<Pick<TestKitOptions, "enabled" | "redact" | "maxNodes" | "maxStringBytes" | "maxEncodedBytes" | "repairStorage" | "maxQualityReports" | "maxDesignAuditReports">> & {
   page: TestKitOptions["page"];
@@ -388,9 +392,14 @@ class Runtime implements TestKitRuntime, NodeIdentity {
       }
     };
     const mutation = new MutationObserver((records) => {
-      if (records.every((record) => (record.target as Element).closest?.("[data-a3s-testkit-overlay]"))) return;
       observeShadows(document);
-      this.#markChanged();
+      const hasPageChange = records.some((record) => {
+        if (record.type === "attributes" && record.attributeName
+          && TRANSIENT_BROWSER_INSTRUMENTATION_ATTRIBUTES.has(record.attributeName)) return false;
+        return !(record.target instanceof Element
+          && record.target.closest("[data-a3s-testkit-overlay]"));
+      });
+      if (hasPageChange) this.#markChanged();
     });
     mutation.observe(document.documentElement, { subtree: true, childList: true, attributes: true, characterData: true });
     observeShadows(document);

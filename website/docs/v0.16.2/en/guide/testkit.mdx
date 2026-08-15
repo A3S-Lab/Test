@@ -1,11 +1,11 @@
 ---
-title: Embedded Web Test Kit
-description: Publish revisioned page context after browser rendering and add human marking with repair handoff.
+title: Add Web Test Kit
+description: Read semantics, components, and geometry after rendering, then let reviewers submit one repair task or a batch from the page.
 ---
 
-# Embedded Web Test Kit
+# Add Web Test Kit
 
-`@a3s-lab/testkit` is a development-time page-context and human-review SDK. After browser rendering, it reads semantic DOM, open Shadow DOM, form state, layout, and viewport facts without writing test attributes onto product elements.
+Add `@a3s-lab/testkit` in development and A3S Test can read the current DOM, accessible semantics, component ownership, and geometry after the page renders. A reviewer can point to one problem or select a batch, then send each repair task to the coding agent that owns the workspace. The SDK does not write test attributes onto product elements.
 
 ## Install
 

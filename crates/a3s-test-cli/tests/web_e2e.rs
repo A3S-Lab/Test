@@ -16,7 +16,10 @@ use support::testkit_browser::{
     verify_hide_until_restart_focus,
 };
 use support::testkit_bundle::bundle_browser_fixture;
-use support::web_fixture::{get, start_testkit_fixture, WebFixture};
+use support::web_fixture::{get, start_static_site_fixture, start_testkit_fixture, WebFixture};
+use support::website::build_website;
+
+const WEBSITE_TESTKIT_SUITE: &str = include_str!("../../../tests/e2e/website-testkit.acl");
 
 fn binary() -> PathBuf {
     PathBuf::from(env!("CARGO_BIN_EXE_a3s-test"))
@@ -96,6 +99,120 @@ fn local_web_fixture_handles_repeated_short_lived_connections() {
     }
 
     assert_eq!(fixture.primary_requests().len(), 128);
+}
+
+#[test]
+fn website_testkit_acl_is_admitted() {
+    let temp = tempfile::tempdir().expect("temporary website ACL workspace");
+    let manifest = temp.path().join("website-testkit.acl");
+    std::fs::write(&manifest, WEBSITE_TESTKIT_SUITE).expect("write website Test Kit ACL");
+
+    let output = Command::new(binary())
+        .args([
+            "check",
+            manifest.to_str().expect("UTF-8 website ACL path"),
+            "--json",
+        ])
+        .current_dir(temp.path())
+        .output()
+        .expect("check website Test Kit ACL");
+
+    assert_process_success("admit website Test Kit ACL", &output);
+}
+
+#[test]
+#[ignore = "requires website dependencies and the exact standalone agent-browser 0.26.x runtime"]
+fn real_agent_browser_runs_the_website_testkit_suite() {
+    let Some(browser) = std::env::var_os("A3S_TEST_AGENT_BROWSER").map(PathBuf::from) else {
+        eprintln!("A3S_TEST_AGENT_BROWSER is not set; skipping website Test Kit E2E");
+        return;
+    };
+    assert!(
+        browser.is_file(),
+        "browser executable does not exist: {browser:?}"
+    );
+
+    let website = build_website("build website Test Kit fixture");
+    let fixture =
+        start_static_site_fixture(&website, "/Test/").expect("start built website fixture");
+    let fixture_address = fixture.address();
+    let homepage = get(&fixture.origin(), "/Test/").expect("built website homepage");
+    assert_eq!(homepage.status, 200);
+    assert!(
+        String::from_utf8(homepage.body)
+            .expect("UTF-8 built website homepage")
+            .contains("data-testid=\"a3s-experience-submit\""),
+        "built homepage must contain the embedded Test Kit experience"
+    );
+
+    let temp = tempfile::tempdir().expect("temporary website E2E workspace");
+    let manifest = temp.path().join("website-testkit.acl");
+    let suite = WEBSITE_TESTKIT_SUITE.replace("http://127.0.0.1:4173", &fixture.origin());
+    std::fs::write(&manifest, suite).expect("write dynamic website Test Kit ACL");
+    let runtime_directories_before = private_runtime_directories();
+
+    let output = Command::new(binary())
+        .args([
+            "run",
+            manifest.to_str().expect("UTF-8 website manifest path"),
+            "--browser-driver",
+            "standalone",
+            "--browser-executable",
+            browser.to_str().expect("UTF-8 browser path"),
+            "--command-timeout-ms",
+            "60000",
+            "--idle-timeout-ms",
+            "15000",
+            "--cleanup-timeout-ms",
+            "15000",
+            "--infrastructure-retries",
+            "0",
+            "--max-parallel-scenarios",
+            "1",
+            "--json",
+        ])
+        .current_dir(temp.path())
+        .output()
+        .expect("run website Test Kit E2E");
+
+    assert!(
+        output.status.success(),
+        "website Test Kit E2E failed\nstdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let report: serde_json::Value =
+        serde_json::from_slice(&output.stdout).expect("website Test Kit JSON run report");
+    assert_eq!(report["status"], "passed");
+    assert_eq!(report["scenarios"][0]["status"], "passed");
+    assert!(report["scenarios"][0]["cleanup_error"].is_null());
+
+    for step in [
+        "review-evidence",
+        "semantic-evidence",
+        "console-evidence",
+        "page-error-evidence",
+    ] {
+        let evidence_path = report["scenarios"][0]["steps"]
+            .as_array()
+            .expect("website E2E steps")
+            .iter()
+            .find(|entry| entry["id"] == step)
+            .and_then(|entry| entry.pointer("/output/evidence/0/path"))
+            .and_then(serde_json::Value::as_str)
+            .map(PathBuf::from)
+            .unwrap_or_else(|| panic!("website E2E step {step} omitted its evidence path"));
+        assert_nonempty_artifact(temp.path(), &evidence_path);
+    }
+
+    assert_empty_browser_diagnostics(&report, temp.path());
+    assert_no_new_private_runtime_directories(&runtime_directories_before);
+
+    drop(fixture);
+    assert!(
+        TcpStream::connect_timeout(&fixture_address, Duration::from_millis(250)).is_err(),
+        "website fixture listener must be closed on drop"
+    );
 }
 
 #[test]
@@ -878,7 +995,13 @@ fn suite(origin: &str) -> String {
 
 fn assert_nonempty_artifact(workspace: &Path, path: &Path) {
     let workspace = workspace.canonicalize().expect("canonical E2E workspace");
-    let path = path.canonicalize().expect("canonical screenshot evidence");
+    let path = if path.is_absolute() {
+        path.to_path_buf()
+    } else {
+        workspace.join(path)
+    }
+    .canonicalize()
+    .expect("canonical E2E evidence");
     assert!(
         path.starts_with(&workspace),
         "screenshot evidence escaped the E2E workspace: {path:?}"
@@ -887,6 +1010,40 @@ fn assert_nonempty_artifact(workspace: &Path, path: &Path) {
         path.metadata().expect("screenshot metadata").len() > 0,
         "screenshot evidence must not be empty"
     );
+}
+
+fn assert_empty_browser_diagnostics(report: &serde_json::Value, workspace: &Path) {
+    for (step, pointer, label) in [
+        ("console-evidence", "/data/messages", "console messages"),
+        ("page-error-evidence", "/data/errors", "page errors"),
+    ] {
+        let evidence_path = report["scenarios"][0]["steps"]
+            .as_array()
+            .expect("website E2E steps")
+            .iter()
+            .find(|entry| entry["id"] == step)
+            .and_then(|entry| entry.pointer("/output/evidence/0/path"))
+            .and_then(serde_json::Value::as_str)
+            .map(PathBuf::from)
+            .unwrap_or_else(|| panic!("website E2E step {step} omitted its evidence path"));
+        let evidence_path = if evidence_path.is_absolute() {
+            evidence_path
+        } else {
+            workspace.join(evidence_path)
+        };
+        let evidence: serde_json::Value = serde_json::from_slice(
+            &std::fs::read(&evidence_path)
+                .unwrap_or_else(|error| panic!("read {label} evidence: {error}")),
+        )
+        .unwrap_or_else(|error| panic!("parse {label} evidence: {error}"));
+        assert_eq!(
+            evidence
+                .pointer(pointer)
+                .and_then(serde_json::Value::as_array),
+            Some(&Vec::new()),
+            "built website emitted unexpected {label}: {evidence}"
+        );
+    }
 }
 
 fn private_runtime_directories() -> BTreeSet<PathBuf> {

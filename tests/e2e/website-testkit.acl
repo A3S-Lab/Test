@@ -1,0 +1,145 @@
+suite "website-testkit-experience" {
+    version = 1
+
+    scenario "single-and-batch-review" {
+        name = "Review rendered page context and submit local findings"
+        surface = "web"
+        timeout_ms = 90000
+
+        viewport "desktop" {
+            width = 1440
+            height = 900
+            scale = 1
+        }
+
+        navigate "open-homepage" {
+            url = "http://127.0.0.1:4173/Test/"
+        }
+
+        wait "homepage-ready" {
+            text = "让 Agent 看懂页面"
+        }
+
+        expect "local-only-disclosure" {
+            text = "这个演示只保存在当前页面"
+        }
+
+        expect "rendered-context" {
+            text = "a3s-experience-submit"
+        }
+
+        click "open-review" {
+            target = role("button", "打开点选模式")
+        }
+
+        wait "overlay-mounted" {
+            visible = text("点选模式已打开", true)
+        }
+
+        click "mark-single" {
+            target = role("button", "Mark element")
+        }
+
+        wait "single-marking-ready" {
+            visible = text("Click one element, or focus it and press Enter, to create a finding. Press Esc to cancel.", true)
+        }
+
+        click "choose-submit-action" {
+            target = testid("a3s-experience-submit")
+        }
+
+        wait "single-editor-ready" {
+            visible = label("Requested fix")
+        }
+
+        fill "single-instruction" {
+            target = label("Requested fix")
+            value = "Increase the action label contrast without changing layout"
+        }
+
+        click "send-single" {
+            target = role("button", "Send and auto-fix")
+        }
+
+        wait "single-receipt" {
+            text = "1 个标记"
+        }
+
+        click "mark-first-batch-item" {
+            target = role("button", "Mark element")
+        }
+
+        wait "first-batch-marking-ready" {
+            visible = text("Click one element, or focus it and press Enter, to create a finding. Press Esc to cancel.", true)
+        }
+
+        click "choose-context-refresh" {
+            target = role("button", "刷新")
+        }
+
+        wait "first-batch-editor-ready" {
+            visible = label("Requested fix")
+        }
+
+        fill "first-batch-instruction" {
+            target = label("Requested fix")
+            value = "Clarify the context refresh state"
+        }
+
+        click "save-first-batch-draft" {
+            target = role("button", "Add draft")
+        }
+
+        click "mark-second-batch-item" {
+            target = role("button", "Mark element")
+        }
+
+        wait "second-batch-marking-ready" {
+            visible = text("Click one element, or focus it and press Enter, to create a finding. Press Esc to cancel.", true)
+        }
+
+        click "choose-install-copy" {
+            target = role("button", "复制命令")
+        }
+
+        wait "second-batch-editor-ready" {
+            visible = label("Requested fix")
+        }
+
+        fill "second-batch-instruction" {
+            target = label("Requested fix")
+            value = "Announce which installer command was copied"
+        }
+
+        click "save-second-batch-draft" {
+            target = role("button", "Add draft")
+        }
+
+        click "send-batch" {
+            target = role("button", "Send selected (2)")
+        }
+
+        wait "batch-receipt" {
+            text = "2 个标记"
+        }
+
+        screenshot "review-evidence" {
+            path = "screenshots/website-testkit.png"
+        }
+
+        accessibility "semantic-evidence" {
+            path = "evidence/accessibility.json"
+            interactive = false
+        }
+
+        console "console-evidence" {
+            path = "evidence/console.json"
+            clear = false
+        }
+
+        page_errors "page-error-evidence" {
+            path = "evidence/page-errors.json"
+            clear = false
+        }
+    }
+}

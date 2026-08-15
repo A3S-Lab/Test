@@ -94,12 +94,7 @@ for (const version of versions) {
   }
 }
 
-for (const asset of [
-  'a3s-test-mark.svg',
-  'favicon.svg',
-  'social-card.svg',
-  'social-card.png',
-]) {
+for (const asset of ['a3s-logo.png', 'social-card.svg', 'social-card.png']) {
   if (!(await fileExists(path.join(docsRoot, 'public', asset)))) {
     failures.push(`Missing public asset ${asset}.`);
   }

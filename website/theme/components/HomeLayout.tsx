@@ -92,14 +92,13 @@ export function HomeLayout() {
   return (
     <main className="test-home">
       <section className="test-hero">
-        <div className="test-hero-title">
+        <div className="test-hero-copy">
           <h1>
+            <span className="test-hero-brand">A3S Test</span>
             {copy.heroTitle.map((line) => (
               <span key={line}>{line}</span>
             ))}
           </h1>
-        </div>
-        <div className="test-hero-copy">
           <p>{copy.heroBody}</p>
           <div className="test-actions">
             <button
@@ -119,14 +118,13 @@ export function HomeLayout() {
             </a>
           </div>
         </div>
+        <TestKitExperience
+          copy={copy.experience}
+          locale={locale}
+          onStartReview={startExperience}
+          reviewStarted={reviewStarted}
+        />
       </section>
-
-      <TestKitExperience
-        copy={copy.experience}
-        locale={locale}
-        onStartReview={startExperience}
-        reviewStarted={reviewStarted}
-      />
 
       <section className="test-installer-rail">
         <header>

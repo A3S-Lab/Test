@@ -12,6 +12,7 @@ import {
   A3STestBoundary,
   A3STestKit,
 } from '@a3s-lab/testkit/react';
+import { withBase } from '@rspress/core/runtime';
 import { useEffect, useState } from 'react';
 import type {
   ContextNode,
@@ -202,7 +203,7 @@ function CheckoutSurface({
     >
       <header className="test-demo-nav">
         <strong>
-          <span aria-hidden="true">A</span>
+          <img alt="" height="24" src={withBase('/a3s-logo.png')} width="24" />
           {copy.shop}
         </strong>
         <span>{copy.sample}</span>

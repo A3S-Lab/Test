@@ -200,9 +200,16 @@ jobs:
         uses: actions/setup-node@v6
         with:
           node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            packages/testkit/package-lock.json
+            website/package-lock.json
 
       - name: Install Test Kit dependencies
         run: npm ci --prefix packages/testkit
+
+      - name: Install website dependencies
+        run: npm ci --prefix website
 
       - name: Install the admitted standalone browser
         run: |
@@ -265,6 +272,10 @@ jobs:
             cargo test -p a3s-test-cli --test web_e2e \
             real_agent_browser_runs_the_embedded_testkit_suite \
             --locked -- --ignored --exact --nocapture
+          bash .github/scripts/run-cargo-test.sh \
+            cargo test -p a3s-test-cli --test web_e2e \
+            real_agent_browser_runs_the_website_testkit_suite \
+            --locked -- --ignored --exact --nocapture
 
       - name: Run the real browser suite on Windows
         if: runner.os == 'Windows'
@@ -285,6 +296,9 @@ jobs:
             --locked -- --ignored --exact --nocapture
           cargo test -p a3s-test-cli --test web_e2e `
             real_agent_browser_runs_the_embedded_testkit_suite `
+            --locked -- --ignored --exact --nocapture
+          cargo test -p a3s-test-cli --test web_e2e `
+            real_agent_browser_runs_the_website_testkit_suite `
             --locked -- --ignored --exact --nocapture
 
       - name: Assert Unix browser cleanup

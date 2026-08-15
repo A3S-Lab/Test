@@ -303,6 +303,25 @@ describe("page context runtime", () => {
     await expect(bridge.waitForChange(first.revision, 100)).resolves.toBeGreaterThan(first.revision);
   });
 
+  it("ignores transient browser instrumentation attributes without hiding semantic changes", async () => {
+    document.body.innerHTML = `<button>Submit order</button>`;
+    const button = document.querySelector("button")!;
+    const bridge = installTestKit({ enabled: true, page: { id: "instrumentation" }, repairStorage: "memory" });
+    const baseline = bridge.snapshot();
+
+    button.setAttribute("data-__ab-ci", "1");
+    button.removeAttribute("data-__ab-ci");
+    button.setAttribute("data-agent-browser-located", "true");
+    button.removeAttribute("data-agent-browser-located");
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(bridge.snapshot().revision).toBe(baseline.revision);
+
+    const changed = bridge.waitForChange(baseline.revision, 100);
+    button.setAttribute("aria-label", "Confirm order");
+    await expect(changed).resolves.toBeGreaterThan(baseline.revision);
+  });
+
   it("tracks route changes, portal roots, transformed and sticky geometry, nested scrolling, virtualization, dialogs, and hydration", async () => {
     document.body.innerHTML = `<div id="app"><section id="list" style="overflow:auto"><button id="row">Row 1</button></section></div><div id="portal"><dialog open><button id="dialog-action">Confirm</button></dialog></div>`;
     document.documentElement.dataset.hydrated = "false";

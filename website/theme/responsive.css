@@ -12,13 +12,11 @@
 
   .test-hero {
     gap: 48px;
+    grid-template-columns: minmax(440px, 0.9fr) minmax(590px, 1.1fr);
   }
 
   .test-experience-stage {
-    grid-template-columns: minmax(0, 54fr) minmax(270px, 23fr) minmax(
-        250px,
-        23fr
-      );
+    grid-template-columns: minmax(340px, 1.35fr) minmax(220px, 0.75fr);
   }
 
   .test-checkout-layout {
@@ -53,28 +51,25 @@
 
 @media (max-width: 1100px) {
   .test-hero {
-    grid-template-columns: minmax(0, 1fr) minmax(380px, 0.85fr);
+    grid-template-columns: 1fr;
+    gap: 48px;
   }
 
   .test-hero h1 {
     font-size: clamp(43px, 5vw, 56px);
   }
 
+  .test-hero-copy {
+    max-width: 720px;
+  }
+
+  .test-experience-shell {
+    width: min(100%, 820px);
+    justify-self: center;
+  }
+
   .test-experience-stage {
-    grid-template-columns: minmax(0, 1.18fr) minmax(320px, 0.82fr);
-  }
-
-  .test-review-rail {
-    min-height: 270px;
-    border-top: 1px solid var(--test-line);
-    grid-column: 1 / -1;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    grid-template-rows: none;
-  }
-
-  .test-review-panel,
-  .test-evidence-receipt {
-    min-height: 240px;
+    grid-template-columns: minmax(390px, 1.45fr) minmax(230px, 0.75fr);
   }
 
   .test-evidence-path {
@@ -118,24 +113,6 @@
   .test-hero-copy {
     max-width: 680px;
     padding-top: 0;
-  }
-
-  .test-experience-stage {
-    grid-template-columns: 1fr;
-  }
-
-  .test-demo-page,
-  .test-context-panel {
-    border-right: 0;
-    border-bottom: 1px solid var(--test-line);
-  }
-
-  .test-context-panel {
-    min-height: 500px;
-  }
-
-  .test-review-rail {
-    grid-column: auto;
   }
 
   .test-installer-rail .test-install {
@@ -257,12 +234,27 @@
 
   .test-experience-shell,
   .test-installer-rail {
-    max-width: calc(100% - 24px);
+    max-width: none;
   }
 
   .test-experience-stage {
     min-height: 0;
     border-radius: 14px;
+    grid-template-columns: 1fr;
+    grid-template-rows: auto;
+  }
+
+  .test-demo-page,
+  .test-context-panel,
+  .test-review-rail {
+    grid-column: auto;
+    grid-row: auto;
+  }
+
+  .test-demo-page,
+  .test-context-panel {
+    border-right: 0;
+    border-bottom: 1px solid var(--test-line);
   }
 
   .test-demo-nav {
@@ -464,7 +456,7 @@
   .test-surfaces dl > div,
   .test-surfaces dl > div:first-child {
     min-height: auto;
-    padding: 28px 0;
+    padding: 28px 20px;
     border-right: 0;
     border-bottom: 1px solid var(--test-line);
     grid-column: auto;
@@ -492,15 +484,19 @@
   .test-footer span {
     display: none;
   }
+
+  .rp-doc > h1:first-child + p {
+    margin-top: 22px;
+    margin-bottom: 38px;
+    padding-bottom: 34px;
+    font-size: 16px;
+    line-height: 1.72;
+  }
 }
 
 @media (max-width: 420px) {
-  .test-hero h1 span {
-    display: inline;
-  }
-
-  .test-hero h1 span + span::before {
-    content: ' ';
+  .test-hero h1 {
+    font-size: 38px;
   }
 
   .test-checkout-progress li {

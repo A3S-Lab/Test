@@ -1,11 +1,11 @@
 ---
-title: Exploration and regression workflows
-description: Understand the responsibility boundaries between external-planner sessions, deterministic ACL suites, and embedded planners.
+title: Explore a page and save the regression
+description: Use an agent session to prove an unknown path, then save its important actions and assertions as a repeatable ACL suite.
 ---
 
-# Exploration and regression workflows
+# Explore a page and save the regression
 
-A3S Test has two primary workflows. They are two planning entries into one typed execution core, not separate test engines.
+For an unfamiliar page, let the coding agent work from one fresh observation at a time. Once the path works, save its important actions and assertions as ACL for local development or CI. A3S Test reuses the same actions, drivers, evidence, and cleanup rules across both workflows.
 
 | Workflow            | Planner                     | Best for                                            | Entry point                   |
 | ------------------- | --------------------------- | --------------------------------------------------- | ----------------------------- |

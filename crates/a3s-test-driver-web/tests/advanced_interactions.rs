@@ -188,6 +188,18 @@ async fn maps_advanced_interactions_to_the_verified_browser_protocol() {
     assert!(context_menu_script.contains("button: 2"));
     assert!(context_menu_script.contains("buttons: 2"));
     action_args[6] = os(&["eval", "<context-menu-script>"]);
+    let shadow_check = action_args
+        .iter()
+        .position(|arguments| {
+            arguments.first().is_some_and(|argument| argument == "eval")
+                && arguments.get(1).is_some_and(|argument| {
+                    argument
+                        .to_string_lossy()
+                        .contains(r#"const target = {"type":"test_id","value":"comments"}"#)
+                })
+        })
+        .expect("semantic Shadow DOM check probe");
+    action_args[shadow_check] = os(&["eval", "<shadow-target-check>"]);
     assert_eq!(
         action_args,
         vec![
@@ -200,6 +212,7 @@ async fn maps_advanced_interactions_to_the_verified_browser_protocol() {
             os(&["eval", "<context-menu-script>"]),
             os(&["type", "#title", "more text"]),
             os(&["keyboard", "inserttext", " at caret"]),
+            os(&["eval", "<shadow-target-check>"]),
             os(&["find", "testid", "comments", "check"]),
             os(&["uncheck", "#readonly"]),
             os(&["select", "@e8", "draft", "review"]),

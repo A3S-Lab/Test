@@ -12,10 +12,10 @@ export default defineConfig({
   siteOrigin,
   title: 'A3S Test',
   description:
-    'A typed, evidence-first test engine for coding-agent exploration and deterministic cross-surface regression suites.',
+    'A3S Test helps coding agents understand rendered interfaces, take typed actions, and preserve verifiable regression evidence.',
   lang: 'zh',
-  icon: '/favicon.svg',
-  logo: '/a3s-test-mark.svg',
+  icon: '/a3s-logo.png',
+  logo: '/a3s-logo.png',
   logoText: 'A3S Test',
   outDir: 'doc_build',
   llms: true,
@@ -32,14 +32,14 @@ export default defineConfig({
       label: '简体中文',
       title: 'A3S Test',
       description:
-        '面向编码 Agent 探索与确定性跨界面回归测试的类型化、证据优先测试引擎。',
+        'A3S Test 让编码 Agent 理解真实页面、执行类型化动作，并保存可验证的回归证据。',
     },
     {
       lang: 'en',
       label: 'English',
       title: 'A3S Test',
       description:
-        'A typed, evidence-first test engine for coding-agent exploration and deterministic cross-surface regression suites.',
+        'A3S Test helps coding agents understand rendered interfaces, take typed actions, and preserve verifiable regression evidence.',
     },
   ],
   head: [
