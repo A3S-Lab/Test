@@ -654,8 +654,8 @@ ${OVERLAY_MARKING_CSS}
     bottom: calc(78px + env(safe-area-inset-bottom));
     left: 8px;
     width: auto;
-    max-height: calc(100vh - 94px - env(safe-area-inset-bottom));
-    max-height: calc(100dvh - 94px - env(safe-area-inset-bottom));
+    max-height: calc(100vh - 110px - env(safe-area-inset-bottom));
+    max-height: calc(100dvh - 110px - env(safe-area-inset-bottom));
   }
 
   .a3s-editor-popover {
