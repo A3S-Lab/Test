@@ -3,6 +3,7 @@ import '@fontsource-variable/geist-mono';
 import './index.css';
 import './home.css';
 import './experience.css';
+import './experience-motion.css';
 import './home-sections.css';
 import './responsive.css';
 

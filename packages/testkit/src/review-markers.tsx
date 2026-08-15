@@ -54,6 +54,7 @@ export function ReviewMarkers(props: ReviewMarkersProps) {
         <button
           type="button"
           className="a3s-marker-action"
+          data-tooltip={draft?.draft.instruction ?? "Open finding"}
           aria-label={`Edit draft marker: ${draft?.draft.instruction ?? marker.id}`}
           onClick={() => { if (draft) props.onEditDraft(draft); }}
         >

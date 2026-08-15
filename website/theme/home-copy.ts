@@ -52,6 +52,11 @@ export type ExperienceCopy = {
   motionFinding: string;
   motionRequest: string;
   motionPacket: string;
+  motionContext: string;
+  motionContextValue: string;
+  motionAdd: string;
+  motionSend: string;
+  motionReady: string;
 };
 
 type LocalizedCopy = {
@@ -262,6 +267,11 @@ export const homeCopy: Record<Locale, LocalizedCopy> = {
       motionFinding: '已命中提交按钮',
       motionRequest: '提高主操作的文字对比度',
       motionPacket: '1 个问题 · 上下文已绑定',
+      motionContext: '实时上下文',
+      motionContextValue: 'button · 提交订单',
+      motionAdd: '加入批次',
+      motionSend: '立即发送',
+      motionReady: '修复任务已就绪',
     },
   },
   en: {
@@ -424,6 +434,11 @@ export const homeCopy: Record<Locale, LocalizedCopy> = {
       motionFinding: 'Submit action located',
       motionRequest: 'Increase the primary action label contrast',
       motionPacket: '1 finding · context bound',
+      motionContext: 'Live context',
+      motionContextValue: 'button · Place order',
+      motionAdd: 'Add to batch',
+      motionSend: 'Send now',
+      motionReady: 'Repair task ready',
     },
   },
 };

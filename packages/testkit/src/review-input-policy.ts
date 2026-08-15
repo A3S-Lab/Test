@@ -1,10 +1,16 @@
 import { useEffect, useRef } from "react";
 import { isOverlayElement, isOverlayEvent } from "./review-dom";
 import { isEditableEvent } from "./review-integration";
+import type { SelectionMode } from "./review-model";
 
 const REVIEW_EVENT_KEYS = {
   toggle: "f",
   escape: "Escape",
+  element: "e",
+  multi: "m",
+  text: "t",
+  area: "a",
+  draw: "d",
   layout: "l",
   pause: "p",
   markers: "h",
@@ -15,6 +21,11 @@ const REVIEW_EVENT_KEYS = {
 export const REVIEW_KEY_SHORTCUTS = {
   toggle: "Control+Shift+F Meta+Shift+F",
   escape: REVIEW_EVENT_KEYS.escape,
+  element: REVIEW_EVENT_KEYS.element.toUpperCase(),
+  multi: REVIEW_EVENT_KEYS.multi.toUpperCase(),
+  text: REVIEW_EVENT_KEYS.text.toUpperCase(),
+  area: REVIEW_EVENT_KEYS.area.toUpperCase(),
+  draw: REVIEW_EVENT_KEYS.draw.toUpperCase(),
   layout: REVIEW_EVENT_KEYS.layout.toUpperCase(),
   pause: REVIEW_EVENT_KEYS.pause.toUpperCase(),
   markers: REVIEW_EVENT_KEYS.markers.toUpperCase(),
@@ -25,6 +36,11 @@ export const REVIEW_KEY_SHORTCUTS = {
 export const REVIEW_SHORTCUT_HELP = [
   { action: "Toggle review", keys: "Ctrl/Command + Shift + F" },
   { action: "Cancel or close", keys: "Esc" },
+  { action: "Mark element", keys: REVIEW_KEY_SHORTCUTS.element },
+  { action: "Mark multiple elements", keys: REVIEW_KEY_SHORTCUTS.multi },
+  { action: "Mark text", keys: REVIEW_KEY_SHORTCUTS.text },
+  { action: "Mark area", keys: REVIEW_KEY_SHORTCUTS.area },
+  { action: "Draw a mark", keys: REVIEW_KEY_SHORTCUTS.draw },
   { action: "Toggle Layout Mode", keys: REVIEW_KEY_SHORTCUTS.layout },
   { action: "Pause or resume motion", keys: REVIEW_KEY_SHORTCUTS.pause },
   { action: "Show or hide markers", keys: REVIEW_KEY_SHORTCUTS.markers },
@@ -93,6 +109,7 @@ export type GlobalReviewShortcutsOptions = {
   onCancelMarking(restoreFocus: boolean): void;
   onCancelCandidate(): void;
   onCloseOverlay(): void;
+  onStartMarking(mode: SelectionMode): void;
   onToggleLayout(): void;
   onTogglePause(): void;
   onToggleMarkers(): void;
@@ -130,7 +147,12 @@ export function useGlobalReviewShortcuts(options: GlobalReviewShortcutsOptions) 
       }
       if (hasModifier) return;
       if (!current.open) return;
-      if (key === REVIEW_EVENT_KEYS.layout) current.onToggleLayout();
+      if (!current.candidate && key === REVIEW_EVENT_KEYS.element) current.onStartMarking("element");
+      else if (!current.candidate && key === REVIEW_EVENT_KEYS.multi) current.onStartMarking("multi");
+      else if (!current.candidate && key === REVIEW_EVENT_KEYS.text) current.onStartMarking("text");
+      else if (!current.candidate && key === REVIEW_EVENT_KEYS.area) current.onStartMarking("area");
+      else if (!current.candidate && key === REVIEW_EVENT_KEYS.draw) current.onStartMarking("draw");
+      else if (key === REVIEW_EVENT_KEYS.layout) current.onToggleLayout();
       else if (key === REVIEW_EVENT_KEYS.pause) current.onTogglePause();
       else if (key === REVIEW_EVENT_KEYS.markers) current.onToggleMarkers();
       else if (key === REVIEW_EVENT_KEYS.copy && current.hasDrafts) current.onCopyDrafts();

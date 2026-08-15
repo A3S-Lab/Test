@@ -424,8 +424,18 @@ export function TestKitExperience({
           <span className="test-evidence-path" aria-hidden="true" />
           <div className="test-product-motion" aria-hidden="true">
             <div className="test-motion-scan">
+              <i />
               <Scan size={14} weight="bold" />
               <span>DOM · A11Y · XY</span>
+            </div>
+            <div className="test-motion-context">
+              <header>
+                <Code size={13} weight="bold" />
+                <span>{copy.motionContext}</span>
+              </header>
+              <strong>{copy.motionContextValue}</strong>
+              <code>role=button</code>
+              <code>x=940 y=566 w=167 h=38</code>
             </div>
             <CursorClick
               className="test-motion-cursor"
@@ -433,15 +443,29 @@ export function TestKitExperience({
               weight="fill"
             />
             <div className="test-motion-note">
-              <span>01</span>
-              <div>
-                <strong>{copy.motionFinding}</strong>
-                <small>{copy.motionRequest}</small>
-              </div>
+              <header>
+                <span>01</span>
+                <div>
+                  <strong>{copy.motionFinding}</strong>
+                  <small>{copy.motionContextValue}</small>
+                </div>
+              </header>
+              <p>{copy.motionRequest}</p>
+              <footer>
+                <span>{copy.motionAdd}</span>
+                <strong>{copy.motionSend}</strong>
+              </footer>
             </div>
             <div className="test-motion-packet">
               <PaperPlaneTilt size={14} weight="fill" />
               <span>{copy.motionPacket}</span>
+            </div>
+            <div className="test-motion-receipt">
+              <CheckCircle size={16} weight="fill" />
+              <span>
+                <strong>{copy.motionReady}</strong>
+                <small>{copy.motionPacket}</small>
+              </span>
             </div>
           </div>
         </div>

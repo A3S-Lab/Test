@@ -205,6 +205,7 @@ describe("React adapter and review overlay", () => {
       await waitFor(() => expect(shadowQuery("textarea")).toBeTruthy());
       fireEvent.change(shadowQuery("textarea"), { target: { value: instruction } });
       if (selector === "#two") {
+        fireEvent.click(shadowQuery(".a3s-editor-details"));
         const conflict = shadowQuery(".a3s-conflicts input");
         fireEvent.click(conflict);
       }
@@ -235,7 +236,9 @@ describe("React adapter and review overlay", () => {
     await waitFor(() => expect(shadowQuery(".a3s-editor").textContent).toContain("2 elements"));
     fireEvent.change(shadowQuery("textarea"), { target: { value: "Align both actions" } });
     fireEvent.click(shadowButton("Add draft"));
-    await waitFor(() => expect(shadowQuery(".a3s-markers").children).toHaveLength(2));
+    await waitFor(() => expect(shadowQuery(".a3s-markers").children).toHaveLength(1));
+    expect(shadowQuery(".a3s-markers").querySelectorAll(".a3s-marker-action")).toHaveLength(1);
+    expect((shadowQuery(".a3s-marker") as HTMLElement).style.cssText).toContain("width: 120px");
 
     fireEvent.click(shadowButton("Edit"));
     fireEvent.change(shadowQuery("textarea"), { target: { value: "Align both primary actions" } });
@@ -245,7 +248,7 @@ describe("React adapter and review overlay", () => {
     fireEvent.click(shadowButton("Hide marker"));
     expect(shadowQuery(".a3s-markers").children).toHaveLength(0);
     fireEvent.click(shadowButton("Reopen marker"));
-    await waitFor(() => expect(shadowQuery(".a3s-markers").children).toHaveLength(2));
+    await waitFor(() => expect(shadowQuery(".a3s-markers").children).toHaveLength(1));
   });
 
   it("restores page-local drafts and semantic targets after a React reload", async () => {
@@ -433,7 +436,8 @@ describe("React adapter and review overlay", () => {
     fireEvent.keyDown(document, { key: "F", metaKey: true, shiftKey: true });
     await waitFor(() => expect(shadowQuery(".a3s-panel")).toBeTruthy());
 
-    fireEvent.click(shadowButton("Element"));
+    fireEvent.keyDown(document, { key: "e" });
+    expect(shadowButton("Element").getAttribute("aria-pressed")).toBe("true");
     target.dispatchEvent(pointerEventWithPath(target, 30, 30));
     fireEvent.change(await waitFor(() => shadowQuery(".a3s-editor textarea")), { target: { value: "Shortcut draft" } });
     fireEvent.click(shadowButton("Add draft"));
@@ -445,7 +449,7 @@ describe("React adapter and review overlay", () => {
       document.querySelector<HTMLElement>("[aria-label='ARIA editor']")!,
     ];
     for (const editable of editableTargets) {
-      for (const key of ["l", "p", "h", "c", "x"]) fireEvent.keyDown(editable, { key });
+      for (const key of ["e", "m", "t", "a", "d", "l", "p", "h", "c", "x"]) fireEvent.keyDown(editable, { key });
     }
     expect(shadowButton("Layout").getAttribute("aria-pressed")).toBe("false");
     expect(getPageContextBridge()?.animationsPaused()).toBe(false);
@@ -751,6 +755,11 @@ describe("React adapter and review overlay", () => {
     const launcher = shadowQuery(".a3s-launch");
     expect(launcher.getAttribute("aria-keyshortcuts")).toBe("Control+Shift+F Meta+Shift+F");
     expect(panel.getAttribute("aria-keyshortcuts")).toBe("Escape");
+    expect(shadowButton("Element").getAttribute("aria-keyshortcuts")).toBe("E");
+    expect(shadowButton("Multi").getAttribute("aria-keyshortcuts")).toBe("M");
+    expect(shadowButton("Text").getAttribute("aria-keyshortcuts")).toBe("T");
+    expect(shadowButton("Area").getAttribute("aria-keyshortcuts")).toBe("A");
+    expect(shadowButton("Draw").getAttribute("aria-keyshortcuts")).toBe("D");
     expect(shadowButton("Layout").getAttribute("aria-keyshortcuts")).toBe("L");
     expect(shadowButton("Pause").getAttribute("aria-keyshortcuts")).toBe("P");
     expect(shadowButton("Hide markers").getAttribute("aria-keyshortcuts")).toBe("H");

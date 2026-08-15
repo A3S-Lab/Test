@@ -22,6 +22,15 @@
 
 ### Changed
 
+- Rebuilt the embedded review surface as a compact floating dock with a
+  secondary tool tray, focused finding editor, grouped batch actions, and one
+  aggregate marker per multi-selection finding. Direct `E`, `M`, `T`, `A`, and
+  `D` marking shortcuts retain editable-control ownership and are covered by
+  React and website ACL regressions.
+- Added a staged homepage demonstration that scans the rendered page, binds
+  semantic and geometric context, opens a human finding, sends its context,
+  and returns a repair-ready receipt. It pauses off-screen, stops when the live
+  review flow begins, and respects reduced-motion preferences.
 - Updated the Docker Buildx and registry-login Actions to their Node.js 24
   major versions, removing the deprecated Node.js 20 runtime from runner-image
   CI and the release publishing path without changing image inputs or

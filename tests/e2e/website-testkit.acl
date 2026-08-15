@@ -44,8 +44,8 @@ suite "website-testkit-experience" {
             interactive = true
         }
 
-        click "mark-single" {
-            target = role("button", "Mark element")
+        press "mark-single" {
+            key = "e"
         }
 
         snapshot "single-marking-state" {
@@ -61,7 +61,7 @@ suite "website-testkit-experience" {
         }
 
         fill "single-instruction" {
-            target = role("textbox", "Requested fix")
+            target = ref("@e52")
             value = "Increase the action label contrast without changing layout"
         }
 
@@ -70,7 +70,7 @@ suite "website-testkit-experience" {
         }
 
         click "send-single" {
-            target = role("button", "Send and auto-fix")
+            target = ref("@e44")
         }
 
         wait "single-receipt" {
@@ -81,8 +81,8 @@ suite "website-testkit-experience" {
             interactive = true
         }
 
-        click "mark-first-batch-item" {
-            target = role("button", "Mark element")
+        press "mark-first-batch-item" {
+            key = "e"
         }
 
         snapshot "first-batch-marking-state" {
@@ -98,7 +98,7 @@ suite "website-testkit-experience" {
         }
 
         fill "first-batch-instruction" {
-            target = role("textbox", "Requested fix")
+            target = ref("@e54")
             value = "Clarify the context refresh state"
         }
 
@@ -107,15 +107,15 @@ suite "website-testkit-experience" {
         }
 
         click "save-first-batch-draft" {
-            target = role("button", "Add draft")
+            target = ref("@e44")
         }
 
         snapshot "after-first-batch-draft" {
             interactive = true
         }
 
-        click "mark-second-batch-item" {
-            target = role("button", "Mark element")
+        press "mark-second-batch-item" {
+            key = "e"
         }
 
         snapshot "second-batch-marking-state" {
@@ -131,7 +131,7 @@ suite "website-testkit-experience" {
         }
 
         fill "second-batch-instruction" {
-            target = role("textbox", "Requested fix")
+            target = ref("@e55")
             value = "Announce which installer command was copied"
         }
 
@@ -140,7 +140,7 @@ suite "website-testkit-experience" {
         }
 
         click "save-second-batch-draft" {
-            target = role("button", "Add draft")
+            target = ref("@e45")
         }
 
         snapshot "batch-ready" {
@@ -148,7 +148,7 @@ suite "website-testkit-experience" {
         }
 
         click "send-batch" {
-            target = role("button", "Send selected (2)")
+            target = ref("@e56")
         }
 
         wait "batch-receipt" {
@@ -210,8 +210,8 @@ suite "website-testkit-experience" {
             interactive = true
         }
 
-        click "mobile-open-layout" {
-            target = role("button", "Layout")
+        press "mobile-open-layout" {
+            key = "l"
         }
 
         snapshot "mobile-layout-controls" {

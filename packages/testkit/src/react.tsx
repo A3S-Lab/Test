@@ -347,6 +347,7 @@ export function A3SReviewOverlay({
       focusPanel();
     },
     onCloseOverlay: closeOverlay,
+    onStartMarking: startMarking,
     onToggleLayout: toggleLayoutMode,
     onTogglePause: togglePause,
     onToggleMarkers: toggleMarkers,
@@ -896,7 +897,7 @@ export function A3SReviewOverlay({
       {layoutMode && layoutSource && !candidate && <div className="a3s-layout-target-preview" style={rectStyle(layoutTarget)} aria-hidden="true" />}
       {drawingPath && <svg className="a3s-drawing" aria-hidden="true"><path d={drawingPath} /></svg>}
       <ReviewMarkers visible={markersVisible} bridge={bridge} drafts={drafts} repairs={repairs} qualityReports={qualityReports} designAuditReports={designAuditReports} onEditDraft={editDraft} />
-      <button ref={launchRef} className={`a3s-launch ${marking ? "is-active" : ""}`} type="button" title="Toggle review overlay (Ctrl/Command+Shift+F)" onClick={() => open ? closeOverlayFromControl() : openOverlay(true)} aria-expanded={open} aria-controls={`${idPrefix}-review-panel`} aria-keyshortcuts={REVIEW_KEY_SHORTCUTS.toggle}>
+      <button ref={launchRef} className={`a3s-launch${marking ? " is-active" : ""}${open ? " is-open" : ""}`} type="button" title="Toggle review overlay (Ctrl/Command+Shift+F)" onClick={() => open ? closeOverlayFromControl() : openOverlay(true)} aria-expanded={open} aria-controls={`${idPrefix}-review-panel`} aria-keyshortcuts={REVIEW_KEY_SHORTCUTS.toggle}>
         <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.4" /><path d="m7.3 16 3.9-9.2c.3-.8 1.4-.8 1.8 0l3.8 9.2M9.2 12.5h5.7" /><path d="M4.8 15.4c3-2.5 6.3-2.8 9.7-.9 1.7.9 3.4.3 5.2-1.3-1 4.7-4 7.1-8.5 7.1" /></svg>
         <span className="a3s-sr-only">A3S Review</span>
         {findingCount > 0 && <span className="a3s-launch-count" aria-hidden="true">{findingCount}</span>}
@@ -969,7 +970,10 @@ export function A3SReviewOverlay({
           {drafts.length === 0 && repairs.length === 0 && qualityReports.length === 0 && designAuditReports.length === 0 && !candidate && <p className="a3s-empty">Mark an element to describe a fix. Contract findings and advisory design suggestions appear here when available.</p>}
               </section>
             </div>
-            {drafts.length > 0 && <footer><button type="button" className="quiet" title="Clear all local drafts (X)" aria-keyshortcuts={REVIEW_KEY_SHORTCUTS.clear} onClick={clearDrafts}>Clear drafts</button><button type="button" className="quiet" title="Copy selected drafts as Markdown (C)" aria-keyshortcuts={REVIEW_KEY_SHORTCUTS.copy} onClick={() => void copyDraftsMarkdown()}>Copy Markdown</button><button type="button" className="quiet" onClick={() => void copyDrafts()}>Copy JSON</button><button type="button" disabled={selectedCount === 0} onClick={() => submit(drafts.filter((item) => item.selected).map((item) => item.draft))}>Send selected ({selectedCount})</button><button type="button" onClick={() => submit(drafts.map((item) => item.draft))}>Send all</button></footer>}
+            {drafts.length > 0 && <footer>
+              <div className="a3s-workspace-secondary-actions"><button type="button" className="quiet" title="Clear all local drafts (X)" aria-keyshortcuts={REVIEW_KEY_SHORTCUTS.clear} onClick={clearDrafts}>Clear drafts</button><button type="button" className="quiet" title="Copy selected drafts as Markdown (C)" aria-keyshortcuts={REVIEW_KEY_SHORTCUTS.copy} onClick={() => void copyDraftsMarkdown()}>Copy Markdown</button><button type="button" className="quiet" onClick={() => void copyDrafts()}>Copy JSON</button></div>
+              <div className="a3s-workspace-send-actions"><button type="button" disabled={selectedCount === 0} onClick={() => submit(drafts.filter((item) => item.selected).map((item) => item.draft))}>Send selected ({selectedCount})</button><button type="button" onClick={() => submit(drafts.map((item) => item.draft))}>Send all</button></div>
+            </footer>}
           </section>
         </aside>
       </>}

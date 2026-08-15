@@ -43,6 +43,11 @@ button, input, textarea, select {
   --a3s-warning: #f6c45b;
   --a3s-warning-soft: #3c3015;
   --a3s-shadow: 0 24px 64px rgb(0 0 0 / 38%);
+  --a3s-toolbar: #17191f;
+  --a3s-toolbar-raised: #22252d;
+  --a3s-toolbar-line: rgb(255 255 255 / 11%);
+  --a3s-toolbar-text: #f7f8fb;
+  --a3s-toolbar-muted: #a7afbd;
 }
 
 .a3s-root[data-theme="light"] {
@@ -165,31 +170,40 @@ button.danger {
   height: 44px;
   min-height: 44px;
   padding: 0;
-  border: 1px solid rgb(255 255 255 / 42%);
-  border-radius: 12px;
-  background: var(--a3s-blue-strong);
+  border: 1px solid var(--a3s-toolbar-line);
+  border-radius: 50%;
+  background: var(--a3s-toolbar);
   color: #ffffff;
-  box-shadow: 0 12px 30px rgb(18 100 255 / 30%);
+  box-shadow: 0 12px 32px rgb(5 10 20 / 30%);
   pointer-events: auto;
   place-items: center;
+  transform-origin: center;
+  transition: opacity 180ms ease, transform 220ms cubic-bezier(.16, 1, .3, 1), visibility 180ms ease, background-color 150ms ease;
 }
 
 .a3s-launch:hover {
-  border-color: #ffffff;
-  background: color-mix(in srgb, var(--a3s-blue-strong) 88%, #000000);
-  transform: translateY(-2px);
+  border-color: rgb(255 255 255 / 26%);
+  background: var(--a3s-toolbar-raised);
+  transform: translateY(-2px) scale(1.02);
 }
 
 .a3s-launch.is-active {
-  box-shadow: 0 0 0 4px color-mix(in srgb, var(--a3s-violet) 24%, transparent), 0 12px 30px rgb(18 100 255 / 30%);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--a3s-blue) 22%, transparent), 0 12px 32px rgb(5 10 20 / 30%);
+}
+
+.a3s-launch.is-open {
+  visibility: hidden;
+  opacity: 0;
+  pointer-events: none;
+  transform: scale(.72) rotate(-12deg);
 }
 
 .a3s-launch > svg {
-  width: 23px;
-  height: 23px;
+  width: 22px;
+  height: 22px;
   fill: none;
   stroke: currentColor;
-  stroke-width: 1.65;
+  stroke-width: 1.55;
   stroke-linecap: round;
   stroke-linejoin: round;
 }
@@ -212,13 +226,26 @@ button.danger {
 
 .a3s-panel {
   position: fixed;
-  right: 74px;
-  bottom: 16px;
-  width: min(760px, calc(100vw - 106px));
+  right: 18px;
+  bottom: 18px;
+  width: min(330px, calc(100vw - 36px));
   overflow: visible;
   border: 0;
   background: transparent;
   pointer-events: none;
+  transform-origin: right bottom;
+  animation: a3s-panel-enter 260ms cubic-bezier(.16, 1, .3, 1) both;
+}
+
+@keyframes a3s-panel-enter {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(.94);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
 }
 
 .a3s-command-bar {
@@ -226,40 +253,47 @@ button.danger {
   min-width: 0;
   height: 52px;
   padding: 6px;
-  border: 1px solid var(--a3s-line);
-  border-radius: 14px;
-  background: color-mix(in srgb, var(--a3s-panel) 96%, transparent);
-  box-shadow: var(--a3s-shadow);
+  border: 1px solid var(--a3s-toolbar-line);
+  border-radius: 17px;
+  background: color-mix(in srgb, var(--a3s-toolbar) 96%, transparent);
+  box-shadow: 0 18px 48px rgb(5 10 20 / 28%), 0 2px 8px rgb(5 10 20 / 20%);
+  color: var(--a3s-toolbar-text);
   pointer-events: auto;
   align-items: center;
   gap: 7px;
+  backdrop-filter: blur(18px) saturate(130%);
 }
 
 .a3s-command-bar > header {
   display: grid;
-  min-width: 112px;
+  min-width: 67px;
   height: 40px;
-  padding: 0 2px 0 4px;
-  border-right: 1px solid var(--a3s-line);
-  grid-template-columns: 27px minmax(0, 1fr) 28px;
+  padding: 0 4px 0 2px;
+  border-right: 1px solid var(--a3s-toolbar-line);
+  grid-template-columns: 30px 28px;
   align-items: center;
-  gap: 6px;
+  gap: 3px;
 }
 
 .a3s-panel-mark {
   display: grid;
-  width: 27px;
-  height: 27px;
+  width: 28px;
+  height: 28px;
   border-radius: 8px;
-  background: var(--a3s-blue-strong);
+  background: #1264ff;
   color: #ffffff;
   font: 780 8px/1 ui-sans-serif, sans-serif;
   letter-spacing: -.03em;
   place-items: center;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 24%);
 }
 
 .a3s-command-bar > header > span:nth-child(2) {
-  min-width: 0;
+  position: fixed;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
 }
 
 .a3s-panel-title,
@@ -295,6 +329,16 @@ button.danger {
   place-items: center;
 }
 
+.a3s-command-bar .a3s-close {
+  color: var(--a3s-toolbar-muted);
+}
+
+.a3s-command-bar .a3s-close:hover {
+  border-color: var(--a3s-toolbar-line);
+  background: rgb(255 255 255 / 8%);
+  color: var(--a3s-toolbar-text);
+}
+
 .a3s-close svg {
   width: 15px;
   height: 15px;
@@ -305,17 +349,18 @@ button.danger {
 }
 
 .a3s-tools {
-  display: flex;
+  position: relative;
+  display: block;
   min-width: 0;
   flex: 1 1 auto;
-  overflow-x: auto;
-  align-items: center;
-  gap: 6px;
-  scrollbar-width: none;
 }
 
-.a3s-tools::-webkit-scrollbar {
-  display: none;
+.a3s-toolbar-core {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 4px;
 }
 
 .a3s-tool-group {
@@ -328,14 +373,14 @@ button.danger {
 .a3s-tool-group-primary {
   padding: 2px;
   border-radius: 10px;
-  background: var(--a3s-soft);
+  background: rgb(255 255 255 / 7%);
 }
 
 .a3s-tool-divider {
   width: 1px;
   height: 24px;
   flex: 0 0 auto;
-  background: var(--a3s-line);
+  background: var(--a3s-toolbar-line);
 }
 
 .a3s-tools button,
@@ -349,7 +394,7 @@ button.danger {
   border-color: transparent;
   border-radius: 8px;
   background: transparent;
-  color: var(--a3s-muted);
+  color: var(--a3s-toolbar-muted);
   place-items: center;
 }
 
@@ -357,14 +402,20 @@ button.danger {
 .a3s-tools button.selected,
 .a3s-settings > .a3s-disclosure:hover,
 .a3s-settings > .a3s-disclosure[aria-expanded="true"] {
-  border-color: color-mix(in srgb, var(--a3s-blue) 28%, transparent);
-  background: var(--a3s-blue-soft);
-  color: var(--a3s-blue-ink);
+  border-color: rgb(255 255 255 / 9%);
+  background: var(--a3s-toolbar-raised);
+  color: var(--a3s-toolbar-text);
+}
+
+.a3s-tool-group-primary button.selected {
+  border-color: rgb(255 255 255 / 18%);
+  background: #1264ff;
+  color: #ffffff;
 }
 
 .a3s-tools button.danger {
-  background: var(--a3s-danger-soft);
-  color: var(--a3s-danger);
+  background: rgb(255 107 118 / 15%);
+  color: #ff9ba3;
 }
 
 .a3s-tools button svg,
@@ -386,8 +437,9 @@ button.danger {
   z-index: 12;
   padding: 5px 7px;
   border-radius: 6px;
-  background: var(--a3s-text);
-  color: var(--a3s-panel);
+  border: 1px solid rgb(255 255 255 / 9%);
+  background: #0e1015;
+  color: #f7f8fb;
   content: attr(data-tooltip);
   font-size: 10px;
   font-weight: 650;
@@ -410,6 +462,65 @@ button.danger {
   overflow: visible;
 }
 
+.a3s-tool-tray {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 12px);
+  display: grid;
+  width: min(430px, calc(100vw - 36px));
+  min-height: 58px;
+  padding: 8px;
+  border: 1px solid var(--a3s-toolbar-line);
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--a3s-toolbar) 97%, transparent);
+  box-shadow: 0 18px 48px rgb(5 10 20 / 30%);
+  color: var(--a3s-toolbar-text);
+  grid-template-columns: minmax(112px, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  backdrop-filter: blur(18px) saturate(130%);
+  animation: a3s-tool-tray-enter 180ms cubic-bezier(.16, 1, .3, 1) both;
+}
+
+.a3s-tool-tray[hidden] {
+  display: none;
+}
+
+@keyframes a3s-tool-tray-enter {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(.97);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.a3s-tool-tray-copy {
+  min-width: 0;
+  padding-left: 6px;
+}
+
+.a3s-tool-tray-copy strong,
+.a3s-tool-tray-copy span {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.a3s-tool-tray-copy strong {
+  color: var(--a3s-toolbar-text);
+  font-size: 11px;
+}
+
+.a3s-tool-tray-copy span {
+  margin-top: 2px;
+  color: var(--a3s-toolbar-muted);
+  font-size: 9px;
+}
+
 .a3s-tool-count {
   position: absolute;
   top: -4px;
@@ -418,7 +529,7 @@ button.danger {
   min-width: 17px;
   height: 17px;
   padding: 0 4px;
-  border: 2px solid var(--a3s-panel);
+  border: 2px solid var(--a3s-toolbar);
   border-radius: 999px;
   background: var(--a3s-violet);
   color: #ffffff;
@@ -433,6 +544,12 @@ button.danger {
 
 .a3s-root[data-dock="left"] .a3s-panel {
   right: auto;
-  left: 74px;
+  left: 18px;
+  transform-origin: left bottom;
+}
+
+.a3s-root[data-dock="left"] .a3s-tool-tray {
+  right: auto;
+  left: 0;
 }
 `;

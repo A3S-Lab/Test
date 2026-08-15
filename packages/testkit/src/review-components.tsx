@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import type { RepairIntent, RepairSeverity, Rect } from "./types";
 import { MODE_LABEL, type LayoutCanvas, type LayoutSource, type OverlayTheme, type SelectionMode } from "./review-model";
 import { validLayoutRect } from "./review-utils";
@@ -27,35 +27,48 @@ export type ReviewMarkingToolbarProps = {
 };
 
 export function ReviewMarkingToolbar(props: ReviewMarkingToolbarProps) {
+  const [moreOpen, setMoreOpen] = useState(false);
+  const beginMarking = (value: SelectionMode) => {
+    setMoreOpen(false);
+    props.onStartMarking(value);
+  };
+
   return <section className="a3s-tools" aria-label="Mark page">
-    <div className="a3s-tool-group a3s-tool-group-primary">
-      {(["element", "multi", "area"] as SelectionMode[]).map((value) => <ToolButton key={value} label={MODE_LABEL[value]} ariaLabel={`Mark ${MODE_LABEL[value].toLowerCase()}`} icon={value} pressed={props.marking && props.mode === value} onClick={() => props.onStartMarking(value)} />)}
-    </div>
-    <div className="a3s-tool-group">
-      {(["text", "draw"] as SelectionMode[]).map((value) => <ToolButton key={value} label={MODE_LABEL[value]} ariaLabel={`Mark ${MODE_LABEL[value].toLowerCase()}`} icon={value} pressed={props.marking && props.mode === value} onClick={() => props.onStartMarking(value)} />)}
-      <ToolButton label="Layout" ariaLabel="Layout" icon="layout" pressed={props.layoutMode} title="Toggle Layout Mode (L)" keyShortcut={REVIEW_KEY_SHORTCUTS.layout} onClick={props.onToggleLayout} />
-    </div>
-    <span className="a3s-tool-divider" aria-hidden="true" />
-    <div className="a3s-tool-group">
-      <ToolButton label={props.paused ? "Resume" : "Pause"} ariaLabel={props.paused ? "Resume page animations" : "Pause page animations"} icon={props.paused ? "play" : "pause"} pressed={props.paused} title="Pause or resume page motion (P)" keyShortcut={REVIEW_KEY_SHORTCUTS.pause} onClick={props.onTogglePause} />
-      <ToolButton label={props.markersVisible ? "Hide markers" : "Show markers"} ariaLabel={props.markersVisible ? "Hide markers" : "Show markers"} icon={props.markersVisible ? "eye" : "eye-off"} pressed={props.markersVisible} title="Show or hide finding markers (H)" keyShortcut={REVIEW_KEY_SHORTCUTS.markers} onClick={props.onToggleMarkers} />
-      <ToolButton label={`Auto-send · ${props.autoSendEnabled ? "on" : "off"}`} ariaLabel={`Turn auto-send ${props.autoSendEnabled ? "off" : "on"}`} icon="send" pressed={props.autoSendEnabled} onClick={props.onToggleAutoSend} />
-      <ToolButton label={`Theme · ${props.theme}`} ariaLabel={`Change overlay theme; current theme is ${props.theme}`} icon="theme" onClick={props.onCycleTheme} />
-      {props.settings}
+    <div className="a3s-toolbar-core">
+      <div className="a3s-tool-group a3s-tool-group-primary">
+        {(["element", "multi", "text"] as const).map((value) => <ToolButton key={value} label={MODE_LABEL[value]} ariaLabel={`Mark ${MODE_LABEL[value].toLowerCase()}`} icon={value} pressed={props.marking && props.mode === value} keyShortcut={REVIEW_KEY_SHORTCUTS[value]} title={`Mark ${MODE_LABEL[value].toLowerCase()} (${REVIEW_KEY_SHORTCUTS[value]})`} onClick={() => beginMarking(value)} />)}
+      </div>
+      <span className="a3s-tool-divider" aria-hidden="true" />
       <button type="button" className="a3s-workspace-toggle" data-tooltip="Findings" aria-label={props.workspaceOpen ? "Hide review workspace" : "Open review workspace"} aria-expanded={props.workspaceOpen} onClick={props.onToggleWorkspace}>
         <ToolGlyph name="inbox" />
         <span className="a3s-sr-only">Findings</span>
         {props.findingCount > 0 && <span className="a3s-tool-count" aria-hidden="true">{props.findingCount}</span>}
       </button>
+      <ToolButton label="More tools" ariaLabel="More review tools" icon="more" expanded={moreOpen} onClick={() => setMoreOpen((current) => !current)} />
+      {props.marking && <ToolButton label="Cancel" ariaLabel="Cancel marking" icon="close" className="danger" onClick={props.onCancelMarking} />}
     </div>
-    {props.marking && <ToolButton label="Cancel" ariaLabel="Cancel marking" icon="close" className="danger" onClick={props.onCancelMarking} />}
+    <div className="a3s-tool-tray" hidden={!moreOpen} role="group" aria-label="More review tools">
+      <div className="a3s-tool-tray-copy">
+        <strong>Review tools</strong>
+        <span>{props.marking ? `${MODE_LABEL[props.mode]} mode active` : "Mark, inspect, and send"}</span>
+      </div>
+      <div className="a3s-tool-group">
+        {(["area", "draw"] as const).map((value) => <ToolButton key={value} label={MODE_LABEL[value]} ariaLabel={`Mark ${MODE_LABEL[value].toLowerCase()}`} icon={value} pressed={props.marking && props.mode === value} keyShortcut={REVIEW_KEY_SHORTCUTS[value]} title={`Mark ${MODE_LABEL[value].toLowerCase()} (${REVIEW_KEY_SHORTCUTS[value]})`} onClick={() => beginMarking(value)} />)}
+        <ToolButton label="Layout" ariaLabel="Layout" icon="layout" pressed={props.layoutMode} title="Toggle Layout Mode (L)" keyShortcut={REVIEW_KEY_SHORTCUTS.layout} onClick={() => { setMoreOpen(false); props.onToggleLayout(); }} />
+        <ToolButton label={props.paused ? "Resume" : "Pause"} ariaLabel={props.paused ? "Resume page animations" : "Pause page animations"} icon={props.paused ? "play" : "pause"} pressed={props.paused} title="Pause or resume page motion (P)" keyShortcut={REVIEW_KEY_SHORTCUTS.pause} onClick={props.onTogglePause} />
+        <ToolButton label={props.markersVisible ? "Hide markers" : "Show markers"} ariaLabel={props.markersVisible ? "Hide markers" : "Show markers"} icon={props.markersVisible ? "eye" : "eye-off"} pressed={props.markersVisible} title="Show or hide finding markers (H)" keyShortcut={REVIEW_KEY_SHORTCUTS.markers} onClick={props.onToggleMarkers} />
+        <ToolButton label={`Auto-send · ${props.autoSendEnabled ? "on" : "off"}`} ariaLabel={`Turn auto-send ${props.autoSendEnabled ? "off" : "on"}`} icon="send" pressed={props.autoSendEnabled} onClick={props.onToggleAutoSend} />
+        <ToolButton label={`Theme · ${props.theme}`} ariaLabel={`Change overlay theme; current theme is ${props.theme}`} icon="theme" onClick={props.onCycleTheme} />
+        {props.settings}
+      </div>
+    </div>
   </section>;
 }
 
-type ToolIcon = SelectionMode | "layout" | "play" | "pause" | "eye" | "eye-off" | "send" | "theme" | "inbox" | "close" | "settings";
+type ToolIcon = SelectionMode | "layout" | "play" | "pause" | "eye" | "eye-off" | "send" | "theme" | "inbox" | "close" | "settings" | "more";
 
-function ToolButton({ label, ariaLabel, icon, pressed, title, keyShortcut, className = "", onClick }: { label: string; ariaLabel: string; icon: ToolIcon; pressed?: boolean; title?: string; keyShortcut?: string; className?: string; onClick(): void }) {
-  return <button type="button" className={`${pressed ? "selected " : ""}${className}`.trim()} data-tooltip={label} title={title ?? label} aria-label={ariaLabel} {...(pressed === undefined ? {} : { "aria-pressed": pressed })} {...(keyShortcut ? { "aria-keyshortcuts": keyShortcut } : {})} onClick={onClick}>
+function ToolButton({ label, ariaLabel, icon, pressed, expanded, title, keyShortcut, className = "", onClick }: { label: string; ariaLabel: string; icon: ToolIcon; pressed?: boolean; expanded?: boolean; title?: string; keyShortcut?: string; className?: string; onClick(): void }) {
+  return <button type="button" className={`${pressed || expanded ? "selected " : ""}${className}`.trim()} data-tooltip={label} title={title ?? label} aria-label={ariaLabel} {...(pressed === undefined ? {} : { "aria-pressed": pressed })} {...(expanded === undefined ? {} : { "aria-expanded": expanded })} {...(keyShortcut ? { "aria-keyshortcuts": keyShortcut } : {})} onClick={onClick}>
     <ToolGlyph name={icon} />
     <span className="a3s-sr-only">{label}</span>
   </button>;
@@ -76,6 +89,7 @@ export function ToolGlyph({ name }: { name: ToolIcon }) {
   if (name === "theme") return <svg {...common}><path d="M10 2.8a7.2 7.2 0 1 0 7.2 7.2A5.8 5.8 0 0 1 10 2.8Z" /></svg>;
   if (name === "inbox") return <svg {...common}><path d="M3.5 5.5h13v10h-13Z" /><path d="M3.5 11h3l1.4 2h4.2l1.4-2h3" /></svg>;
   if (name === "settings") return <svg {...common}><circle cx="10" cy="10" r="2.4" /><path d="M10 3.3v1.3M10 15.4v1.3M3.3 10h1.3M15.4 10h1.3M5.3 5.3l.9.9M13.8 13.8l.9.9M14.7 5.3l-.9.9M6.2 13.8l-.9.9" /></svg>;
+  if (name === "more") return <svg {...common}><circle cx="4.5" cy="10" r="1" /><circle cx="10" cy="10" r="1" /><circle cx="15.5" cy="10" r="1" /></svg>;
   return <svg {...common}><path d="m5 5 10 10M15 5 5 15" /></svg>;
 }
 
@@ -99,15 +113,28 @@ export type FindingEditorProps = {
 };
 
 export function FindingEditor(props: FindingEditorProps) {
+  const [detailsOpen, setDetailsOpen] = useState(() => Boolean(
+    props.successCriteria.trim()
+      || props.intent !== "fix"
+      || props.severity !== "important"
+      || props.conflictOptions.some((option) => option.checked),
+  ));
+
   return <section className="a3s-editor">
-    <small className="a3s-editor-target" title={props.label}>Target · {props.label}</small>
+    <header className="a3s-editor-header">
+      <span className="a3s-editor-index" aria-hidden="true">01</span>
+      <span><strong>{props.editing ? "Edit finding" : "New finding"}</strong><small className="a3s-editor-target" title={props.label}>{props.label}</small></span>
+    </header>
     <div className="a3s-editor-scroll">
-      <label>Requested fix<textarea autoFocus maxLength={8192} value={props.instruction} onChange={(event) => props.onInstruction(event.target.value)} placeholder="Describe what should change" /></label>
-      <label>Success criteria <span>optional</span><textarea maxLength={4096} value={props.successCriteria} onChange={(event) => props.onSuccessCriteria(event.target.value)} placeholder="What should be visibly true after the fix?" /></label>
-      <div className="a3s-fields"><label>Severity<select value={props.severity} onChange={(event) => props.onSeverity(event.target.value as RepairSeverity)}><option value="blocking">Blocking</option><option value="important">Important</option><option value="suggestion">Suggestion</option></select></label><label>Intent<select value={props.intent} onChange={(event) => props.onIntent(event.target.value as RepairIntent)}><option value="fix">Fix</option><option value="change">Change</option><option value="question">Question</option><option value="approve">Approve</option></select></label></div>
-      {props.conflictOptions.length > 0 && <fieldset className="a3s-conflicts"><legend>Conflicts with another draft <span>optional</span></legend><small>Select requests that cannot both be satisfied. A3S Test will ask for clarification without interpreting their wording.</small>{props.conflictOptions.map((option) => <label key={option.id}><input type="checkbox" checked={option.checked} onChange={(event) => props.onConflict(option.id, event.target.checked)} /><span>{option.label}</span></label>)}</fieldset>}
+      <label className="a3s-editor-request">Requested fix<textarea autoFocus maxLength={8192} value={props.instruction} onChange={(event) => props.onInstruction(event.target.value)} placeholder="Describe what should change" /></label>
+      <button type="button" className="a3s-editor-details" aria-expanded={detailsOpen} onClick={() => setDetailsOpen((current) => !current)}><span>Details</span><small>criteria, severity, intent</small><i aria-hidden="true" /></button>
+      {detailsOpen && <div className="a3s-editor-options">
+        <label>Success criteria <span>optional</span><textarea maxLength={4096} value={props.successCriteria} onChange={(event) => props.onSuccessCriteria(event.target.value)} placeholder="What should be visibly true after the fix?" /></label>
+        <div className="a3s-fields"><label>Severity<select value={props.severity} onChange={(event) => props.onSeverity(event.target.value as RepairSeverity)}><option value="blocking">Blocking</option><option value="important">Important</option><option value="suggestion">Suggestion</option></select></label><label>Intent<select value={props.intent} onChange={(event) => props.onIntent(event.target.value as RepairIntent)}><option value="fix">Fix</option><option value="change">Change</option><option value="question">Question</option><option value="approve">Approve</option></select></label></div>
+        {props.conflictOptions.length > 0 && <fieldset className="a3s-conflicts"><legend>Conflicts with another draft <span>optional</span></legend><small>Select requests that cannot both be satisfied. A3S Test will ask for clarification without interpreting their wording.</small>{props.conflictOptions.map((option) => <label key={option.id}><input type="checkbox" checked={option.checked} onChange={(event) => props.onConflict(option.id, event.target.checked)} /><span>{option.label}</span></label>)}</fieldset>}
+      </div>}
     </div>
-    <div className="a3s-actions">{props.onDelete && <button type="button" className="danger" onClick={props.onDelete}>Delete draft</button>}<button type="button" className="quiet" onClick={props.onCancel}>Cancel</button><button type="button" disabled={!props.instruction.trim()} onClick={props.onSave}>{props.editing ? "Save changes" : "Add draft"}</button><button type="button" disabled={!props.instruction.trim()} onClick={props.onSend}>Send and auto-fix</button></div>
+    <div className="a3s-actions">{props.onDelete && <button type="button" className="danger" onClick={props.onDelete}>Delete draft</button>}<button type="button" className="quiet" onClick={props.onCancel}>Cancel</button><button type="button" className="a3s-save-draft" disabled={!props.instruction.trim()} onClick={props.onSave}>{props.editing ? "Save changes" : "Add draft"}</button><button type="button" className="a3s-send-now" disabled={!props.instruction.trim()} onClick={props.onSend}>Send and auto-fix</button></div>
   </section>;
 }
 

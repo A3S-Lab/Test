@@ -57,11 +57,20 @@ export function validLayoutRect(rect: Rect): boolean {
 export function markerRects(target: RepairTarget, bridge: PageContextBridge | null): RectLike[] {
   if (!bridge) return [];
   if (target.layout && target.region) return [target.region];
+  if (target.region && (target.kind === "region" || target.kind === "drawing" || target.nodeIds.length > 1)) {
+    return [target.region];
+  }
   const nodeRects = target.nodeIds.flatMap((nodeId) => {
     const element = bridge.resolve(nodeId);
     return element ? [element.getBoundingClientRect()] : [];
   });
-  return nodeRects.length > 0 ? nodeRects : target.region ? [target.region] : [];
+  if (nodeRects.length === 0) return target.region ? [target.region] : [];
+  if (nodeRects.length === 1) return nodeRects;
+  const left = Math.min(...nodeRects.map((rect) => rect.x));
+  const top = Math.min(...nodeRects.map((rect) => rect.y));
+  const right = Math.max(...nodeRects.map((rect) => rect.x + rect.width));
+  const bottom = Math.max(...nodeRects.map((rect) => rect.y + rect.height));
+  return [{ x: left, y: top, width: right - left, height: bottom - top }];
 }
 
 export function repairId(prefix: string): string {

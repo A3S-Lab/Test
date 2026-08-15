@@ -1,4 +1,5 @@
 import { OVERLAY_SHELL_CSS } from "./overlay-shell-style";
+import { OVERLAY_MARKING_CSS } from "./overlay-marking-style";
 
 export const OVERLAY_CSS = `
 ${OVERLAY_SHELL_CSS}
@@ -7,16 +8,28 @@ ${OVERLAY_SHELL_CSS}
   position: absolute;
   right: 0;
   bottom: calc(100% + 10px);
-  width: min(410px, calc(100vw - 24px));
+  width: min(350px, calc(100vw - 24px));
   margin: 0;
-  padding: 9px 11px;
-  border: 1px solid color-mix(in srgb, var(--a3s-violet) 34%, var(--a3s-line));
-  border-radius: 9px;
-  background: var(--a3s-violet-soft);
-  box-shadow: 0 12px 26px rgb(31 38 66 / 14%);
-  color: var(--a3s-text);
+  padding: 9px 12px;
+  border: 1px solid var(--a3s-toolbar-line);
+  border-radius: 12px;
+  background: var(--a3s-toolbar);
+  box-shadow: 0 14px 36px rgb(5 10 20 / 28%);
+  color: var(--a3s-toolbar-text);
   pointer-events: auto;
   font-size: 11px;
+  animation: a3s-hint-enter 180ms cubic-bezier(.16, 1, .3, 1) both;
+}
+
+@keyframes a3s-hint-enter {
+  from {
+    opacity: 0;
+    transform: translateY(5px) scale(.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
 }
 
 .a3s-root[data-dock="left"] .a3s-hint {
@@ -90,11 +103,20 @@ ${OVERLAY_SHELL_CSS}
   padding: 9px 10px;
   border-top: 1px solid var(--a3s-line);
   background: var(--a3s-bg);
-  overflow-x: auto;
+  flex-wrap: wrap;
   align-items: center;
-  justify-content: flex-end;
+  justify-content: space-between;
   gap: 5px;
-  scrollbar-width: none;
+}
+
+.a3s-workspace > footer > div {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.a3s-workspace-send-actions {
+  margin-left: auto;
 }
 
 .a3s-workspace > footer button {
@@ -248,271 +270,7 @@ ${OVERLAY_SHELL_CSS}
   font-size: 10px;
 }
 
-.a3s-wireframe {
-  position: fixed;
-  inset: 0;
-  border: 16px solid rgb(12 24 48 / var(--a3s-wireframe-fade));
-  background-color: rgb(12 24 48 / var(--a3s-wireframe-fade));
-  background-image: linear-gradient(90deg, color-mix(in srgb, var(--a3s-marker-color) 13%, transparent) 1px, transparent 1px), linear-gradient(color-mix(in srgb, var(--a3s-marker-color) 13%, transparent) 1px, transparent 1px);
-  background-size: 24px 24px;
-  pointer-events: none;
-}
-
-.a3s-highlight,
-.a3s-layout-target-preview {
-  position: fixed;
-  pointer-events: none;
-}
-
-.a3s-highlight {
-  z-index: 3;
-  border: 2px solid var(--a3s-marker-color);
-  border-radius: 5px;
-  background: color-mix(in srgb, var(--a3s-marker-color) 10%, transparent);
-  box-shadow: 0 0 0 1px rgb(255 255 255 / 72%) inset, 0 7px 18px color-mix(in srgb, var(--a3s-marker-color) 14%, transparent);
-}
-
-.a3s-highlight.is-candidate {
-  border-color: var(--a3s-violet);
-  background: color-mix(in srgb, var(--a3s-violet) 10%, transparent);
-}
-
-.a3s-highlight > span,
-.a3s-marker-index {
-  display: grid;
-  min-width: 24px;
-  height: 24px;
-  padding: 0 5px;
-  border: 2px solid #ffffff;
-  border-radius: 999px;
-  background: var(--a3s-marker-color);
-  color: #ffffff;
-  font: 750 9px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
-  place-items: center;
-}
-
-.a3s-highlight > span {
-  position: absolute;
-  top: -13px;
-  left: -13px;
-}
-
-.a3s-layout-target-preview {
-  border: 2px dashed var(--a3s-blue);
-  background: color-mix(in srgb, var(--a3s-blue) 9%, transparent);
-  box-shadow: 0 0 0 1px rgb(255 255 255 / 72%) inset;
-}
-
-.a3s-markers {
-  position: fixed;
-  inset: 0;
-  pointer-events: none;
-}
-
-.a3s-marker {
-  position: fixed;
-  border: 2px solid var(--a3s-marker-color);
-  border-radius: 5px;
-  background: color-mix(in srgb, var(--a3s-marker-color) 7%, transparent);
-}
-
-.a3s-marker > .a3s-marker-index {
-  position: absolute;
-  top: -13px;
-  left: -13px;
-}
-
-.a3s-marker-action {
-  position: absolute;
-  top: -13px;
-  left: -13px;
-  display: grid;
-  width: 26px;
-  height: 26px;
-  min-height: 26px;
-  padding: 0;
-  border: 0;
-  border-radius: 999px;
-  background: transparent;
-  pointer-events: auto;
-  place-items: center;
-}
-
-.a3s-marker-action .a3s-marker-index {
-  position: static;
-}
-
-.a3s-marker.status-quality {
-  border-style: dashed;
-  border-color: #d89016;
-  background: rgb(216 144 22 / 8%);
-}
-
-.a3s-marker.status-design-audit {
-  border-style: dashed;
-  border-color: var(--a3s-blue);
-  background: color-mix(in srgb, var(--a3s-blue) 8%, transparent);
-}
-
-.a3s-marker.status-review_ready,
-.a3s-marker.status-resolved {
-  border-color: var(--a3s-green);
-  background: color-mix(in srgb, var(--a3s-green) 8%, transparent);
-}
-
-.a3s-marker.status-failed,
-.a3s-marker.status-verification_failed {
-  border-color: var(--a3s-danger);
-  background: color-mix(in srgb, var(--a3s-danger) 8%, transparent);
-}
-
-.a3s-drawing {
-  position: fixed;
-  inset: 0;
-  width: 100vw;
-  height: 100vh;
-  overflow: visible;
-  pointer-events: none;
-}
-
-.a3s-drawing path {
-  fill: none;
-  stroke: var(--a3s-marker-color);
-  stroke-width: 3;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  filter: drop-shadow(0 1px 1px #ffffff);
-}
-
-.a3s-editor-popover {
-  position: fixed;
-  z-index: 8;
-  top: var(--a3s-editor-top, 80px);
-  left: var(--a3s-editor-left, 80px);
-  width: min(376px, calc(100vw - 24px));
-  max-height: min(720px, calc(100vh - var(--a3s-editor-top, 80px) - 12px));
-  overflow: hidden;
-  border: 1px solid var(--a3s-line);
-  border-radius: 14px;
-  background: var(--a3s-panel);
-  box-shadow: var(--a3s-shadow);
-  pointer-events: auto;
-}
-
-.a3s-editor-popover::before {
-  position: absolute;
-  top: 22px;
-  left: -6px;
-  width: 10px;
-  height: 10px;
-  border-top: 1px solid var(--a3s-line);
-  border-left: 1px solid var(--a3s-line);
-  background: var(--a3s-panel);
-  content: "";
-  transform: rotate(-45deg);
-}
-
-.a3s-editor-popover[data-side="left"]::before {
-  left: auto;
-  right: -6px;
-  transform: rotate(135deg);
-}
-
-.a3s-editor {
-  display: grid;
-  max-height: inherit;
-  grid-template-rows: auto minmax(0, 1fr) auto;
-}
-
-.a3s-editor-target {
-  display: block;
-  padding: 11px 14px;
-  overflow: hidden;
-  border-bottom: 1px solid var(--a3s-line);
-  background: var(--a3s-violet-soft);
-  color: var(--a3s-violet);
-  font: 700 10px/1.35 ui-monospace, SFMono-Regular, Menlo, monospace;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.a3s-editor-scroll {
-  display: flex;
-  min-height: 0;
-  padding: 14px;
-  overflow: auto;
-  overscroll-behavior: contain;
-  scrollbar-color: var(--a3s-line-strong) transparent;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.a3s-editor textarea,
-.a3s-reply-label textarea {
-  min-height: 64px;
-  resize: vertical;
-  line-height: 1.45;
-}
-
-.a3s-fields,
-.a3s-layout-fields {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 8px;
-}
-
-.a3s-actions {
-  display: flex;
-  justify-content: flex-end;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-
-.a3s-editor > .a3s-actions {
-  padding: 10px 14px;
-  border-top: 1px solid var(--a3s-line);
-  background: var(--a3s-bg);
-}
-
-.a3s-actions button:not(.quiet):not(.danger),
-.a3s-quality-item button:first-child,
-.a3s-human-actions button:first-of-type,
-.a3s-item > div button:first-child {
-  border-color: var(--a3s-blue-strong);
-  background: var(--a3s-blue-strong);
-  color: #ffffff;
-}
-
-.a3s-conflicts {
-  display: flex;
-  margin: 0;
-  padding: 9px;
-  border: 1px solid var(--a3s-line);
-  border-radius: 9px;
-  flex-direction: column;
-  gap: 7px;
-}
-
-.a3s-conflicts legend {
-  padding: 0 4px;
-  color: var(--a3s-text);
-  font-weight: 650;
-}
-
-.a3s-conflicts label {
-  display: flex;
-  flex-direction: row;
-  align-items: flex-start;
-  gap: 7px;
-  font-weight: 450;
-}
-
-.a3s-conflicts input,
-.a3s-item input[type="checkbox"] {
-  margin-top: 3px;
-  accent-color: var(--a3s-blue);
-}
-
+${OVERLAY_MARKING_CSS}
 .a3s-layout {
   display: flex;
   padding: 12px;
@@ -817,37 +575,43 @@ ${OVERLAY_SHELL_CSS}
   .a3s-panel,
   .a3s-root[data-dock="left"] .a3s-panel {
     right: 8px;
-    bottom: 66px;
+    bottom: 12px;
     left: 8px;
     width: auto;
   }
 
   .a3s-command-bar {
-    height: auto;
-    min-height: 50px;
-    align-items: stretch;
+    height: 52px;
+    min-height: 52px;
+    align-items: center;
   }
 
   .a3s-command-bar > header {
-    min-width: 70px;
-    height: auto;
-    align-self: stretch;
-    grid-template-columns: 27px 28px;
+    min-width: 64px;
+    height: 40px;
+    align-self: center;
+    grid-template-columns: 28px 28px;
   }
 
-  .a3s-tools {
-    overflow: visible;
+  .a3s-toolbar-core {
+    flex-wrap: nowrap;
+  }
+
+  .a3s-tool-tray,
+  .a3s-root[data-dock="left"] .a3s-tool-tray {
+    right: 0;
+    left: auto;
+    width: min(360px, calc(100vw - 16px));
+    grid-template-columns: 1fr;
+  }
+
+  .a3s-tool-tray-copy {
+    display: none;
+  }
+
+  .a3s-tool-tray > .a3s-tool-group {
     flex-wrap: wrap;
-    align-content: center;
-    row-gap: 3px;
-  }
-
-  .a3s-command-bar > header > span:nth-child(2) {
-    position: fixed;
-    width: 1px;
-    height: 1px;
-    overflow: hidden;
-    clip-path: inset(50%);
+    justify-content: center;
   }
 
   .a3s-workspace,
@@ -863,7 +627,7 @@ ${OVERLAY_SHELL_CSS}
   .a3s-root[data-dock="left"] .a3s-settings-content {
     position: fixed;
     right: 8px;
-    bottom: 66px;
+    bottom: 72px;
     left: 8px;
     width: auto;
     max-height: calc(100vh - 82px);
@@ -872,7 +636,7 @@ ${OVERLAY_SHELL_CSS}
   .a3s-editor-popover {
     top: auto;
     right: 8px;
-    bottom: 66px;
+    bottom: 72px;
     left: 8px;
     width: auto;
     max-height: calc(100vh - 82px);
@@ -899,9 +663,16 @@ ${OVERLAY_SHELL_CSS}
   }
 
   .a3s-command-bar > header {
-    min-width: 61px;
-    padding-left: 1px;
-    gap: 3px;
+    min-width: 58px;
+    padding-right: 2px;
+    padding-left: 0;
+    gap: 1px;
+  }
+
+  .a3s-tools button,
+  .a3s-settings > .a3s-disclosure {
+    width: 32px;
+    height: 34px;
   }
 }
 
@@ -917,6 +688,8 @@ ${OVERLAY_SHELL_CSS}
   .a3s-root *::before,
   .a3s-root *::after {
     scroll-behavior: auto !important;
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
     transition-duration: .01ms !important;
   }
 }
