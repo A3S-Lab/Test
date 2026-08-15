@@ -2,7 +2,10 @@ import {
   ArrowClockwise,
   CheckCircle,
   Code,
+  CursorClick,
   Package,
+  PaperPlaneTilt,
+  Scan,
   ShieldCheck,
   ShoppingCartSimple,
 } from '@phosphor-icons/react';
@@ -13,7 +16,7 @@ import {
   A3STestKit,
 } from '@a3s-lab/testkit/react';
 import { withBase } from '@rspress/core/runtime';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type {
   ContextNode,
   LocatorCandidate,
@@ -314,6 +317,19 @@ export function TestKitExperience({
   const [confirmed, setConfirmed] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
   const [repairs, setRepairs] = useState<SubmittedRepair[]>([]);
+  const [motionActive, setMotionActive] = useState(false);
+  const stageRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const stage = stageRef.current;
+    if (!stage || typeof IntersectionObserver === 'undefined') return;
+    const observer = new IntersectionObserver(
+      ([entry]) => setMotionActive(Boolean(entry?.isIntersecting)),
+      { threshold: 0.28 },
+    );
+    observer.observe(stage);
+    return () => observer.disconnect();
+  }, []);
 
   const refreshAfterRender = () => {
     window.requestAnimationFrame(() => {
@@ -335,7 +351,10 @@ export function TestKitExperience({
         redact={['[data-demo-private]']}
         repairStorage="memory"
       >
-        <div className="test-experience-stage">
+        <div
+          className={`test-experience-stage${motionActive && !reviewStarted ? ' is-motion-active' : ''}`}
+          ref={stageRef}
+        >
           <CheckoutSurface
             confirmed={confirmed}
             copy={copy}
@@ -403,20 +422,39 @@ export function TestKitExperience({
             </section>
           </aside>
           <span className="test-evidence-path" aria-hidden="true" />
+          <div className="test-product-motion" aria-hidden="true">
+            <div className="test-motion-scan">
+              <Scan size={14} weight="bold" />
+              <span>DOM · A11Y · XY</span>
+            </div>
+            <CursorClick
+              className="test-motion-cursor"
+              size={22}
+              weight="fill"
+            />
+            <div className="test-motion-note">
+              <span>01</span>
+              <div>
+                <strong>{copy.motionFinding}</strong>
+                <small>{copy.motionRequest}</small>
+              </div>
+            </div>
+            <div className="test-motion-packet">
+              <PaperPlaneTilt size={14} weight="fill" />
+              <span>{copy.motionPacket}</span>
+            </div>
+          </div>
         </div>
         <ol className="test-stage-status" aria-label={copy.stageAria}>
-          <li>
-            <span />
-            {copy.renderedStatus}
-          </li>
-          <li>
-            <span />
-            {copy.contextStatus}
-          </li>
-          <li className={repairs.length ? 'is-ready' : undefined}>
-            <span />
-            {copy.evidenceStatus}
-          </li>
+          {copy.motionSteps.map((step, index) => (
+            <li
+              className={repairs.length && index === 4 ? 'is-ready' : undefined}
+              key={step}
+            >
+              <span>{index + 1}</span>
+              {step}
+            </li>
+          ))}
         </ol>
         {reviewStarted ? (
           <A3SReviewOverlay

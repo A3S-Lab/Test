@@ -55,6 +55,19 @@ describe("React adapter and review overlay", () => {
     expect(getPageContextBridge()?.snapshot({ detail: "forensic" }).nodes.some((node) => node.text?.includes("Review & repair"))).toBe(false);
   });
 
+  it("selects a page target without activating its host action", async () => {
+    const hostAction = vi.fn();
+    render(<A3STestKit enabled page={{ id: "selection-action" }} repairStorage="memory"><button id="selection-action" onClick={hostAction}>Submit order</button><A3SReviewOverlay enabled defaultOpen /></A3STestKit>);
+    await waitFor(() => expect(shadowQuery(".a3s-panel")).toBeTruthy());
+    const target = document.querySelector<HTMLElement>("#selection-action")!;
+    setRect(target, { x: 80, y: 60, width: 120, height: 40 });
+    fireEvent.click(shadowButton("Element"));
+    target.dispatchEvent(pointerEventWithPath(target, 100, 80));
+    fireEvent.click(target);
+    await waitFor(() => expect(shadowQuery(".a3s-editor")).toBeTruthy());
+    expect(hostAction).not.toHaveBeenCalled();
+  });
+
   it("requires an explicit save or send before removing each contract finding", async () => {
     render(<A3STestKit enabled page={{ id: "quality-review" }} repairStorage="memory"><button data-testid="quality-target">Checkout action</button><A3SReviewOverlay enabled defaultOpen /></A3STestKit>);
     await waitFor(() => expect(shadowQuery(".a3s-panel")).toBeTruthy());

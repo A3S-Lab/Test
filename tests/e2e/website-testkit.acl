@@ -33,90 +33,118 @@ suite "website-testkit-experience" {
         }
 
         wait "overlay-mounted" {
-            visible = text("点选模式已打开", true)
+            text = "点选模式已打开"
+        }
+
+        snapshot "overlay-controls" {
+            interactive = true
         }
 
         click "mark-single" {
-            target = role("button", "Mark element")
+            target = ref("@e43")
         }
 
-        wait "single-marking-ready" {
-            visible = text("Click one element, or focus it and press Enter, to create a finding. Press Esc to cancel.", true)
+        snapshot "single-marking-state" {
+            interactive = true
         }
 
         click "choose-submit-action" {
             target = testid("a3s-experience-submit")
         }
 
-        wait "single-editor-ready" {
-            visible = label("Requested fix")
+        snapshot "single-editor" {
+            interactive = true
         }
 
         fill "single-instruction" {
-            target = label("Requested fix")
+            target = ref("@e58")
             value = "Increase the action label contrast without changing layout"
         }
 
+        snapshot "single-editor-filled" {
+            interactive = true
+        }
+
         click "send-single" {
-            target = role("button", "Send and auto-fix")
+            target = ref("@e44")
         }
 
         wait "single-receipt" {
             text = "1 个标记"
         }
 
-        click "mark-first-batch-item" {
-            target = role("button", "Mark element")
+        snapshot "after-single" {
+            interactive = true
         }
 
-        wait "first-batch-marking-ready" {
-            visible = text("Click one element, or focus it and press Enter, to create a finding. Press Esc to cancel.", true)
+        click "mark-first-batch-item" {
+            target = ref("@e44")
+        }
+
+        snapshot "first-batch-marking-state" {
+            interactive = true
         }
 
         click "choose-context-refresh" {
             target = role("button", "刷新")
         }
 
-        wait "first-batch-editor-ready" {
-            visible = label("Requested fix")
+        snapshot "first-batch-editor" {
+            interactive = true
         }
 
         fill "first-batch-instruction" {
-            target = label("Requested fix")
+            target = ref("@e60")
             value = "Clarify the context refresh state"
         }
 
+        snapshot "first-batch-editor-filled" {
+            interactive = true
+        }
+
         click "save-first-batch-draft" {
-            target = role("button", "Add draft")
+            target = ref("@e44")
+        }
+
+        snapshot "after-first-batch-draft" {
+            interactive = true
         }
 
         click "mark-second-batch-item" {
-            target = role("button", "Mark element")
+            target = ref("@e45")
         }
 
-        wait "second-batch-marking-ready" {
-            visible = text("Click one element, or focus it and press Enter, to create a finding. Press Esc to cancel.", true)
+        snapshot "second-batch-marking-state" {
+            interactive = true
         }
 
         click "choose-install-copy" {
             target = role("button", "复制命令")
         }
 
-        wait "second-batch-editor-ready" {
-            visible = label("Requested fix")
+        snapshot "second-batch-editor" {
+            interactive = true
         }
 
         fill "second-batch-instruction" {
-            target = label("Requested fix")
+            target = ref("@e61")
             value = "Announce which installer command was copied"
         }
 
+        snapshot "second-batch-editor-filled" {
+            interactive = true
+        }
+
         click "save-second-batch-draft" {
-            target = role("button", "Add draft")
+            target = ref("@e45")
+        }
+
+        snapshot "batch-ready" {
+            interactive = true
         }
 
         click "send-batch" {
-            target = role("button", "Send selected (2)")
+            target = ref("@e64")
         }
 
         wait "batch-receipt" {

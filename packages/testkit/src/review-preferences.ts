@@ -17,7 +17,7 @@ export type ReviewPreferences = {
 
 export const DEFAULT_REVIEW_PREFERENCES: ReviewPreferences = {
   theme: "system",
-  markerColor: "#f97316",
+  markerColor: "#7157c9",
   clearOnCopy: false,
   blockInteractions: false,
   dock: "right",

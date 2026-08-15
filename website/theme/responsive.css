@@ -77,7 +77,7 @@
   }
 
   .test-stage-status {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(5, minmax(0, 1fr));
   }
 
   .test-installer-rail {
@@ -308,9 +308,16 @@
   }
 
   .test-stage-status li {
-    min-height: 48px;
-    padding: 0 5px;
+    min-height: 62px;
+    padding: 7px 3px;
+    flex-direction: column;
     font-size: 8px;
+    line-height: 1.25;
+    text-align: center;
+  }
+
+  .test-product-motion {
+    display: none;
   }
 
   .test-installer-rail {

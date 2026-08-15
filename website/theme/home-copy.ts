@@ -48,6 +48,10 @@ export type ExperienceCopy = {
   renderedStatus: string;
   contextStatus: string;
   evidenceStatus: string;
+  motionSteps: [string, string, string, string, string];
+  motionFinding: string;
+  motionRequest: string;
+  motionPacket: string;
 };
 
 type LocalizedCopy = {
@@ -254,6 +258,10 @@ export const homeCopy: Record<Locale, LocalizedCopy> = {
       renderedStatus: '页面已渲染',
       contextStatus: '上下文已读取',
       evidenceStatus: '任务已保存',
+      motionSteps: ['扫描页面', '命中元素', '读取语义', '人工批注', '批量发送'],
+      motionFinding: '已命中提交按钮',
+      motionRequest: '提高主操作的文字对比度',
+      motionPacket: '1 个问题 · 上下文已绑定',
     },
   },
   en: {
@@ -406,6 +414,16 @@ export const homeCopy: Record<Locale, LocalizedCopy> = {
       renderedStatus: 'Page rendered',
       contextStatus: 'Context ready',
       evidenceStatus: 'Task saved',
+      motionSteps: [
+        'Scan page',
+        'Locate element',
+        'Read semantics',
+        'Add note',
+        'Send batch',
+      ],
+      motionFinding: 'Submit action located',
+      motionRequest: 'Increase the primary action label contrast',
+      motionPacket: '1 finding · context bound',
     },
   },
 };

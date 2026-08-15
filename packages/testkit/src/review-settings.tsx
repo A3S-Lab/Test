@@ -1,6 +1,7 @@
 import { useId, useState } from "react";
 import { REVIEW_SHORTCUT_HELP } from "./review-input-policy";
 import type { ReviewPreferences } from "./review-preferences";
+import { ToolGlyph } from "./review-components";
 
 export type ReviewSettingsProps = {
   preferences: ReviewPreferences;
@@ -23,7 +24,7 @@ export function ReviewSettings({
   ) => onChange({ ...preferences, [key]: value });
 
   return <section className="a3s-settings">
-    <button type="button" className="a3s-disclosure" aria-label="Review preferences" aria-expanded={open} aria-controls={panelId} onClick={() => setOpen((current) => !current)}>Review preferences</button>
+    <button type="button" className="a3s-disclosure" data-tooltip="Preferences" title="Review preferences" aria-label="Review preferences" aria-expanded={open} aria-controls={panelId} onClick={() => setOpen((current) => !current)}><ToolGlyph name="settings" /><span className="a3s-sr-only">Review preferences</span></button>
     {open && <div id={panelId} className="a3s-settings-content">
       <div className="a3s-settings-grid">
       <label>Theme<select aria-label="Overlay theme" value={preferences.theme} onChange={(event) => update("theme", event.target.value as ReviewPreferences["theme"])}><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select></label>

@@ -40,14 +40,14 @@ export function ReviewMarkers(props: ReviewMarkersProps) {
     })),
   ];
   return <div className="a3s-markers">
-    {markers.flatMap((marker) => markerRects(marker.target, props.bridge).map((rect, index) => {
+    {markers.flatMap((marker, markerIndex) => markerRects(marker.target, props.bridge).map((rect, index) => {
       if (marker.status !== "draft") {
         return <span
           key={`${marker.id}-${index}`}
           className={`a3s-marker status-${marker.status}`}
           style={rectStyle(rect)}
           aria-hidden="true"
-        />;
+        >{index === 0 && <span className="a3s-marker-index">{markerIndex + 1}</span>}</span>;
       }
       const draft = props.drafts.find((item) => item.draft.id === marker.id);
       return <span key={`${marker.id}-${index}`} className="a3s-marker status-draft" style={rectStyle(rect)}>
@@ -57,10 +57,7 @@ export function ReviewMarkers(props: ReviewMarkersProps) {
           aria-label={`Edit draft marker: ${draft?.draft.instruction ?? marker.id}`}
           onClick={() => { if (draft) props.onEditDraft(draft); }}
         >
-          <svg viewBox="0 0 16 16" aria-hidden="true">
-            <path d="M3 11.8 3.5 9l6.7-6.7a1.4 1.4 0 0 1 2 0l1.5 1.5a1.4 1.4 0 0 1 0 2L7 12.5l-2.8.5Z" />
-            <path d="m9.3 3.2 3.5 3.5" />
-          </svg>
+          <span className="a3s-marker-index" aria-hidden="true">{markerIndex + 1}</span>
         </button>
       </span>;
     }))}
