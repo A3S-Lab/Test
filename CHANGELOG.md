@@ -1,5 +1,32 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- Added a reusable real macOS GUI certification workflow that rebuilds the
+  locked CUA source, verifies its compile-time source revision and host
+  permissions, runs semantic and window-vision observations, proves exact
+  fixture cleanup, and emits `a3s.test.gui-host-certification/1` evidence.
+- Added a detached SHA-256 record and GitHub OIDC/Sigstore provenance for the
+  certification attestation. Release tags publish the record and checksum as
+  release assets.
+
+### Safety
+
+- GUI certification can run only through an explicit workflow dispatch or a
+  version tag, and only on the dedicated macOS arm64 self-hosted runner label.
+  Pull requests and ordinary branch pushes cannot schedule that privileged
+  desktop host.
+- Release creation now waits for real permission, semantic, visual, and owned
+  cleanup certification. The workflow uses bounded deny-by-default CUA
+  policies and removes its fixture registration and daemon on every exit path.
+
+### Changed
+
+- Advanced the locked CUA 0.10.0 revision to the reviewed background-launch
+  identity fix while retaining the existing MCP and capability contracts.
+
 ## 0.16.0 - 2026-08-15
 
 ### Added

@@ -42,7 +42,7 @@ jobs:
 
     steps:
       - name: Download GUI certification evidence
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v8
         with:
           name: gui-certification-${{ github.sha }}
           path: gui-certification

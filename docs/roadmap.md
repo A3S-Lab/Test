@@ -98,7 +98,9 @@
       using Unix process groups and suspended-before-assignment Windows
       kill-on-close Job Objects, plus Unix host-death watchdogs, bounded
       descendant wait, and direct-child reaping
-- [ ] Record a real macOS host certification in release automation
+- [x] Record real macOS semantic and window-vision host certification in
+      release automation with exact source and policy identity, owned-cleanup
+      proof, detached SHA-256, and GitHub OIDC/Sigstore provenance
 - [ ] Windows and Linux execution, pending reviewed backends in the locked CUA
       stack
 

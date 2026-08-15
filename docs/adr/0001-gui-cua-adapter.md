@@ -36,6 +36,10 @@ MCP JSON-RPC transport in `a3s-test-driver-gui`.
   observation-bound references.
 - Pixel targets are admitted only against the latest digest-bound window
   screenshot and return that image as explicit evidence.
+- Version-tag releases are gated by a reusable real-host job restricted to an
+  explicit dispatch or tag and the dedicated macOS arm64 certification runner.
+  The job must bind source revisions, binary and policy digests, permissions,
+  semantic and visual observations, and exact cleanup in a signed record.
 
 ## Consequences
 
@@ -53,4 +57,6 @@ before transport startup.
 A profile cannot claim host certification merely because a platform binary
 starts or its fake contract passes. The `gui-certify` harness must pass
 permission attribution, semantic or visual observation, and exact owned
-cleanup on the real worker before that host is enabled.
+cleanup on the real worker before that host is enabled. Release automation
+retains the resulting `a3s.test.gui-host-certification/1` record, detached
+checksum, and GitHub OIDC/Sigstore provenance before creating a release.

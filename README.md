@@ -807,7 +807,7 @@ and cleanup invariants.
 | Surface | Status | Interface | Backing adapter |
 | --- | --- | --- | --- |
 | Web | Available | Persistent agent CLI, direct embedded-planner CLI, and ACL suites | A3S Browser or compatible standalone `agent-browser` |
-| GUI | Contract-tested on macOS | Surface-neutral MCP agent sessions and ACL runner boundary | Locked A3S CUA `0.10.0` semantic and window-vision profiles |
+| GUI | Contract-tested and release-certified on macOS | Surface-neutral MCP agent sessions and ACL runner boundary | Locked A3S CUA `0.10.0` semantic and window-vision profiles |
 | TUI | Available | Deterministic ACL suites | Owned PTY/ConPTY process tree and bounded VT semantic viewport |
 
 Inspect the reviewed GUI platform matrix without starting CUA:
@@ -823,6 +823,15 @@ observation, evidence, and owned cleanup before enabling a worker. The `mcp`
 command exposes `test_session_start`, `test_observe`, `test_act`,
 `test_finish`, `test_abort`, and `test_schema` after the exact MCP `2025-06-18`
 handshake.
+
+Version tags are gated by the reusable real macOS GUI certification workflow.
+On a dedicated macOS arm64 runner, it rebuilds the exact locked CUA revision,
+requires the runtime-reported source revision and Accessibility plus Screen
+Recording grants, runs both perception profiles, and proves that no fixture
+process remains. The resulting `a3s.test.gui-host-certification/1` record binds
+the A3S Test and CUA revisions, executable and policy SHA-256 digests, host,
+observations, and cleanup. GitHub signs SLSA provenance for that record, and a
+successful release publishes the JSON record and detached checksum.
 
 Run a terminal suite by fixing the executable and its arguments at the CLI
 host boundary:

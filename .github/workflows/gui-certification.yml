@@ -90,12 +90,12 @@ jobs:
             "$GITHUB_SHA"
 
       - name: Attest the certification record
-        uses: actions/attest-build-provenance@v3
+        uses: actions/attest-build-provenance@v4
         with:
           subject-path: .gui-certification/records/attestation.json
 
       - name: Upload certification evidence
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: gui-certification-${{ github.sha }}
           path: |
@@ -115,7 +115,7 @@ jobs:
 
       - name: Upload bounded failure diagnostics
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: gui-certification-failure-${{ github.sha }}-${{ github.run_attempt }}
           path: |

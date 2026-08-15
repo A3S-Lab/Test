@@ -970,9 +970,21 @@ attribution, semantic/visual behavior, runtime binding-drift gates, ownership
 rules, and cleanup stress tests pass. It is not a claim that a particular host
 has granted permissions.
 `a3s-test gui-certify` performs that real-host observation and cleanup check;
-release automation still needs to record a macOS host result. Windows and
-Linux fail during configuration, before a transport starts, because the
-locked CUA 0.10.0 revision has no reviewed application backend for them.
+the release workflow now calls a reusable certification job before creating a
+GitHub release. That job is restricted to an explicit dispatch or version tag
+and a dedicated macOS arm64 self-hosted runner. It rebuilds the locked CUA
+revision with an embedded source identity, checks the runtime-reported
+revision and host permissions, runs semantic and window-vision certification,
+and proves the fixture is absent before and after both runs.
+
+The job emits `a3s.test.gui-host-certification/1` with the exact A3S Test and
+CUA revisions, executable and policy SHA-256 digests, macOS version and build,
+permission attribution, bounded observation summaries, session cleanup, and
+fixture inventory. A detached checksum and GitHub OIDC/Sigstore SLSA
+provenance make the record independently verifiable; successful version tags
+publish the record and checksum. Windows and Linux still fail during
+configuration, before a transport starts, because the locked CUA 0.10.0
+revision has no reviewed application backend for them.
 
 The CUA stdio proxy has lifecycle ownership independent of the target
 application. On Unix it starts in a new process group that remains registered

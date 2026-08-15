@@ -1215,6 +1215,17 @@ file replacement failures produce `test.driver.gui.artifact_path_invalid`,
 `test.driver.gui.screenshot_invalid`, or `test.driver.gui.stale_image` before an
 input tool is called.
 
+A version-tag release must pass `a3s.test.gui-host-certification/1` on a
+dedicated macOS arm64 host before release creation. The record must bind the
+exact A3S Test revision, locked CUA revision and runtime-reported source
+revision, executable and policy SHA-256 digests, host version, permission
+attribution, semantic and window-vision observations, session cleanup, and
+zero running fixture instances before and after each profile. The record and
+detached checksum are release assets, and the JSON record must have GitHub
+OIDC/Sigstore SLSA provenance from the reusable certification workflow. A
+binary start, version match, fake contract pass, or unsigned local JSON file
+does not satisfy this release gate.
+
 The CUA MCP proxy must be admitted into an owned process-tree boundary before
 the transport can be returned. Unix uses a dedicated process group and EOF
 watchdog, so abrupt host death still terminates the group. Windows creates the

@@ -20,6 +20,14 @@ profiles. Windows and Linux GUI profiles fail closed until their CUA backends
 are reviewed. A macOS worker should pass `a3s-test gui-certify` with its real
 application and permissions before use.
 
+Version tags additionally require the repository's reusable real macOS
+certification workflow. Its `a3s.test.gui-host-certification/1` record binds
+the exact A3S Test and CUA source revisions, binary and policy digests, host
+permissions, semantic and window-vision observations, and zero surviving
+fixture processes. The detached checksum and GitHub OIDC/Sigstore provenance
+are the release proof; a local JSON result alone is not a release
+certification.
+
 ## Tool loop
 
 Use exactly this state machine:
