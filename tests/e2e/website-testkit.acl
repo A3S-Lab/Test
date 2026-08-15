@@ -29,11 +29,19 @@ suite "website-testkit-experience" {
         }
 
         click "pause-motion-sequence" {
-            target = role("button", "暂停自动演示")
+            target = css(".test-motion-toggle")
+        }
+
+        expect "motion-sequence-paused" {
+            visible = css(".test-motion-toggle[aria-pressed='true']")
         }
 
         click "resume-motion-sequence" {
-            target = role("button", "继续自动演示")
+            target = css(".test-motion-toggle")
+        }
+
+        expect "motion-sequence-resumed" {
+            visible = css(".test-motion-toggle[aria-pressed='false']")
         }
 
         wheel "show-release-disclosure" {
