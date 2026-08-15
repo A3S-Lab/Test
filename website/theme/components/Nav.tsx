@@ -30,6 +30,21 @@ import '@rspress/core/dist/theme/components/NavHamburger/index.css';
 import { createPortal } from 'react-dom';
 import { useContext, useEffect, useRef } from 'react';
 
+function labelSocialLinks(root: ParentNode, language: string) {
+  root
+    .querySelectorAll<HTMLAnchorElement>(
+      '.rp-social-links__item[href="https://github.com/A3S-Lab/Test"]',
+    )
+    .forEach((link) => {
+      link.setAttribute(
+        'aria-label',
+        language === 'zh'
+          ? '在 GitHub 上查看 A3S Test'
+          : 'View A3S Test on GitHub',
+      );
+    });
+}
+
 function versionHref(
   pathname: string,
   currentVersion: string,
@@ -155,6 +170,8 @@ function NavHamburger() {
       const enhancedControls = new Map<HTMLElement, () => void>();
       let controlIndex = 0;
       const enhanceControls = () => {
+        labelSocialLinks(screen, language);
+
         const controls = screen.querySelectorAll<HTMLElement>(
           '.rp-nav-screen-menu-item:not(a), .rp-nav-screen-langs, .rp-nav-screen-versions, .rp-switch-appearance',
         );
@@ -301,6 +318,10 @@ export function Nav({
 }: NavProps) {
   const navList = useNav();
   const language = useLang();
+
+  useEffect(() => {
+    labelSocialLinks(document, language);
+  }, [language]);
 
   useEffect(() => {
     const mobileSearch = document.querySelector<HTMLElement>(

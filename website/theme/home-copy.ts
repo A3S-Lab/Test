@@ -1,7 +1,6 @@
 export type Locale = 'zh' | 'en';
 
 type LocalizedCopy = {
-  heroEyebrow: string;
   heroTitle: [string, string];
   heroBody: string;
   readDocs: string;
@@ -37,7 +36,6 @@ type LocalizedCopy = {
   workflowDecide: string;
   workflowAct: string;
   workflowProve: string;
-  boundaryEyebrow: string;
   boundaryTitle: string;
   boundaryBody: string;
   boundaryFacts: string;
@@ -65,7 +63,6 @@ type LocalizedCopy = {
 
 export const homeCopy: Record<Locale, LocalizedCopy> = {
   zh: {
-    heroEyebrow: '自主探索 / 确定性回归',
     heroTitle: ['看懂界面，', '证明每次操作'],
     heroBody:
       '探索未知路径，验证真实结果，再把稳定流程固化为类型化 ACL 回归测试。',
@@ -126,7 +123,6 @@ export const homeCopy: Record<Locale, LocalizedCopy> = {
     workflowDecide: '决策',
     workflowAct: '动作',
     workflowProve: '证明',
-    boundaryEyebrow: '权限边界',
     boundaryTitle: '模型能建议，不能替你授权',
     boundaryBody:
       '确定性事实、模型建议、人工决定和工作区修改分属四层权限，不能互相冒充。',
@@ -156,7 +152,6 @@ export const homeCopy: Record<Locale, LocalizedCopy> = {
     footer: '类型化动作，可检查证据，自有清理责任。',
   },
   en: {
-    heroEyebrow: 'AGENT EXPLORATION / DETERMINISTIC REGRESSION',
     heroTitle: ['See interfaces.', 'Prove actions.'],
     heroBody:
       'Explore unknown paths, verify real outcomes, then preserve stable workflows as typed ACL regression suites.',
@@ -220,7 +215,6 @@ export const homeCopy: Record<Locale, LocalizedCopy> = {
     workflowDecide: 'Decide',
     workflowAct: 'Act',
     workflowProve: 'Prove',
-    boundaryEyebrow: 'AUTHORITY BOUNDARY',
     boundaryTitle: 'Models may advise. They cannot authorize for you.',
     boundaryBody:
       'Deterministic facts, model advice, human decisions, and workspace mutation occupy four separate authority layers.',

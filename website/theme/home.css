@@ -35,23 +35,13 @@
   justify-content: flex-start;
 }
 
-.test-eyebrow {
-  color: var(--test-accent);
-  font-family: var(--test-mono);
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0.1em;
-  line-height: 1.5;
-  text-transform: uppercase;
-}
-
 .test-hero h1 {
   max-width: 780px;
-  margin: 24px 0 20px;
+  margin: 0 0 20px;
   color: var(--test-text);
   font-size: clamp(44px, 4.2vw, 60px);
   font-weight: 680;
-  letter-spacing: -0.06em;
+  letter-spacing: -0.04em;
   line-height: 1.04;
 }
 
@@ -276,7 +266,7 @@
   margin: 0;
   font-size: clamp(34px, 4vw, 54px);
   font-weight: 650;
-  letter-spacing: -0.05em;
+  letter-spacing: -0.04em;
   line-height: 1.08;
 }
 

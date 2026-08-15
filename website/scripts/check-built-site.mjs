@@ -85,6 +85,12 @@ if (
 if (!rootHtml.includes('install.sh') || !javascript.includes('install.ps1')) {
   missing.push('cross-platform install commands on the homepage');
 }
+if (
+  !javascript.includes('在 GitHub 上查看 A3S Test') ||
+  !javascript.includes('View A3S Test on GitHub')
+) {
+  missing.push('localized accessible names for GitHub navigation links');
+}
 if (!rootHtml.includes('/Test/social-card.png')) {
   missing.push('raster Open Graph image metadata');
 }

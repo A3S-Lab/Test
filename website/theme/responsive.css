@@ -116,9 +116,9 @@
   }
 
   .test-hero h1 {
-    margin-top: 20px;
+    margin-top: 0;
     font-size: clamp(38px, 10.5vw, 44px);
-    letter-spacing: -0.05em;
+    letter-spacing: -0.04em;
     line-height: 1.02;
   }
 

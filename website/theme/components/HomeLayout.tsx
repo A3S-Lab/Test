@@ -64,7 +64,6 @@ export function HomeLayout() {
     <main className="test-home">
       <section className="test-hero">
         <div className="test-hero-copy">
-          <span className="test-eyebrow">{copy.heroEyebrow}</span>
           <h1>
             {copy.heroTitle.map((line) => (
               <span key={line}>{line}</span>
@@ -159,7 +158,6 @@ export function HomeLayout() {
 
       <section className="test-section test-boundary">
         <div className="test-boundary-copy">
-          <span className="test-eyebrow">{copy.boundaryEyebrow}</span>
           <h2>{copy.boundaryTitle}</h2>
           <p>{copy.boundaryBody}</p>
           <a href={route('/concepts/architecture.html')}>

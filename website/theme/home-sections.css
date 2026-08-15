@@ -134,10 +134,6 @@
   border-right: 1px solid var(--test-line);
 }
 
-.test-boundary-copy h2 {
-  margin-top: 24px;
-}
-
 .test-boundary-copy p {
   margin: 20px 0 28px;
   color: var(--test-muted);
