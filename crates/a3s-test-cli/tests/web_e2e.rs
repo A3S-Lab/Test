@@ -786,12 +786,36 @@ fn suite(origin: &str) -> String {
             value = "Ada Lovelace"
         }}
 
+        focus "display-name-selection" {{
+            target = css("#display-name")
+        }}
+
+        press "selection-start" {{
+            key = "Home"
+        }}
+
+        press "selection-first-character" {{
+            key = "Shift+ArrowRight"
+        }}
+
+        press "selection-second-character" {{
+            key = "Shift+ArrowRight"
+        }}
+
+        press "selection-third-character" {{
+            key = "Shift+ArrowRight"
+        }}
+
+        insert_text "replace-current-selection" {{
+            value = "Grace"
+        }}
+
         click "submit" {{
             target = css("#submit")
         }}
 
         expect "submitted" {{
-            text = "submitted: Ada Lovelace"
+            text = "submitted: Grace Lovelace"
         }}
 
         screenshot "form-evidence" {{
