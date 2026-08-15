@@ -49,11 +49,11 @@ A3S_TEST_AGENT_BROWSER="$(command -v agent-browser)" \
 default entry must match the Rust workspace version. Every listed version owns
 matching Chinese and English route trees.
 
-The active documentation lives under `docs/v0.16.2`. The `docs/v0.15.0`
-directory is a historical snapshot for the previous contract line. New
-documentation work updates only the active version. When a release changes a
-public action schema, provider protocol, CLI contract, or safety boundary,
-archive the old directory before advancing the default version.
+The active documentation lives under `docs/v0.17.0`. The `docs/v0.16.2` and
+`docs/v0.15.0` directories are historical snapshots for previous contract
+lines. New documentation work updates only the active version. When a release
+changes a public action schema, provider protocol, CLI contract, or safety
+boundary, archive the old directory before advancing the default version.
 
 Before a tag can create a GitHub Release, the release preflight requires the
 tag, Rust workspace version, dated changelog section, default documentation
@@ -64,7 +64,7 @@ generated-site checks used by the documentation workflow. Run the metadata
 gate locally with:
 
 ```bash
-node ../scripts/check-release-metadata.mjs --tag v0.16.2
+node ../scripts/check-release-metadata.mjs --tag v0.17.0
 ```
 
 `npm run check:site` derives expected routes from the source trees, verifies

@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.17.0 - 2026-08-16
 
 ### Added
 
@@ -43,6 +43,9 @@
 - Release metadata now binds the packaged Test Kit version to the active
   documentation snapshot and requires every archived snapshot to retain its
   own semantic Test Kit version.
+- Raised the Rust workspace minor release to `0.17.0` and the Test Kit minor
+  release to `0.4.0`, with the browser bridge deriving its reported SDK
+  version directly from the package manifest.
 - Shortened the repository homepage around installation, one proven Web path,
   and the shared evidence contracts. The Rspress homepage now identifies and
   preserves the selected documentation version in copyable Unix and
