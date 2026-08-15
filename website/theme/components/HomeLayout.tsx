@@ -1,20 +1,33 @@
 import { useLang, useSite, useVersion, withBase } from '@rspress/core/runtime';
 import { EvidencePanel } from './EvidencePanel';
-import { InstallSwitcher } from './InstallSwitcher';
+import { InstallSwitcher, installCommandFor } from './InstallSwitcher';
 import { homeCopy, type Locale } from '../home-copy';
 
-function MarkdownHome({ locale }: { locale: Locale }) {
+function MarkdownHome({
+  defaultVersion,
+  locale,
+  version,
+}: {
+  defaultVersion: string;
+  locale: Locale;
+  version: string;
+}) {
   const copy = homeCopy[locale];
-  const install =
-    'curl -fsSL https://github.com/A3S-Lab/Test/releases/latest/download/install.sh | sh';
+  const unixInstall = installCommandFor('macos', version, defaultVersion);
+  const windowsInstall = installCommandFor('windows', version, defaultVersion);
 
   return (
     <main>
       <h1>{copy.heroTitle.join(locale === 'zh' ? '' : ' ')}</h1>
       <p>{copy.heroBody}</p>
       <h2>{copy.installTitle}</h2>
+      <h3>macOS / Linux</h3>
       <pre>
-        <code>{install}</code>
+        <code>{unixInstall}</code>
+      </pre>
+      <h3>Windows PowerShell</h3>
+      <pre>
+        <code>{windowsInstall}</code>
       </pre>
       <h2>{copy.proofTitle}</h2>
       <p>{copy.proofBody}</p>
@@ -57,7 +70,13 @@ export function HomeLayout() {
   };
 
   if (import.meta.env.SSG_MD) {
-    return <MarkdownHome locale={locale} />;
+    return (
+      <MarkdownHome
+        defaultVersion={defaultVersion}
+        locale={locale}
+        version={version}
+      />
+    );
   }
 
   return (
@@ -94,7 +113,6 @@ export function HomeLayout() {
           <InstallSwitcher
             defaultVersion={defaultVersion}
             labels={copy}
-            locale={locale}
             version={version}
           />
         </div>

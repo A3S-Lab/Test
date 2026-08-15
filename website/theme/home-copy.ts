@@ -9,6 +9,7 @@ type LocalizedCopy = {
   installBody: string;
   installTabs: string;
   installPackage: string;
+  installNote: string;
   copy: string;
   copied: string;
   copyError: string;
@@ -72,7 +73,8 @@ export const homeCopy: Record<Locale, LocalizedCopy> = {
     installBody: '安装 CLI，并为已检测到的编码 Agent 安装同版本 Skill。',
     installTabs: '选择安装平台',
     installPackage: 'CLI + Agent Skill',
-    copy: '复制',
+    installNote: '安装器校验发布归档的 SHA-256，并保持 CLI 与 Skill 版本一致。',
+    copy: '复制命令',
     copied: '已复制',
     copyError: '复制失败',
     proofTitle: '每一次操作都有来源和证据',
@@ -162,7 +164,9 @@ export const homeCopy: Record<Locale, LocalizedCopy> = {
       'Install the CLI and the matching Skill for detected coding agents.',
     installTabs: 'Choose an installation platform',
     installPackage: 'CLI + Agent Skill',
-    copy: 'Copy',
+    installNote:
+      'The installer verifies the release archive SHA-256 and keeps the CLI and Skill on the same version.',
+    copy: 'Copy command',
     copied: 'Copied',
     copyError: 'Copy failed',
     proofTitle: 'Every action carries provenance and evidence',

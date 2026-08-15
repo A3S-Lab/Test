@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import type { Locale } from '../home-copy';
 
 type CopyState = 'idle' | 'copied' | 'error';
 type Platform = 'macos' | 'linux' | 'windows';
@@ -7,6 +6,7 @@ type Platform = 'macos' | 'linux' | 'windows';
 type Labels = {
   installTabs: string;
   installPackage: string;
+  installNote: string;
   copy: string;
   copied: string;
   copyError: string;
@@ -20,7 +20,12 @@ const platformLabels: Record<Platform, string> = {
 
 const platforms = Object.keys(platformLabels) as Platform[];
 
-function commandFor(platform: Platform, version: string, isCurrent: boolean) {
+export function installCommandFor(
+  platform: Platform,
+  version: string,
+  defaultVersion: string,
+) {
+  const isCurrent = version === defaultVersion;
   if (platform === 'windows') {
     const command =
       "& ([scriptblock]::Create((irm 'https://github.com/A3S-Lab/Test/releases/latest/download/install.ps1')))";
@@ -32,24 +37,36 @@ function commandFor(platform: Platform, version: string, isCurrent: boolean) {
   return isCurrent ? command : `${command} -s -- --version ${version}`;
 }
 
+function browserPlatform(): Platform | null {
+  const userAgent = navigator.userAgent;
+  if (/Android|iPad|iPhone|iPod/i.test(userAgent)) return null;
+  if (/Windows/i.test(userAgent)) return 'windows';
+  if (/Linux/i.test(userAgent)) return 'linux';
+  if (/Macintosh|Mac OS X/i.test(userAgent)) return 'macos';
+  return null;
+}
+
 export function InstallSwitcher({
   defaultVersion,
   labels,
-  locale,
   version,
 }: {
   defaultVersion: string;
   labels: Labels;
-  locale: Locale;
   version: string;
 }) {
   const [active, setActive] = useState<Platform>('macos');
   const [copyState, setCopyState] = useState<CopyState>('idle');
   const resetTimer = useRef<number | undefined>(undefined);
   const command = useMemo(
-    () => commandFor(active, version, version === defaultVersion),
+    () => installCommandFor(active, version, defaultVersion),
     [active, defaultVersion, version],
   );
+
+  useEffect(() => {
+    const detected = browserPlatform();
+    if (detected) setActive(detected);
+  }, []);
 
   useEffect(
     () => () => {
@@ -136,7 +153,9 @@ export function InstallSwitcher({
         role="tabpanel"
       >
         <div className="test-install-meta">
-          <span>{labels.installPackage}</span>
+          <span>
+            {labels.installPackage} · {version}
+          </span>
           <button
             aria-live="polite"
             className={copyState === 'copied' ? 'is-copied' : undefined}
@@ -150,11 +169,7 @@ export function InstallSwitcher({
           <span aria-hidden="true">{active === 'windows' ? 'PS›' : '$'}</span>
           <code>{command}</code>
         </div>
-        <p className="test-install-note">
-          {locale === 'zh'
-            ? '安装器校验发布归档的 SHA-256，并保留版本一致性。'
-            : 'The installer verifies the release archive SHA-256 and keeps versions aligned.'}
-        </p>
+        <p className="test-install-note">{labels.installNote}</p>
       </div>
     </div>
   );

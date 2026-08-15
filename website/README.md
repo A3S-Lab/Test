@@ -3,6 +3,10 @@
 The official multilingual website and versioned documentation for
 [A3S Test](https://github.com/A3S-Lab/Test), built with Rspress.
 
+The root route is Simplified Chinese. English uses `/en/`, historical
+versions keep the same locale tree under `/<version>/`, and the homepage
+selects a desktop install command while keeping every command copyable.
+
 ## Local development
 
 ```bash
@@ -33,3 +37,7 @@ directory is a historical snapshot for the previous contract line. New
 documentation work updates only the active version. When a release changes a
 public action schema, provider protocol, CLI contract, or safety boundary,
 archive the old directory before advancing the default version.
+
+`npm run check:site` derives expected routes from the source trees, verifies
+the default locale and version-pinned installers, and rejects broken internal
+references in the generated site.

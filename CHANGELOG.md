@@ -11,6 +11,11 @@
 
 ### Changed
 
+- Shortened the repository homepage around installation, one proven Web path,
+  and the shared evidence contracts. The Rspress homepage now identifies and
+  preserves the selected documentation version in copyable Unix and
+  PowerShell installers, while generated-site checks derive every bilingual
+  route and reject broken internal references.
 - Split review-overlay host lifecycle and global input policy out of the React
   overlay module so rendering, page input blocking, focus tracking, and
   shortcut dispatch retain explicit ownership below the repository file-size
@@ -18,6 +23,13 @@
 
 ### Fixed
 
+- Made the React Test Kit adapter render on Node without server-side
+  `useLayoutEffect` warnings while retaining synchronous browser focus and
+  boundary registration after hydration. Framework-neutral bridge inspection
+  now returns `null` on Node and direct runtime enablement reports its browser
+  requirement explicitly. Package and release gates now load the built ESM and
+  CommonJS entries, render both React adapters on the server, type-check both
+  module consumers, and require the MIT license in the tarball.
 - Serialized Windows CIM process-identity queries before marker-checked
   emergency cleanup. Concurrent cold-provider lookups now retain the existing
   five-second per-query bound instead of starving one another and making
