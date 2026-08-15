@@ -33,6 +33,10 @@
 
 ### Fixed
 
+- Removed collapsed mobile documentation-menu groups from the accessibility
+  tree while preserving keyboard focus restoration and disclosure semantics.
+  Language, version, and resource links are now exposed only while their
+  owning group is expanded.
 - Raised muted text and repair-thread actor contrast to WCAG AA in system and
   light themes, and made the scrollable findings region keyboard focusable.
   The real-browser audit retains the exact failing node and rule when either

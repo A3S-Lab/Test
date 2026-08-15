@@ -206,6 +206,8 @@ function NavHamburger() {
                 ) ||
                 group?.style.gridTemplateRows === '1fr';
               control.setAttribute('aria-expanded', String(Boolean(expanded)));
+              group?.setAttribute('aria-hidden', String(!expanded));
+              group?.toggleAttribute('inert', !expanded);
               group
                 ?.querySelectorAll<HTMLAnchorElement>('a[href]')
                 .forEach((link) => {
@@ -217,9 +219,14 @@ function NavHamburger() {
             const syncAfterClick = () =>
               window.requestAnimationFrame(syncExpanded);
             control.addEventListener('click', syncAfterClick);
-            cleanups.push(() =>
-              control.removeEventListener('click', syncAfterClick),
-            );
+            cleanups.push(() => {
+              control.removeEventListener('click', syncAfterClick);
+              group?.removeAttribute('aria-hidden');
+              group?.removeAttribute('inert');
+              group
+                ?.querySelectorAll<HTMLAnchorElement>('a[href]')
+                .forEach((link) => link.removeAttribute('tabindex'));
+            });
           }
 
           const activateWithKeyboard = (event: KeyboardEvent) => {
