@@ -22,6 +22,10 @@
 
 ### Changed
 
+- Updated the Docker Buildx and registry-login Actions to their Node.js 24
+  major versions, removing the deprecated Node.js 20 runtime from runner-image
+  CI and the release publishing path without changing image inputs or
+  registry authority.
 - Release creation now waits for a fail-closed metadata and documentation
   preflight before scheduling privileged GUI certification. The gate requires
   the tag, Rust workspace version, dated changelog section, default Rspress
