@@ -473,6 +473,11 @@ fn terminate_process_tree(process_id: u32, process_markers: &[String]) -> bool {
 
 #[cfg(windows)]
 fn windows_process_command_line(process_id: u32) -> Option<String> {
+    // A cold CIM provider can starve concurrent PowerShell queries until they
+    // all reach the bounded command deadline. Process identity checks are
+    // inexpensive after provider startup, so serialize them without relaxing
+    // the per-query timeout or the fail-closed marker check.
+    let _query_guard = windows_process_query_lock().lock().ok()?;
     let powershell = windows_system_executable(r"WindowsPowerShell\v1.0\powershell.exe")?;
     let script = format!(
         "$process = Get-CimInstance Win32_Process -Filter 'ProcessId = {process_id}' \
@@ -494,6 +499,12 @@ fn windows_process_command_line(process_id: u32) -> Option<String> {
         character.is_whitespace() || character == '\u{feff}' || character == '\0'
     });
     (!command_line.is_empty()).then(|| command_line.to_string())
+}
+
+#[cfg(windows)]
+fn windows_process_query_lock() -> &'static Mutex<()> {
+    static QUERY: OnceLock<Mutex<()>> = OnceLock::new();
+    QUERY.get_or_init(|| Mutex::new(()))
 }
 
 #[cfg(windows)]
@@ -715,6 +726,40 @@ mod tests {
             &command_line,
             &["definitely-not-this-process".to_string()]
         ));
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn windows_process_queries_remain_available_during_parallel_cleanup() {
+        const QUERY_COUNT: usize = 3;
+
+        let executable = std::env::current_exe().expect("current executable");
+        let marker = executable
+            .file_name()
+            .and_then(|name| name.to_str())
+            .expect("executable name")
+            .to_string();
+        let barrier = Arc::new(std::sync::Barrier::new(QUERY_COUNT));
+        let queries = (0..QUERY_COUNT)
+            .map(|_| {
+                let barrier = Arc::clone(&barrier);
+                std::thread::spawn(move || {
+                    barrier.wait();
+                    windows_process_command_line(std::process::id())
+                })
+            })
+            .collect::<Vec<_>>();
+
+        for query in queries {
+            let command_line = query
+                .join()
+                .expect("join process query")
+                .expect("query current process command line");
+            assert!(windows_command_matches_process_markers(
+                &command_line,
+                std::slice::from_ref(&marker)
+            ));
+        }
     }
 
     #[cfg(windows)]

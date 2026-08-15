@@ -18,6 +18,10 @@
 
 ### Fixed
 
+- Serialized Windows CIM process-identity queries before marker-checked
+  emergency cleanup. Concurrent cold-provider lookups now retain the existing
+  five-second per-query bound instead of starving one another and making
+  otherwise safe process cleanup depend on a CI rerun.
 - Prioritized unmodified `Escape` for active Test Kit marking and finding
   editors even when the event originates in an editable control. Idle host
   editors still retain `Escape` without closing the review panel, while
