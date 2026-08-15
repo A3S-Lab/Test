@@ -9,8 +9,55 @@ permissions:
   contents: read
 
 jobs:
+  release-preflight:
+    name: Release metadata and documentation
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Install Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: website/package-lock.json
+
+      - name: Test release metadata admission
+        run: node --test tests/release-metadata.test.mjs
+
+      - name: Verify tagged release metadata
+        run: node scripts/check-release-metadata.mjs --tag "$GITHUB_REF_NAME"
+
+      - name: Install documentation dependencies
+        working-directory: website
+        run: npm ci
+
+      - name: Check documentation formatting
+        working-directory: website
+        run: npm run format:check
+
+      - name: Check documentation contracts
+        working-directory: website
+        run: npm run check
+
+      - name: Build documentation
+        working-directory: website
+        run: npm run build
+        env:
+          DOCS_BASE: /Test/
+          DOCS_ORIGIN: https://a3s-lab.github.io
+
+      - name: Verify built documentation
+        working-directory: website
+        run: npm run check:site
+        env:
+          DOCS_BASE: /Test/
+
   gui-certification:
     name: Real macOS GUI certification
+    needs: release-preflight
     permissions:
       contents: read
       id-token: write
@@ -19,7 +66,9 @@ jobs:
 
   create-release:
     name: Create GitHub Release
-    needs: gui-certification
+    needs:
+      - release-preflight
+      - gui-certification
     runs-on: ubuntu-latest
     permissions:
       contents: write

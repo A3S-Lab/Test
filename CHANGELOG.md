@@ -16,6 +16,11 @@
 
 ### Changed
 
+- Release creation now waits for a fail-closed metadata and documentation
+  preflight before scheduling privileged GUI certification. The gate requires
+  the tag, Rust workspace version, dated changelog section, default Rspress
+  version, ordered snapshot provenance, and both locale trees to agree, then
+  rebuilds and verifies the complete generated site.
 - Shortened the repository homepage around installation, one proven Web path,
   and the shared evidence contracts. The Rspress homepage now identifies and
   preserves the selected documentation version in copyable Unix and

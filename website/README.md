@@ -38,6 +38,16 @@ documentation work updates only the active version. When a release changes a
 public action schema, provider protocol, CLI contract, or safety boundary,
 archive the old directory before advancing the default version.
 
+Before a tag can create a GitHub Release, the release preflight requires the
+tag, Rust workspace version, dated changelog section, default documentation
+version, ordered snapshot metadata, and both locale trees to agree. It then
+runs the same formatting, contract, build, and generated-site checks used by
+the documentation workflow. Run the metadata gate locally with:
+
+```bash
+node ../scripts/check-release-metadata.mjs --tag v0.16.2
+```
+
 `npm run check:site` derives expected routes from the source trees, verifies
 the default locale and version-pinned installers, and rejects broken internal
 references in the generated site.

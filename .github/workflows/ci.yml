@@ -12,6 +12,25 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  release-metadata:
+    name: Release metadata
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Install Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+
+      - name: Test release metadata admission
+        run: node --test tests/release-metadata.test.mjs
+
+      - name: Verify current release metadata
+        run: node scripts/check-release-metadata.mjs
+
   runner-image:
     name: Hermetic runner image
     runs-on: ubuntu-latest
