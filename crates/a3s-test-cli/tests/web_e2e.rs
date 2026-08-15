@@ -12,8 +12,8 @@ use support::testkit_accessibility::{
     verify_audit_fixture_reset,
 };
 use support::testkit_browser::{
-    assert_wcag_accessibility, assert_wcag_accessibility_across_themes, run_review_workflow,
-    verify_hide_until_restart_focus,
+    assert_wcag_accessibility, assert_wcag_accessibility_across_themes, click_accessible,
+    run_review_workflow, verify_hide_until_restart_focus,
 };
 use support::testkit_bundle::bundle_browser_fixture;
 use support::web_fixture::{get, start_static_site_fixture, start_testkit_fixture, WebFixture};
@@ -400,10 +400,11 @@ fn real_agent_browser_runs_the_embedded_testkit_suite() {
     let accessibility = String::from_utf8_lossy(&accessibility.stdout);
     for expected in [
         "dialog \"Review\"",
-        "button \"Pause page animations\"",
-        "button \"Turn auto-send on\"",
-        "button \"Change overlay theme; current theme is system\"",
-        "button \"Layout\"",
+        "button \"Mark element\"",
+        "button \"Mark multi\"",
+        "button \"Mark text\"",
+        "button \"Open review workspace\"",
+        "button \"More review tools\"",
         "button \"Close review overlay\"",
         "heading \"Screen-reader audit controls\"",
         "button \"Seed contract and design candidates\"",
@@ -418,11 +419,35 @@ fn real_agent_browser_runs_the_embedded_testkit_suite() {
         );
     }
 
+    click_accessible(
+        &command,
+        "open the TestKit review tool tray",
+        "button",
+        "More review tools",
+    );
+    let tool_accessibility = command(&["snapshot"]);
+    assert_process_success(
+        "capture the expanded TestKit review tool tray",
+        &tool_accessibility,
+    );
+    let tool_accessibility = String::from_utf8_lossy(&tool_accessibility.stdout);
+    for expected in [
+        "button \"Pause page animations\"",
+        "button \"Turn auto-send on\"",
+        "button \"Change overlay theme; current theme is system\"",
+        "button \"Layout\"",
+    ] {
+        assert!(
+            tool_accessibility.contains(expected),
+            "expanded TestKit review tool tray missing {expected:?}: {tool_accessibility}"
+        );
+    }
+
     assert_wcag_accessibility_across_themes(&command);
 
     let focus_round_trip = command(&[
         "eval",
-        "(async()=>{let host=null;for(let frame=0;frame<120;frame+=1){const candidate=document.querySelector('[data-a3s-testkit-overlay]');if(candidate?.isConnected&&candidate.shadowRoot?.querySelector('[aria-label=\"Close review overlay\"]')){await new Promise(resolve=>requestAnimationFrame(resolve));if(candidate.isConnected&&candidate.shadowRoot?.querySelector('[aria-label=\"Close review overlay\"]')){host=candidate;break}}await new Promise(resolve=>requestAnimationFrame(resolve))}if(!host)throw new Error('stable TestKit overlay host not found');const shadow=host.shadowRoot;shadow.querySelector('[aria-label=\"Close review overlay\"]').click();await new Promise(resolve=>requestAnimationFrame(resolve));const closeFocus=shadow.activeElement?.classList.contains('a3s-launch')===true;shadow.querySelector('.a3s-launch').click();await new Promise(resolve=>requestAnimationFrame(resolve));const openFocus=shadow.activeElement?.classList.contains('a3s-panel')===true;return JSON.stringify({closeFocus,openFocus})})()",
+        "(async()=>{let host=null;for(let frame=0;frame<120;frame+=1){const candidate=document.querySelector('[data-a3s-testkit-overlay]');if(candidate?.isConnected&&candidate.shadowRoot?.querySelector('[aria-label=\"Close review overlay\"]')){await new Promise(resolve=>requestAnimationFrame(resolve));if(candidate.isConnected&&candidate.shadowRoot?.querySelector('[aria-label=\"Close review overlay\"]')){host=candidate;break}}await new Promise(resolve=>requestAnimationFrame(resolve))}if(!host)throw new Error('stable TestKit overlay host not found');const shadow=host.shadowRoot;const waitForFocus=async className=>{for(let frame=0;frame<120;frame+=1){if(shadow.activeElement?.classList.contains(className))return frame;await new Promise(resolve=>requestAnimationFrame(resolve))}return -1};shadow.querySelector('[aria-label=\"Close review overlay\"]').click();const closeFrame=await waitForFocus('a3s-launch');shadow.querySelector('.a3s-launch').click();const openFrame=await waitForFocus('a3s-panel');return JSON.stringify({closeFocus:closeFrame>=0,openFocus:openFrame>=0,closeFrame,openFrame})})()",
     ]);
     assert_process_success(
         "exercise TestKit overlay focus round trip",

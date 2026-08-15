@@ -192,6 +192,7 @@ fn verify_shortcut_discoverability(command: &impl Fn(&[&str]) -> Output) {
         "set a compact viewport for shortcut help",
         &["set", "viewport", "390", "667", "1"],
     );
+    open_review_tool_tray(command, "open review tools for shortcut help");
     activate_accessible_with_enter(
         command,
         "open shortcut help through review preferences",
@@ -227,13 +228,21 @@ fn verify_shortcut_discoverability(command: &impl Fn(&[&str]) -> Output) {
     let compact_layout = encoded_eval(
         command,
         "inspect compact shortcut help layout",
-        "(()=>{const shadow=document.querySelector('[data-a3s-testkit-overlay]').shadowRoot;const settings=shadow.querySelector('.a3s-settings');const panel=shadow.querySelector('.a3s-panel');const hide=[...shadow.querySelectorAll('button')].find(candidate=>candidate.textContent.trim()==='Hide until tab restart');const bounds=hide.getBoundingClientRect();const panelBounds=panel.getBoundingClientRect();return JSON.stringify({settingsHeight:settings.clientHeight,viewportHeight:innerHeight,reachable:bounds.top>=panelBounds.top&&bounds.bottom<=panelBounds.bottom})})()",
+        "(()=>{const shadow=document.querySelector('[data-a3s-testkit-overlay]').shadowRoot;const settings=shadow.querySelector('.a3s-settings-content');const hide=[...shadow.querySelectorAll('button')].find(candidate=>candidate.textContent.trim()==='Hide until tab restart');const bounds=hide.getBoundingClientRect();const settingsBounds=settings.getBoundingClientRect();return JSON.stringify({settingsHeight:settings.clientHeight,settingsBounds:{top:settingsBounds.top,right:settingsBounds.right,bottom:settingsBounds.bottom,left:settingsBounds.left},viewportHeight:innerHeight,viewportWidth:innerWidth,viewportBounded:settingsBounds.top>=0&&settingsBounds.right<=innerWidth&&settingsBounds.bottom<=innerHeight&&settingsBounds.left>=0,reachable:bounds.top>=settingsBounds.top&&bounds.bottom<=settingsBounds.bottom})})()",
     );
     assert!(
         compact_layout["settingsHeight"]
             .as_u64()
-            .is_some_and(|height| height <= 401),
+            .is_some_and(|height| {
+                compact_layout["viewportHeight"]
+                    .as_u64()
+                    .is_some_and(|viewport| height <= viewport.saturating_sub(82))
+            }),
         "compact review preferences exceeded their viewport share: {compact_layout}"
+    );
+    assert_eq!(
+        compact_layout["viewportBounded"], true,
+        "compact review preferences escaped the viewport: {compact_layout}"
     );
     assert_eq!(
         compact_layout["reachable"], true,
@@ -498,6 +507,7 @@ fn exercise_host_interaction_blocking(command: &impl Fn(&[&str]) -> Output) {
         "observe the unblocked host click",
         "window.testkitHostClicks===1",
     );
+    open_review_tool_tray(command, "open review tools for interaction preferences");
     activate_accessible_with_enter(
         command,
         "open review preferences",
@@ -706,6 +716,7 @@ pub fn verify_hide_until_restart_focus(command: &impl Fn(&[&str]) -> Output) {
         "focus the host application before hiding review",
         &["focus", "#host-probe"],
     );
+    open_review_tool_tray(command, "open review tools before hiding review");
     activate_accessible_with_enter(
         command,
         "open review preferences before hiding review",
@@ -743,7 +754,24 @@ fn click_host_probe(command: &impl Fn(&[&str]) -> Output, context: &str) {
     click_accessible(command, context, "button", "Host interaction probe");
 }
 
-pub(super) fn click_accessible(
+fn open_review_tool_tray(command: &impl Fn(&[&str]) -> Output, context: &str) {
+    let expanded = eval(
+        command,
+        &format!("inspect before {context}"),
+        "document.querySelector('[data-a3s-testkit-overlay]').shadowRoot.querySelector('[aria-label=\"More review tools\"]')?.getAttribute('aria-expanded')==='true'",
+    );
+    if expanded == true {
+        return;
+    }
+    activate_accessible_with_enter(command, context, "button", "More review tools");
+    wait_for(
+        command,
+        &format!("wait after {context}"),
+        "document.querySelector('[data-a3s-testkit-overlay]').shadowRoot.querySelector('[aria-label=\"More review tools\"]')?.getAttribute('aria-expanded')==='true'",
+    );
+}
+
+pub(crate) fn click_accessible(
     command: &impl Fn(&[&str]) -> Output,
     context: &str,
     role: &str,

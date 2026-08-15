@@ -107,6 +107,7 @@ export function A3SReviewOverlay({
   const replyTriggerRefs = useRef(new Map<string, HTMLButtonElement>());
   const suppressHostClickRef = useRef<EventTarget | null>(null);
   const focusPanelOnOpenRef = useRef(false);
+  const focusLauncherOnCloseRef = useRef(false);
   const restoreFocusRef = useRef<HTMLElement | null>(null);
   const lastApplicationFocusRef = useLastApplicationFocus(enabled, host);
   const idPrefix = useId().replace(/:/g, "");
@@ -115,8 +116,8 @@ export function A3SReviewOverlay({
   drawingRef.current = drawing;
 
   function closeOverlay() {
+    focusLauncherOnCloseRef.current = true;
     setOpen(false);
-    queueMicrotask(() => launchRef.current?.focus());
   }
 
   function closeOverlayFromControl() {
@@ -307,6 +308,15 @@ export function A3SReviewOverlay({
     if (!open || !focusPanelOnOpenRef.current) return;
     focusPanelOnOpenRef.current = false;
     panelRef.current?.focus();
+  }, [mount, open]);
+
+  useBrowserLayoutEffect(() => {
+    if (open || !focusLauncherOnCloseRef.current) return;
+    focusLauncherOnCloseRef.current = false;
+    const focusLauncher = () => launchRef.current?.focus({ preventScroll: true });
+    focusLauncher();
+    const frame = window.requestAnimationFrame(focusLauncher);
+    return () => window.cancelAnimationFrame(frame);
   }, [mount, open]);
 
   useBrowserLayoutEffect(() => {

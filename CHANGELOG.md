@@ -52,6 +52,11 @@
 
 ### Fixed
 
+- Restored review Dock focus after closing with the secondary tool tray open,
+  and removed transformed or filtered containing blocks that displaced compact
+  Review preferences outside the viewport. The preference surface now uses
+  the correct panel text color in light themes; real-browser regressions
+  expand the tray and verify focus, viewport bounds, scrolling, and contrast.
 - Made page-motion pause ownership-safe. Test Kit now records only running
   animations and playing media that it actually pauses, freezes motion that
   starts while review pause remains active, and resumes only that owned set;

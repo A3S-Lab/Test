@@ -151,6 +151,7 @@ ${OVERLAY_SHELL_CSS}
   border-radius: 14px;
   background: var(--a3s-panel);
   box-shadow: var(--a3s-shadow);
+  color: var(--a3s-text);
   flex-direction: column;
   gap: 11px;
 }

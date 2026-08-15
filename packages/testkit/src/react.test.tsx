@@ -771,6 +771,8 @@ describe("React adapter and review overlay", () => {
     expect(shortcutHelp.textContent).toContain("Letter shortcuts and panel toggle are ignored while typing");
     expect(shortcutHelp.textContent).toContain("Escape still cancels active marking or an open finding editor");
 
+    fireEvent.click(shadowButton("More tools"));
+    expect(shadowButton("More tools").getAttribute("aria-expanded")).toBe("true");
     fireEvent.click(shadowQuery("header button"));
     await waitFor(() => expect(document.querySelector<HTMLElement>("[data-a3s-testkit-overlay]")!.shadowRoot!.activeElement).toBe(launcher));
     fireEvent.click(launcher);

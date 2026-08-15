@@ -234,7 +234,7 @@ button.danger {
   background: transparent;
   pointer-events: none;
   transform-origin: right bottom;
-  animation: a3s-panel-enter 260ms cubic-bezier(.16, 1, .3, 1) both;
+  animation: a3s-panel-enter 260ms cubic-bezier(.16, 1, .3, 1);
 }
 
 @keyframes a3s-panel-enter {
@@ -261,7 +261,6 @@ button.danger {
   pointer-events: auto;
   align-items: center;
   gap: 7px;
-  backdrop-filter: blur(18px) saturate(130%);
 }
 
 .a3s-command-bar > header {
@@ -478,8 +477,7 @@ button.danger {
   grid-template-columns: minmax(112px, 1fr) auto;
   align-items: center;
   gap: 8px;
-  backdrop-filter: blur(18px) saturate(130%);
-  animation: a3s-tool-tray-enter 180ms cubic-bezier(.16, 1, .3, 1) both;
+  animation: a3s-tool-tray-enter 180ms cubic-bezier(.16, 1, .3, 1);
 }
 
 .a3s-tool-tray[hidden] {
