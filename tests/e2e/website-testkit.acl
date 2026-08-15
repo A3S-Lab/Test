@@ -28,24 +28,16 @@ suite "website-testkit-experience" {
             visible = css(".test-experience-stage.is-motion-active")
         }
 
-        focus "focus-motion-sequence-toggle" {
-            target = css(".test-motion-toggle")
-        }
-
-        press "pause-motion-sequence" {
-            key = "Enter"
+        click "pause-motion-sequence" {
+            target = role("button", "暂停自动演示")
         }
 
         wait "motion-sequence-paused" {
             visible = css(".test-motion-toggle[aria-pressed='true']")
         }
 
-        focus "refocus-motion-sequence-toggle" {
-            target = css(".test-motion-toggle")
-        }
-
-        press "resume-motion-sequence" {
-            key = "Enter"
+        click "resume-motion-sequence" {
+            target = role("button", "继续自动演示")
         }
 
         wait "motion-sequence-resumed" {

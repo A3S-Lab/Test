@@ -236,6 +236,7 @@ jobs:
           executable="$root/chrome-headless-shell-$platform/chrome-headless-shell"
           chmod +x "$executable"
           printf 'AGENT_BROWSER_EXECUTABLE_PATH=%s\n' "$executable" >> "$GITHUB_ENV"
+          printf 'AGENT_BROWSER_ARGS=%s\n' '--force-prefers-no-reduced-motion' >> "$GITHUB_ENV"
           "$executable" --version
 
       - name: Install pinned Chrome Headless Shell on Windows
@@ -252,7 +253,7 @@ jobs:
           Expand-Archive -LiteralPath $archive -DestinationPath $root -Force
           $executable = Join-Path $root 'chrome-headless-shell-win64\chrome-headless-shell.exe'
           "AGENT_BROWSER_EXECUTABLE_PATH=$executable" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-          'AGENT_BROWSER_ARGS=--no-sandbox' | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          'AGENT_BROWSER_ARGS=--no-sandbox,--force-prefers-no-reduced-motion' | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           Write-Output "Chrome Headless Shell ${version}: $executable"
           & $executable --version
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

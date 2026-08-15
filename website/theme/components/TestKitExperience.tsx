@@ -526,12 +526,7 @@ export function TestKitExperience({
               aria-label={motionPaused ? copy.motionResume : copy.motionPause}
               aria-pressed={motionPaused}
               className="test-motion-toggle"
-              onClick={() => setMotionPaused(!motionPaused)}
-              onKeyDown={(event) => {
-                if (event.key !== 'Enter') return;
-                event.preventDefault();
-                setMotionPaused(!motionPaused);
-              }}
+              onClick={() => setMotionPaused((current) => !current)}
               title={motionPaused ? copy.motionResume : copy.motionPause}
               type="button"
             >
