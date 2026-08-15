@@ -129,7 +129,9 @@ result. Redact sensitive content before sharing evidence.
 The verifier requires each referenced artifact to be a non-empty regular file
 inside the audit directory. Symlink or path traversal escapes are rejected.
 Each workflow may reference at most 20 unique files, and each file is limited
-to 64 MiB.
+to 64 MiB. Verification reads and hashes every distinct file through a stable
+file handle, rejects replacement during the read, and limits the aggregate
+distinct evidence set to 1 GiB.
 
 ## Audit artifact
 
@@ -197,8 +199,13 @@ coverage, timing, and evidence files:
 
 ```bash
 revision="$(git rev-parse HEAD)"
-npm run audit:check -- /absolute/path/to/audit.json --revision "$revision"
+npm run audit:check -- /absolute/path/to/audit.json --revision "$revision" \
+  > /absolute/path/to/audit-verification.json
 ```
+
+The revision must identify an existing commit in this repository. The
+verifier reads the workflow manifest and Test Kit package version from that
+commit rather than trusting mutable working-tree copies.
 
 This command may succeed when a result is `failed` or `blocked`; success means
 the audit is structurally authentic and inspectable, not that the product
@@ -210,12 +217,30 @@ recorded `passed`, apply the closure gate:
 ```bash
 npm run audit:check -- /absolute/path/to/audit.json \
   --revision "$revision" \
-  --require-pass
+  --require-pass \
+  > /absolute/path/to/audit-closure-verification.json
 ```
 
-The verifier emits `a3s.test.screen-reader-audit-verification/1` with the exact
-revision, Test Kit version, gate mode, and outcome counts. Keep that output
-with the reviewed artifact.
+The verifier emits `a3s.test.screen-reader-audit-verification/2` with the exact
+revision, Test Kit version, gate mode, and outcome counts. It also records the
+raw audit and committed workflow-manifest byte lengths and SHA-256 digests,
+plus an ordered byte length and SHA-256 digest for every referenced evidence
+file. `evidence_set_sha256` hashes the compact JSON serialization of that
+ordered evidence-record array.
+
+The record contains only audit-relative paths, so identical inputs produce
+identical verification JSON after the audit directory is copied or moved.
+Keep the verification output with the reviewed artifact. To detect later
+replacement, rerun the same gate and compare the complete record:
+
+```bash
+npm run audit:check -- /absolute/path/to/audit.json \
+  --revision "$revision" \
+  --require-pass \
+  > /absolute/path/to/audit-closure-verification.next.json
+cmp /absolute/path/to/audit-closure-verification.json \
+  /absolute/path/to/audit-closure-verification.next.json
+```
 
 Even a successful `--require-pass` command does not authorize repair or close
 M8 without confirmation that the recorded person independently performed the

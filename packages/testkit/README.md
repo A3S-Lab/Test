@@ -166,5 +166,7 @@ The
 [independent screen-reader audit guide](../../docs/screen-reader-audit.md)
 provides the loopback fixture command, canonical 15-workflow manifest,
 evidence rules, strict audit JSON contract, and separate structural and
-all-passed verification commands. The harness makes the audit reproducible;
-it does not close M8 or grant repair authority.
+all-passed verification commands. Verification resolves the named Git commit
+and emits a location-independent v2 record with SHA-256 bindings for the audit,
+committed workflow manifest, and every evidence file. The harness makes the
+audit reproducible; it does not close M8 or grant repair authority.

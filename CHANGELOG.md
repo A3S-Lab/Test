@@ -39,6 +39,12 @@
 
 ### Fixed
 
+- Bound screen-reader audit verification to a real Git commit and read the
+  canonical workflow manifest plus Test Kit version from that revision. The
+  location-independent verification v2 record now includes byte length and
+  SHA-256 bindings for the audit JSON, committed manifest, every evidence file,
+  and the ordered evidence set, while rejecting files replaced during hashing
+  and aggregate evidence above 1 GiB.
 - Raised the documentation mobile navigation and installer copy controls to a
   44-pixel minimum target without changing the compact desktop layout.
 - Removed collapsed mobile documentation-menu groups from the accessibility

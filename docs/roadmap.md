@@ -246,10 +246,12 @@ snapshot. Pages without the SDK retain the existing Web behavior.
   candidates, clarification replies, human review actions, and terminal repair
   states. It also verifies that scrollable findings remain keyboard reachable.
   A committed 15-workflow manifest, loopback-only shared fixture, strict
-  revision-bound audit artifact, evidence verifier, and closure gate now make
-  the remaining manual audit reproducible. This does not close the item: an
-  independent VoiceOver, NVDA, or equivalent hands-on lifecycle audit is still
-  required.
+  revision-bound audit artifact, digest-bound location-independent verifier,
+  and closure gate now make the remaining manual audit reproducible. The
+  verifier loads its manifest and Test Kit version from the audited Git commit
+  and binds every evidence file by byte length and SHA-256. This does not close
+  the item: an independent VoiceOver, NVDA, or equivalent hands-on lifecycle
+  audit is still required.
 
 ## M9: Repair queue and coding-agent handoff
 
