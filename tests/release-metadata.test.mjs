@@ -11,15 +11,21 @@ const validInput = {
       version: "v0.16.2",
       sourceTag: "v0.16.2",
       sourceCommit: "e207e6a2578209d7d648d9365f08c7c591dffdd7",
+      testkitVersion: "0.3.0",
     },
     archives: [
       {
         version: "v0.15.0",
         sourceTag: "v0.15.0",
         sourceCommit: "1c973610efca7692bfed58ae31573cef6ec98f7f",
+        testkitVersion: "0.3.0",
       },
     ],
   },
+  testKitManifest: JSON.stringify({
+    name: "@a3s-lab/testkit",
+    version: "0.3.0",
+  }),
   versions: ["v0.16.2", "v0.15.0"],
   workspaceManifest: `[workspace.package]
 version = "0.16.2"
@@ -46,6 +52,43 @@ test("rejects a release tag that differs from the workspace version", () => {
   ]);
 });
 
+test("binds release metadata to the packaged Test Kit version", () => {
+  const result = validateReleaseMetadata({
+    ...validInput,
+    snapshots: {
+      ...validInput.snapshots,
+      current: {
+        ...validInput.snapshots.current,
+        testkitVersion: "0.2.0",
+      },
+    },
+  });
+
+  assert.deepEqual(result.errors, [
+    "Current snapshot Test Kit version 0.2.0 does not match package version 0.3.0.",
+  ]);
+});
+
+test("requires every documentation snapshot to bind a Test Kit version", () => {
+  const result = validateReleaseMetadata({
+    ...validInput,
+    snapshots: {
+      ...validInput.snapshots,
+      archives: [
+        {
+          version: "v0.15.0",
+          sourceTag: "v0.15.0",
+          sourceCommit: "1c973610efca7692bfed58ae31573cef6ec98f7f",
+        },
+      ],
+    },
+  });
+
+  assert.deepEqual(result.errors, [
+    "Archive v0.15.0 Test Kit version <missing> is not semantic.",
+  ]);
+});
+
 test("reports documentation and provenance drift together", () => {
   const result = validateReleaseMetadata({
     ...validInput,
@@ -56,6 +99,7 @@ test("reports documentation and provenance drift together", () => {
         version: "v0.15.0",
         sourceTag: "v0.15.0",
         sourceCommit: "short",
+        testkitVersion: "0.3.0",
       },
       archives: [],
     },
@@ -83,11 +127,13 @@ test("rejects duplicate and malformed version records", () => {
           version: "v0.16.2",
           sourceTag: "v0.16.1",
           sourceCommit: "1c973610efca7692bfed58ae31573cef6ec98f7f",
+          testkitVersion: "0.3.0",
         },
         {
           version: "16.0",
           sourceTag: "16.0",
           sourceCommit: "not-a-commit",
+          testkitVersion: "0.3.0",
         },
       ],
     },

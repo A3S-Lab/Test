@@ -27,20 +27,26 @@ async function directoryExists(directory) {
 
 async function main() {
   const releaseTag = parseReleaseTag(process.argv.slice(2));
-  const [workspaceManifest, changelog, snapshotsContents] = await Promise.all([
+  const [workspaceManifest, testKitManifest, changelog, snapshotsContents] =
+    await Promise.all([
     readFile(path.join(repositoryRoot, "Cargo.toml"), "utf8"),
+    readFile(
+      path.join(repositoryRoot, "packages", "testkit", "package.json"),
+      "utf8",
+    ),
     readFile(path.join(repositoryRoot, "CHANGELOG.md"), "utf8"),
     readFile(
       path.join(repositoryRoot, "website", "version-snapshots.json"),
       "utf8",
     ),
-  ]);
+    ]);
   const snapshots = JSON.parse(snapshotsContents);
   const result = validateReleaseMetadata({
     changelog,
     defaultVersion,
     releaseTag,
     snapshots,
+    testKitManifest,
     versions,
     workspaceManifest,
   });

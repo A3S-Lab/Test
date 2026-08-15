@@ -40,6 +40,9 @@
   the tag, Rust workspace version, dated changelog section, default Rspress
   version, ordered snapshot provenance, and both locale trees to agree, then
   rebuilds and verifies the complete generated site.
+- Release metadata now binds the packaged Test Kit version to the active
+  documentation snapshot and requires every archived snapshot to retain its
+  own semantic Test Kit version.
 - Shortened the repository homepage around installation, one proven Web path,
   and the shared evidence contracts. The Rspress homepage now identifies and
   preserves the selected documentation version in copyable Unix and

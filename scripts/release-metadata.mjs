@@ -1,5 +1,7 @@
 const DOCUMENTATION_VERSION_PATTERN =
   /^v\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/;
+const PACKAGE_VERSION_PATTERN =
+  /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/;
 const COMMIT_PATTERN = /^[0-9a-f]{40}$/;
 
 function escapeRegExp(value) {
@@ -24,15 +26,33 @@ export function parseWorkspaceVersion(workspaceManifest) {
   throw new Error("Cargo.toml has no workspace package version.");
 }
 
+export function parseTestKitVersion(testKitManifest) {
+  let manifest;
+  try {
+    manifest = JSON.parse(testKitManifest);
+  } catch {
+    throw new Error("Test Kit package manifest is not valid JSON.");
+  }
+  if (manifest?.name !== "@a3s-lab/testkit") {
+    throw new Error("Test Kit package manifest has an unexpected package name.");
+  }
+  if (!PACKAGE_VERSION_PATTERN.test(manifest.version ?? "")) {
+    throw new Error("Test Kit package manifest has no semantic version.");
+  }
+  return manifest.version;
+}
+
 export function validateReleaseMetadata({
   changelog,
   defaultVersion,
   releaseTag,
   snapshots,
+  testKitManifest,
   versions,
   workspaceManifest,
 }) {
   const workspaceVersion = parseWorkspaceVersion(workspaceManifest);
+  const testKitVersion = parseTestKitVersion(testKitManifest);
   const expectedTag = `v${workspaceVersion}`;
   const errors = [];
 
@@ -78,6 +98,16 @@ export function validateReleaseMetadata({
       "Current snapshot source commit must be a full lowercase Git commit SHA.",
     );
   }
+  const currentTestKitVersion = current.testkitVersion ?? "<missing>";
+  if (!PACKAGE_VERSION_PATTERN.test(currentTestKitVersion)) {
+    errors.push(
+      `Current snapshot Test Kit version ${currentTestKitVersion} is not semantic.`,
+    );
+  } else if (currentTestKitVersion !== testKitVersion) {
+    errors.push(
+      `Current snapshot Test Kit version ${currentTestKitVersion} does not match package version ${testKitVersion}.`,
+    );
+  }
 
   const archives = snapshots?.archives ?? [];
   const archiveVersions = archives.map((archive) => archive.version);
@@ -95,6 +125,12 @@ export function validateReleaseMetadata({
     if (!COMMIT_PATTERN.test(archive.sourceCommit ?? "")) {
       errors.push(
         `Archive ${archive.version} source commit must be a full lowercase Git commit SHA.`,
+      );
+    }
+    const archiveTestKitVersion = archive.testkitVersion ?? "<missing>";
+    if (!PACKAGE_VERSION_PATTERN.test(archiveTestKitVersion)) {
+      errors.push(
+        `Archive ${archive.version} Test Kit version ${archiveTestKitVersion} is not semantic.`,
       );
     }
   }
