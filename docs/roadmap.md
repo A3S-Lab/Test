@@ -240,6 +240,14 @@ snapshot. Pages without the SDK retain the existing Web behavior.
 - [ ] Complete and independently audit every review workflow with a screen
       reader
 
+  Automated prerequisite evidence now includes an independent `axe-core`
+  WCAG A/AA scan in real Chromium across all three themes, review preferences,
+  marking and Layout editors, restored drafts, deterministic and advisory
+  candidates, clarification replies, human review actions, and terminal repair
+  states. It also verifies that scrollable findings remain keyboard reachable.
+  This does not close the item: an independent VoiceOver, NVDA, or equivalent
+  hands-on lifecycle audit is still required.
+
 ## M9: Repair queue and coding-agent handoff
 
 - [x] Define typed `RepairBatch`, per-item batch results, `RepairAttempt`

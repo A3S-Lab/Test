@@ -15,6 +15,47 @@ pub fn run_review_workflow(command: &impl Fn(&[&str]) -> Output) {
     author_searchable_layout_placement(command);
 }
 
+pub fn assert_wcag_accessibility(command: &impl Fn(&[&str]) -> Output, context: &str) {
+    let violations = encoded_eval(
+        command,
+        context,
+        "(async()=>JSON.stringify(await window.testkitFixture.auditAccessibility()))()",
+    );
+    assert_eq!(
+        violations,
+        serde_json::json!([]),
+        "{context} found WCAG violations: {violations:#}"
+    );
+}
+
+pub fn assert_wcag_accessibility_across_themes(command: &impl Fn(&[&str]) -> Output) {
+    for (theme, next_theme) in [("system", "light"), ("light", "dark"), ("dark", "system")] {
+        wait_for(
+            command,
+            &format!("wait for the {theme} review theme"),
+            &format!(
+                "document.querySelector('[data-a3s-testkit-overlay]').shadowRoot.querySelector('.a3s-root')?.dataset.theme==='{}'",
+                theme
+            ),
+        );
+        assert_wcag_accessibility(command, &format!("audit the {theme} review theme"));
+        click_accessible(
+            command,
+            &format!("cycle the {theme} review theme"),
+            "button",
+            &format!("Change overlay theme; current theme is {theme}"),
+        );
+        wait_for(
+            command,
+            &format!("wait for the {next_theme} review theme"),
+            &format!(
+                "document.querySelector('[data-a3s-testkit-overlay]').shadowRoot.querySelector('.a3s-root')?.dataset.theme==='{}'",
+                next_theme
+            ),
+        );
+    }
+}
+
 fn exercise_keyboard_multi_selection(command: &impl Fn(&[&str]) -> Output) {
     run(
         command,
@@ -87,6 +128,7 @@ fn exercise_keyboard_multi_selection(command: &impl Fn(&[&str]) -> Output) {
         "open the completed keyboard multi-select editor",
         "(()=>{const shadow=document.querySelector('[data-a3s-testkit-overlay]').shadowRoot;return shadow.querySelector('.a3s-editor')?.textContent.includes('2 selected elements')&&shadow.activeElement?.matches('textarea')})()",
     );
+    assert_wcag_accessibility(command, "audit the keyboard multi-select editor");
     run(
         command,
         "discard the completed keyboard multi-selection from its editor",
@@ -168,6 +210,7 @@ fn verify_shortcut_discoverability(command: &impl Fn(&[&str]) -> Output) {
             && snapshot.contains("Escape still cancels active marking or an open finding editor",),
         "review shortcut help was not exposed through the accessibility tree: {snapshot}"
     );
+    assert_wcag_accessibility(command, "audit review preferences and shortcut help");
     let hide = accessible_ref(
         command,
         "locate the final compact review preference",
@@ -280,6 +323,7 @@ fn create_and_restore_draft(command: &impl Fn(&[&str]) -> Output) {
         restored["markerName"],
         format!("Edit draft marker: {RESTORED_DRAFT}")
     );
+    assert_wcag_accessibility(command, "audit a restored draft and spatial marker");
 }
 
 fn edit_draft_from_spatial_marker(command: &impl Fn(&[&str]) -> Output) {
@@ -306,6 +350,7 @@ fn edit_draft_from_spatial_marker(command: &impl Fn(&[&str]) -> Output) {
         "Requested fix",
         EDITED_DRAFT,
     );
+    assert_wcag_accessibility(command, "audit the restored draft editor");
     click_accessible(
         command,
         "save the restored marker draft",
@@ -458,6 +503,7 @@ fn exercise_host_interaction_blocking(command: &impl Fn(&[&str]) -> Output) {
         "wait for host pointer blocking",
         "document.querySelector('[data-a3s-testkit-overlay]').shadowRoot.querySelector('[aria-label=\"Block page pointer input\"]')?.checked===true",
     );
+    assert_wcag_accessibility(command, "audit interaction-blocking preferences");
     click_host_probe(command, "attempt the blocked host click");
     let blocked_count = eval(
         command,
@@ -514,6 +560,7 @@ fn author_searchable_layout_placement(command: &impl Fn(&[&str]) -> Output) {
         "filter the component catalog",
         "(()=>{const results=document.querySelector('[data-a3s-testkit-overlay]').shadowRoot.querySelector('.a3s-catalog-results');return results?.textContent.includes('Checkout Form')&&!results.textContent.includes('Breadcrumbs')})()",
     );
+    assert_wcag_accessibility(command, "audit the filtered Layout component catalog");
     scroll_and_click_accessible(
         command,
         "choose the searched component type",
@@ -599,6 +646,7 @@ fn author_searchable_layout_placement(command: &impl Fn(&[&str]) -> Output) {
             .is_some_and(|value| value.contains("Place Checkout Form")),
         "Layout pointer up did not create an editor: {pointer_up}"
     );
+    assert_wcag_accessibility(command, "audit the Layout placement editor");
     click_accessible(
         command,
         "save the searched Layout draft",
@@ -678,7 +726,12 @@ fn click_host_probe(command: &impl Fn(&[&str]) -> Output, context: &str) {
     click_accessible(command, context, "button", "Host interaction probe");
 }
 
-fn click_accessible(command: &impl Fn(&[&str]) -> Output, context: &str, role: &str, name: &str) {
+pub(super) fn click_accessible(
+    command: &impl Fn(&[&str]) -> Output,
+    context: &str,
+    role: &str,
+    name: &str,
+) {
     let reference = accessible_ref(command, context, role, name);
     run(command, context, &["click", &reference]);
 }
@@ -756,7 +809,7 @@ fn set_checkbox_accessible(
     );
 }
 
-fn accessible_ref(
+pub(super) fn accessible_ref(
     command: &impl Fn(&[&str]) -> Output,
     context: &str,
     role: &str,
@@ -790,17 +843,21 @@ fn snapshot_ref(line: &str) -> Option<&str> {
     Some(&line[start..end])
 }
 
-fn wait_for(command: &impl Fn(&[&str]) -> Output, context: &str, condition: &str) {
+pub(super) fn wait_for(command: &impl Fn(&[&str]) -> Output, context: &str, condition: &str) {
     run(command, context, &["wait", "--fn", condition]);
 }
 
-fn eval(command: &impl Fn(&[&str]) -> Output, context: &str, script: &str) -> Value {
+pub(super) fn eval(command: &impl Fn(&[&str]) -> Output, context: &str, script: &str) -> Value {
     let output = run(command, context, &["eval", script]);
     serde_json::from_slice(&output.stdout)
         .unwrap_or_else(|error| panic!("{context} did not return JSON: {error}"))
 }
 
-fn encoded_eval(command: &impl Fn(&[&str]) -> Output, context: &str, script: &str) -> Value {
+pub(super) fn encoded_eval(
+    command: &impl Fn(&[&str]) -> Output,
+    context: &str,
+    script: &str,
+) -> Value {
     let encoded = eval(command, context, script)
         .as_str()
         .unwrap_or_else(|| panic!("{context} did not return an encoded JSON string"))

@@ -517,11 +517,18 @@ ignored real Chromium Test Kit suite also captures the browser accessibility
 tree, verifies the keyboard reference, and checks the launcher-to-dialog focus
 round trip, editable `Escape` ownership, completed-editor cancellation,
 keyboard multi-selection focus, and the hide-to-application focus transfer.
-These checks are regression evidence for DOM and accessibility-tree semantics;
-they are not a substitute for completing every workflow with an actual screen
-reader. M8 remains open until an independent reviewer audits the full review
-lifecycle with VoiceOver, NVDA, or an equivalent supported screen reader in an
-environment that permits assistive-technology inspection.
+The same real-browser fixture runs an independent `axe-core` WCAG A/AA scan
+across system, light, and dark themes plus preferences, marking editors,
+restored drafts, Layout Mode, contract and design candidates, submitted
+repairs, clarification replies, human review actions, and terminal states.
+The scan includes the open review Shadow DOM and reports exact failing nodes.
+
+These checks are regression evidence for DOM, accessibility-tree, contrast,
+and keyboard-scroll semantics; they are not a substitute for completing every
+workflow with an actual screen reader. M8 remains open until an independent
+reviewer audits the full review lifecycle with VoiceOver, NVDA, or an
+equivalent supported screen reader in an environment that permits
+assistive-technology inspection.
 
 At submission time, the Test Kit enriches a repair with a fresh context
 revision and bounded page context. A submitted target contains current private

@@ -1,8 +1,10 @@
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { hydrateRoot } from "react-dom/client";
+import axe from "axe-core";
 import { A3SReviewOverlay, A3STestBoundary, A3STestKit } from "./react";
 import { getPageContextBridge } from "./runtime";
+import type { DesignAuditReport, QualityReport } from "./types";
 
 declare global {
   interface Window {
@@ -10,6 +12,13 @@ declare global {
     testkitCopiedText?: string;
     testkitHostClicks?: number;
     testkitFixture?: {
+      auditAccessibility(): Promise<Array<{
+        id: string;
+        impact: string | null;
+        help: string;
+        nodes: Array<{ target: string[]; summary: string }>;
+      }>>;
+      seedReviewCandidates(): Promise<boolean>;
       route(): void;
       repair(): void;
       virtualize(): void;
@@ -70,6 +79,80 @@ function Fixture() {
 
 const root = hydrateRoot(document.querySelector("#root")!, <Fixture />);
 window.testkitFixture = {
+  async auditAccessibility() {
+    const results = await axe.run(document, {
+      runOnly: {
+        type: "tag",
+        values: ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22a", "wcag22aa"],
+      },
+    });
+    return results.violations.map((violation) => ({
+      id: violation.id,
+      impact: violation.impact ?? null,
+      help: violation.help,
+      nodes: violation.nodes.map((node) => ({
+        target: node.target.map(String),
+        summary: node.failureSummary ?? "",
+      })),
+    }));
+  },
+  async seedReviewCandidates() {
+    await new Promise<void>((resolve) => {
+      requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+    });
+    const bridge = getPageContextBridge();
+    if (!bridge) return false;
+    const snapshot = bridge.snapshot();
+    const nodeId = snapshot.nodes.find((node) => node.testId === "repair-target")?.id;
+    if (!nodeId) return false;
+    const quality: QualityReport = {
+      contract: "screen-reader-audit",
+      variant: "desktop",
+      state: "ready",
+      outcome: "failed",
+      observation_revision: snapshot.revision,
+      matches: [],
+      findings: [{
+        id: "a11y:contract-role",
+        dimension: "design_conformance",
+        rule_id: "contract.element.role",
+        severity: "important",
+        message: "Use the contracted role",
+        expected: "button",
+        actual: "link",
+        element_id: "repair-target",
+        observed_node_id: nodeId,
+        confidence: 100,
+      }],
+    };
+    const designAudit: DesignAuditReport = {
+      protocol: "a3s.test.design-audit-report/1",
+      provenance: {
+        identity: { provider: "fixture", model: "screen-reader-audit" },
+        observation_id: 1,
+        surface_revision: snapshot.revision,
+        screenshot_sha256: `sha256:${"a".repeat(64)}`,
+        page_context_sha256: `sha256:${"b".repeat(64)}`,
+        width: window.innerWidth,
+        height: window.innerHeight,
+        usage: { input_units: 1, output_units: 1, cost_microusd: 0 },
+        request_id: "screen-reader-audit-1",
+        authority: "advisory",
+      },
+      dimensions: ["visual_hierarchy"],
+      findings: [{
+        id: "a11y:design-emphasis",
+        dimension: "visual_hierarchy",
+        priority: "medium",
+        summary: "The primary action lacks emphasis",
+        rationale: "Nearby controls have equal visual weight",
+        recommendation: "Increase the primary action contrast and surrounding space",
+        confidence: 90,
+        target: { kind: "node", node_id: nodeId },
+      }],
+    };
+    return bridge.reportQuality(quality) && bridge.reportDesignAudit(designAudit);
+  },
   route() {
     history.pushState(null, "", "/routed?view=2");
   },

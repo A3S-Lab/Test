@@ -156,6 +156,8 @@ panel toggle are ignored while focus is in an editable control. Active marking
 or an open finding editor receives unmodified `Escape` first, including from
 an editable target; an idle host editable retains `Escape` and leaves the panel
 open. Unit and real-Chromium accessibility-tree checks protect these semantics.
-A separate hands-on VoiceOver, NVDA, or equivalent screen-reader audit of every
-workflow is still required before claiming complete assistive-technology
-coverage.
+The real-browser suite also runs `axe-core` WCAG A/AA scans across three themes
+and the major review, Layout, candidate, clarification, human-review, and
+terminal states, including the open Shadow DOM. A separate hands-on VoiceOver,
+NVDA, or equivalent screen-reader audit of every workflow is still required
+before claiming complete assistive-technology coverage.

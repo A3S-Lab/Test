@@ -4,6 +4,11 @@
 
 ### Added
 
+- Added an independent `axe-core` WCAG A/AA gate to the real Chromium Test Kit
+  suite. It scans the open review Shadow DOM across system, light, and dark
+  themes plus preferences, marking and Layout editors, restored drafts,
+  contract and design candidates, clarification replies, human review actions,
+  and terminal repair states.
 - Exposed every global Test Kit review shortcut through `aria-keyshortcuts`
   and a keyboard-reference section inside Review preferences. Unit and real
   Chromium coverage verify both the control metadata and accessibility-tree
@@ -23,6 +28,10 @@
 
 ### Fixed
 
+- Raised muted text and repair-thread actor contrast to WCAG AA in system and
+  light themes, and made the scrollable findings region keyboard focusable.
+  The real-browser audit retains the exact failing node and rule when either
+  contract regresses.
 - Made the React Test Kit adapter render on Node without server-side
   `useLayoutEffect` warnings while retaining synchronous browser focus and
   boundary registration after hydration. Framework-neutral bridge inspection

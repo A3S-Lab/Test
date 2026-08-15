@@ -732,6 +732,7 @@ describe("React adapter and review overlay", () => {
     expect(shadowButton("Theme · system").getAttribute("aria-label")).toBe("Change overlay theme; current theme is system");
     expect(shadowQuery(".a3s-announcer").getAttribute("aria-atomic")).toBe("true");
     expect(shadowQuery(".a3s-list").hasAttribute("aria-live")).toBe(false);
+    expect((shadowQuery(".a3s-list") as HTMLElement).tabIndex).toBe(0);
 
     const launcher = shadowQuery(".a3s-launch");
     expect(launcher.getAttribute("aria-keyshortcuts")).toBe("Control+Shift+F Meta+Shift+F");

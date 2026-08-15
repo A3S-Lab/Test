@@ -7,7 +7,13 @@ use std::process::Command;
 use std::time::Duration;
 
 use support::browser_process::bounded_output;
-use support::testkit_browser::{run_review_workflow, verify_hide_until_restart_focus};
+use support::testkit_accessibility::{
+    exercise_repair_status_accessibility, exercise_review_candidate_accessibility,
+};
+use support::testkit_browser::{
+    assert_wcag_accessibility, assert_wcag_accessibility_across_themes, run_review_workflow,
+    verify_hide_until_restart_focus,
+};
 use support::testkit_bundle::bundle_browser_fixture;
 use support::web_fixture::{get, start_testkit_fixture, WebFixture};
 
@@ -258,6 +264,8 @@ fn real_agent_browser_runs_the_embedded_testkit_suite() {
         );
     }
 
+    assert_wcag_accessibility_across_themes(&command);
+
     let focus_round_trip = command(&[
         "eval",
         "(async()=>{let host=null;for(let frame=0;frame<120;frame+=1){const candidate=document.querySelector('[data-a3s-testkit-overlay]');if(candidate?.isConnected&&candidate.shadowRoot?.querySelector('[aria-label=\"Close review overlay\"]')){await new Promise(resolve=>requestAnimationFrame(resolve));if(candidate.isConnected&&candidate.shadowRoot?.querySelector('[aria-label=\"Close review overlay\"]')){host=candidate;break}}await new Promise(resolve=>requestAnimationFrame(resolve))}if(!host)throw new Error('stable TestKit overlay host not found');const shadow=host.shadowRoot;shadow.querySelector('[aria-label=\"Close review overlay\"]').click();await new Promise(resolve=>requestAnimationFrame(resolve));const closeFocus=shadow.activeElement?.classList.contains('a3s-launch')===true;shadow.querySelector('.a3s-launch').click();await new Promise(resolve=>requestAnimationFrame(resolve));const openFocus=shadow.activeElement?.classList.contains('a3s-panel')===true;return JSON.stringify({closeFocus,openFocus})})()",
@@ -378,6 +386,7 @@ fn real_agent_browser_runs_the_embedded_testkit_suite() {
     );
 
     run_review_workflow(&command);
+    exercise_review_candidate_accessibility(&command);
 
     let select_keyboard_marking = command(&[
         "eval",
@@ -426,6 +435,8 @@ fn real_agent_browser_runs_the_embedded_testkit_suite() {
         "window[Symbol.for('a3s.test.page-context')].listRepairs().length===1",
     ]);
     assert_process_success("wait for TestKit keyboard finding", &submitted);
+    assert_wcag_accessibility(&command, "audit the submitted repair state");
+    exercise_repair_status_accessibility(&command);
 
     let changed = command(&[
         "eval",
