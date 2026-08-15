@@ -92,7 +92,7 @@ revision and scope.
 ```json
 {
   "protocol": "a3s.test.page-context/1",
-  "sdkVersion": "0.3.0",
+  "sdkVersion": "0.4.0",
   "revision": 42,
   "page": {
     "id": "checkout",

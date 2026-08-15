@@ -23,7 +23,7 @@ const validWorkflowManifest = {
 const validAudit = {
   protocol: "a3s.test.screen-reader-audit/1",
   revision: "7dba354fa29cf329f077bfe6d5f7aa1cffdf73be",
-  testkit_version: "0.3.0",
+  testkit_version: "0.4.0",
   independent: true,
   auditor: { id: "independent-auditor" },
   environment: {
@@ -55,7 +55,7 @@ test("accepts a complete independently attested audit", () => {
     validateScreenReaderAudit({
       audit: validAudit,
       expectedRevision: validAudit.revision,
-      testkitVersion: "0.3.0",
+      testkitVersion: "0.4.0",
       workflows,
     }),
     {
@@ -94,7 +94,7 @@ test("rejects incomplete, duplicated, or reordered workflow results", () => {
   const result = validateScreenReaderAudit({
     audit,
     expectedRevision: validAudit.revision,
-    testkitVersion: "0.3.0",
+    testkitVersion: "0.4.0",
     workflows,
   });
 
@@ -132,14 +132,14 @@ test("rejects unverifiable identity, environment, timing, and evidence", () => {
   const result = validateScreenReaderAudit({
     audit,
     expectedRevision: validAudit.revision,
-    testkitVersion: "0.3.0",
+    testkitVersion: "0.4.0",
     workflows,
   });
 
   assert.deepEqual(result.errors, [
     `Audit revision short does not match ${validAudit.revision}.`,
     "Audit revision must be a full lowercase Git commit SHA.",
-    "Audit Test Kit version 0.2.0 does not match 0.3.0.",
+    "Audit Test Kit version 0.2.0 does not match 0.4.0.",
     "Audit must explicitly attest independent execution.",
     "Audit auditor.id must be a non-empty bounded string.",
     "Audit environment.input_modes must contain unique bounded strings.",
@@ -154,7 +154,7 @@ test("requires every workflow to pass only for a closure audit", () => {
     audit: validAudit,
     expectedRevision: validAudit.revision,
     requirePass: true,
-    testkitVersion: "0.3.0",
+    testkitVersion: "0.4.0",
     workflows,
   });
 
@@ -167,7 +167,7 @@ test("rejects unknown fields instead of silently accepting schema drift", () => 
   const result = validateScreenReaderAudit({
     audit: { ...validAudit, hidden_authority: "repair" },
     expectedRevision: validAudit.revision,
-    testkitVersion: "0.3.0",
+    testkitVersion: "0.4.0",
     workflows,
   });
 
@@ -190,7 +190,7 @@ test("rejects nested schema drift, unsafe evidence paths, and inverted timing", 
   const result = validateScreenReaderAudit({
     audit,
     expectedRevision: validAudit.revision,
-    testkitVersion: "0.3.0",
+    testkitVersion: "0.4.0",
     workflows,
   });
 
@@ -206,7 +206,7 @@ test("rejects impossible ISO calendar timestamps", () => {
   const result = validateScreenReaderAudit({
     audit: { ...validAudit, started_at: "2026-02-30T10:00:00.000Z" },
     expectedRevision: validAudit.revision,
-    testkitVersion: "0.3.0",
+    testkitVersion: "0.4.0",
     workflows,
   });
 

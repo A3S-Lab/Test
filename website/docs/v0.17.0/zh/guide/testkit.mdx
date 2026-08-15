@@ -12,7 +12,7 @@ description: 在页面渲染后读取语义、组件与坐标，让评审者点�
 每个 GitHub Release 都发布匹配的包：
 
 ```bash
-npm install https://github.com/A3S-Lab/Test/releases/download/v0.16.2/a3s-testkit.tgz
+npm install https://github.com/A3S-Lab/Test/releases/download/v0.17.0/a3s-testkit.tgz
 ```
 
 ## React 接入
@@ -61,6 +61,8 @@ export function App() {
 MutationObserver、ResizeObserver、滚动、视口和导航信号会推进修订号。没有变化的页面不会被轮询。任何旧修订上的目标都会失效，避免 Agent 对热更新前的坐标或 DOM 引用执行动作。
 
 ## 人工标记与批量修复
+
+Test Kit 0.4.0 使用紧凑的悬浮 Dock 承载评审流程。主控件始终可用且不遮挡页面，标记工具、偏好设置、当前编辑器和问题工作区只在需要时展开。
 
 Overlay 支持元素、文本、点击或拖动多选、矩形和自由手绘标记。评审者可以：
 

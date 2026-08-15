@@ -1,0 +1,112 @@
+---
+title: Generate page contracts from PRDs and designs
+description: Generate cited candidate trees from PRDs and designs, review them, then compare the approved contract with the live page.
+---
+
+# Generate page contracts from PRDs and designs
+
+A3S Test can generate cited candidate trees from PRDs and designs, then publish the reviewed selection as a Surface Contract. At runtime, compare that contract with the browser accessibility tree and Test Kit page context to find gaps between product intent, design, and the current implementation.
+
+## Keep three data classes separate
+
+| Data         | What it can prove                                                           | What it cannot prove                                       |
+| ------------ | --------------------------------------------------------------------------- | ---------------------------------------------------------- |
+| PRD          | Product intent, copy requirements, user outcomes, and business constraints  | That the current DOM implements them                       |
+| Design       | Regions, hierarchy, geometry, visual relationships, and source-image digest | Browser roles, accessible names, or live interaction state |
+| Page context | Current-revision semantics, state, components, locators, and geometry       | That product intent itself is correct                      |
+
+Only a reviewed selection can become a blocking Surface Contract. Model output, unresolved conflicts, and low-confidence candidates remain advisory.
+
+## Generate candidates
+
+An ACL file declares sources, budgets, and the deployment-owned provider:
+
+```acl
+contract_generation "checkout" {
+    max_cost_microusd = 50000
+
+    context {
+        mode = "operate"
+        audience = ["customer"]
+        primary_outcome = "place_order"
+    }
+
+    provider {
+        name = "deployment-gateway"
+        model = "interface-contract-model"
+        endpoint = "https://inference.example.test/v1/contracts"
+        authorization_env = "A3S_TEST_PROVIDER_AUTHORIZATION_CONTRACTS"
+    }
+
+    source "requirements" {
+        kind = "prd"
+        path = "./checkout.md"
+        uri = "./checkout.md"
+    }
+
+    source "desktop-design" {
+        kind = "design"
+        path = "./checkout.png"
+        uri = "./checkout.png"
+        media_type = "image/png"
+        width = 1440
+        height = 900
+    }
+}
+```
+
+```bash
+export A3S_TEST_PROVIDER_AUTHORIZATION_CONTRACTS='Bearer ...'
+a3s-test contract generate \
+  --config tests/contracts/checkout.generate.acl \
+  --output tests/contracts/checkout.draft.json
+```
+
+The draft contains candidates, conflicts, open decisions, provider usage, and source digests. It has no executable authority.
+
+## Review and publish
+
+```acl
+contract_review {
+    reviewer = "product-owner@example.test"
+
+    candidate "requirements:desktop:place-order" {
+        action = "approve"
+    }
+
+    conflict "conflict:0123456789abcdef" {
+        select = "requirements:desktop:place-order"
+        rationale = "Approved product terminology"
+    }
+}
+```
+
+```bash
+a3s-test contract review \
+  --draft tests/contracts/checkout.draft.json \
+  --review tests/contracts/checkout.review.acl \
+  --output tests/contracts/checkout.acl \
+  --audit tests/contracts/checkout.reviewed.json
+```
+
+Review rehashes sources, checks cited byte ranges, rejects unresolved conflicts or product questions, and regenerates canonical ACL locally. The workflow checksum detects accidental or unreviewed mutation; it is not a digital signature.
+
+## Reconcile against the rendered page
+
+A suite references the reviewed contract with `verify_contract`:
+
+```acl
+verify_contract "checkout-ready" {
+    contract = "./contracts/checkout.acl"
+    variant = "desktop"
+    state = "ready"
+}
+```
+
+Reconciliation prefers test ID, component identity, role plus accessible name, and finally role. Missing or truncated Test Kit context is inconclusive and fails closed. Blocking differences determine the suite result. Advisory differences remain in the report.
+
+## Optional visual grounding and design audit
+
+A visual-grounding provider receives an observation- and SHA-256-bound PNG and returns point or box candidates. A3S Test rehashes the bytes, admits geometry, and hit-tests current Test Kit nodes. A unique hit may become a current semantic target. Ambiguous or unmapped results remain image-bound advice. Grounding never clicks automatically.
+
+A design-audit provider receives the screenshot plus complete page context and may advise on hierarchy, composition, spacing, typography, color use, consistency, interaction clarity, content clarity, and responsive composition. Advice has no verdict, action, or repair authority and reaches the Repair Ledger only after human review.

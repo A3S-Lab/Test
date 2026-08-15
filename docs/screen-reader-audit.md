@@ -159,7 +159,7 @@ shape; a complete artifact repeats the result shape for all 15 manifest IDs:
 {
   "protocol": "a3s.test.screen-reader-audit/1",
   "revision": "0123456789abcdef0123456789abcdef01234567",
-  "testkit_version": "0.3.0",
+  "testkit_version": "0.4.0",
   "independent": true,
   "auditor": {
     "id": "external-accessibility-reviewer",

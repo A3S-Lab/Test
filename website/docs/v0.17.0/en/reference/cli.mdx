@@ -1,0 +1,73 @@
+---
+title: CLI commands and stable contracts
+description: Find agent-session, ACL, provider, distributed-run, surface-capability, and exit-code references by task.
+---
+
+# CLI commands and stable contracts
+
+This page groups A3S Test's stable commands and return conventions by task. Start with capability discovery, then move into agent sessions, ACL suites, or distributed execution for the job at hand.
+
+## Discover capabilities
+
+These commands report installed protocols and scheduling boundaries instead of guessing from documentation:
+
+```bash
+a3s-test capabilities --json
+a3s-test agent schema
+a3s-test provider schema contract-generation
+a3s-test provider schema design-audit
+a3s-test provider schema llm
+a3s-test provider schema visual-grounding
+a3s-test worker schema
+a3s-test worker inventory
+a3s-test worker remote schema
+a3s-test worker artifacts schema
+a3s-test distributed schema
+```
+
+Provider schemas describe request, response, provenance, and authority fields. They do not mean the repository bundles an inference backend.
+
+## Agent sessions
+
+| Command                                   | Purpose                                                                              |
+| ----------------------------------------- | ------------------------------------------------------------------------------------ |
+| `agent start`                             | Create a persistent Web session with a goal, success condition, and policy boundary. |
+| `agent observe`                           | Return a fresh observation, semantic refs, and `observation_id`.                     |
+| `agent click`, `fill`, `press`, and peers | Execute compact actions bound to the latest observation.                             |
+| `agent act --action-json`                 | Execute the complete generated action schema.                                        |
+| `agent screenshot`                        | Save a contained PNG inside the session artifact root.                               |
+| `agent ground`                            | Request visual-location candidates without clicking.                                 |
+| `agent audit`                             | Request advisory design review without changing the verdict.                         |
+| `agent finish`                            | Write a terminal report and close the owned surface.                                 |
+| `agent abort`                             | Cancel the session and perform bounded cleanup.                                      |
+
+`agent open` aliases `agent start`, and `agent snapshot` aliases `agent observe`.
+
+## ACL and distributed runs
+
+```bash
+a3s-test check <suite.acl> --json
+a3s-test run <suite.acl> --json
+a3s-test distributed plan <distributed.acl> --compact
+a3s-test distributed run <distributed.acl> --json
+```
+
+Remote workers use separate `a3s.test.remote-worker/3` execution and `a3s.test.remote-artifacts/1` artifact protocols. A request cannot select executables, applications, backends, credentials, or network policy. Deployment startup fixes those authorities.
+
+## Exit codes
+
+|  Exit | Meaning                                                                    |
+| ----: | -------------------------------------------------------------------------- |
+|   `0` | Passed                                                                     |
+|   `1` | Test or action failed                                                      |
+|   `2` | Invalid invocation or configuration, or distributed infrastructure failure |
+| `124` | Timed out                                                                  |
+| `130` | Cancelled                                                                  |
+
+The first `Ctrl+C` requests cancellation and owned-surface cleanup. A second interrupt terminates only browser and CUA process boundaries and TUI process trees owned by the current process.
+
+## Web capability summary
+
+The Web driver supports navigation, semantic snapshots, click, hover, focus, fill and type, selection-scoped text insertion, check, select, double and context click, drag, key press, modifier wheel, and viewport control. Synchronization covers load, text, URL, and visibility waits or expectations. Evidence includes screenshots, accessibility trees, console output, page errors, HAR, Chrome traces, WebM video, and contained downloads.
+
+Browser execution is headless by default. `--headed` is an explicit debugging option. Initial origin, `--allow-origin`, and explicit hostname exceptions constrain navigation and network access.

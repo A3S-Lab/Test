@@ -92,6 +92,21 @@ for (const version of versions) {
       }
     }
   }
+
+  for (const locale of ['zh', 'en']) {
+    const testKitGuide = await readFile(
+      path.join(docsRoot, version, locale, 'guide', 'testkit.mdx'),
+      'utf8',
+    );
+    const versionedPackageUrl =
+      `https://github.com/A3S-Lab/Test/releases/download/${version}/` +
+      'a3s-testkit.tgz';
+    if (!testKitGuide.includes(versionedPackageUrl)) {
+      failures.push(
+        `${version} ${locale} Test Kit guide does not pin ${versionedPackageUrl}.`,
+      );
+    }
+  }
 }
 
 for (const asset of ['a3s-logo.png', 'social-card.svg', 'social-card.png']) {

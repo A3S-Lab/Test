@@ -1,0 +1,85 @@
+---
+title: 快速开始
+description: 用一个真实 Web 页面完成首次观察、动作和证据保存，再把稳定路径写成 ACL 回归测试。
+---
+
+# 快速开始
+
+这份指南会带你完成一次完整 Web 测试。先启动本地页面，用 Agent 会话观察并执行一个动作，保存截图和报告，最后把已经跑通的路径写成 ACL。两种工作方式使用同一套类型化动作和证据格式。
+
+## 安装
+
+macOS 或 Linux：
+
+```bash
+curl -fsSL https://github.com/A3S-Lab/Test/releases/latest/download/install.sh | sh
+```
+
+Windows PowerShell：
+
+```powershell
+& ([scriptblock]::Create((irm 'https://github.com/A3S-Lab/Test/releases/latest/download/install.ps1')))
+```
+
+安装器会下载当前平台的 CLI，校验 SHA-256，并为检测到的编码 Agent 安装同版本 Skill。需要固定目录或指定 Agent 时，请查看[安装指南](./installation.mdx)。
+
+## 启动一个持久 Web 会话
+
+先启动本地产品，再声明目标和可观察成功条件：
+
+```bash
+a3s-test agent start http://127.0.0.1:3000/checkout \
+  --session checkout \
+  --goal "Complete checkout with the fixture account" \
+  --success "The confirmation heading is visible" \
+  --json
+```
+
+观察当前界面：
+
+```bash
+a3s-test agent observe --session checkout --interactive --json
+```
+
+响应会带回新的 `observation_id` 和可操作语义引用，例如：
+
+```text
+observation_id: 1
+@e1 [button] Continue
+```
+
+把动作绑定到这次观察。任何改变状态的动作完成后都要重新观察：
+
+```bash
+a3s-test agent click @e1 \
+  --session checkout \
+  --observation 1 \
+  --json
+```
+
+## 用证据完成会话
+
+```bash
+a3s-test agent screenshot screenshots/confirmation.png \
+  --session checkout \
+  --json
+
+a3s-test agent finish \
+  --session checkout \
+  --status passed \
+  --summary "Checkout completed and confirmation was observed" \
+  --json
+```
+
+每个工作区保留追加式记录：
+
+```text
+.a3s-test/agent-sessions/checkout/
+├── session.json
+├── events.jsonl
+├── report.json
+└── artifacts/
+    └── screenshots/confirmation.png
+```
+
+接下来可以了解[探索与回归工作流](./workflows.mdx)，或把已经证明的路径写成 ACL 套件。

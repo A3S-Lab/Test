@@ -1,0 +1,85 @@
+---
+title: Quick start
+description: Complete one Web observation, action, and evidence capture, then preserve the stable path as an ACL regression.
+---
+
+# Quick start
+
+This guide takes you through one complete Web test. Start a local page, use an agent session to observe it and take one action, save the screenshot and report, then preserve the proven path as ACL. Both workflows use the same typed actions and evidence format.
+
+## Install
+
+On macOS or Linux:
+
+```bash
+curl -fsSL https://github.com/A3S-Lab/Test/releases/latest/download/install.sh | sh
+```
+
+On Windows PowerShell:
+
+```powershell
+& ([scriptblock]::Create((irm 'https://github.com/A3S-Lab/Test/releases/latest/download/install.ps1')))
+```
+
+The installer downloads the platform CLI, verifies its SHA-256, and installs the matching Skill for detected coding agents. See [Installation](./installation.mdx) to select an agent or destination.
+
+## Start a persistent Web session
+
+Run the local product, then declare the goal and an observable success condition:
+
+```bash
+a3s-test agent start http://127.0.0.1:3000/checkout \
+  --session checkout \
+  --goal "Complete checkout with the fixture account" \
+  --success "The confirmation heading is visible" \
+  --json
+```
+
+Observe the current interface:
+
+```bash
+a3s-test agent observe --session checkout --interactive --json
+```
+
+The response contains a new `observation_id` and actionable semantic refs:
+
+```text
+observation_id: 1
+@e1 [button] Continue
+```
+
+Bind the action to that observation. Observe again after every state-changing action:
+
+```bash
+a3s-test agent click @e1 \
+  --session checkout \
+  --observation 1 \
+  --json
+```
+
+## Finish with evidence
+
+```bash
+a3s-test agent screenshot screenshots/confirmation.png \
+  --session checkout \
+  --json
+
+a3s-test agent finish \
+  --session checkout \
+  --status passed \
+  --summary "Checkout completed and confirmation was observed" \
+  --json
+```
+
+Each workspace retains an append-only record:
+
+```text
+.a3s-test/agent-sessions/checkout/
+├── session.json
+├── events.jsonl
+├── report.json
+└── artifacts/
+    └── screenshots/confirmation.png
+```
+
+Continue with [Exploration and regression workflows](./workflows.mdx), or preserve the proven path as ACL.

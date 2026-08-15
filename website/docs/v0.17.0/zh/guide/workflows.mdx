@@ -1,0 +1,84 @@
+---
+title: 探索页面并保存回归测试
+description: 先用 Agent 会话走通未知路径，再把关键动作和断言保存成可重复执行的 ACL 套件。
+---
+
+# 探索页面并保存回归测试
+
+遇到未知页面时，先让编码 Agent 根据最新观察一步一步试。路径跑通后，再把关键动作和断言保存成 ACL，交给本地开发或 CI 重复执行。A3S Test 在两种工作方式之间复用同一套动作、驱动、证据和清理规则。
+
+| 工作流            | 谁做规划                 | 适合场景                          | 入口                    |
+| ----------------- | ------------------------ | --------------------------------- | ----------------------- |
+| Agent 会话        | 调用方编码 Agent         | 探索、问题复现、未知路径、UX 评审 | 持久 Web CLI 或 GUI MCP |
+| ACL 套件          | 关闭式类型化清单         | 稳定回归、CI、跨界面测试          | `check` 与 `run`        |
+| 嵌入式 Agent 循环 | 宿主注入的 `LlmProvider` | 把 A3S Test 嵌入自己的产品        | `a3s-test-agent` 库     |
+
+## Agent 会话
+
+调用方 Agent 始终保留规划权。每一轮遵守相同顺序：
+
+1. 从 A3S Test 获取新的观察和 `observation_id`。
+2. 根据可见状态选择一个动作。
+3. A3S Test 校验动作 Schema、能力、来源和策略。
+4. 驱动执行动作，状态变化后旧引用立即失效。
+5. Agent 重新观察，直到本地证据证明成功或失败。
+
+语义引用不是长期定位器。`@e1` 或 Test Kit 的 `@c7` 必须绑定产生它的最新观察。A3S Test 不允许模型声称自己看到了未被驱动或 Test Kit 记录的状态。
+
+常用命令：
+
+```bash
+a3s-test agent start <url> --session <name> --goal <goal> --success <condition>
+a3s-test agent observe --session <name> --interactive --json
+a3s-test agent click <ref> --session <name> --observation <id> --json
+a3s-test agent finish --session <name> --status passed --summary <text> --json
+```
+
+`agent act --action-json` 暴露完整动作 Schema。v0.17.0 的动作协议修订为 7，并支持在先前已建立的编辑上下文中使用选择范围内的 `insert_text`。它不携带新的目标或定位权限。
+
+## ACL 套件
+
+稳定路径使用 ACL 表达：
+
+```acl
+suite "product-smoke" {
+    version = 1
+
+    scenario "home-page" {
+        name = "Open the home page"
+        surface = "web"
+        timeout_ms = 30000
+
+        navigate "open" {
+            url = "https://example.com"
+        }
+
+        wait "loaded" {
+            load = "networkidle"
+        }
+
+        expect "heading" {
+            text = "Example Domain"
+        }
+
+        screenshot "evidence" {
+            path = "home.png"
+        }
+    }
+}
+```
+
+先做静态准入，再打开界面：
+
+```bash
+a3s-test check tests/e2e/smoke.acl --json
+a3s-test run tests/e2e/smoke.acl --json
+```
+
+未知块、未知属性、重复标识、歧义条件、非法定位器和越界证据路径都会在表面启动前被拒绝。断言失败、超时和已经派发但结果不明确的动作不会自动重放。
+
+## 本地验证仍决定结果
+
+部署方可以通过 `a3s-test agent run` 注入受 Schema 限制的 HTTP LLM provider，但 provider 只能提出一个类型化动作或请求结束。它不能决定 verdict、伪造观察或授权修复。成功仍要求至少一个本地 `expect` 通过，并且精确拥有的界面会话完成清理。
+
+需要页面上下文和人工修复评审时，请继续阅读 [Test Kit](./testkit.mdx)。
