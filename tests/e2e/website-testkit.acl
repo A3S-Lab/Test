@@ -32,7 +32,7 @@ suite "website-testkit-experience" {
             target = css(".test-motion-toggle")
         }
 
-        expect "motion-sequence-paused" {
+        wait "motion-sequence-paused" {
             visible = css(".test-motion-toggle[aria-pressed='true']")
         }
 
@@ -40,7 +40,7 @@ suite "website-testkit-experience" {
             target = css(".test-motion-toggle")
         }
 
-        expect "motion-sequence-resumed" {
+        wait "motion-sequence-resumed" {
             visible = css(".test-motion-toggle[aria-pressed='false']")
         }
 
