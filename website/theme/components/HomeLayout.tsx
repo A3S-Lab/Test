@@ -5,25 +5,27 @@ import { EvidencePanel } from './EvidencePanel';
 import { InstallSwitcher, installCommandFor } from './InstallSwitcher';
 import { TestKitExperience } from './TestKitExperience';
 import { homeCopy, type Locale } from '../home-copy';
+import { publishedVersion } from '../../versions.mjs';
 
 function MarkdownHome({
-  defaultVersion,
+  installVersion,
   locale,
   version,
 }: {
-  defaultVersion: string;
+  installVersion: string;
   locale: Locale;
   version: string;
 }) {
   const copy = homeCopy[locale];
-  const unixInstall = installCommandFor('macos', version, defaultVersion);
-  const windowsInstall = installCommandFor('windows', version, defaultVersion);
+  const unixInstall = installCommandFor('macos', installVersion);
+  const windowsInstall = installCommandFor('windows', installVersion);
 
   return (
     <main>
       <h1>{copy.heroTitle.join(locale === 'zh' ? '' : ' ')}</h1>
       <p>{copy.heroBody}</p>
       <h2>{copy.installTitle}</h2>
+      {version !== installVersion && <p>{copy.installCandidateNote}</p>}
       <h3>macOS / Linux</h3>
       <pre>
         <code>{unixInstall}</code>
@@ -60,6 +62,8 @@ export function HomeLayout() {
   const version = useVersion();
   const { site } = useSite();
   const defaultVersion = site.multiVersion.default;
+  const installVersion =
+    version === defaultVersion ? publishedVersion : version;
   const routePrefix = [
     version && version !== defaultVersion ? version : '',
     locale !== site.lang ? locale : '',
@@ -82,7 +86,7 @@ export function HomeLayout() {
   if (import.meta.env.SSG_MD) {
     return (
       <MarkdownHome
-        defaultVersion={defaultVersion}
+        installVersion={installVersion}
         locale={locale}
         version={version}
       />
@@ -133,9 +137,9 @@ export function HomeLayout() {
         </header>
         <div>
           <InstallSwitcher
-            defaultVersion={defaultVersion}
+            docsVersion={version}
+            installVersion={installVersion}
             labels={copy}
-            version={version}
           />
         </div>
       </section>

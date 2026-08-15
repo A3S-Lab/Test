@@ -57,6 +57,8 @@ export type ExperienceCopy = {
   motionAdd: string;
   motionSend: string;
   motionReady: string;
+  motionPause: string;
+  motionResume: string;
 };
 
 type LocalizedCopy = {
@@ -70,6 +72,7 @@ type LocalizedCopy = {
   installTabs: string;
   installPackage: string;
   installNote: string;
+  installCandidateNote: string;
   copy: string;
   copied: string;
   copyError: string;
@@ -137,6 +140,8 @@ export const homeCopy: Record<Locale, LocalizedCopy> = {
     installTabs: '选择安装平台',
     installPackage: 'CLI + Agent Skill',
     installNote: '安装器校验发布归档的 SHA-256，并保持 CLI 与 Skill 版本一致。',
+    installCandidateNote:
+      '当前文档已进入下一版本准备阶段；此命令仍固定安装已发布的稳定版。',
     copy: '复制命令',
     copied: '已复制',
     copyError: '复制失败',
@@ -272,6 +277,8 @@ export const homeCopy: Record<Locale, LocalizedCopy> = {
       motionAdd: '加入批次',
       motionSend: '立即发送',
       motionReady: '修复任务已就绪',
+      motionPause: '暂停自动演示',
+      motionResume: '继续自动演示',
     },
   },
   en: {
@@ -288,6 +295,8 @@ export const homeCopy: Record<Locale, LocalizedCopy> = {
     installPackage: 'CLI + Agent Skill',
     installNote:
       'The installer verifies the release archive SHA-256 and keeps the CLI and Skill on the same version.',
+    installCandidateNote:
+      'The next documentation version is staged; this command still pins the published stable release.',
     copy: 'Copy command',
     copied: 'Copied',
     copyError: 'Copy failed',
@@ -439,6 +448,8 @@ export const homeCopy: Record<Locale, LocalizedCopy> = {
       motionAdd: 'Add to batch',
       motionSend: 'Send now',
       motionReady: 'Repair task ready',
+      motionPause: 'Pause walkthrough',
+      motionResume: 'Resume walkthrough',
     },
   },
 };

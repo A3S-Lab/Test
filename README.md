@@ -48,11 +48,11 @@ Pin a release when the test environment must be reproducible:
 
 ```bash
 curl -fsSL https://github.com/A3S-Lab/Test/releases/latest/download/install.sh |
-  sh -s -- --version v0.17.0
+  sh -s -- --version v0.16.2
 ```
 
 ```powershell
-& ([scriptblock]::Create((irm 'https://github.com/A3S-Lab/Test/releases/latest/download/install.ps1'))) -Version v0.17.0
+& ([scriptblock]::Create((irm 'https://github.com/A3S-Lab/Test/releases/latest/download/install.ps1'))) -Version v0.16.2
 ```
 
 The installers support CLI-only, Skill-only, agent-specific, and custom

@@ -7,6 +7,7 @@ type Labels = {
   installTabs: string;
   installPackage: string;
   installNote: string;
+  installCandidateNote: string;
   copy: string;
   copied: string;
   copyError: string;
@@ -20,21 +21,16 @@ const platformLabels: Record<Platform, string> = {
 
 const platforms = Object.keys(platformLabels) as Platform[];
 
-export function installCommandFor(
-  platform: Platform,
-  version: string,
-  defaultVersion: string,
-) {
-  const isCurrent = version === defaultVersion;
+export function installCommandFor(platform: Platform, version: string) {
   if (platform === 'windows') {
     const command =
       "& ([scriptblock]::Create((irm 'https://github.com/A3S-Lab/Test/releases/latest/download/install.ps1')))";
-    return isCurrent ? command : `${command} -Version ${version}`;
+    return `${command} -Version ${version}`;
   }
 
   const command =
     'curl -fsSL https://github.com/A3S-Lab/Test/releases/latest/download/install.sh | sh';
-  return isCurrent ? command : `${command} -s -- --version ${version}`;
+  return `${command} -s -- --version ${version}`;
 }
 
 function browserPlatform(): Platform | null {
@@ -47,20 +43,20 @@ function browserPlatform(): Platform | null {
 }
 
 export function InstallSwitcher({
-  defaultVersion,
+  docsVersion,
+  installVersion,
   labels,
-  version,
 }: {
-  defaultVersion: string;
+  docsVersion: string;
+  installVersion: string;
   labels: Labels;
-  version: string;
 }) {
   const [active, setActive] = useState<Platform>('macos');
   const [copyState, setCopyState] = useState<CopyState>('idle');
   const resetTimer = useRef<number | undefined>(undefined);
   const command = useMemo(
-    () => installCommandFor(active, version, defaultVersion),
-    [active, defaultVersion, version],
+    () => installCommandFor(active, installVersion),
+    [active, installVersion],
   );
 
   useEffect(() => {
@@ -154,7 +150,7 @@ export function InstallSwitcher({
       >
         <div className="test-install-meta">
           <span>
-            {labels.installPackage} · {version}
+            {labels.installPackage} · {installVersion}
           </span>
           <button
             aria-live="polite"
@@ -169,7 +165,15 @@ export function InstallSwitcher({
           <span aria-hidden="true">{active === 'windows' ? 'PS›' : '$'}</span>
           <code>{command}</code>
         </div>
-        <p className="test-install-note">{labels.installNote}</p>
+        <p
+          className={`test-install-note${
+            docsVersion === installVersion ? '' : ' is-visible'
+          }`}
+        >
+          {docsVersion === installVersion
+            ? labels.installNote
+            : labels.installCandidateNote}
+        </p>
       </div>
     </div>
   );

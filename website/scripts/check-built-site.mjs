@@ -1,7 +1,7 @@
 import { access, readFile, readdir, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { defaultVersion, versions } from '../versions.mjs';
+import { defaultVersion, publishedVersion, versions } from '../versions.mjs';
 
 const scriptDirectory = path.dirname(fileURLToPath(import.meta.url));
 const websiteRoot = path.resolve(scriptDirectory, '..');
@@ -145,11 +145,29 @@ if (
   failures.push('homepage Markdown lacks cross-platform install commands');
 }
 if (
-  !rootHtml.includes(`CLI + Agent Skill<!-- --> · <!-- -->${defaultVersion}`)
+  !rootHtml.includes(`CLI + Agent Skill<!-- --> · <!-- -->${publishedVersion}`)
 ) {
   failures.push(
-    'homepage install panel does not identify the selected version',
+    'homepage install panel does not identify the published version',
   );
+}
+if (!rootHtml.includes(`--version ${publishedVersion}`)) {
+  failures.push('homepage installer does not pin the published version');
+}
+if (
+  !rootMarkdown.includes(`--version ${publishedVersion}`) ||
+  !rootMarkdown.includes(`-Version ${publishedVersion}`)
+) {
+  failures.push(
+    'homepage Markdown does not pin both published-version installers',
+  );
+}
+if (
+  defaultVersion !== publishedVersion &&
+  (!rootHtml.includes('当前文档已进入下一版本准备阶段') ||
+    !rootMarkdown.includes('当前文档已进入下一版本准备阶段'))
+) {
+  failures.push('staged homepage does not disclose its stable install version');
 }
 if (
   !javascript.includes('在 GitHub 上查看 A3S Test') ||

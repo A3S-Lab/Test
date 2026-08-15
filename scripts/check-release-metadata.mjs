@@ -1,7 +1,11 @@
 import { readFile, stat } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { defaultVersion, versions } from "../website/versions.mjs";
+import {
+  defaultVersion,
+  publishedVersion,
+  versions,
+} from "../website/versions.mjs";
 import { validateReleaseMetadata } from "./release-metadata.mjs";
 
 const scriptDirectory = path.dirname(fileURLToPath(import.meta.url));
@@ -27,14 +31,20 @@ async function directoryExists(directory) {
 
 async function main() {
   const releaseTag = parseReleaseTag(process.argv.slice(2));
-  const [workspaceManifest, testKitManifest, changelog, snapshotsContents] =
-    await Promise.all([
+  const [
+    workspaceManifest,
+    testKitManifest,
+    changelog,
+    repositoryReadme,
+    snapshotsContents,
+  ] = await Promise.all([
     readFile(path.join(repositoryRoot, "Cargo.toml"), "utf8"),
     readFile(
       path.join(repositoryRoot, "packages", "testkit", "package.json"),
       "utf8",
     ),
     readFile(path.join(repositoryRoot, "CHANGELOG.md"), "utf8"),
+    readFile(path.join(repositoryRoot, "README.md"), "utf8"),
     readFile(
       path.join(repositoryRoot, "website", "version-snapshots.json"),
       "utf8",
@@ -44,7 +54,9 @@ async function main() {
   const result = validateReleaseMetadata({
     changelog,
     defaultVersion,
+    publishedVersion,
     releaseTag,
+    repositoryReadme,
     snapshots,
     testKitManifest,
     versions,
@@ -66,8 +78,12 @@ async function main() {
     return;
   }
 
+  const status =
+    releaseTag === undefined
+      ? `Staged metadata verified for ${result.expectedTag}; published installers remain ${publishedVersion}`
+      : `Release metadata verified for ${result.expectedTag}`;
   console.log(
-    `Release metadata verified for ${result.expectedTag}, ${versions.length} documentation versions, and two locales.`,
+    `${status}, with ${versions.length} documentation versions and two locales.`,
   );
 }
 

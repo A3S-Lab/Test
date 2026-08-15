@@ -306,6 +306,14 @@
   display: none;
 }
 
+.test-install-note.is-visible {
+  display: block;
+  margin: 8px 0 0;
+  color: #aebfda;
+  font-size: 10px;
+  line-height: 1.45;
+}
+
 .test-section {
   max-width: var(--test-max-width);
   margin: 0 auto;

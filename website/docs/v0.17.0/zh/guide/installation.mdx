@@ -3,6 +3,10 @@ title: 安装与升级
 description: 安装版本匹配的 A3S Test CLI 与 Agent Skill，并按需固定版本、Agent 或目标目录。
 ---
 
+:::warning 发布候选
+v0.17.0 已在 main 上准备完成，但尚未正式发布。安装示例仍固定到 v0.16.2，直到发布门禁被明确推进。
+:::
+
 # 安装与升级
 
 执行下方命令后，你会同时得到 A3S Test CLI 和版本匹配的 Agent Skill。安装器会识别当前系统、下载预编译包并校验 SHA-256。以后运行同一条命令即可升级。
@@ -24,7 +28,7 @@ curl -fsSL https://github.com/A3S-Lab/Test/releases/latest/download/install.sh |
 
 ```bash
 curl -fsSL https://github.com/A3S-Lab/Test/releases/latest/download/install.sh |
-  sh -s -- --version v0.17.0
+  sh -s -- --version v0.16.2
 ```
 
 ## Windows PowerShell
@@ -37,7 +41,7 @@ curl -fsSL https://github.com/A3S-Lab/Test/releases/latest/download/install.sh |
 
 ```powershell
 & ([scriptblock]::Create((irm 'https://github.com/A3S-Lab/Test/releases/latest/download/install.ps1'))) -Agent codex
-& ([scriptblock]::Create((irm 'https://github.com/A3S-Lab/Test/releases/latest/download/install.ps1'))) -Version v0.17.0
+& ([scriptblock]::Create((irm 'https://github.com/A3S-Lab/Test/releases/latest/download/install.ps1'))) -Version v0.16.2
 ```
 
 ## 支持的 Agent 目标
@@ -64,7 +68,7 @@ curl -fsSL https://github.com/A3S-Lab/Test/releases/latest/download/install.sh |
 
 ```bash
 cargo install --git https://github.com/A3S-Lab/Test \
-  --tag v0.17.0 --locked a3s-test-cli
+  --tag v0.16.2 --locked a3s-test-cli
 ```
 
 每个发布还包含可手动安装的 `a3s-test.skill`、各平台归档、校验文件、Test Kit 包和 Linux runner 镜像引用。不要跳过校验文件或用未固定的镜像标签代替发布的 digest。

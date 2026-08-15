@@ -5,6 +5,9 @@ import { validateReleaseMetadata } from "../scripts/release-metadata.mjs";
 const validInput = {
   changelog: "# Changelog\n\n## 0.16.2 - 2026-08-15\n",
   defaultVersion: "v0.16.2",
+  publishedVersion: "v0.16.2",
+  repositoryReadme:
+    "sh -s -- --version v0.16.2\n-Version v0.16.2\n",
   releaseTag: "v0.16.2",
   snapshots: {
     current: {
@@ -49,6 +52,48 @@ test("rejects a release tag that differs from the workspace version", () => {
 
   assert.deepEqual(result.errors, [
     "Release tag v0.17.0 does not match workspace version v0.16.2.",
+  ]);
+});
+
+test("allows staged docs on main but blocks a tag before the version is published", () => {
+  const staged = {
+    ...validInput,
+    publishedVersion: "v0.15.0",
+    repositoryReadme:
+      "sh -s -- --version v0.15.0\n-Version v0.15.0\n",
+    releaseTag: undefined,
+  };
+
+  assert.deepEqual(validateReleaseMetadata(staged).errors, []);
+  assert.deepEqual(
+    validateReleaseMetadata({ ...staged, releaseTag: "v0.16.2" }).errors,
+    [
+      "Published documentation version v0.15.0 does not match release tag v0.16.2.",
+    ],
+  );
+});
+
+test("requires the published version to remain in the documentation set", () => {
+  const result = validateReleaseMetadata({
+    ...validInput,
+    publishedVersion: "v0.14.0",
+  });
+
+  assert.deepEqual(result.errors, [
+    "Published documentation version v0.14.0 is not present in versions.mjs.",
+  ]);
+});
+
+test("binds repository installation examples to the published version", () => {
+  const result = validateReleaseMetadata({
+    ...validInput,
+    repositoryReadme:
+      "sh -s -- --version v0.15.0\n-Version v0.15.0\n",
+  });
+
+  assert.deepEqual(result.errors, [
+    "README.md does not pin the Unix installer to published version v0.16.2.",
+    "README.md does not pin the PowerShell installer to published version v0.16.2.",
   ]);
 });
 

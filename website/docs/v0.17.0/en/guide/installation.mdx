@@ -3,6 +3,10 @@ title: Installation and upgrades
 description: Install matching A3S Test CLI and Agent Skill versions, with optional version, agent, and destination controls.
 ---
 
+:::warning Release candidate
+v0.17.0 is staged on main but not published. Installation examples remain pinned to v0.16.2 until the release gate is intentionally advanced.
+:::
+
 # Installation and upgrades
 
 Run the command below to install both the A3S Test CLI and a matching Agent Skill. The installer detects the current platform, downloads the prebuilt archive, and verifies its SHA-256. Run the same command again to upgrade.
@@ -24,7 +28,7 @@ Pin a version:
 
 ```bash
 curl -fsSL https://github.com/A3S-Lab/Test/releases/latest/download/install.sh |
-  sh -s -- --version v0.17.0
+  sh -s -- --version v0.16.2
 ```
 
 ## Windows PowerShell
@@ -37,7 +41,7 @@ Select an agent or version:
 
 ```powershell
 & ([scriptblock]::Create((irm 'https://github.com/A3S-Lab/Test/releases/latest/download/install.ps1'))) -Agent codex
-& ([scriptblock]::Create((irm 'https://github.com/A3S-Lab/Test/releases/latest/download/install.ps1'))) -Version v0.17.0
+& ([scriptblock]::Create((irm 'https://github.com/A3S-Lab/Test/releases/latest/download/install.ps1'))) -Version v0.16.2
 ```
 
 ## Supported agent targets
@@ -64,7 +68,7 @@ Build the CLI from a Git tag:
 
 ```bash
 cargo install --git https://github.com/A3S-Lab/Test \
-  --tag v0.17.0 --locked a3s-test-cli
+  --tag v0.16.2 --locked a3s-test-cli
 ```
 
 Each release also contains `a3s-test.skill`, platform archives, checksum files, the Test Kit package, and an immutable Linux runner image reference. Do not bypass checksums or replace the released image digest with a floating tag.

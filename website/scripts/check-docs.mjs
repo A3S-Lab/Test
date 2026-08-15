@@ -1,7 +1,7 @@
 import { readFile, readdir } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { defaultVersion, versions } from '../versions.mjs';
+import { defaultVersion, publishedVersion, versions } from '../versions.mjs';
 
 const scriptDirectory = path.dirname(fileURLToPath(import.meta.url));
 const websiteRoot = path.resolve(scriptDirectory, '..');
@@ -44,6 +44,11 @@ if (`v${workspaceVersion}` !== defaultVersion) {
     `Default documentation ${defaultVersion} does not match workspace ${workspaceVersion}.`,
   );
 }
+if (!versions.includes(publishedVersion)) {
+  failures.push(
+    `Published documentation ${publishedVersion} is not listed in versions.mjs.`,
+  );
+}
 
 const snapshots = JSON.parse(
   await readFile(path.join(websiteRoot, 'version-snapshots.json'), 'utf8'),
@@ -64,6 +69,10 @@ if (JSON.stringify(archivedVersions) !== JSON.stringify(expectedArchives)) {
 }
 
 for (const version of versions) {
+  const installVersion =
+    version === defaultVersion ? publishedVersion : version;
+  const isStagedCurrent =
+    version === defaultVersion && publishedVersion !== defaultVersion;
   const zhRoot = path.join(docsRoot, version, 'zh');
   const enRoot = path.join(docsRoot, version, 'en');
   const [zhFiles, enFiles] = await Promise.all([
@@ -90,16 +99,43 @@ for (const version of versions) {
           `${path.relative(websiteRoot, filename)} contains a long dash.`,
         );
       }
+      const candidateMarker =
+        locale === 'zh'
+          ? ':::warning 发布候选'
+          : ':::warning Release candidate';
+      if (isStagedCurrent && !contents.includes(candidateMarker)) {
+        failures.push(
+          `${path.relative(websiteRoot, filename)} lacks its release-candidate disclosure.`,
+        );
+      }
+      if (!isStagedCurrent && contents.includes(candidateMarker)) {
+        failures.push(
+          `${path.relative(websiteRoot, filename)} retains a stale release-candidate disclosure.`,
+        );
+      }
     }
   }
 
   for (const locale of ['zh', 'en']) {
+    const installationGuide = await readFile(
+      path.join(docsRoot, version, locale, 'guide', 'installation.mdx'),
+      'utf8',
+    );
+    if (
+      !installationGuide.includes(`--version ${installVersion}`) ||
+      !installationGuide.includes(`-Version ${installVersion}`) ||
+      !installationGuide.includes(`--tag ${installVersion}`)
+    ) {
+      failures.push(
+        `${version} ${locale} installation guide does not pin published install version ${installVersion}.`,
+      );
+    }
     const testKitGuide = await readFile(
       path.join(docsRoot, version, locale, 'guide', 'testkit.mdx'),
       'utf8',
     );
     const versionedPackageUrl =
-      `https://github.com/A3S-Lab/Test/releases/download/${version}/` +
+      `https://github.com/A3S-Lab/Test/releases/download/${installVersion}/` +
       'a3s-testkit.tgz';
     if (!testKitGuide.includes(versionedPackageUrl)) {
       failures.push(

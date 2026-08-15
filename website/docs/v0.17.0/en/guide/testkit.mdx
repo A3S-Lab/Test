@@ -3,6 +3,10 @@ title: Add Web Test Kit
 description: Read semantics, components, and geometry after rendering, then let reviewers submit one repair task or a batch from the page.
 ---
 
+:::warning Release candidate
+v0.17.0 is staged on main but not published. Installation examples remain pinned to v0.16.2 until the release gate is intentionally advanced.
+:::
+
 # Add Web Test Kit
 
 Add `@a3s-lab/testkit` in development and A3S Test can read the current DOM, accessible semantics, component ownership, and geometry after the page renders. A reviewer can point to one problem or select a batch, then send each repair task to the coding agent that owns the workspace. The SDK does not write test attributes onto product elements.
@@ -12,7 +16,7 @@ Add `@a3s-lab/testkit` in development and A3S Test can read the current DOM, acc
 Every GitHub Release publishes the matching package:
 
 ```bash
-npm install https://github.com/A3S-Lab/Test/releases/download/v0.17.0/a3s-testkit.tgz
+npm install https://github.com/A3S-Lab/Test/releases/download/v0.16.2/a3s-testkit.tgz
 ```
 
 ## React integration
@@ -66,6 +70,10 @@ Test Kit 0.4.0 presents review work as a compact floating dock. The primary
 controls stay available without covering the page, while marking tools,
 preferences, the focused editor, and the findings workspace open only when
 needed.
+
+The editor stays attached to the selected target so the page remains visible.
+Saved drafts move into a separate findings workspace with pinned single and
+batch send controls.
 
 The overlay supports element, text, click or drag multi-selection, rectangular findings, and freehand findings. A reviewer can:
 

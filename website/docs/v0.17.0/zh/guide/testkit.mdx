@@ -3,6 +3,10 @@ title: 接入 Web Test Kit
 description: 在页面渲染后读取语义、组件与坐标，让评审者点选问题并提交单条或批量修复任务。
 ---
 
+:::warning 发布候选
+v0.17.0 已在 main 上准备完成，但尚未正式发布。安装示例仍固定到 v0.16.2，直到发布门禁被明确推进。
+:::
+
 # 接入 Web Test Kit
 
 把 `@a3s-lab/testkit` 接入开发环境后，A3S Test 能在页面渲染完成时读取当前 DOM、可访问语义、组件归属和坐标。评审者可以直接点选或框选问题，再把一条或一批修复任务交给拥有工作区的编码 Agent。SDK 不会给业务 DOM 写入测试属性。
@@ -12,7 +16,7 @@ description: 在页面渲染后读取语义、组件与坐标，让评审者点�
 每个 GitHub Release 都发布匹配的包：
 
 ```bash
-npm install https://github.com/A3S-Lab/Test/releases/download/v0.17.0/a3s-testkit.tgz
+npm install https://github.com/A3S-Lab/Test/releases/download/v0.16.2/a3s-testkit.tgz
 ```
 
 ## React 接入
@@ -63,6 +67,8 @@ MutationObserver、ResizeObserver、滚动、视口和导航信号会推进修�
 ## 人工标记与批量修复
 
 Test Kit 0.4.0 使用紧凑的悬浮 Dock 承载评审流程。主控件始终可用且不遮挡页面，标记工具、偏好设置、当前编辑器和问题工作区只在需要时展开。
+
+编辑器会贴近选中目标并保留页面可见区域。保存后的草稿进入独立问题工作区，单项发送与批量发送操作固定在工作区底部。
 
 Overlay 支持元素、文本、点击或拖动多选、矩形和自由手绘标记。评审者可以：
 

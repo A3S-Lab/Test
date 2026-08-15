@@ -45,7 +45,9 @@ export function parseTestKitVersion(testKitManifest) {
 export function validateReleaseMetadata({
   changelog,
   defaultVersion,
+  publishedVersion,
   releaseTag,
+  repositoryReadme,
   snapshots,
   testKitManifest,
   versions,
@@ -59,6 +61,36 @@ export function validateReleaseMetadata({
   if (releaseTag !== undefined && releaseTag !== expectedTag) {
     errors.push(
       `Release tag ${releaseTag} does not match workspace version ${expectedTag}.`,
+    );
+  }
+  if (!versions.includes(publishedVersion)) {
+    errors.push(
+      `Published documentation version ${publishedVersion} is not present in versions.mjs.`,
+    );
+  }
+  if (
+    releaseTag === expectedTag &&
+    versions.includes(publishedVersion) &&
+    publishedVersion !== expectedTag
+  ) {
+    errors.push(
+      `Published documentation version ${publishedVersion} does not match release tag ${releaseTag}.`,
+    );
+  }
+  if (
+    versions.includes(publishedVersion) &&
+    !repositoryReadme.includes(`--version ${publishedVersion}`)
+  ) {
+    errors.push(
+      `README.md does not pin the Unix installer to published version ${publishedVersion}.`,
+    );
+  }
+  if (
+    versions.includes(publishedVersion) &&
+    !repositoryReadme.includes(`-Version ${publishedVersion}`)
+  ) {
+    errors.push(
+      `README.md does not pin the PowerShell installer to published version ${publishedVersion}.`,
     );
   }
   if (defaultVersion !== expectedTag) {

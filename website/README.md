@@ -47,7 +47,10 @@ A3S_TEST_AGENT_BROWSER="$(command -v agent-browser)" \
 
 `versions.mjs` is the source of truth for the public version selector. The
 default entry must match the Rust workspace version. Every listed version owns
-matching Chinese and English route trees.
+matching Chinese and English route trees. `publishedVersion` separately names
+the release that installation commands may download. Main may stage the next
+documentation version, but its homepage must keep installing the published
+version and disclose that distinction until a release commit aligns both.
 
 The active documentation lives under `docs/v0.17.0`. The `docs/v0.16.2` and
 `docs/v0.15.0` directories are historical snapshots for previous contract
@@ -56,14 +59,18 @@ changes a public action schema, provider protocol, CLI contract, or safety
 boundary, archive the old directory before advancing the default version.
 
 Before a tag can create a GitHub Release, the release preflight requires the
-tag, Rust workspace version, dated changelog section, default documentation
-version, packaged Test Kit version, ordered snapshot metadata, and both locale
-trees to agree. Each snapshot records the Test Kit version documented by that
-route tree. The preflight then runs the same formatting, contract, build, and
-generated-site checks used by the documentation workflow. Run the metadata
-gate locally with:
+tag, Rust workspace version, default and published documentation versions,
+dated changelog section, packaged Test Kit version, ordered snapshot metadata,
+and both locale trees to agree. A tag is rejected while `publishedVersion`
+still names an older stable release. Each snapshot records the Test Kit version
+documented by that route tree. The preflight then runs the same formatting,
+contract, build, and generated-site checks used by the documentation workflow.
+Run the metadata gate locally with:
 
 ```bash
+node ../scripts/check-release-metadata.mjs
+
+# Only after publishedVersion and every installer example move to v0.17.0.
 node ../scripts/check-release-metadata.mjs --tag v0.17.0
 ```
 
