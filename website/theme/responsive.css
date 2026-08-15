@@ -1,21 +1,40 @@
-@media (max-width: 1100px) {
-  .test-hero-copy,
+@media (max-width: 1240px) {
+  .test-hero,
   .test-proof,
   .test-capabilities,
   .test-workflows,
+  .test-boundary-copy,
   .test-surfaces,
   .test-cta {
     padding-right: 40px;
     padding-left: 40px;
   }
 
-  .test-hero-install {
-    padding-right: 32px;
-    padding-left: 32px;
+  .test-hero {
+    gap: 48px;
+  }
+
+  .test-experience-stage {
+    grid-template-columns: minmax(0, 54fr) minmax(270px, 23fr) minmax(
+        250px,
+        23fr
+      );
+  }
+
+  .test-checkout-layout {
+    grid-template-columns: minmax(0, 1.25fr) minmax(200px, 0.75fr);
+  }
+
+  .test-installer-rail {
+    grid-template-columns: 220px minmax(0, 1fr);
+  }
+
+  .test-installer-rail .test-install {
+    grid-template-columns: 270px minmax(0, 1fr);
   }
 
   .test-proof {
-    gap: 36px;
+    gap: 44px;
   }
 
   .test-tree-row {
@@ -26,31 +45,101 @@
     display: none;
   }
 
-  .test-boundary-copy {
-    padding-right: 40px;
-    padding-left: 40px;
-  }
-
   .test-authority-layers {
     padding-right: 36px;
     padding-left: 36px;
   }
 }
 
-@media (max-width: 900px) {
+@media (max-width: 1100px) {
   .test-hero {
-    min-height: auto;
+    grid-template-columns: minmax(0, 1fr) minmax(380px, 0.85fr);
+  }
+
+  .test-hero h1 {
+    font-size: clamp(43px, 5vw, 56px);
+  }
+
+  .test-experience-stage {
+    grid-template-columns: minmax(0, 1.18fr) minmax(320px, 0.82fr);
+  }
+
+  .test-review-rail {
+    min-height: 270px;
+    border-top: 1px solid var(--test-line);
+    grid-column: 1 / -1;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-rows: none;
+  }
+
+  .test-review-panel,
+  .test-evidence-receipt {
+    min-height: 240px;
+  }
+
+  .test-evidence-path {
+    display: none;
+  }
+
+  .test-stage-status {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .test-installer-rail {
     grid-template-columns: 1fr;
   }
 
+  .test-installer-rail > header {
+    display: grid;
+    padding: 4px 6px 0;
+    grid-template-columns: 220px minmax(0, 1fr);
+    gap: 20px;
+  }
+
+  .test-installer-rail .test-install {
+    grid-template-columns: 310px minmax(0, 1fr);
+  }
+
+  .test-capabilities > header,
+  .test-workflows > header,
+  .test-surfaces > header {
+    gap: 36px;
+  }
+}
+
+@media (max-width: 900px) {
+  .test-hero {
+    padding-top: 64px;
+    padding-bottom: 48px;
+    grid-template-columns: 1fr;
+    gap: 28px;
+  }
+
   .test-hero-copy {
-    min-height: auto;
+    max-width: 680px;
+    padding-top: 0;
+  }
+
+  .test-experience-stage {
+    grid-template-columns: 1fr;
+  }
+
+  .test-demo-page,
+  .test-context-panel {
     border-right: 0;
     border-bottom: 1px solid var(--test-line);
   }
 
-  .test-hero-install {
-    min-height: 560px;
+  .test-context-panel {
+    min-height: 500px;
+  }
+
+  .test-review-rail {
+    grid-column: auto;
+  }
+
+  .test-installer-rail .test-install {
+    grid-template-columns: 260px minmax(0, 1fr);
   }
 
   .test-proof,
@@ -62,16 +151,36 @@
     align-items: stretch;
   }
 
-  .test-boundary-copy {
-    border-right: 0;
-    border-bottom: 1px solid var(--test-line);
+  .test-capabilities > header,
+  .test-workflows > header,
+  .test-surfaces > header {
+    align-items: start;
+    grid-template-columns: 1fr;
+    gap: 20px;
   }
 
-  .test-capability-1,
+  .test-capability-1 {
+    min-height: 340px;
+    grid-column: 1 / -1;
+    grid-row: auto;
+  }
+
   .test-capability-2,
   .test-capability-3,
   .test-capability-4 {
-    grid-column: span 6;
+    min-height: 210px;
+    border-top: 1px solid var(--test-line);
+    border-bottom: 0;
+    grid-column: span 4;
+  }
+
+  .test-capability-2 {
+    border-left: 0;
+  }
+
+  .test-boundary-copy {
+    border-right: 0;
+    border-bottom: 1px solid var(--test-line);
   }
 
   .test-surfaces dl {
@@ -79,9 +188,9 @@
   }
 
   .test-surfaces dl > div:first-child {
-    grid-column: 1 / -1;
     border-right: 0;
     border-bottom: 1px solid var(--test-line);
+    grid-column: 1 / -1;
   }
 
   .test-cta {
@@ -91,34 +200,41 @@
   }
 }
 
-@media (max-width: 767px) {
+@media (max-width: 768px) {
   .rp-nav {
     padding-right: 16px;
     padding-left: 16px;
   }
 
-  .test-hero-copy,
-  .test-hero-install,
+  .rp-doc-layout__sidebar:not(.rp-doc-layout__sidebar--open) {
+    visibility: hidden;
+    pointer-events: none;
+  }
+
+  .test-hero,
   .test-proof,
   .test-capabilities,
   .test-workflows,
   .test-boundary-copy,
   .test-surfaces,
   .test-cta {
-    padding: 64px 20px;
+    padding-right: 20px;
+    padding-left: 20px;
   }
 
-  .test-hero-copy {
+  .test-hero {
     min-height: auto;
-    padding-top: 56px;
-    padding-bottom: 72px;
-    justify-content: flex-start;
+    padding-top: 52px;
+    padding-bottom: 42px;
+  }
+
+  .test-hero::after {
+    top: -240px;
+    right: -260px;
   }
 
   .test-hero h1 {
-    margin-top: 0;
-    font-size: clamp(38px, 10.5vw, 44px);
-    letter-spacing: -0.04em;
+    font-size: clamp(38px, 10.6vw, 48px);
     line-height: 1.02;
   }
 
@@ -126,7 +242,7 @@
   .test-section header > p,
   .test-section-copy > p,
   .test-cta p {
-    font-size: 16px;
+    font-size: 15px;
   }
 
   .test-actions {
@@ -139,19 +255,126 @@
     width: 100%;
   }
 
-  .test-hero-install {
-    min-height: auto;
-    padding-top: 64px;
-    padding-bottom: 72px;
+  .test-experience-shell,
+  .test-installer-rail {
+    max-width: calc(100% - 24px);
+  }
+
+  .test-experience-stage {
+    min-height: 0;
+    border-radius: 14px;
+  }
+
+  .test-demo-nav {
+    padding: 0 14px;
+  }
+
+  .test-demo-content {
+    padding: 16px 14px 18px;
+  }
+
+  .test-checkout-progress li {
+    gap: 4px;
+    font-size: 8px;
+  }
+
+  .test-checkout-progress li::after {
+    left: calc(50% + 20px);
+    width: calc(100% - 40px);
+  }
+
+  .test-checkout-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .test-order-summary {
+    border-top: 1px solid var(--test-line);
+    border-left: 0;
+  }
+
+  .test-context-panel {
+    min-height: 0;
+  }
+
+  .test-review-rail {
+    min-height: 0;
+    grid-template-columns: 1fr;
+  }
+
+  .test-review-panel,
+  .test-evidence-receipt {
+    min-height: 0;
+  }
+
+  .test-stage-status {
+    padding: 0;
+  }
+
+  .test-stage-status::before {
+    right: 15%;
+    left: 15%;
+  }
+
+  .test-stage-status li {
+    min-height: 48px;
+    padding: 0 5px;
+    font-size: 8px;
+  }
+
+  .test-installer-rail {
+    margin-top: 10px;
+    padding: 12px;
+    border-radius: 14px;
+  }
+
+  .test-installer-rail > header {
+    display: block;
+    padding: 4px 2px 0;
+  }
+
+  .test-installer-rail header p {
+    margin-top: 6px;
+  }
+
+  .test-installer-rail .test-install {
+    grid-template-columns: 1fr;
+  }
+
+  .test-install-tabs {
+    border-right: 0;
+    border-bottom: 1px solid #2b3b5c;
   }
 
   .test-install-tabs button {
-    font-size: 12px;
+    min-height: 50px;
   }
 
   .test-install-panel {
-    min-height: 250px;
-    padding: 16px;
+    min-height: 0;
+    padding: 12px;
+    grid-template-columns: 1fr;
+  }
+
+  .test-install-meta {
+    align-items: center;
+    flex-direction: row;
+    justify-content: space-between;
+  }
+
+  .test-install-command {
+    min-height: 68px;
+  }
+
+  .test-proof {
+    margin-top: 54px;
+    padding-top: 76px;
+    padding-bottom: 76px;
+    gap: 36px;
+  }
+
+  .test-section h2,
+  .test-cta h2 {
+    font-size: clamp(32px, 9vw, 43px);
   }
 
   .test-evidence-observation,
@@ -178,8 +401,14 @@
     padding-left: 4px;
   }
 
-  .test-capability-grid,
-  .test-workflow-details {
+  .test-capabilities,
+  .test-workflows,
+  .test-surfaces {
+    padding-top: 82px;
+    padding-bottom: 82px;
+  }
+
+  .test-capability-grid {
     grid-template-columns: 1fr;
   }
 
@@ -188,11 +417,19 @@
   .test-capability-3,
   .test-capability-4 {
     min-height: 230px;
+    padding: 28px;
+    border-top: 1px solid var(--test-line);
+    border-left: 0;
     grid-column: auto;
   }
 
-  .test-capability h3 {
-    margin-top: 50px;
+  .test-capability-1 {
+    min-height: 330px;
+    border-top: 0;
+  }
+
+  .test-capability-1 h3 {
+    font-size: 32px;
   }
 
   .test-workflow-track {
@@ -204,11 +441,20 @@
   }
 
   .test-workflow-track span:nth-child(-n + 2) {
-    border-bottom: 1px solid var(--test-line);
+    border-bottom: 1px solid rgb(255 255 255 / 25%);
+  }
+
+  .test-workflow-details {
+    grid-template-columns: 1fr;
   }
 
   .test-authority-layers {
     padding: 24px 20px;
+  }
+
+  .test-authority-layers li {
+    grid-template-columns: 1fr;
+    gap: 9px;
   }
 
   .test-surfaces dl {
@@ -218,7 +464,7 @@
   .test-surfaces dl > div,
   .test-surfaces dl > div:first-child {
     min-height: auto;
-    padding: 26px 0;
+    padding: 28px 0;
     border-right: 0;
     border-bottom: 1px solid var(--test-line);
     grid-column: auto;
@@ -229,7 +475,13 @@
   }
 
   .test-surfaces dt {
-    margin-bottom: 18px;
+    margin-bottom: 20px;
+  }
+
+  .test-cta {
+    min-height: 410px;
+    padding-top: 72px;
+    padding-bottom: 72px;
   }
 
   .test-footer {
@@ -242,10 +494,25 @@
   }
 }
 
-@media (max-width: 390px) {
-  .test-install-tabs button {
-    padding: 0 6px;
-    font-size: 11px;
+@media (max-width: 420px) {
+  .test-hero h1 span {
+    display: inline;
+  }
+
+  .test-hero h1 span + span::before {
+    content: ' ';
+  }
+
+  .test-checkout-progress li {
+    flex-direction: column;
+  }
+
+  .test-checkout-progress li::after {
+    top: 10px;
+  }
+
+  .test-context-geometry {
+    grid-template-columns: 1fr;
   }
 
   .test-install-meta {

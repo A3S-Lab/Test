@@ -12,10 +12,18 @@
     "dev": "rspress dev",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
+    "prebuild": "npm run testkit:build",
+    "predev": "npm run testkit:build",
+    "pretypecheck": "npm run testkit:build",
     "preview": "rspress preview",
+    "testkit:build": "npm --prefix ../packages/testkit run build",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@a3s-lab/testkit": "file:../packages/testkit",
+    "@fontsource-variable/geist": "^5.3.0",
+    "@fontsource-variable/geist-mono": "^5.3.0",
+    "@phosphor-icons/react": "^2.1.10",
     "@rspress/core": "^2.0.17"
   },
   "devDependencies": {

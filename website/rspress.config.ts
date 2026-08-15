@@ -43,7 +43,7 @@ export default defineConfig({
     },
   ],
   head: [
-    ['meta', { name: 'theme-color', content: '#0d1210' }],
+    ['meta', { name: 'theme-color', content: '#f8fbff' }],
     ['meta', { property: 'og:type', content: 'website' }],
     ['meta', { property: 'og:site_name', content: 'A3S Test' }],
     [
@@ -79,7 +79,7 @@ export default defineConfig({
     ],
   ],
   themeConfig: {
-    darkMode: true,
+    darkMode: false,
     search: true,
     localeRedirect: 'never',
     enableContentAnimation: false,

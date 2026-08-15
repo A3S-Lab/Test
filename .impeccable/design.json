@@ -1,0 +1,113 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-08-15T00:00:00.000Z",
+  "title": "Design System: A3S Test",
+  "extensions": {
+    "colorMeta": {
+      "control-blue": {
+        "role": "primary",
+        "displayName": "Control Blue",
+        "canonical": "#1264ff",
+        "tonalRamp": ["#04183f", "#06317e", "#084bbd", "#1264ff", "#4b89ff", "#83adff", "#bdd4ff", "#edf4ff"]
+      },
+      "canvas": {
+        "role": "neutral",
+        "displayName": "Evidence Canvas",
+        "canonical": "#f8fbff",
+        "tonalRamp": ["#17202d", "#303d4d", "#4d5c6d", "#6d7b8c", "#98a4b2", "#c1cad4", "#e2e8ef", "#f8fbff"]
+      },
+      "evidence-green": {
+        "role": "secondary",
+        "displayName": "Evidence Green",
+        "canonical": "#0c9b70",
+        "tonalRamp": ["#032f23", "#075740", "#087b59", "#0c9b70", "#41b994", "#78d1b3", "#b8ead7", "#effaf6"]
+      },
+      "review-violet": {
+        "role": "tertiary",
+        "displayName": "Review Violet",
+        "canonical": "#7157c9",
+        "tonalRamp": ["#21183f", "#392b69", "#554296", "#7157c9", "#927cdb", "#b4a3e8", "#d8cdf5", "#f5f1ff"]
+      }
+    },
+    "typographyMeta": {
+      "display": { "displayName": "Product Display", "purpose": "Homepage promise and A3S Test name only." },
+      "body": { "displayName": "Readable Body", "purpose": "Documentation and product explanation." },
+      "label": { "displayName": "Evidence Label", "purpose": "Commands, refs, revisions, coordinates, and digests." }
+    },
+    "shadows": [
+      { "name": "surface-shell", "value": "0 24px 64px rgba(36, 76, 137, 0.14)", "purpose": "Interactive product surfaces." },
+      { "name": "surface-raised", "value": "0 34px 84px rgba(36, 76, 137, 0.18)", "purpose": "The primary live Test Kit experience." }
+    ],
+    "motion": [
+      { "name": "state", "value": "180ms ease", "purpose": "Hover, selection, and copy-result state changes." },
+      { "name": "reveal", "value": "620ms cubic-bezier(0.2, 0.8, 0.2, 1)", "purpose": "One restrained homepage reveal sequence." }
+    ],
+    "breakpoints": [
+      { "name": "compact", "value": "1100px" },
+      { "name": "stack", "value": "900px" },
+      { "name": "mobile", "value": "767px" }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "The single strongest action in a region.",
+      "html": "<button class=\"ds-button-primary\">START REVIEW</button>",
+      "css": ".ds-button-primary { min-height: 48px; padding: 0 20px; border: 0; border-radius: 9px; background: #1264ff; color: #fff; font: 720 13px/1 system-ui, sans-serif; transition: background 180ms ease, transform 180ms ease; } .ds-button-primary:hover { background: #084ed0; transform: translateY(-2px); } .ds-button-primary:focus-visible { outline: 3px solid rgba(18,100,255,.28); outline-offset: 3px; }"
+    },
+    {
+      "name": "Secondary Button",
+      "kind": "button",
+      "refersTo": "button-secondary",
+      "description": "A supporting route or reversible action.",
+      "html": "<button class=\"ds-button-secondary\">VIEW CONTEXT</button>",
+      "css": ".ds-button-secondary { min-height: 48px; padding: 0 20px; border: 1px solid #bfd0e8; border-radius: 9px; background: #fff; color: #101827; font: 720 13px/1 system-ui, sans-serif; transition: border-color 180ms ease, color 180ms ease, transform 180ms ease; } .ds-button-secondary:hover { border-color: #7ea1d8; color: #1264ff; transform: translateY(-2px); } .ds-button-secondary:focus-visible { outline: 3px solid rgba(18,100,255,.28); outline-offset: 3px; }"
+    },
+    {
+      "name": "Evidence Chip",
+      "kind": "chip",
+      "description": "Reports a real verified or ready state.",
+      "html": "<span class=\"ds-evidence-chip\">EVIDENCE READY</span>",
+      "css": ".ds-evidence-chip { display: inline-flex; min-height: 28px; padding: 0 10px; align-items: center; border: 1px solid #b7dfd1; border-radius: 999px; background: #effaf6; color: #087353; font: 700 10px/1.4 ui-monospace, monospace; letter-spacing: .04em; }"
+    },
+    {
+      "name": "Live Surface",
+      "kind": "custom",
+      "description": "The real Test Kit-powered interface proof.",
+      "html": "<section class=\"ds-live-surface\"><strong>Checkout surface</strong><span>@c7 button · revision 42</span></section>",
+      "css": ".ds-live-surface { display: grid; gap: 10px; padding: 24px; border: 1px solid #bfd0e8; border-radius: 14px; background: #fff; color: #101827; box-shadow: 0 24px 64px rgba(36,76,137,.14); } .ds-live-surface strong { font: 720 20px/1.25 system-ui, sans-serif; } .ds-live-surface span { color: #56657b; font: 700 11px/1.4 ui-monospace, monospace; }"
+    },
+    {
+      "name": "Install Command",
+      "kind": "custom",
+      "refersTo": "code-field",
+      "description": "Copyable version-aware release installer.",
+      "html": "<code class=\"ds-install-command\">$ curl -fsSL …/install.sh | sh</code>",
+      "css": ".ds-install-command { display: block; padding: 18px; border-radius: 9px; background: #0e1b35; color: #dce9ff; font: 600 12px/1.65 ui-monospace, monospace; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Visible Evidence Path",
+    "overview": "A bright A3S family surface makes the path from rendered interface to typed action, human authorization, and inspectable evidence visible before implementation detail.",
+    "keyCharacteristics": [
+      "White and pale-blue operating surfaces with one decisive electric-blue field per viewport.",
+      "A real Test Kit-powered page experience as the primary visual proof.",
+      "Cool hairlines, compact controls, restrained blue-tinted elevation, and generous section spacing."
+    ],
+    "rules": [
+      { "name": "The One Blue Field Rule", "body": "One major blue region may carry a viewport; elsewhere blue is action and wayfinding.", "section": "colors" },
+      { "name": "The Data Voice Rule", "body": "Monospace communicates data and protocol state, never general product personality.", "section": "typography" },
+      { "name": "The Hairline Before Shadow Rule", "body": "Structural regions use a cool boundary; floating interfaces receive elevation.", "section": "elevation" }
+    ],
+    "dos": [
+      "Do demonstrate rendered semantics, revision binding, coordinates, human review, and evidence with real product behavior.",
+      "Do keep Chinese and English content, routes, labels, and accessible names in parity."
+    ],
+    "donts": [
+      "Don't invent repair success, customer evidence, benchmark results, or unsupported platform availability.",
+      "Don't replace the real Test Kit experience with a static illustration or fake overlay."
+    ]
+  }
+}

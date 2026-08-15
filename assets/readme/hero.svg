@@ -1,54 +1,88 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1200" height="440" viewBox="0 0 1200 440" role="img" aria-labelledby="title desc">
   <title id="title">A3S Test, typed autonomous interface testing</title>
-  <desc id="desc">Fresh interface context flows through a typed action into inspectable evidence.</desc>
-  <rect width="1200" height="440" rx="24" fill="#0d1210"/>
-  <rect x="1" y="1" width="1198" height="438" rx="23" fill="none" stroke="#2b3932" stroke-width="2"/>
-  <line x1="650" y1="0" x2="650" y2="440" stroke="#2b3932"/>
+  <desc id="desc">A rendered page becomes revisioned context, a typed action, human review, and inspectable evidence.</desc>
+  <defs>
+    <linearGradient id="readme-mark" x1="49" y1="38" x2="103" y2="96" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#1264ff"/>
+      <stop offset=".58" stop-color="#337aff"/>
+      <stop offset="1" stop-color="#7157c9"/>
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="440" rx="24" fill="#f8fbff"/>
+  <rect x="1" y="1" width="1198" height="438" rx="23" fill="none" stroke="#dce4f0" stroke-width="2"/>
+  <circle cx="1150" cy="30" r="250" fill="#edf4ff"/>
+  <circle cx="1150" cy="30" r="316" fill="none" stroke="#dbe8ff"/>
 
-  <g transform="translate(54 42)">
-    <rect width="34" height="34" rx="8" fill="#183e30"/>
-    <path d="M8 14V8h6M20 8h6v6M26 20v6h-6M14 26H8v-6" fill="none" stroke="#69ddb0" stroke-width="2" stroke-linecap="round"/>
-    <circle cx="17" cy="17" r="3" fill="#eef5f1"/>
-    <text x="48" y="24" fill="#a7b5ae" font-family="ui-monospace,SFMono-Regular,Menlo,monospace" font-size="18" font-weight="650" letter-spacing="2">A3S / TEST ENGINE</text>
+  <g transform="translate(50 38)">
+    <rect width="54" height="54" rx="15" fill="url(#readme-mark)"/>
+    <path d="M15 24v-8h8M31 16h8v8M39 32v8h-8M23 40h-8v-8" fill="none" stroke="#fff" stroke-width="2.8" stroke-linecap="round"/>
+    <circle cx="27" cy="28" r="3.8" fill="#fff"/>
+    <text x="72" y="37" fill="#56657b" font-family="ui-monospace,SFMono-Regular,Menlo,monospace" font-size="20" font-weight="650" letter-spacing="2">A3S / TEST ENGINE</text>
   </g>
 
-  <text x="54" y="174" fill="#eef5f1" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC',sans-serif" font-size="72" font-weight="680" letter-spacing="-3">A3S TEST</text>
-  <text x="56" y="225" fill="#69ddb0" font-family="ui-monospace,SFMono-Regular,Menlo,monospace" font-size="22" font-weight="650" letter-spacing="2">UNDERSTAND / ACT / PROVE</text>
-  <text x="56" y="280" fill="#d7e1dc" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC',sans-serif" font-size="27" font-weight="560">Agent exploration and ACL regression</text>
-  <text x="56" y="318" fill="#d7e1dc" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC',sans-serif" font-size="27" font-weight="560">share one typed evidence boundary.</text>
-  <g transform="translate(56 360)">
-    <text x="0" y="20" fill="#7b8b83" font-family="ui-monospace,SFMono-Regular,Menlo,monospace" font-size="18">WEB</text>
-    <line x1="56" y1="14" x2="92" y2="14" stroke="#46584f"/>
-    <text x="112" y="20" fill="#7b8b83" font-family="ui-monospace,SFMono-Regular,Menlo,monospace" font-size="18">GUI</text>
-    <line x1="168" y1="14" x2="204" y2="14" stroke="#46584f"/>
-    <text x="224" y="20" fill="#7b8b83" font-family="ui-monospace,SFMono-Regular,Menlo,monospace" font-size="18">TUI</text>
+  <text x="50" y="180" fill="#101827" font-family="ui-sans-serif,system-ui,-apple-system,'Segoe UI','PingFang SC',sans-serif" font-size="72" font-weight="760" letter-spacing="-3">A3S TEST</text>
+  <text x="52" y="228" fill="#1264ff" font-family="ui-monospace,SFMono-Regular,Menlo,monospace" font-size="22" font-weight="700" letter-spacing="2">SEE / ACT / PROVE</text>
+  <text x="52" y="284" fill="#56657b" font-family="ui-sans-serif,system-ui,-apple-system,'Segoe UI','PingFang SC',sans-serif" font-size="26" font-weight="560">Fresh interface context becomes typed actions</text>
+  <text x="52" y="320" fill="#56657b" font-family="ui-sans-serif,system-ui,-apple-system,'Segoe UI','PingFang SC',sans-serif" font-size="26" font-weight="560">and evidence another agent can inspect.</text>
+  <g transform="translate(52 366)" font-family="ui-monospace,SFMono-Regular,Menlo,monospace" font-size="18" font-weight="600">
+    <text x="0" y="18" fill="#0a46ad">WEB</text>
+    <line x1="54" y1="12" x2="88" y2="12" stroke="#bfd0e8"/>
+    <text x="106" y="18" fill="#56657b">GUI</text>
+    <line x1="160" y1="12" x2="194" y2="12" stroke="#bfd0e8"/>
+    <text x="212" y="18" fill="#56657b">TUI</text>
   </g>
 
-  <g transform="translate(694 36)">
-    <rect width="452" height="368" rx="16" fill="#090d0b" stroke="#46584f" stroke-width="2"/>
-    <g transform="translate(24 22)">
-      <text x="0" y="18" fill="#8fa198" font-family="ui-monospace,SFMono-Regular,Menlo,monospace" font-size="18">PAGE CONTEXT / REVISION 7</text>
-      <text x="354" y="18" fill="#69ddb0" font-family="ui-monospace,SFMono-Regular,Menlo,monospace" font-size="18">42</text>
+  <g transform="translate(606 32)">
+    <rect width="544" height="376" rx="18" fill="#ffffff" stroke="#dce4f0" stroke-width="2"/>
+    <g transform="translate(18 18)">
+      <rect width="276" height="340" rx="12" fill="#fbfdff" stroke="#dce4f0"/>
+      <text x="18" y="31" fill="#101827" font-family="ui-sans-serif,system-ui,-apple-system,'Segoe UI',sans-serif" font-size="18" font-weight="720">Rendered checkout</text>
+      <line x1="0" y1="48" x2="276" y2="48" stroke="#dce4f0"/>
+      <rect x="18" y="69" width="155" height="18" rx="4" fill="#edf3fb"/>
+      <rect x="18" y="101" width="240" height="58" rx="8" fill="#ffffff" stroke="#dce4f0"/>
+      <rect x="18" y="173" width="240" height="74" rx="8" fill="#ffffff" stroke="#dce4f0"/>
+      <rect x="31" y="188" width="38" height="38" rx="8" fill="#edf4ff"/>
+      <path d="M42 199h16v16H42z" fill="none" stroke="#1264ff" stroke-width="2"/>
+      <rect x="80" y="190" width="112" height="10" rx="3" fill="#dce4f0"/>
+      <rect x="80" y="209" width="76" height="8" rx="3" fill="#edf3fb"/>
+      <rect x="18" y="270" width="240" height="51" rx="9" fill="#f1edff" stroke="#7157c9" stroke-width="2"/>
+      <rect x="24" y="276" width="228" height="39" rx="7" fill="#1264ff"/>
+      <text x="93" y="301" fill="#ffffff" font-family="ui-sans-serif,system-ui,-apple-system,'Segoe UI',sans-serif" font-size="16" font-weight="700">Place order</text>
+      <rect x="24" y="260" width="66" height="22" rx="11" fill="#7157c9"/>
+      <text x="35" y="276" fill="#ffffff" font-family="ui-monospace,SFMono-Regular,Menlo,monospace" font-size="13" font-weight="700">target</text>
     </g>
-    <line x1="0" y1="62" x2="452" y2="62" stroke="#2b3932"/>
-    <g transform="translate(24 86)">
-      <text x="0" y="20" fill="#69ddb0" font-family="ui-monospace,SFMono-Regular,Menlo,monospace" font-size="20">@c1</text>
-      <text x="66" y="20" fill="#7b8b83" font-family="ui-monospace,SFMono-Regular,Menlo,monospace" font-size="20">main</text>
-      <text x="142" y="20" fill="#eef5f1" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" font-size="21" font-weight="650">Checkout</text>
-      <text x="24" y="70" fill="#69ddb0" font-family="ui-monospace,SFMono-Regular,Menlo,monospace" font-size="20">@c4</text>
-      <text x="90" y="70" fill="#7b8b83" font-family="ui-monospace,SFMono-Regular,Menlo,monospace" font-size="20">form</text>
-      <text x="158" y="70" fill="#eef5f1" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" font-size="21" font-weight="650">Payment details</text>
-      <rect x="16" y="94" width="388" height="68" rx="9" fill="#183e30" stroke="#69ddb0" stroke-width="2"/>
-      <text x="34" y="136" fill="#69ddb0" font-family="ui-monospace,SFMono-Regular,Menlo,monospace" font-size="20">@c7</text>
-      <text x="100" y="136" fill="#b8f3db" font-family="ui-monospace,SFMono-Regular,Menlo,monospace" font-size="20">button</text>
-      <text x="198" y="136" fill="#eef5f1" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" font-size="21" font-weight="650">Place order</text>
-      <text x="18" y="192" fill="#7b8b83" font-family="ui-monospace,SFMono-Regular,Menlo,monospace" font-size="18">x 1048  y 716  w 168  h 44</text>
+    <g transform="translate(306 18)">
+      <rect width="132" height="340" rx="12" fill="#ffffff" stroke="#dce4f0"/>
+      <text x="14" y="29" fill="#1264ff" font-family="ui-sans-serif,system-ui,-apple-system,'Segoe UI',sans-serif" font-size="16" font-weight="720">Context</text>
+      <line x1="0" y1="48" x2="132" y2="48" stroke="#dce4f0"/>
+      <text x="14" y="77" fill="#5f6d84" font-family="ui-monospace,SFMono-Regular,Menlo,monospace" font-size="13">TARGET</text>
+      <rect x="14" y="89" width="104" height="35" rx="6" fill="#eaf2ff"/>
+      <text x="24" y="111" fill="#0a46ad" font-family="ui-monospace,SFMono-Regular,Menlo,monospace" font-size="13">@n42 button</text>
+      <text x="14" y="153" fill="#5f6d84" font-family="ui-monospace,SFMono-Regular,Menlo,monospace" font-size="13">REVISION</text>
+      <text x="14" y="177" fill="#101827" font-family="ui-monospace,SFMono-Regular,Menlo,monospace" font-size="18" font-weight="700">7</text>
+      <text x="14" y="214" fill="#5f6d84" font-family="ui-monospace,SFMono-Regular,Menlo,monospace" font-size="13">GEOMETRY</text>
+      <rect x="14" y="228" width="104" height="52" fill="#f8fbff" stroke="#bfd0e8"/>
+      <rect x="91" y="263" width="20" height="8" fill="#1264ff"/>
+      <text x="14" y="306" fill="#56657b" font-family="ui-monospace,SFMono-Regular,Menlo,monospace" font-size="12">x 812 · y 416</text>
     </g>
-    <line x1="24" y1="294" x2="428" y2="294" stroke="#2b3932"/>
-    <g transform="translate(24 320)">
-      <text x="0" y="20" fill="#69ddb0" font-family="ui-monospace,SFMono-Regular,Menlo,monospace" font-size="18">click @c7</text>
-      <text x="150" y="20" fill="#7b8b83" font-family="ui-monospace,SFMono-Regular,Menlo,monospace" font-size="18">→</text>
-      <text x="184" y="20" fill="#eef5f1" font-family="ui-monospace,SFMono-Regular,Menlo,monospace" font-size="18">events + report</text>
+    <g transform="translate(450 18)">
+      <rect width="76" height="156" rx="12" fill="#f4f0ff" stroke="#cfc4f4"/>
+      <circle cx="38" cy="34" r="10" fill="#7157c9"/>
+      <path d="M34 34h8M38 30v8" stroke="#fff" stroke-width="2" stroke-linecap="round"/>
+      <text x="14" y="70" fill="#7157c9" font-family="ui-sans-serif,system-ui,-apple-system,'Segoe UI',sans-serif" font-size="14" font-weight="720">Review</text>
+      <text x="14" y="95" fill="#56657b" font-family="ui-monospace,SFMono-Regular,Menlo,monospace" font-size="11">select</text>
+      <text x="14" y="115" fill="#56657b" font-family="ui-monospace,SFMono-Regular,Menlo,monospace" font-size="11">describe</text>
+      <text x="14" y="135" fill="#56657b" font-family="ui-monospace,SFMono-Regular,Menlo,monospace" font-size="11">authorize</text>
+      <rect y="168" width="76" height="172" rx="12" fill="#e9f8f2" stroke="#b9e5d4"/>
+      <circle cx="38" cy="203" r="10" fill="#0c9b70"/>
+      <path d="m33 203 3 3 6-7" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+      <text x="12" y="239" fill="#087855" font-family="ui-sans-serif,system-ui,-apple-system,'Segoe UI',sans-serif" font-size="14" font-weight="720">Evidence</text>
+      <text x="12" y="265" fill="#477464" font-family="ui-monospace,SFMono-Regular,Menlo,monospace" font-size="11">events</text>
+      <text x="12" y="285" fill="#477464" font-family="ui-monospace,SFMono-Regular,Menlo,monospace" font-size="11">report</text>
+      <text x="12" y="315" fill="#0c9b70" font-family="ui-monospace,SFMono-Regular,Menlo,monospace" font-size="11">ready</text>
     </g>
+    <path d="M282 292h34" fill="none" stroke="#1264ff" stroke-width="2.5" stroke-linecap="round"/>
+    <path d="m309 286 7 6-7 6" fill="none" stroke="#1264ff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M432 143h25" fill="none" stroke="#1264ff" stroke-width="2.5" stroke-linecap="round"/>
   </g>
 </svg>

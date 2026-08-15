@@ -103,14 +103,38 @@ if (!rootHtml.includes('<html lang="zh">')) {
 if (!englishHtml.includes('<html lang="en">')) {
   failures.push('English homepage does not declare English');
 }
-if (!rootHtml.includes('看懂界面，') || !rootHtml.includes('证明每次操作')) {
+if (
+  !rootHtml.includes('让 Agent 看懂界面，') ||
+  !rootHtml.includes('证明每次操作')
+) {
   failures.push('default homepage lacks Chinese product copy');
 }
 if (
-  !englishHtml.includes('See interfaces.') ||
-  !englishHtml.includes('Prove actions.')
+  !englishHtml.includes('Help agents see interfaces.') ||
+  !englishHtml.includes('Prove every action.')
 ) {
   failures.push('English homepage lacks English product copy');
+}
+if (
+  !rootHtml.includes('data-testid="a3s-experience-submit"') ||
+  !rootHtml.includes('公共体验只写入当前页面内存')
+) {
+  failures.push('homepage lacks the local interactive Test Kit surface');
+}
+if (
+  !javascript.includes('a3s.test.page-context/1') ||
+  !javascript.includes('data-a3s-testkit-overlay')
+) {
+  failures.push('built JavaScript does not include the real Test Kit runtime');
+}
+if (!rootHtml.includes('bf8ff2ac')) {
+  failures.push('homepage build erased the approved direction contract');
+}
+if (
+  !javascript.includes('data-a3s-previous-tabindex') ||
+  !javascript.includes('rp-doc-layout__sidebar--open')
+) {
+  failures.push('built JavaScript lacks closed mobile sidebar isolation');
 }
 if (!rootHtml.includes('install.sh') || !javascript.includes('install.ps1')) {
   failures.push('homepage lacks cross-platform install commands');

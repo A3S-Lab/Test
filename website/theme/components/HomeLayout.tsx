@@ -1,6 +1,9 @@
 import { useLang, useSite, useVersion, withBase } from '@rspress/core/runtime';
+import { ArrowRight, ArrowUpRight } from '@phosphor-icons/react';
+import { useState } from 'react';
 import { EvidencePanel } from './EvidencePanel';
 import { InstallSwitcher, installCommandFor } from './InstallSwitcher';
+import { TestKitExperience } from './TestKitExperience';
 import { homeCopy, type Locale } from '../home-copy';
 
 function MarkdownHome({
@@ -31,6 +34,8 @@ function MarkdownHome({
       </pre>
       <h2>{copy.proofTitle}</h2>
       <p>{copy.proofBody}</p>
+      <h2>{copy.experience.contextTitle}</h2>
+      <p>{copy.experience.localOnly}</p>
       <h2>{copy.capabilitiesTitle}</h2>
       {copy.capabilities.map((item) => (
         <section key={item.title}>
@@ -47,14 +52,11 @@ function MarkdownHome({
   );
 }
 
-function Arrow() {
-  return <span aria-hidden="true">→</span>;
-}
-
 export function HomeLayout() {
   const language = useLang();
   const locale: Locale = language === 'zh' ? 'zh' : 'en';
   const copy = homeCopy[locale];
+  const [reviewStarted, setReviewStarted] = useState(false);
   const version = useVersion();
   const { site } = useSite();
   const defaultVersion = site.multiVersion.default;
@@ -67,6 +69,14 @@ export function HomeLayout() {
   const route = (pathname: string) => {
     const normalized = pathname.replace(/^\/+/, '');
     return withBase(`/${[routePrefix, normalized].filter(Boolean).join('/')}`);
+  };
+  const startExperience = () => {
+    setReviewStarted(true);
+    window.requestAnimationFrame(() => {
+      document
+        .getElementById('testkit-experience')
+        ?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    });
   };
 
   if (import.meta.env.SSG_MD) {
@@ -82,34 +92,48 @@ export function HomeLayout() {
   return (
     <main className="test-home">
       <section className="test-hero">
-        <div className="test-hero-copy">
+        <div className="test-hero-title">
           <h1>
             {copy.heroTitle.map((line) => (
               <span key={line}>{line}</span>
             ))}
           </h1>
+        </div>
+        <div className="test-hero-copy">
           <p>{copy.heroBody}</p>
           <div className="test-actions">
-            <a
+            <button
               className="test-button test-button-primary"
+              onClick={startExperience}
+              type="button"
+            >
+              {copy.startExperience}
+              <ArrowRight aria-hidden="true" size={16} weight="bold" />
+            </button>
+            <a
+              className="test-button test-button-secondary"
               href={route('/guide/')}
             >
               {copy.readDocs}
-              <Arrow />
-            </a>
-            <a
-              className="test-button test-button-secondary"
-              href="https://github.com/A3S-Lab/Test"
-            >
-              {copy.viewGitHub}
+              <ArrowRight aria-hidden="true" size={16} weight="bold" />
             </a>
           </div>
         </div>
-        <div className="test-hero-install">
-          <header>
-            <h2>{copy.installTitle}</h2>
-            <p>{copy.installBody}</p>
-          </header>
+      </section>
+
+      <TestKitExperience
+        copy={copy.experience}
+        locale={locale}
+        onStartReview={startExperience}
+        reviewStarted={reviewStarted}
+      />
+
+      <section className="test-installer-rail">
+        <header>
+          <h2>{copy.installTitle}</h2>
+          <p>{copy.installBody}</p>
+        </header>
+        <div>
           <InstallSwitcher
             defaultVersion={defaultVersion}
             labels={copy}
@@ -161,14 +185,15 @@ export function HomeLayout() {
             <h3>{copy.workflowAgent}</h3>
             <p>{copy.workflowAgentBody}</p>
             <a href={route('/guide/workflows.html')}>
-              {copy.readDocs} <Arrow />
+              {copy.readDocs}{' '}
+              <ArrowRight aria-hidden="true" size={15} weight="bold" />
             </a>
           </article>
           <article>
             <h3>{copy.workflowAcl}</h3>
             <p>{copy.workflowAclBody}</p>
             <a href={route('/guide/workflows.html')}>
-              ACL <Arrow />
+              ACL <ArrowRight aria-hidden="true" size={15} weight="bold" />
             </a>
           </article>
         </div>
@@ -179,7 +204,8 @@ export function HomeLayout() {
           <h2>{copy.boundaryTitle}</h2>
           <p>{copy.boundaryBody}</p>
           <a href={route('/concepts/architecture.html')}>
-            {copy.architecture} <Arrow />
+            {copy.architecture}{' '}
+            <ArrowRight aria-hidden="true" size={15} weight="bold" />
           </a>
         </div>
         <ol className="test-authority-layers">
@@ -229,7 +255,7 @@ export function HomeLayout() {
             href={route('/guide/')}
           >
             {copy.quickStart}
-            <Arrow />
+            <ArrowRight aria-hidden="true" size={16} weight="bold" />
           </a>
           <a
             className="test-button test-button-secondary"
@@ -243,7 +269,9 @@ export function HomeLayout() {
       <footer className="test-footer">
         <a href={route('/')}>A3S Test</a>
         <span>{copy.footer}</span>
-        <a href="https://github.com/A3S-Lab/Test">GitHub ↗</a>
+        <a href="https://github.com/A3S-Lab/Test">
+          GitHub <ArrowUpRight aria-hidden="true" size={14} weight="bold" />
+        </a>
       </footer>
     </main>
   );

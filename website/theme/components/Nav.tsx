@@ -1,5 +1,4 @@
 import {
-  ThemeContext,
   removeBase,
   useLang,
   useLocation,
@@ -14,7 +13,6 @@ import {
   Search,
   SocialLinks,
   SvgWrapper,
-  SwitchAppearance,
   type NavProps,
 } from '@rspress/core/theme-original';
 import {
@@ -28,7 +26,7 @@ import { useNavScreen } from '@rspress/core/dist/theme/components/NavHamburger/u
 import '@rspress/core/dist/theme/components/Nav/index.css';
 import '@rspress/core/dist/theme/components/NavHamburger/index.css';
 import { createPortal } from 'react-dom';
-import { useContext, useEffect, useRef } from 'react';
+import { useEffect, useRef } from 'react';
 
 function labelSocialLinks(root: ParentNode, language: string) {
   root
@@ -91,33 +89,6 @@ function NavVersions() {
       menuItem={{ text: currentVersion, items }}
     />
   ) : null;
-}
-
-function AccessibleAppearance() {
-  const { theme, setTheme = () => {} } = useContext(ThemeContext);
-  const language = useLang();
-  const isDark = theme === 'dark';
-  const label =
-    language === 'zh'
-      ? isDark
-        ? '切换到浅色主题'
-        : '切换到深色主题'
-      : isDark
-        ? 'Switch to light theme'
-        : 'Switch to dark theme';
-
-  return (
-    <button
-      aria-label={label}
-      className="test-theme-toggle"
-      onClick={() => setTheme(isDark ? 'light' : 'dark')}
-      type="button"
-    >
-      <span aria-hidden="true">
-        <SwitchAppearance />
-      </span>
-    </button>
-  );
 }
 
 function isVisibleControl(element: HTMLElement, screen: HTMLElement) {
@@ -388,7 +359,6 @@ export function Nav({
           <NavMenuDivider />
           <NavLangs />
           <NavVersions />
-          <AccessibleAppearance />
           <SocialLinks />
         </div>
         <NavHamburger />

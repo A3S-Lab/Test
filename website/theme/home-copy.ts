@@ -1,8 +1,59 @@
 export type Locale = 'zh' | 'en';
 
+export type ExperienceCopy = {
+  stageAria: string;
+  sample: string;
+  shop: string;
+  checkoutTitle: string;
+  checkoutProgress: [string, string, string, string];
+  customerTitle: string;
+  customerName: string;
+  customerAddress: string;
+  productsTitle: string;
+  productName: string;
+  productVariant: string;
+  quantity: string;
+  subtotal: string;
+  summaryTitle: string;
+  productTotal: string;
+  delivery: string;
+  deliveryValue: string;
+  discount: string;
+  discountValue: string;
+  payable: string;
+  paymentTitle: string;
+  paymentMethod: string;
+  submit: string;
+  submitted: string;
+  contextTitle: string;
+  refresh: string;
+  connecting: string;
+  selected: string;
+  revision: string;
+  role: string;
+  name: string;
+  geometry: string;
+  locator: string;
+  source: string;
+  reviewTitle: string;
+  reviewBody: string;
+  openReview: string;
+  reviewStarted: string;
+  localOnly: string;
+  evidenceTitle: string;
+  evidenceWaiting: string;
+  evidenceReady: string;
+  findingsUnit: string;
+  noFinding: string;
+  renderedStatus: string;
+  contextStatus: string;
+  evidenceStatus: string;
+};
+
 type LocalizedCopy = {
   heroTitle: [string, string];
   heroBody: string;
+  startExperience: string;
   readDocs: string;
   viewGitHub: string;
   installTitle: string;
@@ -60,14 +111,16 @@ type LocalizedCopy = {
   quickStart: string;
   architecture: string;
   footer: string;
+  experience: ExperienceCopy;
 };
 
 export const homeCopy: Record<Locale, LocalizedCopy> = {
   zh: {
-    heroTitle: ['看懂界面，', '证明每次操作'],
+    heroTitle: ['让 Agent 看懂界面，', '证明每次操作'],
     heroBody:
-      '探索未知路径，验证真实结果，再把稳定流程固化为类型化 ACL 回归测试。',
-    readDocs: '开始使用',
+      'A3S Test 让编码 Agent 在界面测试中看得懂、点得准、可追溯、可审计，并为每次操作留下可验证证据。',
+    startExperience: '开始体验',
+    readDocs: '阅读文档',
     viewGitHub: '查看 GitHub',
     installTitle: '一条命令开始测试',
     installBody: '安装 CLI，并为已检测到的编码 Agent 安装同版本 Skill。',
@@ -152,12 +205,64 @@ export const homeCopy: Record<Locale, LocalizedCopy> = {
     quickStart: '阅读快速开始',
     architecture: '查看架构边界',
     footer: '类型化动作，可检查证据，自有清理责任。',
+    experience: {
+      stageAria: 'A3S Test Kit 实时体验',
+      sample: '交互演示',
+      shop: 'A3S Shop',
+      checkoutTitle: '确认订单',
+      checkoutProgress: ['购物车', '确认订单', '支付', '完成'],
+      customerTitle: '收货信息',
+      customerName: '张三 · 138 0000 0000',
+      customerAddress: '北京市海淀区中关村大街 1 号 A3S 大厦 1001 室',
+      productsTitle: '商品清单',
+      productName: 'A3S 自动化测试套件',
+      productVariant: '团队版 · 年度许可',
+      quantity: '数量 1',
+      subtotal: '¥1,298.00',
+      summaryTitle: '订单金额',
+      productTotal: '商品总额',
+      delivery: '运费',
+      deliveryValue: '¥0.00',
+      discount: '优惠',
+      discountValue: '−¥50.00',
+      payable: '实付金额',
+      paymentTitle: '支付方式',
+      paymentMethod: '企业测试账户',
+      submit: '提交订单',
+      submitted: '演示订单状态已更新。',
+      contextTitle: '页面上下文',
+      refresh: '刷新',
+      connecting: '正在读取真实页面上下文…',
+      selected: '选中元素',
+      revision: '修订',
+      role: '角色',
+      name: '名称',
+      geometry: '视口坐标',
+      locator: '推荐定位器',
+      source: '组件来源',
+      reviewTitle: '人工复核',
+      reviewBody:
+        '打开真实 Review Overlay，点选单个元素或批量标记，再填写修复意图。',
+      openReview: '开始点选标记',
+      reviewStarted: '标记层已开启',
+      localOnly:
+        '公共体验只写入当前页面内存，不修改源码，也不会联系底层修复 Agent。',
+      evidenceTitle: '证据',
+      evidenceWaiting: '等待本地提交',
+      evidenceReady: '已记录到内存',
+      findingsUnit: '个标记',
+      noFinding: '尚无已提交标记',
+      renderedStatus: '渲染界面',
+      contextStatus: '解析上下文',
+      evidenceStatus: '本地证据',
+    },
   },
   en: {
-    heroTitle: ['See interfaces.', 'Prove actions.'],
+    heroTitle: ['Help agents see interfaces.', 'Prove every action.'],
     heroBody:
-      'Explore unknown paths, verify real outcomes, then preserve stable workflows as typed ACL regression suites.',
-    readDocs: 'Get started',
+      'A3S Test helps coding agents understand, target, trace, and audit interface tests while preserving verifiable evidence for every action.',
+    startExperience: 'Start the experience',
+    readDocs: 'Read the docs',
     viewGitHub: 'View GitHub',
     installTitle: 'Start testing with one command',
     installBody:
@@ -252,5 +357,56 @@ export const homeCopy: Record<Locale, LocalizedCopy> = {
     quickStart: 'Read the quick start',
     architecture: 'See architecture boundaries',
     footer: 'Typed actions, inspectable evidence, owned cleanup.',
+    experience: {
+      stageAria: 'Live A3S Test Kit experience',
+      sample: 'Interactive demo',
+      shop: 'A3S Shop',
+      checkoutTitle: 'Review order',
+      checkoutProgress: ['Cart', 'Review', 'Payment', 'Complete'],
+      customerTitle: 'Delivery details',
+      customerName: 'Alex Chen · +1 555 0100',
+      customerAddress: '1001 Interface Way, San Francisco, CA 94107',
+      productsTitle: 'Order items',
+      productName: 'A3S autonomous testing suite',
+      productVariant: 'Team · annual license',
+      quantity: 'Quantity 1',
+      subtotal: '$1,298.00',
+      summaryTitle: 'Order summary',
+      productTotal: 'Products',
+      delivery: 'Delivery',
+      deliveryValue: '$0.00',
+      discount: 'Discount',
+      discountValue: '−$50.00',
+      payable: 'Total due',
+      paymentTitle: 'Payment method',
+      paymentMethod: 'Company test account',
+      submit: 'Place order',
+      submitted: 'The demo order state changed.',
+      contextTitle: 'Page context',
+      refresh: 'Refresh',
+      connecting: 'Reading the real page context…',
+      selected: 'Selected element',
+      revision: 'Revision',
+      role: 'Role',
+      name: 'Name',
+      geometry: 'Viewport geometry',
+      locator: 'Preferred locator',
+      source: 'Component source',
+      reviewTitle: 'Human review',
+      reviewBody:
+        'Open the real Review Overlay, select one element or a batch, then describe the repair intent.',
+      openReview: 'Start marking',
+      reviewStarted: 'Review layer opened',
+      localOnly:
+        'This public experience writes only to page memory. It does not edit source or contact a repair agent.',
+      evidenceTitle: 'Evidence',
+      evidenceWaiting: 'Waiting for a local submission',
+      evidenceReady: 'Recorded in memory',
+      findingsUnit: 'findings',
+      noFinding: 'No submitted findings yet',
+      renderedStatus: 'Rendered page',
+      contextStatus: 'Context parsed',
+      evidenceStatus: 'Local evidence',
+    },
   },
 };

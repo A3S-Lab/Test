@@ -3,11 +3,11 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/A3S-Lab/Test/releases/latest"><img src="https://img.shields.io/github/v/release/A3S-Lab/Test?style=flat-square&color=55d6a5&label=release" alt="Latest release"></a>
+  <a href="https://github.com/A3S-Lab/Test/releases/latest"><img src="https://img.shields.io/github/v/release/A3S-Lab/Test?style=flat-square&color=1264ff&label=release" alt="Latest release"></a>
   <a href="https://github.com/A3S-Lab/Test/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/A3S-Lab/Test/ci.yml?branch=main&style=flat-square&label=CI" alt="CI status"></a>
-  <a href="https://a3s-lab.github.io/Test/"><img src="https://img.shields.io/badge/docs-中文%20%7C%20English-303a35?style=flat-square" alt="Chinese and English documentation"></a>
-  <img src="https://img.shields.io/badge/Rust-1.85%2B-303a35?style=flat-square" alt="Rust 1.85 or newer">
-  <a href="./LICENSE"><img src="https://img.shields.io/badge/license-MIT-303a35?style=flat-square" alt="MIT License"></a>
+  <a href="https://a3s-lab.github.io/Test/"><img src="https://img.shields.io/badge/docs-中文%20%7C%20English-1264ff?style=flat-square" alt="Chinese and English documentation"></a>
+  <img src="https://img.shields.io/badge/Rust-1.85%2B-56657b?style=flat-square" alt="Rust 1.85 or newer">
+  <a href="./LICENSE"><img src="https://img.shields.io/badge/license-MIT-56657b?style=flat-square" alt="MIT License"></a>
 </p>
 
 <h3 align="center">Explore unknown interface paths. Preserve proven paths as typed regressions.</h3>
