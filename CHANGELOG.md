@@ -18,6 +18,11 @@
 
 ### Fixed
 
+- Prioritized unmodified `Escape` for active Test Kit marking and finding
+  editors even when the event originates in an editable control. Idle host
+  editors still retain `Escape` without closing the review panel, while
+  cancelling a completed multi-selection editor now restores panel focus.
+  React and real Chromium regressions cover both ownership boundaries.
 - Kept keyboard multi-selection on application controls until explicit
   `Shift+Enter` completion. Starting or extending a selection no longer opens
   an empty editor or steals focus into the review Shadow DOM, and `Escape`,

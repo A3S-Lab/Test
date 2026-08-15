@@ -444,23 +444,28 @@ The overlay also exposes global review commands. `Ctrl/Command+Shift+F`
 toggles the panel from anywhere outside an editable target. While the panel is
 open, `L` toggles Layout Mode, `P` pauses or resumes page motion, `H` hides or
 shows markers, `C` copies the selected drafts as Markdown, and `X` clears all
-local drafts. `Escape` cancels the active marking/editor state first, then
-closes the panel. Commands are ignored inside inputs, textareas, selects,
-contenteditable regions, and ARIA textbox, searchbox, combobox, or spinbutton
-controls. Each command also has a named button and visible shortcut tooltip.
-The launcher and active controls expose the same bindings through
-`aria-keyshortcuts`. Review preferences includes a keyboard-reference section
-that remains available to keyboard and screen-reader navigation and explicitly
-states that commands are ignored while typing in an editable control.
+local drafts. Inputs, textareas, selects, contenteditable regions, and ARIA
+textbox, searchbox, combobox, or spinbutton controls retain those letter
+shortcuts and the panel toggle while the reviewer is typing. Unmodified
+`Escape` has a narrower ownership rule: active marking or an open finding
+editor receives it first, even when focus is editable. An idle host editable
+retains `Escape`, and the review panel stays open. Outside editable controls,
+`Escape` closes an otherwise idle panel. Each command also has a named button
+and visible shortcut tooltip. The launcher and active controls expose the same
+bindings through `aria-keyshortcuts`. Review preferences includes a
+keyboard-reference section that remains available to keyboard and
+screen-reader navigation and states the same ownership boundary.
 
 Keyboard multi-selection remains in the host application until it is ready to
 describe. Focus an application element and press `Enter` to add it; the polite
 announcer reports the bounded count without mounting the finding editor or
 activating the host control. Move focus to each additional element and repeat,
 then press `Shift+Enter` to finish and move into the two-textarea finding
-editor. `Escape`, the marking Cancel control, panel toggling, and Layout Mode
-discard an incomplete selection and restore application focus instead of
-leaving a zero-target or stale editor behind.
+editor. Pressing `Escape` from that completed multi-select editor discards it
+and restores focus to the review panel. During selection, `Escape`, the marking
+Cancel control, panel toggling, and Layout Mode discard the incomplete
+candidate and restore application focus instead of leaving a zero-target or
+stale editor behind.
 
 Marker rectangles remain pointer-transparent page evidence. A draft marker
 adds only a 28 CSS-pixel edit button at its top-start corner; activating it
@@ -505,13 +510,13 @@ Automated React tests cover dialog naming, control names, live-region messages,
 shortcut metadata and help content, and Shadow DOM focus restoration. The
 ignored real Chromium Test Kit suite also captures the browser accessibility
 tree, verifies the keyboard reference, and checks the launcher-to-dialog focus
-round trip, keyboard multi-selection focus and cancellation, plus the
-hide-to-application focus transfer. These checks are regression evidence for
-DOM and accessibility-tree semantics; they are not a substitute for completing
-every workflow with an actual screen reader. M8 remains open until an
-independent reviewer audits the full review lifecycle with VoiceOver, NVDA, or
-an equivalent supported screen reader in an environment that permits
-assistive-technology inspection.
+round trip, editable `Escape` ownership, completed-editor cancellation,
+keyboard multi-selection focus, and the hide-to-application focus transfer.
+These checks are regression evidence for DOM and accessibility-tree semantics;
+they are not a substitute for completing every workflow with an actual screen
+reader. M8 remains open until an independent reviewer audits the full review
+lifecycle with VoiceOver, NVDA, or an equivalent supported screen reader in an
+environment that permits assistive-technology inspection.
 
 At submission time, the Test Kit enriches a repair with a fresh context
 revision and bounded page context. A submitted target contains current private

@@ -336,9 +336,10 @@ The completion work intentionally preserves these product boundaries:
       semantic locator anchors, reload/SPA-route restoration, and fail-closed
       handling for targets that cannot be resolved uniquely
 - [x] Add one global keyboard command layer for overlay toggle, Escape,
-      Layout Mode, pause, marker visibility, copy, and clear, and ignore
-      commands originating in inputs, textareas, selects, contenteditable
-      regions, or ARIA text-entry controls
+      Layout Mode, pause, marker visibility, copy, and clear. Editable controls
+      retain letter commands and the panel toggle; active marking or an open
+      editor receives unmodified Escape first, while an idle editable retains
+      Escape without closing the panel
 - [x] Expose the same commands through `aria-keyshortcuts` and an in-overlay
       keyboard reference, with direct unit and real-browser accessibility-tree
       evidence while keeping the independent screen-reader audit open
@@ -365,7 +366,8 @@ The completion work intentionally preserves these product boundaries:
 - [x] Extend the real Chromium Test Kit suite to prove restored drafts,
       keyboard-only review controls and multi-selection, host-interaction
       blocking, searchable Layout authoring, and accessible spatial marker
-      editing
+      editing, including Escape cancellation from a completed multi-select
+      editor with panel-focus restoration
 - [x] Re-run Test Kit typecheck/tests/build, Rust formatting/tests/clippy, the
       real Chromium Test Kit suite, and the complete repair lifecycle matrix
 

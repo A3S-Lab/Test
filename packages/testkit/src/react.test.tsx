@@ -456,6 +456,39 @@ describe("React adapter and review overlay", () => {
     await waitFor(() => expect(document.querySelector<HTMLElement>("[data-a3s-testkit-overlay]")!.shadowRoot!.querySelector(".a3s-panel")).toBeNull());
   });
 
+  it("reserves editable Escape for active marking without closing an idle review panel", async () => {
+    render(<A3STestKit enabled page={{ id: "editable-escape" }} repairStorage="memory"><input aria-label="Editable escape target" /><A3SReviewOverlay enabled defaultOpen /></A3STestKit>);
+    const panel = await waitFor(() => shadowQuery(".a3s-panel"));
+    const input = document.querySelector<HTMLInputElement>("[aria-label='Editable escape target']")!;
+
+    input.focus();
+    input.dispatchEvent(new FocusEvent("focusin", { bubbles: true, composed: true }));
+    fireEvent.keyDown(input, { key: "Escape" });
+    expect(document.querySelector<HTMLElement>("[data-a3s-testkit-overlay]")!.shadowRoot!.querySelector(".a3s-panel")).toBe(panel);
+
+    fireEvent.click(shadowButton("Element"));
+    await waitFor(() => expect(document.activeElement).toBe(input));
+    fireEvent.keyDown(input, { key: "Escape" });
+    await waitFor(() => expect(document.querySelector<HTMLElement>("[data-a3s-testkit-overlay]")!.shadowRoot!.querySelector(".a3s-hint")).toBeNull());
+    expect(document.activeElement).toBe(input);
+    expect(document.querySelector<HTMLElement>("[data-a3s-testkit-overlay]")!.shadowRoot!.querySelector(".a3s-panel")).toBe(panel);
+  });
+
+  it("cancels a finding editor when Escape originates in its textarea", async () => {
+    render(<A3STestKit enabled page={{ id: "editor-escape" }} repairStorage="memory"><button id="editor-escape-target">Editor escape target</button><A3SReviewOverlay enabled defaultOpen /></A3STestKit>);
+    const panel = await waitFor(() => shadowQuery(".a3s-panel"));
+    const target = document.querySelector<HTMLElement>("#editor-escape-target")!;
+    setRect(target, { x: 20, y: 20, width: 140, height: 32 });
+    fireEvent.click(shadowButton("Element"));
+    target.dispatchEvent(pointerEventWithPath(target, 40, 30));
+    const editor = await waitFor(() => shadowQuery(".a3s-editor textarea"));
+    expect(document.querySelector<HTMLElement>("[data-a3s-testkit-overlay]")!.shadowRoot!.activeElement).toBe(editor);
+
+    fireEvent.keyDown(editor, { key: "Escape", composed: true });
+    await waitFor(() => expect(document.querySelector<HTMLElement>("[data-a3s-testkit-overlay]")!.shadowRoot!.querySelector(".a3s-editor")).toBeNull());
+    expect(document.querySelector<HTMLElement>("[data-a3s-testkit-overlay]")!.shadowRoot!.activeElement).toBe(panel);
+  });
+
   it("exposes spatial draft editing and isolates typed host integration callbacks", async () => {
     const onDraftAdded = vi.fn(() => { throw new Error("host add failure"); });
     const onDraftUpdated = vi.fn(() => { throw new Error("host update failure"); });
@@ -711,7 +744,8 @@ describe("React adapter and review overlay", () => {
     expect(shortcutHelp.getAttribute("aria-labelledby")).toBe(shadowQuery(".a3s-shortcuts-title").id);
     expect(shortcutHelp.textContent).toContain("Toggle review");
     expect(shortcutHelp.textContent).toContain("Copy selected drafts");
-    expect(shortcutHelp.textContent).toContain("Ignored while typing in an editable control");
+    expect(shortcutHelp.textContent).toContain("Letter shortcuts and panel toggle are ignored while typing");
+    expect(shortcutHelp.textContent).toContain("Escape still cancels active marking or an open finding editor");
 
     fireEvent.click(shadowQuery("header button"));
     await waitFor(() => expect(document.querySelector<HTMLElement>("[data-a3s-testkit-overlay]")!.shadowRoot!.activeElement).toBe(launcher));

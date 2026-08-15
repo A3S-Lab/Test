@@ -132,7 +132,9 @@ For keyboard multi-selection, focus an application element and press `Enter`
 to add it without activating the host control or moving focus into the review
 Shadow DOM. Repeat for additional elements, then press `Shift+Enter` to open
 the finding editor. `Escape` or the visible marking Cancel control discards an
-incomplete selection and restores application focus.
+incomplete selection and restores application focus. From a completed
+multi-select editor, `Escape` discards the editor and restores review-panel
+focus.
 
 The review preferences section persists only bounded presentation choices:
 theme, marker color, clear-after-copy, explicit host pointer blocking, panel
@@ -145,7 +147,11 @@ The overlay exposes a named non-modal dialog, finding-specific action names,
 one polite status announcer, visible keyboard focus, and focus restoration when
 controls disappear, including when tab-scoped hiding removes the Shadow DOM.
 Global review commands are published through `aria-keyshortcuts` and a
-keyboard-reference section in Review preferences. Unit and real-Chromium
-accessibility-tree checks protect these semantics. A separate hands-on
-screen-reader audit of every workflow is still required before claiming
-complete assistive-technology coverage.
+keyboard-reference section in Review preferences. Letter shortcuts and the
+panel toggle are ignored while focus is in an editable control. Active marking
+or an open finding editor receives unmodified `Escape` first, including from
+an editable target; an idle host editable retains `Escape` and leaves the panel
+open. Unit and real-Chromium accessibility-tree checks protect these semantics.
+A separate hands-on VoiceOver, NVDA, or equivalent screen-reader audit of every
+workflow is still required before claiming complete assistive-technology
+coverage.

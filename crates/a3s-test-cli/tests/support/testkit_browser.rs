@@ -87,16 +87,15 @@ fn exercise_keyboard_multi_selection(command: &impl Fn(&[&str]) -> Output) {
         "open the completed keyboard multi-select editor",
         "(()=>{const shadow=document.querySelector('[data-a3s-testkit-overlay]').shadowRoot;return shadow.querySelector('.a3s-editor')?.textContent.includes('2 selected elements')&&shadow.activeElement?.matches('textarea')})()",
     );
-    click_accessible(
+    run(
         command,
-        "discard the completed keyboard multi-selection",
-        "button",
-        "Cancel",
+        "discard the completed keyboard multi-selection from its editor",
+        &["press", "Escape"],
     );
     wait_for(
         command,
         "remove the completed keyboard multi-select editor",
-        "!document.querySelector('[data-a3s-testkit-overlay]').shadowRoot.querySelector('.a3s-editor')",
+        "(()=>{const shadow=document.querySelector('[data-a3s-testkit-overlay]').shadowRoot;return !shadow.querySelector('.a3s-editor')&&shadow.activeElement?.classList.contains('a3s-panel')})()",
     );
 
     run(
@@ -165,7 +164,8 @@ fn verify_shortcut_discoverability(command: &impl Fn(&[&str]) -> Output) {
         snapshot.contains("heading \"Keyboard shortcuts\"")
             && snapshot.contains("Toggle review")
             && snapshot.contains("Copy selected drafts")
-            && snapshot.contains("Ignored while typing in an editable control"),
+            && snapshot.contains("Letter shortcuts and panel toggle are ignored while typing")
+            && snapshot.contains("Escape still cancels active marking or an open finding editor",),
         "review shortcut help was not exposed through the accessibility tree: {snapshot}"
     );
     let hide = accessible_ref(

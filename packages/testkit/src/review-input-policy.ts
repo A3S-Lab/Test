@@ -106,9 +106,21 @@ export function useGlobalReviewShortcuts(options: GlobalReviewShortcutsOptions) 
   useEffect(() => {
     if (!options.active) return;
     const onGlobalKeyDown = (event: KeyboardEvent) => {
-      if (event.defaultPrevented || isEditableEvent(event)) return;
+      if (event.defaultPrevented) return;
       const current = latest.current;
       const key = event.key.toLowerCase();
+      const hasModifier = event.metaKey || event.ctrlKey || event.altKey || event.shiftKey;
+      if (!hasModifier && event.key === REVIEW_EVENT_KEYS.escape) {
+        if (current.marking) current.onCancelMarking(true);
+        else if (current.candidate) current.onCancelCandidate();
+        else if (isEditableEvent(event)) return;
+        else if (current.open) current.onCloseOverlay();
+        else return;
+        event.preventDefault();
+        event.stopPropagation();
+        return;
+      }
+      if (isEditableEvent(event)) return;
       if ((event.metaKey || event.ctrlKey) && event.shiftKey && key === REVIEW_EVENT_KEYS.toggle) {
         event.preventDefault();
         event.stopPropagation();
@@ -116,16 +128,7 @@ export function useGlobalReviewShortcuts(options: GlobalReviewShortcutsOptions) 
         current.onToggleOverlay();
         return;
       }
-      if (event.metaKey || event.ctrlKey || event.altKey || event.shiftKey) return;
-      if (event.key === REVIEW_EVENT_KEYS.escape) {
-        if (current.marking) current.onCancelMarking(true);
-        else if (current.candidate) current.onCancelCandidate();
-        else if (current.open) current.onCloseOverlay();
-        else return;
-        event.preventDefault();
-        event.stopPropagation();
-        return;
-      }
+      if (hasModifier) return;
       if (!current.open) return;
       if (key === REVIEW_EVENT_KEYS.layout) current.onToggleLayout();
       else if (key === REVIEW_EVENT_KEYS.pause) current.onTogglePause();

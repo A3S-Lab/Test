@@ -36,7 +36,7 @@ export function ReviewSettings({
       <section className="a3s-shortcuts" aria-labelledby={shortcutsTitleId}>
         <h3 id={shortcutsTitleId} className="a3s-shortcuts-title">Keyboard shortcuts</h3>
         <dl>{REVIEW_SHORTCUT_HELP.map((shortcut) => <div key={shortcut.action}><dt>{shortcut.action}</dt><dd><kbd>{shortcut.keys}</kbd></dd></div>)}</dl>
-        <p>Ignored while typing in an editable control.</p>
+        <p>Letter shortcuts and panel toggle are ignored while typing. Escape still cancels active marking or an open finding editor.</p>
       </section>
       <button type="button" className="quiet" onClick={onHideUntilRestart}>Hide until tab restart</button>
     </div>}
