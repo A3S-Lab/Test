@@ -1,5 +1,34 @@
 # Changelog
 
+## 0.16.0 - 2026-08-15
+
+### Added
+
+- Added selection-scoped `insert_text` to ACL suites, persistent agent CLI
+  sessions, the typed action JSON contract, and the standalone Web driver. It
+  inserts at the browser's current caret or replaces the current selection
+  without refocusing a target.
+- Added real standalone-browser coverage that focuses a semantic form field,
+  creates a keyboard selection, replaces it through `insert_text`, and proves
+  the submitted value end to end on macOS and Windows CI.
+
+### Fixed
+
+- Accepted the current standalone browser's top-level and nested visibility
+  response envelopes without weakening typed boolean admission.
+
+### Safety
+
+- `insert_text` uses the existing typed text-input policy capability and
+  provenance redaction. It carries no target or locator authority and can only
+  affect the editing context explicitly established by an earlier browser
+  action.
+
+### Changed
+
+- Advanced the action protocol revision to 7 and raised the Rust workspace
+  release to `0.16.0`. The unchanged Test Kit remains `0.3.0`.
+
 ## 0.15.0 - 2026-08-15
 
 ### Added

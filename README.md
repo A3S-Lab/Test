@@ -431,7 +431,7 @@ tagged Rust package:
 
 ```bash
 cargo install --git https://github.com/A3S-Lab/Test \
-  --tag v0.15.0 --locked a3s-test-cli
+  --tag v0.16.0 --locked a3s-test-cli
 ```
 
 ### Hermetic runner image
@@ -843,7 +843,7 @@ recordings are confined to the scenario artifact root.
 
 | Concern | Available capabilities |
 | --- | --- |
-| Interaction | Navigate, semantic snapshots and targets, click, hover, focus, fill/type, check/select, double/context click, drag, key press, modifier wheel, viewport |
+| Interaction | Navigate, semantic snapshots and targets, click, hover, focus, fill/type, selection-scoped text insertion, check/select, double/context click, drag, key press, modifier wheel, viewport |
 | Synchronization | Typed load, text, URL, and visibility waits; text, URL, and visibility assertions |
 | Browser state | Stable tab IDs and labels, frame context, browser dialogs |
 | Files | Upload fixtures and keep downloads inside the session artifact root |
