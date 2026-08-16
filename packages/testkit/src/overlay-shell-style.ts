@@ -226,9 +226,9 @@ button.danger {
 
 .a3s-panel {
   position: fixed;
-  right: 20px;
-  bottom: 20px;
-  width: min(410px, calc(100vw - 40px));
+  right: 16px;
+  bottom: 16px;
+  width: min(364px, calc(100vw - 32px));
   overflow: visible;
   border: 0;
   background: transparent;
@@ -251,35 +251,35 @@ button.danger {
 .a3s-command-bar {
   display: flex;
   min-width: 0;
-  height: 58px;
-  padding: 6px;
+  height: 50px;
+  padding: 4px;
   border: 1px solid var(--a3s-toolbar-line);
-  border-radius: 16px;
+  border-radius: 14px;
   background: color-mix(in srgb, var(--a3s-toolbar) 97%, transparent);
   box-shadow: 0 20px 52px rgb(5 10 20 / 26%), 0 2px 8px rgb(5 10 20 / 18%);
   color: var(--a3s-toolbar-text);
   pointer-events: auto;
   align-items: center;
-  gap: 7px;
+  gap: 5px;
   backdrop-filter: blur(14px);
 }
 
 .a3s-command-bar > header {
   display: grid;
-  min-width: 116px;
-  height: 46px;
-  padding: 0 5px 0 1px;
+  min-width: 104px;
+  height: 42px;
+  padding: 0 4px 0 0;
   border-right: 1px solid var(--a3s-toolbar-line);
-  grid-template-columns: 32px minmax(48px, 1fr) 30px;
+  grid-template-columns: 28px minmax(42px, 1fr) 26px;
   align-items: center;
   gap: 3px;
 }
 
 .a3s-panel-mark {
   display: grid;
-  width: 30px;
-  height: 30px;
-  border-radius: 9px;
+  width: 26px;
+  height: 26px;
+  border-radius: 8px;
   background: #1264ff;
   color: #ffffff;
   font: 780 8px/1 ui-sans-serif, sans-serif;
@@ -289,8 +289,8 @@ button.danger {
 }
 
 .a3s-panel-mark > svg {
-  width: 19px;
-  height: 19px;
+  width: 17px;
+  height: 17px;
   fill: none;
   stroke: currentColor;
   stroke-width: 1.45;
@@ -313,22 +313,28 @@ button.danger {
 
 .a3s-panel-title {
   color: var(--a3s-toolbar-text);
-  font-size: 11.5px;
+  font-size: 11px;
   line-height: 1.2;
 }
 
-.a3s-panel-description {
-  margin-top: 2px;
-  color: var(--a3s-toolbar-muted);
-  font-size: 9px;
-  line-height: 1.25;
+.a3s-command-bar .a3s-panel-description {
+  position: fixed;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  border: 0;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
 }
 
 .a3s-close {
   display: grid;
-  width: 30px;
-  height: 30px;
-  min-height: 30px;
+  width: 26px;
+  height: 26px;
+  min-height: 26px;
   padding: 0;
   border-color: transparent;
   background: transparent;
@@ -367,26 +373,26 @@ button.danger {
   min-width: 0;
   align-items: center;
   justify-content: flex-start;
-  gap: 4px;
+  gap: 3px;
 }
 
 .a3s-tool-group {
   display: flex;
   flex: 0 0 auto;
   align-items: center;
-  gap: 3px;
+  gap: 2px;
 }
 
 .a3s-tool-group-primary {
-  padding: 2px;
+  padding: 1px;
   border: 1px solid rgb(255 255 255 / 7%);
-  border-radius: 10px;
+  border-radius: 9px;
   background: rgb(255 255 255 / 5%);
 }
 
 .a3s-tool-divider {
   width: 1px;
-  height: 24px;
+  height: 20px;
   flex: 0 0 auto;
   background: var(--a3s-toolbar-line);
 }
@@ -395,9 +401,9 @@ button.danger {
 .a3s-settings > .a3s-disclosure {
   position: relative;
   display: grid;
-  width: 38px;
-  height: 38px;
-  min-height: 38px;
+  width: 34px;
+  height: 34px;
+  min-height: 34px;
   padding: 0;
   border-color: transparent;
   border-radius: 8px;
@@ -429,8 +435,8 @@ button.danger {
 
 .a3s-tools button svg,
 .a3s-settings > .a3s-disclosure svg {
-  width: 17px;
-  height: 17px;
+  width: 16px;
+  height: 16px;
   fill: none;
   stroke: currentColor;
   stroke-width: 1.55;
@@ -476,13 +482,13 @@ button.danger {
 .a3s-tool-tray {
   position: absolute;
   right: 0;
-  bottom: calc(100% + 12px);
+  bottom: calc(100% + 8px);
   display: grid;
-  width: min(416px, calc(100vw - 40px));
-  min-height: 58px;
-  padding: 8px;
+  width: min(380px, calc(100vw - 32px));
+  min-height: 50px;
+  padding: 6px;
   border: 1px solid var(--a3s-toolbar-line);
-  border-radius: 14px;
+  border-radius: 12px;
   background: color-mix(in srgb, var(--a3s-toolbar) 97%, transparent);
   box-shadow: 0 18px 48px rgb(5 10 20 / 30%);
   color: var(--a3s-toolbar-text);
@@ -554,7 +560,7 @@ button.danger {
 
 .a3s-root[data-dock="left"] .a3s-panel {
   right: auto;
-  left: 20px;
+  left: 16px;
   transform-origin: left bottom;
 }
 

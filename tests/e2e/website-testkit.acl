@@ -17,14 +17,14 @@ suite "website-testkit-experience" {
         }
 
         wait "homepage-ready" {
-            text = "让 Agent 看懂页面"
+            text = "先让 Agent 看清页面"
         }
 
         expect "published-install-version" {
             text = "CLI + Agent Skill · v0.16.2"
         }
 
-        expect "motion-sequence-active" {
+        wait "motion-sequence-active" {
             visible = css(".test-experience-stage.is-motion-active")
         }
 
@@ -44,20 +44,12 @@ suite "website-testkit-experience" {
             visible = css(".test-motion-toggle[aria-pressed='false']")
         }
 
-        wheel "show-release-disclosure" {
-            delta_y = 900
-        }
-
         expect "release-candidate-disclosure" {
             text = "当前文档已进入下一版本准备阶段"
         }
 
-        wheel "return-to-testkit" {
-            delta_y = -900
-        }
-
         expect "local-only-disclosure" {
-            text = "这个演示只保存在当前页面"
+            text = "演示数据仅保存在此页"
         }
 
         expect "rendered-context" {
@@ -65,7 +57,7 @@ suite "website-testkit-experience" {
         }
 
         click "open-review" {
-            target = role("button", "打开点选模式")
+            target = role("button", "开始标记")
         }
 
         wait "overlay-mounted" {
@@ -106,7 +98,7 @@ suite "website-testkit-experience" {
         }
 
         wait "single-receipt" {
-            text = "1 个标记"
+            text = "1 个问题"
         }
 
         snapshot "after-single" {
@@ -184,11 +176,12 @@ suite "website-testkit-experience" {
         }
 
         wait "batch-receipt" {
-            text = "2 个标记"
+            text = "2 个问题"
         }
 
-        screenshot "review-evidence" {
-            path = "screenshots/website-testkit.png"
+        accessibility "review-evidence" {
+            path = "evidence/review-interactive.json"
+            interactive = true
         }
 
         accessibility "semantic-evidence" {
@@ -223,7 +216,7 @@ suite "website-testkit-experience" {
         }
 
         wait "mobile-homepage-ready" {
-            text = "让 Agent 看懂页面"
+            text = "先让 Agent 看清页面"
         }
 
         expect "mobile-rendered-context" {
@@ -231,7 +224,7 @@ suite "website-testkit-experience" {
         }
 
         click "mobile-open-review" {
-            target = role("button", "打开点选模式")
+            target = role("button", "开始标记")
         }
 
         wait "mobile-overlay-mounted" {
@@ -275,8 +268,9 @@ suite "website-testkit-experience" {
             interactive = true
         }
 
-        screenshot "mobile-layout-evidence" {
-            path = "screenshots/website-testkit-mobile.png"
+        accessibility "mobile-layout-evidence" {
+            path = "evidence/layout-interactive-mobile.json"
+            interactive = true
         }
 
         accessibility "mobile-semantic-evidence" {

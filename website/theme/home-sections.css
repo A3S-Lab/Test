@@ -24,37 +24,24 @@
   overflow: hidden;
   border: 1px solid var(--test-line);
   border-radius: var(--test-shell-radius);
-  grid-template-columns: repeat(12, minmax(0, 1fr));
+  grid-template-columns: 1.2fr repeat(4, minmax(0, 1fr));
 }
 
 .test-capability {
+  display: flex;
   min-width: 0;
-  padding: 30px 34px;
+  min-height: 340px;
+  padding: 30px 26px;
+  border-left: 1px solid var(--test-line);
   background: var(--test-bg);
+  flex-direction: column;
 }
 
 .test-capability-1 {
-  display: flex;
-  min-height: 480px;
-  padding: 42px;
+  padding: 34px 30px;
+  border-left: 0;
   background: var(--test-accent);
   color: #ffffff;
-  flex-direction: column;
-  grid-column: 1 / span 7;
-  grid-row: 1 / span 3;
-}
-
-.test-capability-2,
-.test-capability-3,
-.test-capability-4 {
-  min-height: 160px;
-  border-bottom: 1px solid var(--test-line);
-  border-left: 1px solid var(--test-line);
-  grid-column: 8 / -1;
-}
-
-.test-capability-4 {
-  border-bottom: 0;
 }
 
 .test-capability code {
@@ -68,19 +55,18 @@
 
 .test-capability h3 {
   max-width: 600px;
-  margin: 28px 0 10px;
+  margin: auto 0 10px;
   color: var(--test-text);
-  font-size: 21px;
+  font-size: 20px;
   font-weight: 700;
   letter-spacing: -0.03em;
   line-height: 1.18;
 }
 
 .test-capability-1 h3 {
-  margin-top: auto;
   color: #ffffff;
-  font-size: clamp(30px, 3vw, 44px);
-  line-height: 1.08;
+  font-size: clamp(25px, 2.1vw, 32px);
+  line-height: 1.1;
 }
 
 .test-capability p {
@@ -94,7 +80,7 @@
 .test-capability-1 p {
   max-width: 520px;
   color: #f8fbff;
-  font-size: 16px;
+  font-size: 15px;
 }
 
 .test-workflows {

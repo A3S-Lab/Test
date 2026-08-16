@@ -71,8 +71,8 @@ function LiveContextPanel({
 
   useEffect(() => {
     let cancelled = false;
-    let frame = 0;
-    let remainingFrames = 120;
+    let timer = 0;
+    const deadline = Date.now() + 10_000;
 
     const capture = () => {
       if (cancelled) return;
@@ -86,8 +86,7 @@ function LiveContextPanel({
       );
 
       if (!snapshot || !node) {
-        remainingFrames -= 1;
-        if (remainingFrames > 0) frame = window.requestAnimationFrame(capture);
+        if (Date.now() < deadline) timer = window.setTimeout(capture, 50);
         return;
       }
 
@@ -109,10 +108,10 @@ function LiveContextPanel({
       });
     };
 
-    frame = window.requestAnimationFrame(capture);
+    timer = window.setTimeout(capture, 0);
     return () => {
       cancelled = true;
-      window.cancelAnimationFrame(frame);
+      window.clearTimeout(timer);
     };
   }, [refreshKey]);
 
@@ -327,11 +326,24 @@ export function TestKitExperience({
   useEffect(() => {
     const stage = stageRef.current;
     if (!stage || typeof IntersectionObserver === 'undefined') return;
+    const setActive = (active: boolean) => {
+      setMotionActive(active);
+      if (!active) setMotionStep(0);
+    };
+    const rect = stage.getBoundingClientRect();
+    const visibleWidth = Math.max(
+      0,
+      Math.min(rect.right, window.innerWidth) - Math.max(rect.left, 0),
+    );
+    const visibleHeight = Math.max(
+      0,
+      Math.min(rect.bottom, window.innerHeight) - Math.max(rect.top, 0),
+    );
+    const area = rect.width * rect.height;
+    setActive(area > 0 && (visibleWidth * visibleHeight) / area >= 0.28);
     const observer = new IntersectionObserver(
       ([entry]) => {
-        const active = Boolean(entry?.isIntersecting);
-        setMotionActive(active);
-        if (!active) setMotionStep(0);
+        setActive(Boolean(entry?.isIntersecting));
       },
       { threshold: 0.28 },
     );

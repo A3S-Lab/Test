@@ -30,6 +30,13 @@
 
 ### Changed
 
+- Tightened the desktop Test Kit dock, tool tray, finding editor, settings,
+  and batch workspace while retaining 44-pixel targets on mobile and coarse
+  pointers, including 320-pixel-wide viewports.
+- Reworked the bilingual homepage around the actual rendered perception,
+  targeting, human submission, scoped repair, and fresh-browser verification
+  path. The embedded demonstration now labels its in-page storage boundary
+  directly instead of implying an external agent handoff.
 - Aligned documentation typography, tables, inline code, and light syntax
   rendering with the A3S UI documentation system. ACL examples now use a
   dedicated presentation grammar while product parsing remains owned by

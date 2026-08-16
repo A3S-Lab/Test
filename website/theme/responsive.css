@@ -136,22 +136,25 @@
     gap: 20px;
   }
 
+  .test-capability-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .test-capability-1 {
-    min-height: 340px;
+    min-height: 300px;
     grid-column: 1 / -1;
-    grid-row: auto;
   }
 
   .test-capability-2,
   .test-capability-3,
-  .test-capability-4 {
-    min-height: 210px;
+  .test-capability-4,
+  .test-capability-5 {
+    min-height: 240px;
     border-top: 1px solid var(--test-line);
-    border-bottom: 0;
-    grid-column: span 4;
   }
 
-  .test-capability-2 {
+  .test-capability-2,
+  .test-capability-4 {
     border-left: 0;
   }
 
@@ -426,7 +429,8 @@
   .test-capability-1,
   .test-capability-2,
   .test-capability-3,
-  .test-capability-4 {
+  .test-capability-4,
+  .test-capability-5 {
     min-height: 230px;
     padding: 28px;
     border-top: 1px solid var(--test-line);

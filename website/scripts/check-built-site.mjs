@@ -124,20 +124,23 @@ if (!englishHtml.includes('<html lang="en">')) {
   failures.push('English homepage does not declare English');
 }
 if (
-  !rootHtml.includes('让 Agent 看懂页面，') ||
-  !rootHtml.includes('点中问题，交给它修')
+  !rootHtml.includes('先让 Agent 看清页面，') ||
+  !rootHtml.includes('再把问题交给它修') ||
+  !rootHtml.includes('从页面现场到验证结果，只走一条闭环')
 ) {
   failures.push('default homepage lacks Chinese product copy');
 }
 if (
-  !englishHtml.includes('Agents understand the page.') ||
-  !englishHtml.includes('You point. They repair.')
+  !englishHtml.includes('Give agents the live page.') ||
+  !englishHtml.includes('Keep every repair grounded.') ||
+  !englishHtml.includes('One traceable path from live page to verified result')
 ) {
   failures.push('English homepage lacks English product copy');
 }
 if (
   !rootHtml.includes('data-testid="a3s-experience-submit"') ||
-  !rootHtml.includes('这个演示只保存在当前页面')
+  !rootHtml.includes('演示数据仅保存在此页') ||
+  !rootHtml.includes('不联系外部 Agent')
 ) {
   failures.push('homepage lacks the local interactive Test Kit surface');
 }

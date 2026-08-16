@@ -7,10 +7,10 @@ ${OVERLAY_SHELL_CSS}
 .a3s-hint {
   position: absolute;
   right: 0;
-  bottom: calc(100% + 10px);
-  width: min(350px, calc(100vw - 24px));
+  bottom: calc(100% + 8px);
+  width: min(330px, calc(100vw - 24px));
   margin: 0;
-  padding: 9px 12px;
+  padding: 8px 10px;
   border: 1px solid var(--a3s-toolbar-line);
   border-radius: 10px;
   background: var(--a3s-toolbar);
@@ -40,17 +40,17 @@ ${OVERLAY_SHELL_CSS}
 .a3s-workspace {
   position: absolute;
   right: 0;
-  bottom: calc(100% + 10px);
+  bottom: calc(100% + 8px);
   display: grid;
-  width: min(440px, calc(100vw - 24px));
-  max-height: min(680px, calc(100vh - 92px));
+  width: min(400px, calc(100vw - 24px));
+  max-height: min(600px, calc(100vh - 82px));
   overflow: hidden;
   border: 0;
-  border-radius: 16px;
+  border-radius: 14px;
   background: var(--a3s-panel);
   box-shadow: var(--a3s-shadow);
   pointer-events: auto;
-  grid-template-rows: 48px minmax(0, 1fr) auto;
+  grid-template-rows: 44px minmax(0, 1fr) auto;
 }
 
 .a3s-workspace[hidden] {
@@ -65,8 +65,8 @@ ${OVERLAY_SHELL_CSS}
 .a3s-workspace-header {
   display: flex;
   min-width: 0;
-  min-height: 52px;
-  padding: 0 11px 0 15px;
+  min-height: 44px;
+  padding: 0 9px 0 12px;
   border-bottom: 1px solid var(--a3s-line);
   align-items: center;
   justify-content: space-between;
@@ -84,13 +84,13 @@ ${OVERLAY_SHELL_CSS}
 
 .a3s-workspace-header strong {
   color: var(--a3s-text);
-  font-size: 13.5px;
+  font-size: 13px;
 }
 
 .a3s-workspace-header small {
   margin-top: 1px;
   color: var(--a3s-faint);
-  font-size: 10px;
+  font-size: 9.5px;
 }
 
 .a3s-workspace-scroll {
@@ -101,11 +101,11 @@ ${OVERLAY_SHELL_CSS}
 
 .a3s-workspace > footer {
   display: grid;
-  padding: 10px 12px 12px;
+  padding: 8px 10px 10px;
   border-top: 1px solid var(--a3s-line);
   background: var(--a3s-bg);
   grid-template-columns: 1fr;
-  gap: 8px;
+  gap: 6px;
 }
 
 .a3s-workspace > footer > div {
@@ -120,7 +120,7 @@ ${OVERLAY_SHELL_CSS}
 }
 
 .a3s-workspace > footer button {
-  min-height: 34px;
+  min-height: 32px;
   flex: 0 0 auto;
   padding: 0 9px;
   font-size: 11px;
@@ -140,21 +140,21 @@ ${OVERLAY_SHELL_CSS}
 .a3s-settings-content {
   position: absolute;
   right: 0;
-  bottom: calc(100% + 12px);
+  bottom: calc(100% + 8px);
   z-index: 14;
   display: flex;
-  width: min(380px, calc(100vw - 24px));
-  max-height: min(610px, calc(100vh - 170px));
-  padding: 14px;
+  width: min(348px, calc(100vw - 24px));
+  max-height: min(540px, calc(100vh - 150px));
+  padding: 12px;
   overflow: auto;
   overscroll-behavior: contain;
   border: 0;
-  border-radius: 16px;
+  border-radius: 14px;
   background: var(--a3s-panel);
   box-shadow: var(--a3s-shadow);
   color: var(--a3s-text);
   flex-direction: column;
-  gap: 11px;
+  gap: 9px;
 }
 
 .a3s-settings-content > button.quiet {
@@ -185,7 +185,7 @@ ${OVERLAY_SHELL_CSS}
 .a3s-settings-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 10px;
+  gap: 8px;
 }
 
 .a3s-settings label,
@@ -193,7 +193,7 @@ ${OVERLAY_SHELL_CSS}
 .a3s-editor label {
   display: flex;
   flex-direction: column;
-  gap: 5px;
+  gap: 4px;
   color: var(--a3s-text);
   font-size: 11px;
   font-weight: 650;
@@ -208,8 +208,8 @@ ${OVERLAY_SHELL_CSS}
 .a3s-editor select,
 .a3s-reply-label textarea {
   width: 100%;
-  min-height: 34px;
-  padding: 7px 8px;
+  min-height: 32px;
+  padding: 6px 8px;
   border: 1px solid var(--a3s-line-strong);
   border-radius: 8px;
   background: var(--a3s-bg);
@@ -311,11 +311,11 @@ ${OVERLAY_SHELL_CSS}
 ${OVERLAY_MARKING_CSS}
 .a3s-layout {
   display: flex;
-  padding: 12px;
+  padding: 10px;
   border-bottom: 1px solid var(--a3s-line);
   background: var(--a3s-soft);
   flex-direction: column;
-  gap: 9px;
+  gap: 7px;
 }
 
 .a3s-layout > p {
@@ -383,7 +383,7 @@ ${OVERLAY_MARKING_CSS}
 
 .a3s-catalog-results {
   display: flex;
-  max-height: 210px;
+  max-height: 170px;
   overflow: auto;
   flex-direction: column;
   gap: 9px;
@@ -419,7 +419,7 @@ ${OVERLAY_MARKING_CSS}
 }
 
 .a3s-quality {
-  padding: 10px 12px 0;
+  padding: 8px 10px 0;
   border-bottom: 1px solid var(--a3s-line);
 }
 
@@ -437,7 +437,7 @@ ${OVERLAY_MARKING_CSS}
 
 .a3s-quality-item {
   display: grid;
-  padding: 10px 0;
+  padding: 8px 0;
   border-top: 1px solid var(--a3s-line);
   grid-template-columns: auto minmax(0, 1fr);
   gap: 3px 8px;
@@ -482,20 +482,20 @@ ${OVERLAY_MARKING_CSS}
 
 .a3s-list {
   display: flex;
-  min-height: 88px;
-  padding: 10px 12px 12px;
+  min-height: 72px;
+  padding: 8px 10px 10px;
   flex-direction: column;
-  gap: 9px;
+  gap: 7px;
 }
 
 .a3s-item {
   display: flex;
-  padding: 11px;
+  padding: 9px;
   border: 1px solid var(--a3s-line);
   border-radius: 10px;
   background: var(--a3s-panel);
   flex-direction: column;
-  gap: 7px;
+  gap: 5px;
   transition: border-color 150ms ease, background-color 150ms ease, transform 150ms ease;
 }
 
@@ -574,7 +574,7 @@ ${OVERLAY_MARKING_CSS}
 
 .a3s-empty {
   margin: 0;
-  padding: 18px 10px;
+  padding: 14px 8px;
   color: var(--a3s-faint);
   text-align: center;
 }
@@ -638,10 +638,10 @@ ${OVERLAY_MARKING_CSS}
   }
 
   .a3s-command-bar > header {
-    min-width: 108px;
+    min-width: 122px;
     height: 46px;
     align-self: center;
-    grid-template-columns: 28px minmax(44px, 1fr) 30px;
+    grid-template-columns: 28px minmax(44px, 1fr) 44px;
   }
 
   .a3s-toolbar-core {
@@ -652,6 +652,13 @@ ${OVERLAY_MARKING_CSS}
   .a3s-settings > .a3s-disclosure {
     width: 44px;
     height: 44px;
+    min-height: 44px;
+  }
+
+  .a3s-close {
+    width: 44px;
+    height: 44px;
+    min-width: 44px;
     min-height: 44px;
   }
 
@@ -732,6 +739,11 @@ ${OVERLAY_MARKING_CSS}
 }
 
 @media (max-width: 420px) {
+  .a3s-command-bar {
+    padding: 2px;
+    gap: 1px;
+  }
+
   .a3s-settings-grid,
   .a3s-fields,
   .a3s-layout-fields {
@@ -739,11 +751,16 @@ ${OVERLAY_MARKING_CSS}
   }
 
   .a3s-command-bar > header {
-    min-width: 58px;
+    min-width: 70px;
     padding-right: 2px;
     padding-left: 0;
-    grid-template-columns: 28px 28px;
+    grid-template-columns: 24px 44px;
     gap: 1px;
+  }
+
+  .a3s-panel-mark {
+    width: 24px;
+    height: 24px;
   }
 
   .a3s-command-bar > header > span:nth-child(2) {
@@ -758,6 +775,7 @@ ${OVERLAY_MARKING_CSS}
     width: 44px;
     height: 44px;
     min-height: 44px;
+    flex: 0 0 44px;
   }
 
   .a3s-toolbar-core,
@@ -766,10 +784,55 @@ ${OVERLAY_MARKING_CSS}
   }
 }
 
-@media (hover: none) {
+@media (max-width: 340px) {
+  .a3s-command-bar > header {
+    min-width: 44px;
+    padding: 0;
+    grid-template-columns: 44px;
+    gap: 0;
+  }
+
+  .a3s-panel-mark {
+    display: none;
+  }
+}
+
+@media (hover: none), (pointer: coarse) {
+  .a3s-panel {
+    width: min(410px, calc(100vw - 32px));
+  }
+
+  .a3s-command-bar {
+    height: 58px;
+    min-height: 58px;
+    padding: 6px;
+  }
+
+  .a3s-command-bar > header {
+    height: 46px;
+  }
+
+  .a3s-tools button,
+  .a3s-settings > .a3s-disclosure,
+  .a3s-close,
+  .a3s-workspace button,
+  .a3s-editor > .a3s-actions button,
+  .a3s-settings-content button {
+    min-width: 44px;
+    min-height: 44px;
+  }
+
   .a3s-tools button[data-tooltip]::after,
   .a3s-settings > .a3s-disclosure[data-tooltip]::after {
     display: none;
+  }
+}
+
+@media (max-width: 720px) and (hover: none),
+  (max-width: 720px) and (pointer: coarse) {
+  .a3s-panel,
+  .a3s-root[data-dock="left"] .a3s-panel {
+    width: auto;
   }
 }
 

@@ -177,11 +177,11 @@ export const OVERLAY_MARKING_CSS = `
   z-index: 8;
   top: var(--a3s-editor-top, 80px);
   left: var(--a3s-editor-left, 80px);
-  width: min(360px, calc(100vw - 24px));
-  max-height: min(620px, calc(100vh - var(--a3s-editor-top, 80px) - 12px));
+  width: min(330px, calc(100vw - 24px));
+  max-height: min(540px, calc(100vh - var(--a3s-editor-top, 80px) - 12px));
   overflow: hidden;
   border: 0;
-  border-radius: 14px;
+  border-radius: 12px;
   background: var(--a3s-panel);
   box-shadow: 0 26px 72px rgb(36 76 137 / 22%), 0 4px 14px rgb(36 76 137 / 9%);
   pointer-events: auto;
@@ -226,8 +226,8 @@ export const OVERLAY_MARKING_CSS = `
 .a3s-editor-header {
   display: grid;
   min-width: 0;
-  min-height: 54px;
-  padding: 10px 13px;
+  min-height: 46px;
+  padding: 8px 11px;
   border-bottom: 1px solid var(--a3s-line);
   background: var(--a3s-panel);
   grid-template-columns: 25px minmax(0, 1fr);
@@ -282,12 +282,12 @@ export const OVERLAY_MARKING_CSS = `
 .a3s-editor-scroll {
   display: flex;
   min-height: 0;
-  padding: 14px;
+  padding: 11px;
   overflow: auto;
   overscroll-behavior: contain;
   scrollbar-color: var(--a3s-line-strong) transparent;
   flex-direction: column;
-  gap: 9px;
+  gap: 7px;
 }
 
 .a3s-editor textarea,
@@ -298,14 +298,14 @@ export const OVERLAY_MARKING_CSS = `
 }
 
 .a3s-editor-request textarea {
-  min-height: 92px;
+  min-height: 82px;
 }
 
 .a3s-editor-details {
   position: relative;
   display: grid;
-  min-height: 38px;
-  padding: 7px 30px 7px 10px;
+  min-height: 34px;
+  padding: 6px 28px 6px 9px;
   border-color: var(--a3s-line);
   background: var(--a3s-panel);
   grid-template-columns: auto minmax(0, 1fr);
@@ -348,7 +348,7 @@ export const OVERLAY_MARKING_CSS = `
 .a3s-editor-options {
   display: flex;
   flex-direction: column;
-  gap: 9px;
+  gap: 7px;
   animation: a3s-editor-options-enter 180ms cubic-bezier(.16, 1, .3, 1) both;
 }
 
@@ -378,14 +378,14 @@ export const OVERLAY_MARKING_CSS = `
 }
 
 .a3s-editor > .a3s-actions {
-  padding: 11px 14px 12px;
+  padding: 9px 11px 10px;
   border-top: 1px solid var(--a3s-line);
   background: var(--a3s-panel);
 }
 
 .a3s-editor > .a3s-actions button {
-  min-height: 34px;
-  padding: 0 11px;
+  min-height: 32px;
+  padding: 0 9px;
   font-size: 11px;
 }
 
