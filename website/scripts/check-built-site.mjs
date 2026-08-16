@@ -124,18 +124,29 @@ if (!englishHtml.includes('<html lang="en">')) {
   failures.push('English homepage does not declare English');
 }
 if (
-  !rootHtml.includes('先让 Agent 看清页面，') ||
-  !rootHtml.includes('再把问题交给它修') ||
-  !rootHtml.includes('从页面现场到验证结果，只走一条闭环')
+  !rootHtml.includes('把页面事实交给 Agent，') ||
+  !rootHtml.includes('再用新证据验证修复') ||
+  !rootHtml.includes('从页面现场到验证结果，每一步都有边界')
 ) {
   failures.push('default homepage lacks Chinese product copy');
 }
 if (
-  !englishHtml.includes('Give agents the live page.') ||
-  !englishHtml.includes('Keep every repair grounded.') ||
-  !englishHtml.includes('One traceable path from live page to verified result')
+  !englishHtml.includes('Give agents the rendered facts.') ||
+  !englishHtml.includes('Verify changes with fresh evidence.') ||
+  !englishHtml.includes(
+    'Every step from live page to verified result has a boundary',
+  )
 ) {
   failures.push('English homepage lacks English product copy');
+}
+if (
+  !rootHtml.includes('PRD 与设计稿不会被包装成浏览器可访问树') ||
+  !englishHtml.includes(
+    'PRDs and designs never masquerade as a browser accessibility tree',
+  ) ||
+  !rootMarkdown.includes('PRD 与设计稿不会被包装成浏览器可访问树')
+) {
+  failures.push('homepage lacks the source-to-contract authority boundary');
 }
 if (
   !rootHtml.includes('data-testid="a3s-experience-submit"') ||

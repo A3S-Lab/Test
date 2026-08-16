@@ -68,11 +68,14 @@ function LiveContextPanel({
   onRefresh: () => void;
 }) {
   const [context, setContext] = useState<ContextView | null>(null);
+  const [contextUnavailable, setContextUnavailable] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
     let timer = 0;
     const deadline = Date.now() + 10_000;
+    setContext(null);
+    setContextUnavailable(false);
 
     const capture = () => {
       if (cancelled) return;
@@ -86,7 +89,11 @@ function LiveContextPanel({
       );
 
       if (!snapshot || !node) {
-        if (Date.now() < deadline) timer = window.setTimeout(capture, 50);
+        if (Date.now() < deadline) {
+          timer = window.setTimeout(capture, 50);
+        } else {
+          setContextUnavailable(true);
+        }
         return;
       }
 
@@ -174,7 +181,7 @@ function LiveContextPanel({
         </dl>
       ) : (
         <p className="test-context-loading" role="status">
-          {copy.connecting}
+          {contextUnavailable ? copy.contextUnavailable : copy.connecting}
         </p>
       )}
     </section>
@@ -202,7 +209,7 @@ function CheckoutSurface({
       name="Checkout experience"
       source={{
         file: 'website/theme/components/TestKitExperience.tsx',
-        line: 179,
+        line: 191,
       }}
     >
       <header className="test-demo-nav">

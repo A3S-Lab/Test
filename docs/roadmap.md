@@ -180,9 +180,12 @@ snapshot. Pages without the SDK retain the existing Web behavior.
       and open Shadow DOM for click, fill, and check actions, including native
       `searchbox` semantics and pointer clicks bound to post-scroll coordinates
 - [x] Build the production Rspress site inside the real-browser suite and
-      verify single submission, ordered batch submission, screenshot,
-      accessibility, empty browser diagnostics, and exact cleanup on macOS and
-      Windows CI
+      verify single submission, ordered batch submission, focused and complete
+      accessibility evidence, empty browser diagnostics, and exact cleanup on
+      macOS and Windows CI
+- [ ] Restore PNG evidence to the production website suite after the pinned Web
+      runtime can certify bounded screenshot capture without hanging; semantic
+      evidence remains required independently
 
 ## M7: Page-context observation and targeting
 

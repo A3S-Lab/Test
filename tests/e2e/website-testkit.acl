@@ -17,7 +17,7 @@ suite "website-testkit-experience" {
         }
 
         wait "homepage-ready" {
-            text = "先让 Agent 看清页面"
+            text = "把页面事实交给 Agent"
         }
 
         expect "published-install-version" {
@@ -46,6 +46,10 @@ suite "website-testkit-experience" {
 
         expect "release-candidate-disclosure" {
             text = "当前文档已进入下一版本准备阶段"
+        }
+
+        expect "source-contract-boundary" {
+            text = "PRD 与设计稿不会被包装成浏览器可访问树"
         }
 
         expect "local-only-disclosure" {
@@ -216,7 +220,7 @@ suite "website-testkit-experience" {
         }
 
         wait "mobile-homepage-ready" {
-            text = "先让 Agent 看清页面"
+            text = "把页面事实交给 Agent"
         }
 
         expect "mobile-rendered-context" {

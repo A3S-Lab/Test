@@ -30,6 +30,11 @@
 
 ### Changed
 
+- Clarified the bilingual homepage around revision-bound rendered facts,
+  reviewed PRD and design contract candidates, deterministic comparison, and
+  the human repair-authorization boundary. Workflow links, platform support,
+  installer states, and the generated Markdown homepage now use the same
+  terminology and evidence claims.
 - Tightened the desktop Test Kit dock, tool tray, finding editor, settings,
   and batch workspace while retaining 44-pixel targets on mobile and coarse
   pointers, including 320-pixel-wide viewports.
@@ -44,6 +49,10 @@
 
 ### Fixed
 
+- Replaced the homepage's indefinite Page Context loading state with an
+  actionable retry message after the bounded capture deadline, and corrected
+  website regression documentation to describe the semantic evidence it
+  currently retains.
 - Scrolled direct ref and CSS click targets into view before dispatch so a
   valid target below the initial viewport cannot report success without
   receiving the click.

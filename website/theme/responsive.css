@@ -35,14 +35,6 @@
     gap: 44px;
   }
 
-  .test-tree-row {
-    grid-template-columns: 40px 62px minmax(0, 1fr);
-  }
-
-  .test-tree-row small {
-    display: none;
-  }
-
   .test-authority-layers {
     padding-right: 36px;
     padding-left: 36px;
@@ -391,28 +383,43 @@
     font-size: clamp(32px, 9vw, 43px);
   }
 
-  .test-evidence-observation,
-  .test-evidence-ledger {
+  .test-contract-sources,
+  .test-contract-flow {
     grid-template-columns: 1fr;
   }
 
-  .test-evidence-observation > div:first-child,
-  .test-evidence-ledger > div {
+  .test-contract-sources article {
+    min-height: auto;
     border-right: 0;
     border-bottom: 1px solid var(--test-line);
   }
 
-  .test-evidence-ledger > div:last-child {
+  .test-contract-sources article:last-child {
     border-bottom: 0;
   }
 
-  .test-tree-row {
-    padding-left: 18px;
-    grid-template-columns: 38px 56px minmax(0, 1fr);
+  .test-contract-sources strong {
+    margin-top: 18px;
   }
 
-  .test-tree-row-root {
-    padding-left: 4px;
+  .test-contract-flow {
+    min-height: 0;
+    padding: 14px 18px;
+    gap: 2px;
+  }
+
+  .test-contract-flow article {
+    min-height: 0;
+    padding: 16px 0;
+  }
+
+  .test-contract-flow article.is-result {
+    padding: 16px;
+  }
+
+  .test-contract-flow > svg {
+    justify-self: center;
+    transform: rotate(90deg);
   }
 
   .test-capabilities,
@@ -541,5 +548,13 @@
 
   .test-install-meta button {
     width: 100%;
+  }
+
+  .test-contract-panel figcaption {
+    padding-top: 12px;
+    padding-bottom: 12px;
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 4px;
   }
 }

@@ -13,7 +13,7 @@ export default defineConfig({
   siteOrigin,
   title: 'A3S Test',
   description:
-    'A3S Test helps coding agents understand rendered interfaces, take typed actions, and preserve verifiable regression evidence.',
+    'A3S Test gives coding agents revision-bound page context, reviewed surface contracts, typed actions, and verifiable evidence.',
   lang: 'zh',
   icon: '/a3s-logo.png',
   logo: '/a3s-logo.png',
@@ -36,14 +36,14 @@ export default defineConfig({
       label: '简体中文',
       title: 'A3S Test',
       description:
-        'A3S Test 让编码 Agent 理解真实页面、执行类型化动作，并保存可验证的回归证据。',
+        'A3S Test 为编码 Agent 提供修订绑定的页面上下文、经审阅的界面契约、类型化动作和可验证证据。',
     },
     {
       lang: 'en',
       label: 'English',
       title: 'A3S Test',
       description:
-        'A3S Test helps coding agents understand rendered interfaces, take typed actions, and preserve verifiable regression evidence.',
+        'A3S Test gives coding agents revision-bound page context, reviewed surface contracts, typed actions, and verifiable evidence.',
     },
   ],
   head: [
@@ -63,7 +63,8 @@ export default defineConfig({
       'meta',
       {
         property: 'og:image:alt',
-        content: 'A3S Test understands interfaces and proves every action.',
+        content:
+          'A3S Test connects rendered page context, reviewed contracts, and verifiable actions.',
       },
     ],
     ['meta', { name: 'twitter:card', content: 'summary_large_image' }],

@@ -1,7 +1,7 @@
 import { useLang, useSite, useVersion, withBase } from '@rspress/core/runtime';
 import { ArrowRight, ArrowUpRight } from '@phosphor-icons/react';
 import { useState } from 'react';
-import { EvidencePanel } from './EvidencePanel';
+import { ContractPanel } from './ContractPanel';
 import { InstallSwitcher, installCommandFor } from './InstallSwitcher';
 import { TestKitExperience } from './TestKitExperience';
 import { homeCopy, type Locale } from '../home-copy';
@@ -36,6 +36,19 @@ function MarkdownHome({
       </pre>
       <h2>{copy.proofTitle}</h2>
       <p>{copy.proofBody}</p>
+      <h3>PRD · {copy.contractPrdTitle}</h3>
+      <p>{copy.contractPrdBody}</p>
+      <h3>Design · {copy.contractDesignTitle}</h3>
+      <p>{copy.contractDesignBody}</p>
+      <h3>Page Context · {copy.contractPageTitle}</h3>
+      <p>{copy.contractPageBody}</p>
+      <h3>{copy.contractReviewTitle}</h3>
+      <p>{copy.contractReviewBody}</p>
+      <h3>{copy.contractCompareTitle}</h3>
+      <p>{copy.contractCompareBody}</p>
+      <h3>{copy.contractReportTitle}</h3>
+      <p>{copy.contractReportBody}</p>
+      <p>{copy.contractDisclaimer}</p>
       <h2>{copy.experience.contextTitle}</h2>
       <p>{copy.experience.localOnly}</p>
       <h2>{copy.capabilitiesTitle}</h2>
@@ -46,6 +59,8 @@ function MarkdownHome({
           <code>{item.code}</code>
         </section>
       ))}
+      <h2>{copy.workflowTitle}</h2>
+      <p>{copy.workflowBody}</p>
       <h2>{copy.boundaryTitle}</h2>
       <p>{copy.boundaryBody}</p>
       <h2>{copy.surfacesTitle}</h2>
@@ -148,8 +163,12 @@ export function HomeLayout() {
         <div className="test-section-copy">
           <h2>{copy.proofTitle}</h2>
           <p>{copy.proofBody}</p>
+          <a href={route('/guide/contracts.html')}>
+            {copy.contractGuide}{' '}
+            <ArrowRight aria-hidden="true" size={15} weight="bold" />
+          </a>
         </div>
-        <EvidencePanel labels={copy} locale={locale} />
+        <ContractPanel labels={copy} />
       </section>
 
       <section className="test-section test-capabilities">
@@ -187,7 +206,7 @@ export function HomeLayout() {
             <h3>{copy.workflowAgent}</h3>
             <p>{copy.workflowAgentBody}</p>
             <a href={route('/guide/workflows.html')}>
-              {copy.readDocs}{' '}
+              {copy.workflowAgentLink}{' '}
               <ArrowRight aria-hidden="true" size={15} weight="bold" />
             </a>
           </article>
@@ -195,7 +214,8 @@ export function HomeLayout() {
             <h3>{copy.workflowAcl}</h3>
             <p>{copy.workflowAclBody}</p>
             <a href={route('/guide/workflows.html')}>
-              ACL <ArrowRight aria-hidden="true" size={15} weight="bold" />
+              {copy.workflowAclLink}{' '}
+              <ArrowRight aria-hidden="true" size={15} weight="bold" />
             </a>
           </article>
         </div>
