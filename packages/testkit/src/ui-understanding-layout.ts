@@ -1,4 +1,6 @@
 import type {
+  UIBoxEdges,
+  UIBoxModel,
   UILayoutEdge,
   UILayoutGraph,
   UILayoutNode,
@@ -46,6 +48,7 @@ export function captureUILayoutGraph(
       overflowX,
       overflowY,
       overflowMetrics: captureOverflowMetrics(element, overflowX, overflowY),
+      boxModel: captureBoxModel(element, style, maxStringBytes),
       order: boundedStyleValue(element, style, "order", maxStringBytes) || "0",
       stackingContextReasons: stackingContextReasons(element, style),
     };
@@ -125,6 +128,80 @@ export function captureUILayoutGraph(
     }
   }
   return { nodes, edges };
+}
+
+function captureBoxModel(
+  element: Element,
+  style: CSSStyleDeclaration,
+  maxStringBytes: number,
+): UIBoxModel {
+  return {
+    boxSizing: boxSizing(
+      boundedStyleValue(element, style, "box-sizing", maxStringBytes),
+    ),
+    writingMode: writingMode(
+      boundedStyleValue(element, style, "writing-mode", maxStringBytes),
+    ),
+    direction: textDirection(
+      boundedStyleValue(element, style, "direction", maxStringBytes),
+    ),
+    margin: captureBoxEdges(element, style, "margin-", "", maxStringBytes),
+    borderWidth: captureBoxEdges(
+      element,
+      style,
+      "border-",
+      "-width",
+      maxStringBytes,
+    ),
+    padding: captureBoxEdges(element, style, "padding-", "", maxStringBytes),
+  };
+}
+
+function captureBoxEdges(
+  element: Element,
+  style: CSSStyleDeclaration,
+  prefix: string,
+  suffix: string,
+  maxStringBytes: number,
+): UIBoxEdges {
+  const value = (side: keyof UIBoxEdges): string =>
+    boundedStyleValue(
+      element,
+      style,
+      `${prefix}${side}${suffix}`,
+      maxStringBytes,
+    ) || "0px";
+  return {
+    top: value("top"),
+    right: value("right"),
+    bottom: value("bottom"),
+    left: value("left"),
+  };
+}
+
+function boxSizing(value: string): UIBoxModel["boxSizing"] {
+  if (!value) return "content-box";
+  if (value === "content-box" || value === "border-box") return value;
+  return "unknown";
+}
+
+function writingMode(value: string): UIBoxModel["writingMode"] {
+  if (!value) return "horizontal-tb";
+  if (
+    value === "horizontal-tb" ||
+    value === "vertical-rl" ||
+    value === "vertical-lr" ||
+    value === "sideways-rl" ||
+    value === "sideways-lr"
+  )
+    return value;
+  return "unknown";
+}
+
+function textDirection(value: string): UIBoxModel["direction"] {
+  if (!value) return "ltr";
+  if (value === "ltr" || value === "rtl") return value;
+  return "unknown";
 }
 
 function captureOverflowMetrics(

@@ -340,7 +340,7 @@ is not a requirement.
 
 | Capability family | Existing foundation | Remaining completion work |
 | --- | --- | --- |
-| Autonomous page understanding | Bounded semantic context, component/source boundaries, locator candidates, accessibility state, geometry, observed style profiles, layout graphs with overflow/clipping metrics, repeated-component clusters, state differences, and timeline-aware motion facts | None; keep the browser accessibility tree, Page Context, and UI understanding as independent evidence |
+| Autonomous page understanding | Bounded semantic context, component/source boundaries, locator candidates, accessibility state, geometry, observed style profiles, box-model and overflow-aware layout graphs, repeated-component clusters, state differences, and timeline-aware motion facts | None; keep the browser accessibility tree, Page Context, and UI understanding as independent evidence |
 | Human capture | Element, text, multi-element, rectangular area, freehand drawing, draft edit/delete, and single/selected/all submission | Restore page-local drafts safely, add global marker controls, clear-all, and direct spatial draft editing |
 | Layout authoring | Typed non-mutating placement and rearrangement intents, page/wireframe canvases, purpose, pointer regions, keyboard source selection, and explicit target geometry | Add a searchable 65+ component catalog and adjustable wireframe page fade while preserving free-form component types |
 | Review controls | Pause/resume, manual theme, visible auto-send opt-in, focus restoration, named controls, and live announcements | Add documented global shortcuts with editable-target guards, persisted presentation preferences, explicit interaction blocking, movable docking, and hide-until-tab-restart |
@@ -570,6 +570,9 @@ The completion work intentionally preserves these product boundaries:
       stacking-context relationships as a current-node layout graph
 - [x] Record client and scroll extents, signed scroll offsets, per-axis
       overflow, and derived active clipping with strict consistency checks
+- [x] Record resolved physical margin, border, and padding edges together with
+      box sizing, writing mode, and text direction without deriving logical
+      intent or a second layout tree
 - [x] Cluster repeated structures with deterministic tag, role, semantic
       state, subtree, and style fingerprints instead of class-name guessing
 - [x] Record only naturally observed interaction-state style/accessibility

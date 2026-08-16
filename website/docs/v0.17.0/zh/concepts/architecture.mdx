@@ -42,7 +42,7 @@ Core 不依赖浏览器、桌面感知、终端模拟、CLI 或具体 LLM provid
                        同一份修订绑定的观察
 ```
 
-`a3s.test.page-context/1` Page Context 协议负责组件边界、有界源码提示、多坐标空间几何、visual viewport、受控业务事实和人工修复上下文。它可选嵌套的 `a3s.test.ui-understanding/1` 记录补充浏览器计算出的视觉事实，包括观察到的设计令牌、Flex/Grid/普通流和层叠关系、精确的 client/scroll 尺寸与推导出的裁剪状态、确定性重复结构指纹、真实交互状态差分与时间轴感知的动效证据。
+`a3s.test.page-context/1` Page Context 协议负责组件边界、有界源码提示、多坐标空间几何、visual viewport、受控业务事实和人工修复上下文。它可选嵌套的 `a3s.test.ui-understanding/1` 记录补充浏览器计算出的视觉事实，包括观察到的设计令牌、Flex/Grid/普通流和层叠关系、精确的 client/scroll 尺寸与推导出的裁剪状态、包含书写方向的物理盒模型边值、确定性重复结构指纹、真实交互状态差分与时间轴感知的动效证据。
 
 可访问树仍是语义事实源。UI 理解既不是另一棵可访问树，也不是截图模型；它不能点击、判定测试通过、声称产品意图或授权修复。截图继续由 A3S Test 证据层负责；对于 canvas、远程桌面等缺少有效 DOM 语义的界面，模型理解只是可选的建议层。
 

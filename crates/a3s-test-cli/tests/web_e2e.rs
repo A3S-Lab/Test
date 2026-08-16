@@ -399,6 +399,7 @@ fn real_agent_browser_runs_the_embedded_testkit_suite() {
         "a3s.test.ui-understanding/1",
         "observationId",
         "computed_style",
+        "boxModel",
         "overflowMetrics",
         "responsiveConditions",
         "rangeStarts",
@@ -761,6 +762,25 @@ fn verify_testkit_ui_understanding_through_driver(browser: &Path, origin: &str) 
             && overflow["clipsY"] == true,
         "vertical overflow and clipping evidence is inconsistent: {nested_layout}"
     );
+
+    let box_layout = ui["layout"]["nodes"]
+        .as_array()
+        .and_then(|nodes| {
+            nodes.iter().find(|node| {
+                node.pointer("/boxModel/writingMode")
+                    .and_then(serde_json::Value::as_str)
+                    == Some("vertical-rl")
+                    && node
+                        .pointer("/boxModel/direction")
+                        .and_then(serde_json::Value::as_str)
+                        == Some("rtl")
+            })
+        })
+        .expect("fixture box-model layout evidence");
+    assert_eq!(box_layout["boxModel"]["boxSizing"], "border-box");
+    assert_eq!(box_layout["boxModel"]["margin"]["left"], "16px");
+    assert_eq!(box_layout["boxModel"]["borderWidth"]["right"], "2px");
+    assert_eq!(box_layout["boxModel"]["padding"]["bottom"], "7px");
 
     let animations = ui["motion"]["animations"]
         .as_array()

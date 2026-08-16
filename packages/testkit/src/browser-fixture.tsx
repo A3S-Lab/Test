@@ -238,6 +238,7 @@ function Fixture() {
           <span id="scroll-motion" />
           <span id="view-motion" />
         </div>
+        <div id="box-model-probe">Box model probe</div>
         <section id="audit-controls" aria-labelledby="audit-controls-title">
           <h2 id="audit-controls-title">Screen-reader audit controls</h2>
           <p>

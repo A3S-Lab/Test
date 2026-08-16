@@ -201,6 +201,7 @@ pub struct UiLayoutNode {
     pub overflow_x: String,
     pub overflow_y: String,
     pub overflow_metrics: UiOverflowMetrics,
+    pub box_model: UiBoxModel,
     pub order: String,
     pub stacking_context_reasons: Vec<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -222,6 +223,53 @@ pub struct UiOverflowMetrics {
     pub overflowing_y: bool,
     pub clips_x: bool,
     pub clips_y: bool,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct UiBoxModel {
+    pub box_sizing: UiBoxSizing,
+    pub writing_mode: UiWritingMode,
+    pub direction: UiTextDirection,
+    pub margin: UiBoxEdges,
+    pub border_width: UiBoxEdges,
+    pub padding: UiBoxEdges,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct UiBoxEdges {
+    pub top: String,
+    pub right: String,
+    pub bottom: String,
+    pub left: String,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum UiBoxSizing {
+    ContentBox,
+    BorderBox,
+    Unknown,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum UiWritingMode {
+    HorizontalTb,
+    VerticalRl,
+    VerticalLr,
+    SidewaysRl,
+    SidewaysLr,
+    Unknown,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum UiTextDirection {
+    Ltr,
+    Rtl,
+    Unknown,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
@@ -630,6 +678,7 @@ impl UiUnderstandingSnapshot {
                         || rect.width < 0.0
                         || rect.height < 0.0
                 }) || !valid_overflow_metrics(node)
+                    || !valid_box_model(&node.box_model)
             })
         {
             return Err(UiUnderstandingValidationError::new(
@@ -665,6 +714,20 @@ fn valid_overflow_value(value: &str) -> bool {
         value,
         "visible" | "hidden" | "clip" | "scroll" | "auto" | "overlay"
     )
+}
+
+fn valid_box_model(model: &UiBoxModel) -> bool {
+    valid_box_edges(&model.margin)
+        && valid_box_edges(&model.border_width)
+        && valid_box_edges(&model.padding)
+}
+
+fn valid_box_edges(edges: &UiBoxEdges) -> bool {
+    [&edges.top, &edges.right, &edges.bottom, &edges.left]
+        .into_iter()
+        .all(|value| {
+            !value.is_empty() && value.trim() == value && !value.chars().any(char::is_control)
+        })
 }
 
 fn validate_scope(scope: &UiContextScope) -> Result<(), UiUnderstandingValidationError> {

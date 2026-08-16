@@ -146,7 +146,7 @@ describe("rendered UI understanding", () => {
 
   it("distinguishes overflowing content, active clipping, and animation timelines", () => {
     document.body.innerHTML = `
-      <section id="clipped" dir="rtl" style="overflow-x:hidden;overflow-y:auto">
+      <section id="clipped" dir="rtl" style="box-sizing:border-box;writing-mode:vertical-rl;direction:rtl;margin:4px 8px 12px 16px;border-style:solid;border-width:1px 2px 3px 4px;padding:5px 6px 7px 8px;overflow-x:hidden;overflow-y:auto">
         <div>Wide content</div>
       </section>
       <section id="visible" style="overflow:visible">Visible overflow</section>
@@ -251,6 +251,19 @@ describe("rendered UI understanding", () => {
       overflowingY: false,
       clipsX: true,
       clipsY: false,
+    });
+    expect(clippedLayout.boxModel).toEqual({
+      boxSizing: "border-box",
+      writingMode: "vertical-rl",
+      direction: "rtl",
+      margin: { top: "4px", right: "8px", bottom: "12px", left: "16px" },
+      borderWidth: {
+        top: "1px",
+        right: "2px",
+        bottom: "3px",
+        left: "4px",
+      },
+      padding: { top: "5px", right: "6px", bottom: "7px", left: "8px" },
     });
     expect(visibleLayout.overflowMetrics).toMatchObject({
       overflowingX: true,

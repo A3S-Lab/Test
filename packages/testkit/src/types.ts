@@ -205,6 +205,28 @@ export type UIGridLayout = {
   gap: string;
 };
 
+export type UIBoxEdges = {
+  top: string;
+  right: string;
+  bottom: string;
+  left: string;
+};
+
+export type UIBoxModel = {
+  boxSizing: "content-box" | "border-box" | "unknown";
+  writingMode:
+    | "horizontal-tb"
+    | "vertical-rl"
+    | "vertical-lr"
+    | "sideways-rl"
+    | "sideways-lr"
+    | "unknown";
+  direction: "ltr" | "rtl" | "unknown";
+  margin: UIBoxEdges;
+  borderWidth: UIBoxEdges;
+  padding: UIBoxEdges;
+};
+
 export type UIOverflowMetrics = {
   clientWidth: number;
   clientHeight: number;
@@ -227,6 +249,7 @@ export type UILayoutNode = {
   overflowX: string;
   overflowY: string;
   overflowMetrics: UIOverflowMetrics;
+  boxModel: UIBoxModel;
   order: string;
   stackingContextReasons: string[];
   flex?: UIFlexLayout;

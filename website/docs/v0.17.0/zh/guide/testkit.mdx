@@ -87,15 +87,15 @@ MutationObserver、ResizeObserver、滚动、视口和导航信号会推进修�
 
 每个快照默认包含一个可选的 `a3s.test.ui-understanding/1` 嵌套记录。它补充浏览器可访问树缺少的视觉事实，不创建一棵竞争性的语义树，也不猜测产品意图。
 
-| 证据     | 来自浏览器的事实                                                                                                                                             |
-| -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| 样式画像 | 颜色、字体、间距、圆角、阴影、z-index、安全的根级设计属性和响应式条件。                                                                                      |
-| 布局图   | Flex、Grid、普通流、精确的 client/scroll 尺寸、有符号滚动偏移、逐轴 overflow 与当前裁剪状态、当前盒模型、包含、offset parent、滚动容器和层叠上下文关系。     |
-| 重复结构 | 根据标签、角色、语义状态、有界子树形状和 computed style 生成确定性指纹。类名本身不会被当作组件事实。                                                         |
-| 状态差分 | 从已观察的默认状态到真实 hover、focus、focus-visible、checked、expanded、selected 或 disabled 状态的变化。Test Kit 不会为了采集而主动触发交互。              |
-| 动效画像 | transition、CSS 与 Web Animations、document/scroll/view/具名时间轴、animation range、关键帧名称、sticky 与滚动节点、canvas、媒体界面和 reduced-motion 偏好。 |
+| 证据     | 来自浏览器的事实                                                                                                                                                                                              |
+| -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 样式画像 | 颜色、字体、间距、圆角、阴影、z-index、安全的根级设计属性和响应式条件。                                                                                                                                       |
+| 布局图   | Flex、Grid、普通流、精确的 client/scroll 尺寸、有符号滚动偏移、逐轴 overflow 与当前裁剪状态、物理 margin/border/padding 边值、box sizing、书写模式、文本方向、包含、offset parent、滚动容器和层叠上下文关系。 |
+| 重复结构 | 根据标签、角色、语义状态、有界子树形状和 computed style 生成确定性指纹。类名本身不会被当作组件事实。                                                                                                          |
+| 状态差分 | 从已观察的默认状态到真实 hover、focus、focus-visible、checked、expanded、selected 或 disabled 状态的变化。Test Kit 不会为了采集而主动触发交互。                                                               |
+| 动效画像 | transition、CSS 与 Web Animations、document/scroll/view/具名时间轴、animation range、关键帧名称、sticky 与滚动节点、canvas、媒体界面和 reduced-motion 偏好。                                                  |
 
-记录使用独立的 `observationId`，因为焦点、悬停或运行中的动画可能改变 computed state，却不改变页面语义修订号。它的 `pageRevision`、viewport 与 scope 仍必须和外层 Page Context 一致。浏览器没有暴露已解析的 Web Animations 时间轴时，具名 CSS 时间轴只记录为 `named`，Test Kit 不会猜测它由滚动还是视图驱动。Web 驱动会拒绝过期绑定、未知字段、非法几何、互相矛盾的 overflow/裁剪或时间轴证据、不一致的截断信息和预算越界。
+记录使用独立的 `observationId`，因为焦点、悬停或运行中的动画可能改变 computed state，却不改变页面语义修订号。它的 `pageRevision`、viewport 与 scope 仍必须和外层 Page Context 一致。物理盒模型边值与书写模式、文本方向分别记录，Test Kit 不会据此虚构逻辑布局意图。浏览器没有暴露已解析的 Web Animations 时间轴时，具名 CSS 时间轴只记录为 `named`，Test Kit 不会猜测它由滚动还是视图驱动。Web 驱动会拒绝过期绑定、未知字段、非法几何、格式错误的盒模型证据、互相矛盾的 overflow/裁剪或时间轴证据、不一致的截断信息和预算越界。
 
 默认预算为 200 个采样节点、200 个状态候选、32 毫秒和 256 KiB。`maxUiNodes`、`maxUiStateSamples`、`maxUiDurationMs` 与 `maxUiEncodedBytes` 可以降低安装上限，每次 `snapshot()` 请求还可以继续收紧。单次请求使用 `snapshot({ ui: false })` 关闭；整个安装不需要该投影时使用 `uiUnderstanding={false}`。
 

@@ -240,8 +240,9 @@ After rendering, Test Kit publishes bounded, revisioned context:
   profiles with source counts and confidence.
 - Flex, Grid, flow, scroll-container, and stacking relationships; exact
   client/scroll extents, signed offsets, and derived overflow/clipping state;
-  plus deterministic repeated-component clusters that do not guess from
-  class names alone.
+  resolved physical margin, border, and padding edges with box sizing, writing
+  mode, and text direction; plus deterministic repeated-component clusters
+  that do not guess from class names alone.
 - Real default-to-hover/focus/checked/expanded state differences and bounded
   CSS, Web Animations, document/scroll/view timelines, animation ranges,
   sticky, canvas, media, and responsive evidence.

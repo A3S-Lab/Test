@@ -42,7 +42,7 @@ browser render
                           one revision-bound observation
 ```
 
-Page Context protocol `a3s.test.page-context/1` owns component boundaries, bounded source hints, multi-space geometry, visual viewport state, controlled product facts, and human repair context. Its optional nested `a3s.test.ui-understanding/1` record adds browser-computed visual facts: observed design tokens, Flex/Grid/flow and stacking relationships, exact client/scroll extents with derived clipping state, deterministic repeated-structure fingerprints, real interaction-state differences, and timeline-aware motion evidence.
+Page Context protocol `a3s.test.page-context/1` owns component boundaries, bounded source hints, multi-space geometry, visual viewport state, controlled product facts, and human repair context. Its optional nested `a3s.test.ui-understanding/1` record adds browser-computed visual facts: observed design tokens, Flex/Grid/flow and stacking relationships, exact client/scroll extents with derived clipping state, resolved physical box-model edges with writing direction, deterministic repeated-structure fingerprints, real interaction-state differences, and timeline-aware motion evidence.
 
 The accessibility tree remains the semantic source of truth. UI understanding is neither another accessibility tree nor a screenshot model, and it cannot click, pass a test, claim product intent, or authorize a repair. Screenshots remain A3S Test-owned evidence; model interpretation is an optional advisory layer for surfaces such as canvas or remote desktops that lack useful DOM semantics.
 

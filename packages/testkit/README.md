@@ -62,8 +62,10 @@ Each snapshot also includes bounded `a3s.test.ui-understanding/1` evidence by
 default. It profiles observed colors, typography, spacing, radii, shadows, and
 safe root design properties; publishes Flex/Grid/flow, scroll-container, and
 stacking relationships together with exact client/scroll extents, signed
-offsets, and derived overflow/clipping state; clusters repeated structures
-with deterministic tag/role/subtree/style fingerprints; records real
+offsets, derived overflow/clipping state, resolved physical margin, border,
+and padding edges, box sizing, writing mode, and text direction; clusters
+repeated structures with deterministic tag/role/subtree/style fingerprints;
+records real
 interaction-state differences; and detects responsive conditions, transitions,
 CSS and Web Animations, document/scroll/view timelines, animation ranges,
 sticky nodes, canvas, and media. It never guesses a component from a class

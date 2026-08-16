@@ -51,13 +51,13 @@ pub use reconcile::{
 };
 pub use ui_understanding::{
     UiAccessibilityStateChange, UiAnimationProfile, UiAnimationSource, UiAnimationTimeline,
-    UiAnimationTimelineKind, UiAnimationTimelineSource, UiBaselineState, UiComponentCluster,
-    UiContextScope, UiCoordinateSpace, UiCustomProperty, UiCustomPropertySource,
-    UiEvidenceSourceKind, UiFlexLayout, UiGridLayout, UiLayoutEdge, UiLayoutEdgeRelation,
-    UiLayoutGraph, UiLayoutNode, UiMotionProfile, UiObservedInteractionState, UiObservedToken,
-    UiOverflowMetrics, UiResponsiveCondition, UiResponsiveConditionSource, UiStateDiff,
-    UiStyleChange, UiStyleProfile, UiTransitionProfile, UiTruncationReason, UiTypographyToken,
-    UiUnderstandingBudget, UiUnderstandingBudgetLimits, UiUnderstandingBudgetUsed,
-    UiUnderstandingEvidence, UiUnderstandingSnapshot, UiUnderstandingValidationError,
-    UI_UNDERSTANDING_PROTOCOL,
+    UiAnimationTimelineKind, UiAnimationTimelineSource, UiBaselineState, UiBoxEdges, UiBoxModel,
+    UiBoxSizing, UiComponentCluster, UiContextScope, UiCoordinateSpace, UiCustomProperty,
+    UiCustomPropertySource, UiEvidenceSourceKind, UiFlexLayout, UiGridLayout, UiLayoutEdge,
+    UiLayoutEdgeRelation, UiLayoutGraph, UiLayoutNode, UiMotionProfile, UiObservedInteractionState,
+    UiObservedToken, UiOverflowMetrics, UiResponsiveCondition, UiResponsiveConditionSource,
+    UiStateDiff, UiStyleChange, UiStyleProfile, UiTextDirection, UiTransitionProfile,
+    UiTruncationReason, UiTypographyToken, UiUnderstandingBudget, UiUnderstandingBudgetLimits,
+    UiUnderstandingBudgetUsed, UiUnderstandingEvidence, UiUnderstandingSnapshot,
+    UiUnderstandingValidationError, UiWritingMode, UI_UNDERSTANDING_PROTOCOL,
 };

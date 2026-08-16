@@ -86,6 +86,29 @@ fn snapshot_value() -> serde_json::Value {
                         "clipsX": true,
                         "clipsY": false
                     },
+                    "boxModel": {
+                        "boxSizing": "border-box",
+                        "writingMode": "vertical-rl",
+                        "direction": "rtl",
+                        "margin": {
+                            "top": "4px",
+                            "right": "8px",
+                            "bottom": "12px",
+                            "left": "16px"
+                        },
+                        "borderWidth": {
+                            "top": "1px",
+                            "right": "2px",
+                            "bottom": "3px",
+                            "left": "4px"
+                        },
+                        "padding": {
+                            "top": "5px",
+                            "right": "6px",
+                            "bottom": "7px",
+                            "left": "8px"
+                        }
+                    },
                     "order": "0",
                     "stackingContextReasons": [],
                     "flex": {
@@ -155,6 +178,7 @@ fn admits_typed_ui_understanding_and_preserves_legacy_snapshots() {
     assert_eq!(ui.components[0].member_count, 2);
     assert_eq!(ui.layout.nodes[0].overflow_metrics.scroll_left, -12.0);
     assert!(ui.layout.nodes[0].overflow_metrics.clips_x);
+    assert_eq!(ui.layout.nodes[0].box_model.margin.left, "16px");
     assert_eq!(ui.motion.animations[0].timelines.len(), 2);
     ui.validate(
         snapshot.revision,
@@ -256,6 +280,27 @@ fn rejects_inconsistent_overflow_metrics() {
 
     let mut value = snapshot_value();
     value["ui"]["layout"]["nodes"][0]["overflowMetrics"]["clientHeight"] = json!(-1);
+    let snapshot: PageContextSnapshot =
+        serde_json::from_value(value).expect("structurally typed snapshot");
+    assert!(snapshot
+        .ui
+        .as_ref()
+        .expect("UI understanding")
+        .validate(
+            snapshot.revision,
+            snapshot.page.as_ref().map(|page| &page.viewport),
+        )
+        .is_err());
+}
+
+#[test]
+fn rejects_invalid_box_model_evidence() {
+    let mut value = snapshot_value();
+    value["ui"]["layout"]["nodes"][0]["boxModel"]["writingMode"] = json!("diagonal");
+    assert!(serde_json::from_value::<PageContextSnapshot>(value).is_err());
+
+    let mut value = snapshot_value();
+    value["ui"]["layout"]["nodes"][0]["boxModel"]["padding"]["left"] = json!("");
     let snapshot: PageContextSnapshot =
         serde_json::from_value(value).expect("structurally typed snapshot");
     assert!(snapshot

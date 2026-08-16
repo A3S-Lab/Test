@@ -190,6 +190,29 @@ for one request with `"ui": false`.
             "clipsX": false,
             "clipsY": true
           },
+          "boxModel": {
+            "boxSizing": "border-box",
+            "writingMode": "horizontal-tb",
+            "direction": "ltr",
+            "margin": {
+              "top": "0px",
+              "right": "0px",
+              "bottom": "16px",
+              "left": "0px"
+            },
+            "borderWidth": {
+              "top": "1px",
+              "right": "1px",
+              "bottom": "1px",
+              "left": "1px"
+            },
+            "padding": {
+              "top": "16px",
+              "right": "16px",
+              "bottom": "16px",
+              "left": "16px"
+            }
+          },
           "order": "0",
           "stackingContextReasons": []
         }
@@ -251,7 +274,10 @@ tree:
   containing, offset-parent, scroll-container, and stacking-context
   relationships. Each node also carries exact client and scroll extents,
   signed scroll offsets, per-axis overflow, and whether that overflow is
-  currently clipped.
+  currently clipped. Its `boxModel` preserves the browser-resolved physical
+  top/right/bottom/left margin, border-width, and padding values together with
+  box sizing, writing mode, and text direction. It does not guess a logical
+  layout intent from those facts.
 - `components` contains repeated structures only. A deterministic fingerprint
   combines tag, accessible role, stable semantic state, bounded subtree shape,
   and a computed-style summary. Class names alone cannot create a component
@@ -270,8 +296,9 @@ tree:
 change as focus or an animation changes computed state without advancing the
 page revision. `pageRevision`, viewport, and scope must still match the
 containing Page Context record. The Web driver rejects an unsupported
-protocol, stale binding, invalid identifier or geometry, inconsistent
-overflow/clipping derivation, malformed timeline evidence, unknown field,
+protocol, stale binding, invalid identifier or geometry, malformed box-model
+evidence, inconsistent overflow/clipping derivation, malformed timeline
+evidence, unknown field,
 non-observational confidence, inconsistent truncation, excess JSON depth, or
 any collection/string/encoded-size budget violation.
 
@@ -921,10 +948,11 @@ cargo test -p a3s-test-cli --test repair_e2e --locked -- \
 ```
 
 The real Test Kit browser suite runs separately. It proves page-local draft
-restoration and semantic rebinding, rendered overflow/clipping metrics,
-scroll/view animation timelines, spatial marker editing, keyboard-only review
-controls and multi-selection, explicit host-interaction blocking, searchable
-component selection, pointer-authored Layout placement, and the
+restoration and semantic rebinding, rendered box-model and overflow/clipping
+metrics, scroll/view animation timelines, spatial marker editing,
+keyboard-only review controls and multi-selection, explicit host-interaction
+blocking, searchable component selection, pointer-authored Layout placement,
+and the
 accessibility-tree and focus contracts:
 
 ```bash
