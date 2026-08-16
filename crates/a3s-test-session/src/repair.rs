@@ -144,7 +144,7 @@ impl RepairLedger {
             }
             let event = StoredLedgerEvent::Submitted {
                 session: session.to_string(),
-                finding: finding.clone(),
+                finding: Box::new(finding.clone()),
                 timestamp_ms: now_ms,
             };
             self.append(&event).await?;
@@ -250,7 +250,7 @@ impl RepairLedger {
         let event = StoredLedgerEvent::BeforeEvidence {
             session: session.to_string(),
             finding_id: finding_id.to_string(),
-            evidence: evidence.clone(),
+            evidence: Box::new(evidence.clone()),
         };
         self.append(&event).await?;
         let record = self
@@ -852,6 +852,7 @@ impl RepairLedger {
                 finding,
                 timestamp_ms,
             } => {
+                let finding = *finding;
                 self.admit_session(&session)?;
                 validate_finding(&finding).map_err(|error| {
                     SessionError::new(
@@ -912,6 +913,7 @@ impl RepairLedger {
                 finding_id,
                 evidence,
             } => {
+                let evidence = *evidence;
                 self.admit_session(&session)?;
                 let record = self
                     .records
@@ -973,7 +975,7 @@ pub struct RepairTransition {
 enum StoredLedgerEvent {
     Submitted {
         session: String,
-        finding: RepairFinding,
+        finding: Box<RepairFinding>,
         timestamp_ms: u64,
     },
     Transition {
@@ -982,7 +984,7 @@ enum StoredLedgerEvent {
     BeforeEvidence {
         session: String,
         finding_id: String,
-        evidence: RepairEvidenceBundle,
+        evidence: Box<RepairEvidenceBundle>,
     },
 }
 
