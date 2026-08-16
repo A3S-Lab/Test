@@ -28,10 +28,11 @@ npm run check:site
 
 The repository-level browser regression builds this production site, serves
 it from an isolated loopback origin, and drives the real embedded Test Kit
-experience through single and batch submissions. It also captures a
-focused interactive accessibility tree and a complete semantic tree, requires
-empty console and page-error evidence, and verifies owned browser and server
-cleanup. CI runs this path on macOS and Windows.
+experience through single and batch submissions. It preserves desktop and
+mobile viewport PNG evidence, focused interactive accessibility trees, and
+complete semantic trees; requires empty console and page-error evidence; and
+verifies owned browser and preview-server cleanup. CI runs this path on macOS
+and Windows.
 
 From the repository root, after installing the website and Test Kit
 dependencies plus the admitted standalone browser, run:

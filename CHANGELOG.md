@@ -55,9 +55,7 @@
   verifies PNG identity, viewport dimensions, media type, independent
   accessibility evidence, empty diagnostics, and cleanup.
 - Replaced the homepage's indefinite Page Context loading state with an
-  actionable retry message after the bounded capture deadline, and corrected
-  website regression documentation to describe the semantic evidence it
-  currently retains.
+  actionable retry message after the bounded capture deadline.
 - Scrolled direct ref and CSS click targets into view before dispatch so a
   valid target below the initial viewport cannot report success without
   receiving the click.

@@ -9,6 +9,49 @@ const repositoryRoot = path.resolve(websiteRoot, '..');
 const docsRoot = path.join(websiteRoot, 'docs');
 const failures = [];
 
+const [websiteReadme, websiteRegressionSuite] = await Promise.all([
+  readFile(path.join(websiteRoot, 'README.md'), 'utf8'),
+  readFile(
+    path.join(repositoryRoot, 'tests', 'e2e', 'website-testkit.acl'),
+    'utf8',
+  ),
+]);
+const normalizedWebsiteReadme = websiteReadme.replace(/\s+/g, ' ');
+
+const requiredRegressionActions = [
+  ['screenshot', 'review-screenshot-evidence'],
+  ['accessibility', 'review-evidence'],
+  ['accessibility', 'semantic-evidence'],
+  ['console', 'console-evidence'],
+  ['page_errors', 'page-error-evidence'],
+  ['screenshot', 'mobile-layout-screenshot-evidence'],
+  ['accessibility', 'mobile-layout-evidence'],
+  ['accessibility', 'mobile-semantic-evidence'],
+  ['console', 'mobile-console-evidence'],
+  ['page_errors', 'mobile-page-error-evidence'],
+];
+
+for (const [action, name] of requiredRegressionActions) {
+  if (!websiteRegressionSuite.includes(`${action} "${name}" {`)) {
+    failures.push(
+      `Website regression suite lacks the ${action} action ${name}.`,
+    );
+  }
+}
+
+for (const claim of [
+  'desktop and mobile viewport PNG evidence',
+  'focused interactive accessibility trees',
+  'complete semantic trees',
+  'empty console and page-error evidence',
+  'owned browser and preview-server cleanup',
+  'macOS and Windows',
+]) {
+  if (!normalizedWebsiteReadme.includes(claim)) {
+    failures.push(`Website README lacks the evidence claim: ${claim}.`);
+  }
+}
+
 async function fileExists(filename) {
   try {
     await readFile(filename);
