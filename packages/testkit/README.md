@@ -88,9 +88,10 @@ Call `snapshot({ ui: false })` to omit it once, or set
 `uiUnderstanding={false}` for the installation. Callers may only lower the
 installed node, state, string, byte, and time ceilings. UI evidence binds its
 own observation ID to the containing page revision, viewport, and scope; the
-Web driver rejects protocol drift, stale bindings, invalid geometry, and
-budget violations. It remains untrusted evidence with no action, verdict, or
-repair authority.
+Web driver rejects protocol drift, stale bindings, invalid geometry,
+duplicate graph relationships, dangling edge targets, invalid component
+membership, and budget violations. It remains untrusted evidence with no
+action, verdict, or repair authority.
 
 ## Deterministic quality findings
 

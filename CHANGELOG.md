@@ -49,6 +49,11 @@
 
 ### Fixed
 
+- Rejected structurally ambiguous rendered UI evidence at the Rust Web-driver
+  boundary. Duplicate layout nodes or edges, dangling edge targets,
+  contradictory containment, repeated evidence references, invalid component
+  membership, and layout counts above the sampled-node count now fail closed
+  before reaching an agent.
 - Restored desktop and mobile PNG evidence to the production website browser
   regression. Empty or greater-than-32-MiB Web screenshots are now rejected
   with an immediate artifact-cleanup attempt, while the pinned-runtime suite

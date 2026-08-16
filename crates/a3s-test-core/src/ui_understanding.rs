@@ -5,6 +5,8 @@ use std::fmt::{Display, Formatter};
 
 use crate::model::{PageContextRect, PageContextViewport};
 
+mod integrity;
+
 pub const UI_UNDERSTANDING_PROTOCOL: &str = "a3s.test.ui-understanding/1";
 const MAX_UI_NODES: u64 = 1_000;
 const MAX_UI_STATE_SAMPLES: u64 = 1_000;
@@ -490,6 +492,7 @@ impl UiUnderstandingSnapshot {
         self.validate_collection_bounds()?;
         self.validate_evidence()?;
         self.validate_values()?;
+        integrity::validate(self)?;
 
         let encoded = serde_json::to_vec(self).map_err(|_| {
             UiUnderstandingValidationError::new("UI understanding cannot be encoded")

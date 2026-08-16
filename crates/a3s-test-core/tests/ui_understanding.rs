@@ -168,6 +168,16 @@ fn snapshot_value() -> serde_json::Value {
     })
 }
 
+fn assert_ui_validation_fails(value: serde_json::Value, case: &str) {
+    let snapshot: PageContextSnapshot =
+        serde_json::from_value(value).expect("structurally typed snapshot");
+    let result = snapshot.ui.as_ref().expect("UI understanding").validate(
+        snapshot.revision,
+        snapshot.page.as_ref().map(|page| &page.viewport),
+    );
+    assert!(result.is_err(), "accepted {case}");
+}
+
 #[test]
 fn admits_typed_ui_understanding_and_preserves_legacy_snapshots() {
     let snapshot: PageContextSnapshot =
@@ -312,6 +322,71 @@ fn rejects_invalid_box_model_evidence() {
             snapshot.page.as_ref().map(|page| &page.viewport),
         )
         .is_err());
+}
+
+#[test]
+fn rejects_inconsistent_ui_graph_and_reference_sets() {
+    let mut value = snapshot_value();
+    let duplicate = value["ui"]["layout"]["nodes"][0].clone();
+    value["ui"]["layout"]["nodes"]
+        .as_array_mut()
+        .expect("layout nodes")
+        .push(duplicate);
+    assert_ui_validation_fails(value, "duplicate layout node ids");
+
+    let mut value = snapshot_value();
+    value["ui"]["layout"]["edges"] = json!([{
+        "fromNodeId": "n1",
+        "toNodeId": "missing",
+        "relation": "contains"
+    }]);
+    assert_ui_validation_fails(value, "layout edge with a missing target");
+
+    let mut value = snapshot_value();
+    value["ui"]["layout"]["nodes"][0]["parentNodeId"] = json!("n2");
+    value["ui"]["layout"]["edges"] = json!([{
+        "fromNodeId": "n3",
+        "toNodeId": "n1",
+        "relation": "contains"
+    }]);
+    assert_ui_validation_fails(value, "contradictory containment edge");
+
+    let mut value = snapshot_value();
+    value["ui"]["layout"]["edges"] = json!([{
+        "fromNodeId": "n2",
+        "toNodeId": "n1",
+        "relation": "scroll_container"
+    }, {
+        "fromNodeId": "n2",
+        "toNodeId": "n1",
+        "relation": "scroll_container"
+    }]);
+    assert_ui_validation_fails(value, "duplicate layout edges");
+
+    let mut value = snapshot_value();
+    value["ui"]["evidence"]["sourceKinds"] = json!([
+        "computed_style",
+        "computed_style",
+        "dom_structure",
+        "layout_geometry"
+    ]);
+    assert_ui_validation_fails(value, "duplicate evidence sources");
+
+    let mut value = snapshot_value();
+    value["ui"]["evidence"]["sampledNodeIds"] = json!(["n1", "n1"]);
+    assert_ui_validation_fails(value, "duplicate sampled node ids");
+
+    let mut value = snapshot_value();
+    value["ui"]["components"][0]["representativeNodeId"] = json!("n9");
+    assert_ui_validation_fails(value, "unbound component representative");
+
+    let mut value = snapshot_value();
+    value["ui"]["components"][0]["memberNodeIds"] = json!(["n2", "n2"]);
+    assert_ui_validation_fails(value, "duplicate component members");
+
+    let mut value = snapshot_value();
+    value["ui"]["budget"]["used"]["nodes"] = json!(0);
+    assert_ui_validation_fails(value, "layout larger than the sampled node set");
 }
 
 #[test]
