@@ -231,7 +231,9 @@ The review surface follows `<html lang>` by default and provides complete
 English and Simplified Chinese workflow copy, including status announcements
 and accessible names. Applications can pin `locale="en"` or `locale="zh-CN"`
 and override known, bounded presentation messages without changing the page
-context or repair protocols.
+context or repair protocols. Automatic mode observes live language changes;
+the Layout catalog displays and searches all 90 built-in component types in
+either language while leaving project-specific free-form values untouched.
 
 The Web adapter resolves role, label, test ID, and placeholder targets across
 light DOM and open Shadow DOM for click, fill, and check actions. Pointer

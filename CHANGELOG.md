@@ -8,7 +8,9 @@
   status labels, live announcements, and accessible names. The new
   `locale="auto" | "en" | "zh-CN"` option follows the page language by
   default, while typed `messages` overrides admit only known, non-empty values
-  up to 2,048 characters.
+  up to 2,048 characters. Automatic locale resolution observes live
+  `<html lang>` changes, and the 90-entry Layout catalog presents and searches
+  both English and Chinese component names.
 - Added a loopback-only independent screen-reader audit fixture, canonical
   15-workflow manifest, strict revision-bound audit artifact, bounded evidence
   verifier, and separate all-passed closure gate. The shared real-browser
@@ -68,6 +70,11 @@
 
 ### Fixed
 
+- Preserved free-form Layout component values across locale changes while
+  translating known catalog selections, so a Chinese search such as `结账`
+  finds and selects `结账表单` without leaving English UI copy behind. The Web
+  driver's Shadow DOM fallback now preserves the native `searchbox` role for
+  `<input type="search">` during semantic fill and visibility checks.
 - Corrected localized Layout labels and made pointer multi-selection derive its
   displayed count from selected node IDs instead of parsing English copy.
 - Separated staged documentation from the published install version. The

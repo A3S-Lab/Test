@@ -176,7 +176,7 @@ snapshot. Pages without the SDK retain the existing Web behavior.
       normalized coordinates in the real Test Kit browser suite
 - [x] Resolve role, label, test ID, and placeholder targets across light DOM
       and open Shadow DOM for click, fill, and check actions, including native
-      pointer clicks bound to post-scroll coordinates
+      `searchbox` semantics and pointer clicks bound to post-scroll coordinates
 - [x] Build the production Rspress site inside the real-browser suite and
       verify single submission, ordered batch submission, screenshot,
       accessibility, empty browser diagnostics, and exact cleanup on macOS and
@@ -247,7 +247,9 @@ snapshot. Pages without the SDK retain the existing Web behavior.
 - [x] Localize the complete review workflow in English and Simplified Chinese,
       follow the page language by default, expose bounded host copy overrides,
       and keep visible text, live announcements, status labels, and accessible
-      names on one typed message catalog
+      names on one typed message catalog; observe live page-language changes
+      and localize plus search all built-in Layout catalog entries without
+      rewriting project-specific free-form component values
 - [ ] Complete and independently audit every review workflow with a screen
       reader
 

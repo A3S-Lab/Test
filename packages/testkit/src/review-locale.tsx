@@ -1,4 +1,4 @@
-import { createContext, useContext, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import type { SelectionMode } from "./review-model";
 import type { RepairStatus, RepairTarget, SubmittedRepair } from "./types";
 
@@ -314,6 +314,8 @@ export type A3SReviewLocale = "auto" | "en" | "zh-CN";
 export type ResolvedReviewLocale = Exclude<A3SReviewLocale, "auto">;
 export type ReviewMessageValues = Record<string, string | number>;
 export type ReviewTranslator = (key: A3SReviewMessageKey, values?: ReviewMessageValues) => string;
+
+const EMPTY_REVIEW_MESSAGE_OVERRIDES: A3SReviewMessageOverrides = {};
 
 const ZH_CN_REVIEW_MESSAGES: Record<A3SReviewMessageKey, string> = {
   reviewTitle: "评审",
@@ -702,9 +704,40 @@ export function useReviewI18n(): ReviewI18n {
   return useContext(ReviewI18nContext);
 }
 
+export function useReviewI18nConfig(
+  locale: A3SReviewLocale = "auto",
+  overrides?: A3SReviewMessageOverrides,
+): ReviewI18n {
+  const [pageLanguage, setPageLanguage] = useState(readPageLanguage);
+  const admittedOverrides = overrides ?? EMPTY_REVIEW_MESSAGE_OVERRIDES;
+
+  useEffect(() => {
+    if (locale !== "auto" || typeof document === "undefined") return;
+    const root = document.documentElement;
+    const update = () => {
+      const next = root.lang;
+      setPageLanguage((current) => current === next ? current : next);
+    };
+    update();
+    if (typeof MutationObserver === "undefined") return;
+    const observer = new MutationObserver(update);
+    observer.observe(root, { attributes: true, attributeFilter: ["lang"] });
+    return () => observer.disconnect();
+  }, [locale]);
+
+  return useMemo(
+    () => createReviewI18n(locale, admittedOverrides, pageLanguage),
+    [locale, admittedOverrides, pageLanguage],
+  );
+}
+
 export function resolveReviewLocale(locale: A3SReviewLocale = "auto", pageLanguage = ""): ResolvedReviewLocale {
   const candidate = locale === "auto" ? pageLanguage : locale;
   return candidate.trim().toLowerCase().startsWith("zh") ? "zh-CN" : "en";
+}
+
+function readPageLanguage(): string {
+  return typeof document === "undefined" ? "" : document.documentElement.lang;
 }
 
 export function createReviewI18n(

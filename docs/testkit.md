@@ -257,11 +257,11 @@ fails with a contextual error.
 ### Review language and host copy
 
 `A3SReviewOverlay` accepts `locale="auto" | "en" | "zh-CN"`. The default,
-`auto`, reads `document.documentElement.lang` when the overlay renders. Every
-`zh-*` language tag resolves to the Simplified Chinese review UI; other tags
-resolve to English. The resolved language is also set on the Shadow DOM review
-root so localized control names, status labels, live announcements, and text
-use the correct language context.
+`auto`, observes `document.documentElement.lang` while the overlay is mounted.
+Every `zh-*` language tag resolves to the Simplified Chinese review UI; other
+tags resolve to English. A live `lang` change updates the Shadow DOM review
+root, control names, status labels, announcements, and built-in component
+labels without remounting the overlay.
 
 Set a language explicitly when the review surface should not follow the page:
 
@@ -396,12 +396,13 @@ path as element marking. Layout drafts can be edited, selected, and submitted
 in the same stable batch order as other findings.
 
 For placement, the component catalog provides 90 independently defined common
-Web component types in ten purpose-based categories. Search matches category,
-component name, and bounded local synonyms such as `one-time code`; every
-result is a native keyboard-operable button. Catalog selection fills the
-explicit component-type field. Reviewers can always ignore the catalog and
-enter a free-form component type, including a project-specific component that
-is not listed. Search terms and catalog entries are presentation data only and
+Web component types in ten purpose-based categories. Every category and
+component has English and Simplified Chinese presentation names; search
+matches either language plus bounded local synonyms such as `one-time code`.
+Every result is a native keyboard-operable button, and catalog selection fills
+the component-type field in the current locale. A known selection follows a
+live locale change, while a free-form project-specific value is preserved
+verbatim. Search terms and catalog entries are presentation data only and
 never become hidden repair instructions.
 
 All layout rectangles use viewport CSS pixels. The wireframe grid and its

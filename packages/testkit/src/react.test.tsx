@@ -64,7 +64,22 @@ describe("React adapter and review overlay", () => {
 
     fireEvent.click(moreTools);
     fireEvent.click(shadowButton("布局"));
-    expect((shadowQuery("[aria-label='布局组件类型']") as HTMLInputElement).value).toBe("区块");
+    const componentType = shadowQuery("[aria-label='布局组件类型']") as HTMLInputElement;
+    expect(componentType.value).toBe("区块");
+    fireEvent.click(shadowButton("组件目录 · 90"));
+    fireEvent.change(shadowQuery("[aria-label='搜索组件目录']"), { target: { value: "结账" } });
+    expect(shadowButton("结账表单")).toBeTruthy();
+    fireEvent.click(shadowButton("结账表单"));
+    expect(componentType.value).toBe("结账表单");
+
+    document.documentElement.lang = "en-US";
+    await waitFor(() => expect(root.lang).toBe("en"));
+    expect(componentType.value).toBe("Checkout Form");
+    expect(shadowButton("Element")).toBeTruthy();
+    fireEvent.change(componentType, { target: { value: "Custom orbit panel" } });
+    document.documentElement.lang = "zh-CN";
+    await waitFor(() => expect(root.lang).toBe("zh-CN"));
+    expect(componentType.value).toBe("Custom orbit panel");
     fireEvent.click(moreTools);
     fireEvent.click(shadowButton("布局"));
 

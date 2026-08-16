@@ -264,6 +264,7 @@ const SEMANTIC_SHADOW_TARGET_QUERY: &str = r#"
       if (element.type === "checkbox") return "checkbox";
       if (element.type === "radio") return "radio";
       if (element.type === "range") return "slider";
+      if (element.type === "search") return "searchbox";
       return "textbox";
     }
     return ({ a:"link", button:"button", h1:"heading", h2:"heading", h3:"heading", h4:"heading", h5:"heading", h6:"heading", img:"img", nav:"navigation", main:"main", form:"form", table:"table", textarea:"textbox", select:"combobox" })[tag] || "";
@@ -368,6 +369,7 @@ fn semantic_visibility_expression(target: &Target) -> Result<String, DriverError
       if (element.type === "checkbox") return "checkbox";
       if (element.type === "radio") return "radio";
       if (element.type === "range") return "slider";
+      if (element.type === "search") return "searchbox";
       return "textbox";
     }}
     return ({{ a:"link", button:"button", h1:"heading", h2:"heading", h3:"heading", h4:"heading", h5:"heading", h6:"heading", img:"img", nav:"navigation", main:"main", form:"form", table:"table", textarea:"textbox", select:"combobox" }})[tag] || "";
@@ -496,7 +498,10 @@ mod tests {
     use a3s_test_core::{LoadState, Target, WaitCondition};
     use serde_json::json;
 
-    use super::{invocation, scalar_bool, semantic_target_action_args, visibility_args, wait_args};
+    use super::{
+        invocation, scalar_bool, semantic_target_action_args, semantic_visibility_expression,
+        visibility_args, wait_args,
+    };
     use crate::{AgentBrowserConfig, BrowserCommand, BrowserNetworkPolicy};
 
     #[test]
@@ -642,5 +647,24 @@ mod tests {
         assert!(fill.contains("HTMLTextAreaElement.prototype"));
         assert!(fill.contains(r#"Use a \"quoted\" label"#));
         assert!(fill.contains(r#"new Event("input""#));
+    }
+
+    #[test]
+    fn semantic_shadow_dom_targets_preserve_the_searchbox_role() {
+        let target = Target::Role {
+            role: "searchbox".to_string(),
+            name: "Search component catalog".to_string(),
+        };
+        let fill = semantic_target_action_args(&target, "fill", Some("checkout"))
+            .expect("Shadow DOM searchbox fallback")
+            .expect("semantic target fallback");
+        let fill = fill[1].to_string_lossy();
+        assert!(fill.contains(r#"element.type === "search""#));
+        assert!(fill.contains(r#"return "searchbox""#));
+
+        let visibility = semantic_visibility_expression(&target)
+            .expect("Shadow DOM searchbox visibility expression");
+        assert!(visibility.contains(r#"element.type === "search""#));
+        assert!(visibility.contains(r#"return "searchbox""#));
     }
 }

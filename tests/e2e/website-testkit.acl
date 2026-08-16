@@ -250,6 +250,31 @@ suite "website-testkit-experience" {
             interactive = true
         }
 
+        click "mobile-open-component-catalog" {
+            target = role("button", "组件目录 · 90")
+        }
+
+        snapshot "mobile-component-catalog-open" {
+            interactive = true
+        }
+
+        fill "mobile-search-component-catalog" {
+            target = role("searchbox", "搜索组件目录")
+            value = "结账"
+        }
+
+        wait "mobile-chinese-component-result" {
+            visible = role("button", "结账表单")
+        }
+
+        click "mobile-choose-chinese-component" {
+            target = role("button", "结账表单")
+        }
+
+        snapshot "mobile-localized-layout-component" {
+            interactive = true
+        }
+
         screenshot "mobile-layout-evidence" {
             path = "screenshots/website-testkit-mobile.png"
         }

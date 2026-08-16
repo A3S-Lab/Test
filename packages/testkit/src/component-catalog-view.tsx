@@ -1,5 +1,6 @@
 import { useId, useMemo, useState } from "react";
 import {
+  componentCatalogItemLabel,
   componentCatalogSize,
   filterComponentCatalog,
 } from "./component-catalog";
@@ -14,7 +15,7 @@ export function ComponentCatalogView({
   selected,
   onSelect,
 }: ComponentCatalogViewProps) {
-  const { t } = useReviewI18n();
+  const { locale, t } = useReviewI18n();
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
   const resultsId = `${useId().replace(/:/g, "")}-component-catalog`;
@@ -33,7 +34,11 @@ export function ComponentCatalogView({
       <div className="a3s-catalog-results" aria-label={t("componentCatalogResults")}>
       {groups.map((group) => <section key={group.name} aria-label={reviewCategoryLabel(t, group.name)}>
         <strong>{reviewCategoryLabel(t, group.name)}</strong>
-        <div>{group.components.map((component) => <button key={component.name} type="button" aria-pressed={component.name === selected} className={component.name === selected ? "selected" : ""} onClick={() => onSelect(component.name)}>{component.name}</button>)}</div>
+        <div>{group.components.map((component) => {
+          const label = componentCatalogItemLabel(component, locale);
+          const isSelected = component.name === selected || component.zhCNName === selected;
+          return <button key={component.name} type="button" aria-pressed={isSelected} className={isSelected ? "selected" : ""} onClick={() => onSelect(label)}>{label}</button>;
+        })}</div>
       </section>)}
       {groups.length === 0 && <p className="a3s-catalog-empty">{t("noCatalogMatches")}</p>}
       </div>

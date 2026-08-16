@@ -37,9 +37,9 @@ the provider, component boundary, and optional Shadow DOM review overlay.
 configuration fails closed.
 
 The review UI supports `locale="auto" | "en" | "zh-CN"`. `auto` is the
-default and resolves every `zh-*` page language to Simplified Chinese; other
-page languages use English. Set the locale explicitly when the overlay should
-not follow `<html lang>`:
+default and observes `<html lang>` while mounted, resolving every `zh-*` page
+language to Simplified Chinese and other page languages to English. Set the
+locale explicitly when the overlay should not follow the host page:
 
 ```tsx
 <A3SReviewOverlay
@@ -143,9 +143,11 @@ markers, draft editing/hiding, animation pause, system/light/dark themes,
 bounded structured copy, and typed Layout Mode. Layout Mode can draw the
 viewport region for a new component or select an existing section and describe
 its destination. Its searchable catalog contains 90 component types across ten
-categories, while the component field remains free-form for project-specific
-types. It emits `placement` or `rearrange` intent for A3S Test and does not move
-or style application DOM itself. Submitted findings support human/agent
+categories, with complete English and Simplified Chinese labels and search.
+Known catalog selections follow a live locale change, while the component
+field preserves project-specific free-form values. It emits `placement` or
+`rearrange` intent for A3S Test and does not move or style application DOM
+itself. Submitted findings support human/agent
 replies, accept/reject/reopen review actions, and per-finding lifecycle
 projection.
 

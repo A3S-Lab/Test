@@ -1,4 +1,4 @@
-import { useEffect, useId, useMemo, useRef, useState, type CSSProperties } from "react";
+import { useEffect, useId, useRef, useState, type CSSProperties } from "react";
 import { createPortal } from "react-dom";
 import { useBrowserLayoutEffect } from "./react-effect";
 import { getPageContextBridge } from "./runtime";
@@ -19,10 +19,11 @@ export type { A3SReviewCopyEvent, A3SReviewOverlayProps } from "./review-overlay
 export type { A3SReviewLocale, A3SReviewMessageKey, A3SReviewMessageOverrides } from "./review-locale";
 import { DEFAULT_REVIEW_PREFERENCES, loadReviewPreferences, loadReviewTabHidden, saveReviewPreferences, saveReviewTabHidden, type ReviewPreferences } from "./review-preferences";
 import { type LayoutCanvas, type LayoutSource, type SelectionMode } from "./review-model";
-import { createReviewI18n, ReviewI18nProvider, reviewActorLabel, reviewModeHint, reviewRepairAnnouncement, reviewStatusLabel, reviewTargetSummary } from "./review-locale";
+import { ReviewI18nProvider, reviewActorLabel, reviewModeHint, reviewRepairAnnouncement, reviewStatusLabel, reviewTargetSummary, useReviewI18nConfig } from "./review-locale";
 import { appendDrawingPoint, drawingBounds, normalizedArea, rectStyle, rectValue, removeDraft, repairId, validLayoutRect } from "./review-utils";
 import { ReviewMarkers } from "./review-markers";
 import type { DesignAuditFinding, DesignAuditReportRecord, PageContextBridge, QualityFinding, QualityReportRecord, RepairDraft, RepairIntent, RepairSeverity, RepairTarget, Rect, SubmittedRepair } from "./types";
+import { useLocalizedLayoutComponentType } from "./use-localized-layout-component-type";
 
 type CandidateSource =
   | { kind: "quality"; selection: QualitySelection }
@@ -42,8 +43,7 @@ export function A3SReviewOverlay({
   onDraftsCleared,
   onSubmitted,
 }: A3SReviewOverlayProps) {
-  const pageLanguage = typeof document === "undefined" ? "" : document.documentElement.lang;
-  const reviewI18n = useMemo(() => createReviewI18n(locale, messages, pageLanguage), [locale, messages, pageLanguage]);
+  const reviewI18n = useReviewI18nConfig(locale, messages);
   const { t } = reviewI18n;
   const callbacks = useLatest({
     copyToClipboard,
@@ -81,7 +81,7 @@ export function A3SReviewOverlay({
   const [layoutMode, setLayoutMode] = useState(false);
   const [layoutPurpose, setLayoutPurpose] = useState("");
   const [layoutCanvas, setLayoutCanvas] = useState<LayoutCanvas>("page");
-  const [layoutComponentType, setLayoutComponentType] = useState(() => reviewI18n.locale === "zh-CN" ? "区块" : "Section");
+  const [layoutComponentType, setLayoutComponentType] = useLocalizedLayoutComponentType(reviewI18n.locale);
   const [layoutSource, setLayoutSource] = useState<LayoutSource | null>(null);
   const [layoutTarget, setLayoutTarget] = useState<Rect>({ x: 40, y: 120, width: 640, height: 240 });
   const [drafts, setDrafts] = useState<ReviewDraftItem[]>([]);

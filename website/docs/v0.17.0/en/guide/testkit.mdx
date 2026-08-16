@@ -54,9 +54,9 @@ The framework-neutral entry exports `installTestKit`, `getPageContextBridge`, an
 ## Review language and project copy
 
 `A3SReviewOverlay` supports `locale="auto" | "en" | "zh-CN"`. The default,
-`auto`, follows `<html lang>`: every `zh-*` tag selects Simplified Chinese and
-other languages use English. Pass an explicit locale when the review surface
-must not follow the host page.
+`auto`, observes `<html lang>` while mounted: every `zh-*` tag selects
+Simplified Chinese and other languages use English. Pass an explicit locale
+when the review surface must not follow the host page.
 
 Projects can override a bounded subset of interface copy:
 
@@ -117,6 +117,8 @@ returns to a durable control after closing an editor, cancelling marking, or
 hiding the UI. Localization does not alter page-context or repair protocols.
 
 Layout Mode emits only typed `placement` or `rearrange` intent with viewport CSS-pixel targets. It never moves, reorders, or styles the host DOM.
+
+Its 90 built-in component types display and search in both English and Simplified Chinese. A known catalog selection follows a live locale change, while a project-specific free-form component value remains unchanged.
 
 ## Security boundary
 
