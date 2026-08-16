@@ -630,7 +630,7 @@ async fn rejects_changed_sources_stale_provenance_and_unbounded_or_cancelled_cal
             b"changed during provider call".to_vec(),
         ),
     );
-    let error = service(mutating_provider.clone())
+    let error = service_with_timeout(mutating_provider.clone(), Duration::from_secs(2))
         .generate(
             "checkout",
             context(),
@@ -728,8 +728,16 @@ async fn assert_invalid_response(source: ContractSource, candidate: ContractCand
 }
 
 fn service(provider: Arc<FakeProvider>) -> ContractGenerationService {
-    ContractGenerationService::new(provider, generation_options())
-        .expect("valid generation service")
+    service_with_timeout(provider, generation_options().timeout)
+}
+
+fn service_with_timeout(
+    provider: Arc<FakeProvider>,
+    timeout: Duration,
+) -> ContractGenerationService {
+    let mut options = generation_options();
+    options.timeout = timeout;
+    ContractGenerationService::new(provider, options).expect("valid generation service")
 }
 
 fn generation_options() -> ContractGenerationOptions {

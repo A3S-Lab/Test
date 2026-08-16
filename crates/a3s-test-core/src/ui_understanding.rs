@@ -537,7 +537,7 @@ impl UiUnderstandingSnapshot {
         }
         if self.budget.reasons.len() > 4
             || has_duplicates(self.budget.reasons.iter().map(|reason| *reason as u8))
-            || self.budget.truncated != !self.budget.reasons.is_empty()
+            || self.budget.truncated == self.budget.reasons.is_empty()
         {
             return Err(UiUnderstandingValidationError::new(
                 "UI understanding truncation metadata is inconsistent",
