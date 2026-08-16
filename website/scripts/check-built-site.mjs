@@ -83,15 +83,36 @@ const javascriptFiles = await collectFiles(
   path.join(outputRoot, 'static', 'js'),
   (filename) => filename.endsWith('.js'),
 );
+const stylesheetFiles = await collectFiles(
+  path.join(outputRoot, 'static', 'css'),
+  (filename) => filename.endsWith('.css'),
+);
 const javascript = (
   await Promise.all(
     javascriptFiles.map((filename) => readFile(filename, 'utf8')),
+  )
+).join('\n');
+const stylesheets = (
+  await Promise.all(
+    stylesheetFiles.map((filename) => readFile(filename, 'utf8')),
   )
 ).join('\n');
 
 const rootHtml = await readFile(path.join(outputRoot, 'index.html'), 'utf8');
 const englishHtml = await readFile(
   path.join(outputRoot, 'en', 'index.html'),
+  'utf8',
+);
+const installationHtml = await readFile(
+  path.join(outputRoot, 'guide', 'installation.html'),
+  'utf8',
+);
+const testKitHtml = await readFile(
+  path.join(outputRoot, 'guide', 'testkit.html'),
+  'utf8',
+);
+const contractsHtml = await readFile(
+  path.join(outputRoot, 'guide', 'contracts.html'),
   'utf8',
 );
 const rootMarkdown = await readFile(path.join(outputRoot, 'index.md'), 'utf8');
@@ -177,6 +198,47 @@ if (
 }
 if (!rootHtml.includes(`${base}social-card.png`)) {
   failures.push('homepage lacks the raster Open Graph image');
+}
+
+const requiredLightCodeTheme = [
+  '--rp-code-block-color:#2e3440',
+  '--rp-code-block-bg:var(--rp-c-bg)',
+  '--shiki-token-constant:#1976d2',
+  '--shiki-token-string:#31a94d',
+  '--shiki-token-keyword:#cf2727',
+  '--shiki-token-function:#7041c8',
+  '--shiki-token-string-expression:#218438',
+];
+for (const contract of requiredLightCodeTheme) {
+  if (!stylesheets.includes(contract)) {
+    failures.push(`documentation CSS lacks light code theme ${contract}`);
+  }
+}
+if (
+  stylesheets.includes('--rp-code-block-bg:#0d1b2f') ||
+  stylesheets.includes('background:#0d1b2f!important')
+) {
+  failures.push('documentation CSS restores the obsolete forced dark code');
+}
+if (!stylesheets.includes('.rp-doc.rspress-doc{')) {
+  failures.push('documentation typography is not scoped to the content root');
+}
+if (!installationHtml.includes('data-lang="powershell"')) {
+  failures.push('installation guide lacks highlighted PowerShell code');
+}
+if (
+  !testKitHtml.includes('data-lang="tsx"') ||
+  !testKitHtml.includes('var(--shiki-token-constant)')
+) {
+  failures.push('Test Kit guide lacks highlighted TSX code');
+}
+if (
+  !contractsHtml.includes('class="rp-codeblock language-acl"') ||
+  !contractsHtml.includes('data-lang="acl"') ||
+  !contractsHtml.includes('var(--shiki-token-keyword)') ||
+  !contractsHtml.includes('var(--shiki-token-string-expression)')
+) {
+  failures.push('contract guide lacks highlighted ACL code');
 }
 
 for (const version of versions.filter((entry) => entry !== defaultVersion)) {

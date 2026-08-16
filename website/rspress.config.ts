@@ -1,5 +1,6 @@
 import * as path from 'node:path';
 import { defineConfig } from '@rspress/core';
+import { aclLanguage } from './acl-language';
 import { remarkAclSyntax } from './remark-acl-syntax';
 import { defaultVersion, versions } from './versions.mjs';
 
@@ -21,6 +22,9 @@ export default defineConfig({
   llms: true,
   markdown: {
     remarkPlugins: [remarkAclSyntax],
+    shiki: {
+      langs: ['tsx', 'ts', 'js', aclLanguage],
+    },
   },
   multiVersion: {
     default: defaultVersion,

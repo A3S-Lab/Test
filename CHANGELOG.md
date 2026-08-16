@@ -1,5 +1,20 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+
+- Aligned documentation typography, tables, inline code, and light syntax
+  rendering with the A3S UI documentation system. ACL examples now use a
+  dedicated presentation grammar while product parsing remains owned by
+  `a3s-acl`.
+
+### Fixed
+
+- Removed the forced dark documentation code theme and limited content
+  typography to the real Rspress document root so sidebar labels retain their
+  intended density.
+
 ## 0.17.0 - 2026-08-16
 
 ### Added

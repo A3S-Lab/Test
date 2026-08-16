@@ -14,7 +14,7 @@
   --rp-c-text-2: #56657b;
   --rp-c-text-3: #5f6d84;
   --rp-nav-height: 72px;
-  --rp-content-max-width: 940px;
+  --rp-content-max-width: 920px;
   --test-bg: #f8fbff;
   --test-paper: #f3f5f8;
   --test-surface: #ffffff;
@@ -142,7 +142,7 @@ img.rspress-logo {
 }
 
 .rp-doc-layout__container {
-  background: #ffffff;
+  background: var(--test-paper);
 }
 
 .rp-doc-layout__sidebar {
@@ -161,121 +161,110 @@ img.rspress-logo {
   color: var(--test-accent-ink);
 }
 
-.rp-doc {
+.rp-doc.rspress-doc {
+  min-width: 0;
+  max-width: 100%;
   color: var(--test-text);
   font-size: 16px;
-  line-height: 1.76;
-}
-
-.rp-doc h1,
-.rp-doc h2,
-.rp-doc h3 {
-  color: var(--test-text);
-  font-family: var(--test-font);
-  letter-spacing: -0.025em;
-}
-
-.rp-doc h1 {
-  font-size: clamp(36px, 3.2vw, 46px);
-  font-weight: 740;
-  letter-spacing: -0.04em;
-  line-height: 1.08;
-  text-wrap: balance;
-}
-
-.rp-doc h2 {
-  margin-top: 2.6em;
-  font-size: 28px;
-  font-weight: 710;
-}
-
-.rp-doc h3 {
-  margin-top: 2em;
-  font-size: 20px;
-  font-weight: 690;
-}
-
-.rp-doc p,
-.rp-doc li {
-  color: var(--test-muted);
-}
-
-.rp-doc > h1:first-child + p {
-  max-width: 72ch;
-  margin-top: 26px;
-  margin-bottom: 52px;
-  padding-bottom: 46px;
-  border-bottom: 1px solid var(--test-line);
-  color: var(--test-muted);
-  font-size: 18px;
-  line-height: 1.72;
-}
-
-.rp-doc > h1:first-child + p + h2 {
-  margin-top: 0;
-}
-
-.rp-doc code,
-.rp-doc pre {
-  font-family: var(--test-mono);
-}
-
-.rp-doc .rp-codeblock {
-  margin-top: 20px;
-  margin-bottom: 24px;
-  border-radius: 12px;
-}
-
-.rp-doc pre {
-  border: 1px solid #2b3d5f;
-  background: #0d1b2f !important;
-  box-shadow: 0 16px 38px rgb(14 27 53 / 12%);
-  color: var(--shiki-foreground) !important;
-}
-
-.rp-doc pre code,
-.rp-doc pre code > span:not([style]) {
-  color: var(--shiki-foreground);
-}
-
-.rp-doc .shiki code .line {
-  min-width: max-content;
-  white-space: pre;
-}
-
-.rp-doc
-  .rp-codeblock:is(.language-bash, .language-powershell)
-  .shiki
-  code
-  .line {
-  min-width: 100%;
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-}
-
-.rp-doc pre code {
-  font-size: 13px;
   line-height: 1.7;
 }
 
-.rp-doc .rp-code-button-group__button {
-  color: #aebdd3;
-}
-
-.rp-doc .rp-code-button-group__button:hover {
-  color: #ffffff;
-}
-
-.rp-doc table {
-  overflow: hidden;
-  border: 1px solid var(--test-line);
-  border-radius: 12px;
-  background: #ffffff;
-}
-
-.rp-doc th {
-  background: #f6f8fc;
+.rp-doc :not(:where(.rp-not-doc, .rp-not-doc *)):where(h1, h2, h3, h4) {
   color: var(--test-text);
+  font-family: var(--test-font);
+  letter-spacing: -0.026em;
+}
+
+.rp-doc :not(:where(.rp-not-doc, .rp-not-doc *)):where(h1) {
+  margin-bottom: 18px;
+  font-size: 32px;
+  font-weight: 600;
+  letter-spacing: -0.052em;
+  line-height: 1.04;
+}
+
+.rp-doc :not(:where(.rp-not-doc, .rp-not-doc *)):where(h2) {
+  margin-top: 48px;
+  padding-top: 24px;
+  border-top: 1px solid var(--test-line);
+  font-size: 28px;
+  font-weight: 600;
+}
+
+.rp-doc :not(:where(.rp-not-doc, .rp-not-doc *)):where(h3) {
+  margin-top: 34px;
+  font-size: 20px;
+  font-weight: 600;
+}
+
+.rp-doc :not(:where(.rp-not-doc, .rp-not-doc *)):where(p, li) {
+  overflow-wrap: anywhere;
+  color: var(--test-muted);
+  line-height: 1.72;
+}
+
+.rp-doc.rspress-doc > p:first-of-type {
+  color: var(--test-muted);
+  font-size: 17px;
+  line-height: 1.75;
+}
+
+.rp-codeblock,
+.rp-codeblock__content,
+.rp-codeblock__content__scroll-container {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.rp-codeblock__content__scroll-container {
+  overflow-x: auto;
+}
+
+.rp-doc :not(:where(.rp-not-doc, .rp-not-doc *)):where(table) {
+  display: block;
+  overflow-x: auto;
+  width: 100%;
+  max-width: 100%;
+  border: 1px solid var(--test-line);
+  border-radius: 16px;
+  background: var(--test-surface);
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+.rp-doc :not(:where(.rp-not-doc, .rp-not-doc *)):where(th) {
+  background: var(--test-paper);
+  color: var(--test-muted);
+  font-family: var(--test-mono);
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0.065em;
+  text-transform: uppercase;
+}
+
+.rp-doc :not(:where(.rp-not-doc, .rp-not-doc *)):where(th, td) {
+  padding: 12px 16px;
+  border-right: 1px solid var(--test-line);
+  border-bottom: 1px solid var(--test-line);
+  vertical-align: top;
+}
+
+.rp-doc :not(:where(.rp-not-doc, .rp-not-doc *)):where(tr:last-child) td {
+  border-bottom: 0;
+}
+
+.rp-doc
+  :not(:where(.rp-not-doc, .rp-not-doc *)):where(th:last-child, td:last-child) {
+  border-right: 0;
+}
+
+.rp-doc :not(:where(.rp-not-doc, .rp-not-doc *)):not(pre) > code {
+  border: 1px solid var(--test-line);
+  border-radius: 5px;
+  background: var(--test-paper);
+  color: var(--test-accent-strong);
+  font-family: var(--test-mono);
+  font-size: 0.84em;
 }
 
 .rp-doc a {
@@ -285,24 +274,6 @@ img.rspress-logo {
 .rp-doc-layout__sidebar[aria-hidden='true'] {
   visibility: hidden;
   pointer-events: none;
-}
-
-html:not(.rp-dark) {
-  --shiki-foreground: #e6edf3;
-  --shiki-background: transparent;
-  --shiki-token-constant: #79c0ff;
-  --shiki-token-string: #7ee787;
-  --shiki-token-comment: #9aa7ba;
-  --shiki-token-keyword: #ff7b72;
-  --shiki-token-parameter: #ffa657;
-  --shiki-token-function: #d2a8ff;
-  --shiki-token-string-expression: #7ee787;
-  --shiki-token-punctuation: #c9d1d9;
-  --shiki-token-link: #7ee787;
-  --shiki-token-deleted: #ff7b72;
-  --shiki-token-inserted: #7ee787;
-  --rp-code-block-color: #e6edf3;
-  --rp-code-block-bg: #0d1b2f;
 }
 
 @media (prefers-reduced-transparency: reduce) {
