@@ -31,6 +31,8 @@
 - [x] Parallel scenarios with explicit resource limits and stable report order
 - [x] Local fixture server with dynamic ports, request sentinels, owned
       lifecycle, and a real standalone-agent-browser CI path
+- [x] Explicit, persisted synthetic browser microphone profile for deterministic
+      media-permission tests without host microphone access
 
 ## M2: Agentic testing
 

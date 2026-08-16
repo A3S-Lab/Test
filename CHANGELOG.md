@@ -18,6 +18,11 @@
   before the evidence reaches an agent. The same bounded UI evidence is
   included in explicitly submitted repair context without gaining action,
   verdict, or repair authority.
+- Added an explicit `--browser-microphone synthetic` profile to deterministic
+  Web runs, persistent and direct agent runs, and Web MCP hosts. It persists
+  across agent-session turns, injects only Chromium's fake-device and
+  fake-permission flags, never captures a real microphone, and defaults to
+  `disabled` for new and legacy session metadata.
 
 ### Changed
 

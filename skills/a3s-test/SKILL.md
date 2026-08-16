@@ -54,6 +54,10 @@ to an ACL suite.
    as a CDN that the page must contact without adding it to A3S Test's exact
    origin gate. Use `--browser-driver standalone` only when the project
    explicitly uses a compatible standalone `agent-browser`.
+   Add `--browser-microphone synthetic` only when a Web test explicitly needs
+   deterministic `getUserMedia` permission without real hardware. The default
+   is `disabled`; synthetic mode never captures the host microphone and the
+   selected profile persists across all turns in that session.
    If a turn returns `test.session.browser_network_policy_missing`, do not
    retry it. Abort or finish that legacy session, then start a new one so the
    browser daemon is created with the persisted network policy.

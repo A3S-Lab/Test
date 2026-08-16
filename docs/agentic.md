@@ -95,6 +95,15 @@ with the selected driver returns `test.session.browser_containment_mismatch`;
 non-canonical or drifted policy lists return
 `test.session.browser_network_policy_mismatch`.
 
+Browser microphone access is a separate typed session policy. It defaults to
+`disabled`; A3S Test neither grants media permission nor selects a real input
+device in that mode. `--browser-microphone synthetic` opts the session into
+Chromium's deterministic fake media device and automatic media permission.
+It never captures the host microphone. `agent start` persists the selected
+profile and every later turn reconnects with it; legacy session metadata
+without the field defaults to `disabled`. The same option is available to
+deterministic `run`, direct `agent run`, and Web MCP hosts.
+
 Action protocol revision 7 is the current cross-surface schema. Revision 2
 introduced the browser interactions needed to inspect document-style
 applications: click, hover, focus, double-click, context-click,

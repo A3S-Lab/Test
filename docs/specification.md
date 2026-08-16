@@ -312,6 +312,18 @@ required host options such as `--no-sandbox` remain active. Only the A3S Test
 launch argument. Windows Browser commands and CUA proxies also use
 `CREATE_NO_WINDOW`, including `.cmd` shims, so test execution does not create
 or flash a console window.
+
+Browser microphone behavior is also explicit. `--browser-microphone` accepts
+`disabled` or `synthetic` and defaults to `disabled` for `run`, `agent start`,
+`agent run`, and Web MCP hosts. Disabled sessions do not receive an automatic
+media permission grant and A3S Test does not select or capture a real device.
+The synthetic profile adds only Chromium's
+`--use-fake-device-for-media-stream` and
+`--use-fake-ui-for-media-stream` launch arguments. It provides deterministic
+local media without exposing the host microphone. Persistent agent metadata
+stores the selected profile before browser startup and reapplies it to every
+turn; legacy metadata without the field is admitted as `disabled`.
+
 Command stdout and stderr are written to private temporary regular files and
 read on a blocking worker after the direct launcher exits. Each stream is
 limited to 8 MiB. A persistent daemon may inherit those file handles without

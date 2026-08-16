@@ -28,6 +28,7 @@ a3s-test agent start <url> \
   [--success <criterion>] \
   [--auto-resolve-repairs] \
   [--allow-origin <origin>] \
+  [--browser-microphone disabled|synthetic] \
   [--headed] \
   --json
 
@@ -68,6 +69,13 @@ Omit `--headed` for enforced headless execution even when the user Browser
 environment or configuration requests a visible window. `--headed` is the
 explicit debugging opt-in. On Windows, Browser command shims run without
 creating a CMD window.
+
+The browser microphone defaults to `disabled`. Select
+`--browser-microphone synthetic` only when a test needs deterministic
+`getUserMedia` permission. It adds Chromium's fake media device and fake
+permission grant, never reads the host microphone, and is stored in the
+session so every later command uses the same profile. Legacy session metadata
+without this field remains readable and defaults to `disabled`.
 
 `ground` is an advisory location operation, not an action. ACL and provider
 admission happen before browser connection. The command captures one bounded

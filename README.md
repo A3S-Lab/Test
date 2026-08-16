@@ -76,6 +76,23 @@ a3s-test agent start http://127.0.0.1:3000/checkout \
 a3s-test agent observe --session checkout --interactive --json
 ```
 
+Voice-product tests can opt into a deterministic synthetic browser microphone:
+
+```bash
+a3s-test agent start http://127.0.0.1:3000/voice \
+  --session voice \
+  --goal "Verify the listening state" \
+  --success "The listening indicator is visible" \
+  --browser-microphone synthetic \
+  --json
+```
+
+The microphone defaults to `disabled`. The `synthetic` profile never captures
+the host microphone; it supplies Chromium's local fake media device and
+permission grant, and a persistent agent session retains that profile across
+turns. The same explicit option is available to `a3s-test run`, `agent run`,
+and Web MCP sessions.
+
 The observation returns a fresh generation and semantic refs instead of a
 timing guess:
 
