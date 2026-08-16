@@ -8,6 +8,7 @@ mod manifest;
 mod model;
 mod page_context;
 mod reconcile;
+mod ui_understanding;
 
 pub use contract::{
     AdmittedProvenance, ContractCitation, ContractContext, ContractElement, ContractMode,
@@ -47,4 +48,15 @@ pub use page_context::{
 };
 pub use reconcile::{
     ContractFinding, ContractMatch, ContractMatchStrategy, ContractOutcome, ContractReport,
+};
+pub use ui_understanding::{
+    UiAccessibilityStateChange, UiAnimationProfile, UiAnimationSource, UiBaselineState,
+    UiComponentCluster, UiContextScope, UiCoordinateSpace, UiCustomProperty,
+    UiCustomPropertySource, UiEvidenceSourceKind, UiFlexLayout, UiGridLayout, UiLayoutEdge,
+    UiLayoutEdgeRelation, UiLayoutGraph, UiLayoutNode, UiMotionProfile, UiObservedInteractionState,
+    UiObservedToken, UiResponsiveCondition, UiResponsiveConditionSource, UiStateDiff,
+    UiStyleChange, UiStyleProfile, UiTransitionProfile, UiTruncationReason, UiTypographyToken,
+    UiUnderstandingBudget, UiUnderstandingBudgetLimits, UiUnderstandingBudgetUsed,
+    UiUnderstandingEvidence, UiUnderstandingSnapshot, UiUnderstandingValidationError,
+    UI_UNDERSTANDING_PROTOCOL,
 };

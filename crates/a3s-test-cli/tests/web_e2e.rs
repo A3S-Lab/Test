@@ -338,6 +338,7 @@ fn real_agent_browser_runs_the_embedded_testkit_suite() {
     );
     let (_bundle_workspace, bundle) = bundle_browser_fixture("bundle TestKit fixture");
     let fixture = start_testkit_fixture(bundle).expect("start TestKit fixture");
+    verify_testkit_ui_understanding_through_driver(&browser, &fixture.origin());
     let workflow_manifest = get(&fixture.origin(), "/screen-reader-workflows.json")
         .expect("read screen-reader workflow manifest from shared fixture");
     assert_eq!(workflow_manifest.status, 200);
@@ -394,6 +395,19 @@ fn real_agent_browser_runs_the_embedded_testkit_suite() {
         stdout.contains("sticky"),
         "sticky geometry missing: {stdout}"
     );
+    for expected in [
+        "a3s.test.ui-understanding/1",
+        "observationId",
+        "computed_style",
+        "responsiveConditions",
+        "stateDiffs",
+        "prefersReducedMotion",
+    ] {
+        assert!(
+            stdout.contains(expected),
+            "rendered UI understanding missing {expected:?}: {stdout}"
+        );
+    }
 
     let accessibility = command(&["snapshot"]);
     assert_process_success("capture TestKit accessibility tree", &accessibility);
@@ -654,6 +668,80 @@ fn real_agent_browser_runs_the_embedded_testkit_suite() {
     assert!(String::from_utf8_lossy(&teardown.stdout).contains("true"));
     let closed = cleanup.close();
     assert_process_success("close TestKit browser session", &closed);
+}
+
+fn verify_testkit_ui_understanding_through_driver(browser: &Path, origin: &str) {
+    let temp = tempfile::tempdir().expect("temporary UI understanding workspace");
+    let manifest = temp.path().join("ui-understanding.acl");
+    let suite = format!(
+        r#"suite "ui-understanding" {{
+    version = 1
+    scenario "rendered-context" {{
+        name = "Capture rendered UI understanding"
+        surface = "web"
+        timeout_ms = 60000
+        navigate "open" {{ url = "{origin}" }}
+        snapshot "context" {{ interactive = true }}
+        expect "fixture-ready" {{ text = "Embedded TestKit E2E" }}
+    }}
+}}
+"#
+    );
+    std::fs::write(&manifest, suite).expect("write UI understanding suite");
+    let output = Command::new(binary())
+        .args([
+            "run",
+            manifest.to_str().expect("UTF-8 UI understanding path"),
+            "--browser-driver",
+            "standalone",
+            "--browser-executable",
+            browser.to_str().expect("UTF-8 browser path"),
+            "--command-timeout-ms",
+            "60000",
+            "--idle-timeout-ms",
+            "15000",
+            "--cleanup-timeout-ms",
+            "15000",
+            "--infrastructure-retries",
+            "0",
+            "--json",
+        ])
+        .current_dir(temp.path())
+        .output()
+        .expect("run UI understanding suite");
+    assert_process_success("capture UI understanding through the Web driver", &output);
+    let report: serde_json::Value =
+        serde_json::from_slice(&output.stdout).expect("UI understanding run report");
+    let ui = report["scenarios"][0]["steps"]
+        .as_array()
+        .expect("UI understanding steps")
+        .iter()
+        .find(|step| step["id"] == "context")
+        .and_then(|step| step.pointer("/output/page_context/snapshot/ui"))
+        .expect("typed UI understanding in the stable observation");
+    assert_eq!(ui["protocol"], "a3s.test.ui-understanding/1");
+    let page_revision = report["scenarios"][0]["steps"]
+        .as_array()
+        .expect("UI understanding steps")
+        .iter()
+        .find(|step| step["id"] == "context")
+        .and_then(|step| step.pointer("/output/page_context/snapshot/revision"))
+        .and_then(serde_json::Value::as_u64)
+        .expect("page-context revision");
+    assert_eq!(ui["pageRevision"].as_u64(), Some(page_revision));
+    assert!(
+        ui["layout"]["nodes"]
+            .as_array()
+            .is_some_and(|nodes| !nodes.is_empty()),
+        "UI understanding must retain bounded layout evidence: {ui}"
+    );
+    assert!(
+        ui["budget"]["used"]["encodedBytes"]
+            .as_u64()
+            .zip(ui["budget"]["limits"]["encodedBytes"].as_u64())
+            .is_some_and(|(used, limit)| used <= limit),
+        "UI understanding must stay within its declared byte budget: {ui}"
+    );
 }
 
 fn run_agent_domain_containment(browser: &Path, fixture: &WebFixture, workspace: &Path) {
@@ -1015,8 +1103,8 @@ fn suite(origin: &str) -> String {
             path = "screenshots/form.png"
         }}
 
-        click "same-origin" {{
-            target = css("#same-origin")
+        click "offscreen-same-origin" {{
+            target = css("#offscreen-same-origin")
         }}
 
         expect "next-page" {{

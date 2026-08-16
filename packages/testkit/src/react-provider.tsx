@@ -47,21 +47,37 @@ export function A3STestKit({ children, ...options }: A3STestKitProps) {
     const installed = installTestKit({
       ...options,
       enabled: true,
-      ready: () => latest.current.ready?.() ?? document.readyState !== "loading",
+      ready: () =>
+        latest.current.ready?.() ?? document.readyState !== "loading",
       facts: () => latest.current.facts?.() ?? {},
     });
     setBridge(installed);
     return () => {
       installed.dispose();
-      setBridge((current) => current === installed ? null : current);
+      setBridge((current) => (current === installed ? null : current));
     };
-  }, [options.enabled, options.maxDesignAuditReports, options.maxEncodedBytes, options.maxNodes, options.maxQualityReports, options.maxStringBytes, options.page.id, options.repairEndpoint, options.repairStorage, stableList(options.redact)]);
+  }, [
+    options.enabled,
+    options.maxDesignAuditReports,
+    options.maxEncodedBytes,
+    options.maxNodes,
+    options.maxQualityReports,
+    options.maxStringBytes,
+    options.maxUiDurationMs,
+    options.maxUiEncodedBytes,
+    options.maxUiNodes,
+    options.maxUiStateSamples,
+    options.page.id,
+    options.repairEndpoint,
+    options.repairStorage,
+    options.uiUnderstanding,
+    stableList(options.redact),
+  ]);
 
-  const value = useMemo(
-    () => ({ bridge, providerConfigured: true }),
-    [bridge],
+  const value = useMemo(() => ({ bridge, providerConfigured: true }), [bridge]);
+  return (
+    <TestKitContext.Provider value={value}>{children}</TestKitContext.Provider>
   );
-  return <TestKitContext.Provider value={value}>{children}</TestKitContext.Provider>;
 }
 
 export type A3STestBoundaryProps = PropsWithChildren<{
@@ -71,7 +87,16 @@ export type A3STestBoundaryProps = PropsWithChildren<{
   ready?: () => boolean;
   facts?: () => Record<string, unknown>;
   roots?: () => readonly Element[];
-  as?: "div" | "section" | "main" | "nav" | "article" | "aside" | "header" | "footer" | "span";
+  as?:
+    | "div"
+    | "section"
+    | "main"
+    | "nav"
+    | "article"
+    | "aside"
+    | "header"
+    | "footer"
+    | "span";
   className?: string;
   style?: CSSProperties;
 }>;
@@ -103,7 +128,11 @@ export function A3STestBoundary({
       facts: () => latest.current.facts?.() ?? {},
     });
   }, [bridge, id, name, source?.file, source?.line, source?.column]);
-  return <Tag ref={ref as never} className={className} style={style}>{children}</Tag>;
+  return (
+    <Tag ref={ref as never} className={className} style={style}>
+      {children}
+    </Tag>
+  );
 }
 
 function useLatest<T>(value: T) {

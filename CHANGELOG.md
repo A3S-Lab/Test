@@ -2,6 +2,23 @@
 
 ## Unreleased
 
+### Added
+
+- Added the nested `a3s.test.ui-understanding/1` Page Context evidence
+  protocol. Test Kit now derives bounded observed design tokens, typography,
+  Flex/Grid/flow and stacking relationships, deterministic repeated-component
+  clusters, real interaction-state differences, responsive conditions, and
+  CSS/Web Animations, sticky, scroll-container, canvas, and media motion
+  evidence after browser rendering. Every record binds an observation ID,
+  page revision, viewport, scope, provenance summary, and node/state/string/
+  byte/time budgets.
+- Added strict Rust UI-understanding types and Web-driver admission. Protocol,
+  revision, viewport, identifiers, confidence, geometry, collection bounds,
+  truncation metadata, JSON depth, strings, and encoded size now fail closed
+  before the evidence reaches an agent. The same bounded UI evidence is
+  included in explicitly submitted repair context without gaining action,
+  verdict, or repair authority.
+
 ### Changed
 
 - Aligned documentation typography, tables, inline code, and light syntax
@@ -11,6 +28,13 @@
 
 ### Fixed
 
+- Scrolled direct ref and CSS click targets into view before dispatch so a
+  valid target below the initial viewport cannot report success without
+  receiving the click.
+- Kept open review-Shadow-DOM mutations and transient hover/focus evidence out
+  of the page revision. Transient visual state receives its own UI observation
+  ID, while semantic, layout, form, route, scroll, and viewport changes retain
+  the monotonic page-revision boundary.
 - Removed the forced dark documentation code theme and limited content
   typography to the real Rspress document root so sidebar labels retain their
   intended density.

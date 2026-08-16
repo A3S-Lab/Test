@@ -286,6 +286,7 @@ fn secret_page_context() -> PageContextObservation {
             computed_styles: None,
         }],
         facts: serde_json::Map::new(),
+        ui: None,
         removed_node_ids: Vec::new(),
         truncated: false,
         next_cursor: None,

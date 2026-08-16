@@ -158,7 +158,15 @@ async fn embedded_host_runs_one_model_turn_verifies_locally_and_closes() {
     assert!(report["cleanup_error"].is_null());
     assert_eq!(
         executor.actions(),
-        ["open", "snapshot", "click", "snapshot", "wait", "close"]
+        [
+            "open",
+            "snapshot",
+            "scrollintoview",
+            "click",
+            "snapshot",
+            "wait",
+            "close"
+        ]
     );
 
     let requests = provider.finish().await;

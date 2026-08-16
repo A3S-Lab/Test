@@ -383,6 +383,8 @@ pub struct PageContextSnapshot {
     pub components: Vec<PageContextComponent>,
     pub nodes: Vec<PageContextNode>,
     pub facts: serde_json::Map<String, Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ui: Option<crate::UiUnderstandingSnapshot>,
     #[serde(rename = "removedNodeIds")]
     pub removed_node_ids: Vec<String>,
     pub truncated: bool,

@@ -1,6 +1,6 @@
 ---
 title: 接入 Web Test Kit
-description: 在页面渲染后读取语义、组件与坐标，让评审者点选问题并提交单条或批量修复任务。
+description: 在页面渲染后读取语义、组件、坐标与视觉系统，让评审者点选问题并提交单条或批量修复任务。
 ---
 
 :::warning 发布候选
@@ -9,7 +9,7 @@ v0.17.0 已在 main 上准备完成，但尚未正式发布。安装示例仍固
 
 # 接入 Web Test Kit
 
-把 `@a3s-lab/testkit` 接入开发环境后，A3S Test 能在页面渲染完成时读取当前 DOM、可访问语义、组件归属和坐标。评审者可以直接点选或框选问题，再把一条或一批修复任务交给拥有工作区的编码 Agent。SDK 不会给业务 DOM 写入测试属性。
+把 `@a3s-lab/testkit` 接入开发环境后，A3S Test 能在页面渲染完成时读取当前 DOM、可访问语义、组件归属、坐标和浏览器计算出的视觉系统。评审者可以直接点选或框选问题，再把一条或一批修复任务交给拥有工作区的编码 Agent。SDK 不会给业务 DOM 写入测试属性。
 
 ## 安装
 
@@ -79,8 +79,27 @@ export function App() {
 - 视口、文档和标准化坐标中的元素几何。
 - 布局视口、设备像素比，以及可选 visual viewport 的偏移与缩放。
 - 有界 computed style、页面事实和脱敏后的表单状态。
+- 观察到的设计令牌、布局关系、重复结构、真实交互状态差分和动效事实。
 
 MutationObserver、ResizeObserver、滚动、视口和导航信号会推进修订号。没有变化的页面不会被轮询。任何旧修订上的目标都会失效，避免 Agent 对热更新前的坐标或 DOM 引用执行动作。
+
+## 渲染态 UI 理解
+
+每个快照默认包含一个可选的 `a3s.test.ui-understanding/1` 嵌套记录。它补充浏览器可访问树缺少的视觉事实，不创建一棵竞争性的语义树，也不猜测产品意图。
+
+| 证据     | 来自浏览器的事实                                                                                                                                |
+| -------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| 样式画像 | 颜色、字体、间距、圆角、阴影、z-index、安全的根级设计属性和响应式条件。                                                                         |
+| 布局图   | Flex、Grid、普通流、overflow、当前盒模型、包含、offset parent、滚动容器和层叠上下文关系。                                                       |
+| 重复结构 | 根据标签、角色、语义状态、有界子树形状和 computed style 生成确定性指纹。类名本身不会被当作组件事实。                                            |
+| 状态差分 | 从已观察的默认状态到真实 hover、focus、focus-visible、checked、expanded、selected 或 disabled 状态的变化。Test Kit 不会为了采集而主动触发交互。 |
+| 动效画像 | transition、CSS 与 Web Animations、关键帧名称、sticky 与滚动节点、canvas、媒体界面和 reduced-motion 偏好。                                      |
+
+记录使用独立的 `observationId`，因为焦点、悬停或运行中的动画可能改变 computed state，却不改变页面语义修订号。它的 `pageRevision`、viewport 与 scope 仍必须和外层 Page Context 一致。Web 驱动会拒绝过期绑定、未知字段、非法几何、不一致的截断信息和预算越界。
+
+默认预算为 200 个采样节点、200 个状态候选、32 毫秒和 256 KiB。`maxUiNodes`、`maxUiStateSamples`、`maxUiDurationMs` 与 `maxUiEncodedBytes` 可以降低安装上限，每次 `snapshot()` 请求还可以继续收紧。单次请求使用 `snapshot({ ui: false })` 关闭；整个安装不需要该投影时使用 `uiUnderstanding={false}`。
+
+截图仍由 A3S Test 的证据层负责，不在 Test Kit 中重复实现。评审者明确发送问题后，同一份有界 UI 记录会随 `untrusted: true` 修复上下文提交，让拥有工作区的 Agent 把选中节点与页面视觉系统准确关联起来。
 
 ## 人工标记与批量修复
 

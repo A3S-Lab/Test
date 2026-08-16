@@ -96,6 +96,7 @@ fn ready_page_context(revision: u64) -> PageContextSnapshot {
         components: Vec::new(),
         nodes: Vec::new(),
         facts: Default::default(),
+        ui: None,
         removed_node_ids: Vec::new(),
         truncated: false,
         next_cursor: None,

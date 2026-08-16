@@ -494,6 +494,71 @@ async fn maps_typed_actions_and_scopes_browser_lifecycle() {
 }
 
 #[tokio::test]
+async fn scrolls_direct_click_targets_into_view_before_dispatch() {
+    let temp = tempfile::tempdir().expect("tempdir");
+    let executor = Arc::new(RecordingExecutor::default());
+    let driver = AgentBrowserDriver::with_executor(
+        AgentBrowserConfig {
+            command: BrowserCommand::Standalone {
+                executable: PathBuf::from("/opt/agent-browser"),
+            },
+            namespace: "direct-click".to_string(),
+            headed: false,
+            command_timeout: Duration::from_secs(5),
+            idle_timeout: Duration::from_secs(2),
+            network_policy: Default::default(),
+        },
+        executor.clone(),
+    );
+    let mut session = driver
+        .open(&ScenarioContext {
+            run_id: "run".to_string(),
+            scenario_id: "direct-click".to_string(),
+            artifacts_dir: temp.path().join("artifacts"),
+        })
+        .await
+        .expect("session");
+
+    for (id, target) in [
+        (
+            "css",
+            Target::Css {
+                selector: "#below-fold".to_string(),
+            },
+        ),
+        (
+            "ref",
+            Target::Ref {
+                value: "@e19".to_string(),
+            },
+        ),
+    ] {
+        session
+            .execute(&step(id, Action::Click { target }))
+            .await
+            .expect("direct click");
+    }
+    session.close().await.expect("close");
+
+    let invocations = executor.invocations.lock().unwrap();
+    let action_args = invocations
+        .iter()
+        .skip(1)
+        .map(|invocation| strip_session_prefix(&invocation.args))
+        .collect::<Vec<_>>();
+    assert_eq!(
+        action_args,
+        vec![
+            os(&["scrollintoview", "#below-fold"]),
+            os(&["click", "#below-fold"]),
+            os(&["scrollintoview", "@e19"]),
+            os(&["click", "@e19"]),
+            os(&["close"]),
+        ]
+    );
+}
+
+#[tokio::test]
 async fn standalone_driver_uses_the_upstream_policy_contract_and_a_safe_idle_floor() {
     let temp = tempfile::tempdir().expect("tempdir");
     let artifacts = temp.path().join("artifacts");

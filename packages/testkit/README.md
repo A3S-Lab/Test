@@ -58,6 +58,36 @@ open Shadow DOM, form state, layout, and viewport facts without adding test
 attributes to application elements. Observer and navigation signals advance a
 versioned snapshot; an unchanged page is not polled.
 
+Each snapshot also includes bounded `a3s.test.ui-understanding/1` evidence by
+default. It profiles observed colors, typography, spacing, radii, shadows, and
+safe root design properties; publishes Flex/Grid/flow, scroll-container, and
+stacking relationships; clusters repeated structures with deterministic
+tag/role/subtree/style fingerprints; records real interaction-state
+differences; and detects responsive conditions, transitions, CSS and Web
+Animations, sticky nodes, canvas, and media. It never guesses a component from
+a class name or synthesizes an interaction for collection.
+
+```tsx
+<A3STestKit
+  enabled={import.meta.env.DEV}
+  page={{ id: "checkout" }}
+  maxUiNodes={200}
+  maxUiStateSamples={200}
+  maxUiDurationMs={32}
+  maxUiEncodedBytes={262_144}
+>
+  <App />
+</A3STestKit>
+```
+
+Call `snapshot({ ui: false })` to omit it once, or set
+`uiUnderstanding={false}` for the installation. Callers may only lower the
+installed node, state, string, byte, and time ceilings. UI evidence binds its
+own observation ID to the containing page revision, viewport, and scope; the
+Web driver rejects protocol drift, stale bindings, invalid geometry, and
+budget violations. It remains untrusted evidence with no action, verdict, or
+repair authority.
+
 ## Deterministic quality findings
 
 When a deterministic Surface Contract runs, the Web driver can project its

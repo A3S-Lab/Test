@@ -331,6 +331,7 @@ mod tests {
             components: vec![],
             nodes: vec![],
             facts: Default::default(),
+            ui: None,
             removed_node_ids: vec![],
             truncated: false,
             next_cursor: None,

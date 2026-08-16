@@ -1,7 +1,9 @@
 export const PAGE_CONTEXT_PROTOCOL = "a3s.test.page-context/1" as const;
+export const UI_UNDERSTANDING_PROTOCOL = "a3s.test.ui-understanding/1" as const;
 export const PAGE_CONTEXT_SYMBOL = Symbol.for("a3s.test.page-context");
 export const QUALITY_REPORT_PROTOCOL = "a3s.test.quality-report/1" as const;
-export const DESIGN_AUDIT_REPORT_PROTOCOL = "a3s.test.design-audit-report/1" as const;
+export const DESIGN_AUDIT_REPORT_PROTOCOL =
+  "a3s.test.design-audit-report/1" as const;
 
 export type ContextDetail = "summary" | "scoped" | "diff" | "forensic";
 
@@ -22,6 +24,10 @@ export type ContextLimits = {
   nodes: number;
   stringBytes: number;
   encodedBytes: number;
+  uiNodes: number;
+  uiStateSamples: number;
+  uiDurationMs: number;
+  uiEncodedBytes: number;
 };
 
 export type ContextSnapshotRequest = {
@@ -29,6 +35,7 @@ export type ContextSnapshotRequest = {
   scope?: ContextScope;
   sinceRevision?: number | null;
   cursor?: string | null;
+  ui?: boolean;
   limits?: Partial<ContextLimits>;
 };
 
@@ -107,8 +114,218 @@ export type ContextComponent = {
   boxes: Rect[];
 };
 
+export type UIEvidenceSourceKind =
+  | "computed_style"
+  | "dom_structure"
+  | "layout_geometry"
+  | "accessibility_state"
+  | "css_stylesheet"
+  | "web_animations";
+
+export type UITruncationReason =
+  "node_limit" | "state_sample_limit" | "time_limit" | "encoded_size_limit";
+
+export type UIUnderstandingBudget = {
+  limits: {
+    nodes: number;
+    stateSamples: number;
+    stringBytes: number;
+    encodedBytes: number;
+    durationMs: number;
+  };
+  used: {
+    nodes: number;
+    stateSamples: number;
+    encodedBytes: number;
+    durationMs: number;
+  };
+  truncated: boolean;
+  reasons: UITruncationReason[];
+};
+
+export type UIObservedToken = {
+  value: string;
+  properties: string[];
+  count: number;
+  nodeIds: string[];
+  confidence: 1;
+};
+
+export type UITypographyToken = {
+  family: string;
+  size: string;
+  weight: string;
+  lineHeight: string;
+  letterSpacing: string;
+  count: number;
+  nodeIds: string[];
+  confidence: 1;
+};
+
+export type UICustomProperty = {
+  name: string;
+  value: string;
+  source: "document_root";
+  confidence: 1;
+};
+
+export type UIResponsiveCondition = {
+  condition: string;
+  matches: boolean;
+  source: "stylesheet";
+  confidence: 1;
+};
+
+export type UIStyleProfile = {
+  colors: UIObservedToken[];
+  typography: UITypographyToken[];
+  spacing: UIObservedToken[];
+  radii: UIObservedToken[];
+  shadows: UIObservedToken[];
+  zIndices: UIObservedToken[];
+  customProperties: UICustomProperty[];
+  responsiveConditions: UIResponsiveCondition[];
+};
+
+export type UIFlexLayout = {
+  direction: string;
+  wrap: string;
+  justifyContent: string;
+  alignItems: string;
+  alignContent: string;
+  gap: string;
+};
+
+export type UIGridLayout = {
+  templateColumns: string;
+  templateRows: string;
+  autoFlow: string;
+  justifyItems: string;
+  alignItems: string;
+  gap: string;
+};
+
+export type UILayoutNode = {
+  nodeId: string;
+  parentNodeId?: string;
+  display: string;
+  position: string;
+  rect?: Rect;
+  overflowX: string;
+  overflowY: string;
+  order: string;
+  stackingContextReasons: string[];
+  flex?: UIFlexLayout;
+  grid?: UIGridLayout;
+};
+
+export type UILayoutEdge = {
+  fromNodeId: string;
+  toNodeId: string;
+  relation: "contains" | "scroll_container" | "offset_parent";
+};
+
+export type UILayoutGraph = {
+  nodes: UILayoutNode[];
+  edges: UILayoutEdge[];
+};
+
+export type UIComponentCluster = {
+  id: string;
+  fingerprint: string;
+  signature: string;
+  representativeNodeId: string;
+  memberNodeIds: string[];
+  memberCount: number;
+  confidence: 1;
+};
+
+export type UIInteractionState =
+  | "default"
+  | "hover"
+  | "focus"
+  | "focus_visible"
+  | "checked"
+  | "expanded"
+  | "selected"
+  | "disabled";
+
+export type UIStyleChange = {
+  property: string;
+  before: string;
+  after: string;
+};
+
+export type UIAccessibilityStateChange = {
+  state: string;
+  before: boolean | null;
+  after: boolean | null;
+};
+
+export type UIStateDiff = {
+  nodeId: string;
+  from: "default";
+  to: Exclude<UIInteractionState, "default">;
+  styleChanges: UIStyleChange[];
+  accessibilityChanges: UIAccessibilityStateChange[];
+  confidence: 1;
+};
+
+export type UITransitionProfile = {
+  nodeId: string;
+  properties: string[];
+  durations: string[];
+  delays: string[];
+  timingFunctions: string[];
+};
+
+export type UIAnimationProfile = {
+  nodeId: string;
+  names: string[];
+  durations: string[];
+  delays: string[];
+  iterationCounts: string[];
+  playStates: string[];
+  sources: Array<"css" | "web_animations">;
+};
+
+export type UIMotionProfile = {
+  prefersReducedMotion: boolean;
+  transitions: UITransitionProfile[];
+  animations: UIAnimationProfile[];
+  keyframeNames: string[];
+  stickyNodeIds: string[];
+  scrollContainerNodeIds: string[];
+  canvasNodeIds: string[];
+  mediaNodeIds: string[];
+};
+
+export type UIUnderstandingEvidence = {
+  sourceKinds: UIEvidenceSourceKind[];
+  sampledNodeIds: string[];
+  totalCandidateNodes: number;
+  omittedNodes: number;
+  inaccessibleStyleSheets: number;
+};
+
+export type UIUnderstandingSnapshot = {
+  protocol: typeof UI_UNDERSTANDING_PROTOCOL;
+  observationId: string;
+  pageRevision: number;
+  viewport: PageViewport;
+  scope: ContextScope;
+  budget: UIUnderstandingBudget;
+  evidence: UIUnderstandingEvidence;
+  style: UIStyleProfile;
+  layout: UILayoutGraph;
+  components: UIComponentCluster[];
+  stateDiffs: UIStateDiff[];
+  motion: UIMotionProfile;
+};
+
 export type JsonPrimitive = string | number | boolean | null;
-export type JsonValue = JsonPrimitive | JsonValue[] | { [key: string]: JsonValue };
+export type JsonValue =
+  JsonPrimitive | JsonValue[] | { [key: string]: JsonValue };
 
 export type PageContextSnapshot = {
   protocol: typeof PAGE_CONTEXT_PROTOCOL;
@@ -129,6 +346,7 @@ export type PageContextSnapshot = {
   components: ContextComponent[];
   nodes: ContextNode[];
   facts: Record<string, JsonValue>;
+  ui?: UIUnderstandingSnapshot;
   removedNodeIds: string[];
   truncated: boolean;
   nextCursor: string | null;
@@ -207,6 +425,7 @@ export type RepairContext = {
   nodes: ContextNode[];
   nearbyNodes: ContextNode[];
   facts: Record<string, JsonValue>;
+  ui?: UIUnderstandingSnapshot;
   untrusted: true;
 };
 
@@ -447,6 +666,11 @@ export type TestKitOptions = {
   maxNodes?: number;
   maxStringBytes?: number;
   maxEncodedBytes?: number;
+  uiUnderstanding?: boolean;
+  maxUiNodes?: number;
+  maxUiStateSamples?: number;
+  maxUiDurationMs?: number;
+  maxUiEncodedBytes?: number;
   repairEndpoint?: string;
   repairStorage?: "local" | "session" | "memory";
   maxQualityReports?: number;

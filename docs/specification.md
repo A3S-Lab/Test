@@ -665,10 +665,12 @@ and confined beneath the canonical scenario artifact root.
 defaults to zero, at least one delta must be non-zero, and `modifiers` may
 contain unique `alt`, `control`, `meta`, or `shift` values. A wheel without a
 target is native. A target-scoped wheel is dispatched at the visible center of
-the resolved element. Context-click also resolves the visible center, moves the
-pointer there, and dispatches a cancelable page `contextmenu` event; it does not
-open the browser-native menu. Viewport width, height, and optional integer
-scale must be greater than zero.
+the resolved element. A direct `ref()` or `css()` click scrolls its resolved
+element into view before dispatch, including targets below the initial
+viewport. Context-click also resolves the visible center, moves the pointer
+there, and dispatches a cancelable page `contextmenu` event; it does not open
+the browser-native menu. Viewport width, height, and optional integer scale
+must be greater than zero.
 
 ## Admission behavior
 

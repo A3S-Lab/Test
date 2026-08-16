@@ -1,6 +1,6 @@
 ---
 title: Add Web Test Kit
-description: Read semantics, components, and geometry after rendering, then let reviewers submit one repair task or a batch from the page.
+description: Read semantics, components, geometry, and the rendered visual system, then submit one repair task or a batch from the page.
 ---
 
 :::warning Release candidate
@@ -9,7 +9,7 @@ v0.17.0 is staged on main but not published. Installation examples remain pinned
 
 # Add Web Test Kit
 
-Add `@a3s-lab/testkit` in development and A3S Test can read the current DOM, accessible semantics, component ownership, and geometry after the page renders. A reviewer can point to one problem or select a batch, then send each repair task to the coding agent that owns the workspace. The SDK does not write test attributes onto product elements.
+Add `@a3s-lab/testkit` in development and A3S Test can read the current DOM, accessible semantics, component ownership, geometry, and browser-computed visual system after the page renders. A reviewer can point to one problem or select a batch, then send each repair task to the coding agent that owns the workspace. The SDK does not write test attributes onto product elements.
 
 ## Install
 
@@ -84,8 +84,27 @@ Each snapshot carries a monotonic revision and binds these facts together:
 - Element geometry in viewport, document, and normalized coordinate spaces.
 - Layout viewport, device pixel ratio, and optional visual-viewport offset and scale.
 - Bounded computed style, page facts, and redacted form state.
+- Observed design tokens, layout relationships, repeated structures, real interaction-state differences, and motion facts.
 
 MutationObserver, ResizeObserver, scrolling, viewport, and navigation signals advance the revision. An unchanged page is not polled. Targets from an older revision expire so an agent cannot act on coordinates or DOM refs from before a hot reload.
+
+## Rendered UI understanding
+
+Every snapshot includes an optional nested `a3s.test.ui-understanding/1` record by default. It complements the browser accessibility tree instead of creating a competing tree or inferring product intent.
+
+| Evidence            | Browser-derived facts                                                                                                                                                                                  |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Style profile       | Colors, typography, spacing, radii, shadows, z-index values, safe root design properties, and responsive conditions.                                                                                   |
+| Layout graph        | Flex, Grid, normal flow, overflow, current boxes, containing, offset-parent, scroll-container, and stacking-context relationships.                                                                     |
+| Repeated structures | Deterministic fingerprints from tag, role, semantic state, bounded subtree shape, and computed style. Class names alone never define a component.                                                      |
+| State differences   | Differences from a previously observed default state to a real hover, focus, focus-visible, checked, expanded, selected, or disabled state. Test Kit does not synthesize interactions to collect them. |
+| Motion profile      | Transitions, CSS and Web Animations, keyframe names, sticky and scrolling nodes, canvas and media surfaces, and reduced-motion preference.                                                             |
+
+The record has its own `observationId` because focus, hover, or a running animation can change computed state without changing the semantic page revision. Its `pageRevision`, viewport, and scope must still match the containing Page Context snapshot. The Web driver rejects stale bindings, unknown fields, invalid geometry, inconsistent truncation, or budget violations.
+
+Default limits are 200 sampled nodes, 200 state candidates, 32 ms, and 256 KiB. Installation options `maxUiNodes`, `maxUiStateSamples`, `maxUiDurationMs`, and `maxUiEncodedBytes` can lower those ceilings, and each `snapshot()` request may lower them again. Use `snapshot({ ui: false })` for one request or `uiUnderstanding={false}` for an installation that does not need this projection.
+
+Screenshots remain A3S Test evidence and are not duplicated inside Test Kit. When a reviewer explicitly sends a finding, the same bounded UI record accompanies its `untrusted: true` repair context so the workspace-owning agent can correlate a selected node with the page's visual system.
 
 ## Human marking and batch repair
 

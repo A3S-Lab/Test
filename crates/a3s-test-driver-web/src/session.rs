@@ -1262,6 +1262,14 @@ impl AgentBrowserSession {
         action: &str,
         value: Option<&str>,
     ) -> Result<Value, DriverError> {
+        if action == "click" && matches!(target, Target::Ref { .. } | Target::Css { .. }) {
+            let selector = direct_selector(target)?;
+            self.execute_command(vec!["scrollintoview".into(), selector.into()])
+                .await?;
+            return self
+                .execute_command(target_action(target, action, value)?)
+                .await;
+        }
         if let Some(args) = semantic_target_action_args(target, action, value)? {
             let mut shadow_result = self.execute_command(args.clone()).await?;
             let mut state = browser_result(shadow_result.clone());
@@ -1428,6 +1436,18 @@ fn parse_page_context_value(mut value: Value) -> Result<PageContextObservation, 
             "test.driver.web.page_context_protocol_unsupported",
             "page context bridge protocol is unsupported",
         ));
+    }
+    if let Some(ui) = &parsed.ui {
+        ui.validate(
+            parsed.revision,
+            parsed.page.as_ref().map(|page| &page.viewport),
+        )
+        .map_err(|error| {
+            DriverError::new(
+                "test.driver.web.ui_understanding_invalid",
+                format!("page context bridge returned invalid UI understanding: {error}"),
+            )
+        })?;
     }
     Ok(PageContextObservation::from_snapshot(parsed))
 }

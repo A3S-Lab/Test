@@ -73,10 +73,15 @@ network requests, or shell execution.
   "scope": { "kind": "page" },
   "sinceRevision": null,
   "cursor": null,
+  "ui": true,
   "limits": {
     "nodes": 500,
     "stringBytes": 4096,
-    "encodedBytes": 1048576
+    "encodedBytes": 1048576,
+    "uiNodes": 200,
+    "uiStateSamples": 200,
+    "uiDurationMs": 32,
+    "uiEncodedBytes": 262144
   }
 }
 ```
@@ -85,7 +90,8 @@ network requests, or shell execution.
 page, a current context node, a registered component, or a viewport/document
 rectangle. The SDK may lower caller limits to its configured ceiling but must
 never raise them. Truncated results carry an opaque cursor bound to the page
-revision and scope.
+revision and scope. UI understanding is enabled by default and can be omitted
+for one request with `"ui": false`.
 
 ### Snapshot response
 
@@ -114,6 +120,69 @@ revision and scope.
   "components": [],
   "nodes": [],
   "facts": {},
+  "ui": {
+    "protocol": "a3s.test.ui-understanding/1",
+    "observationId": "ui-42-0123456789abcdef",
+    "pageRevision": 42,
+    "viewport": {
+      "width": 1440,
+      "height": 900,
+      "dpr": 2,
+      "visual": { "x": 0, "y": 0, "width": 960, "height": 600, "scale": 1.5 }
+    },
+    "scope": { "kind": "page" },
+    "budget": {
+      "limits": {
+        "nodes": 200,
+        "stateSamples": 200,
+        "stringBytes": 4096,
+        "encodedBytes": 262144,
+        "durationMs": 32
+      },
+      "used": {
+        "nodes": 84,
+        "stateSamples": 12,
+        "encodedBytes": 24118,
+        "durationMs": 8
+      },
+      "truncated": false,
+      "reasons": []
+    },
+    "evidence": {
+      "sourceKinds": [
+        "computed_style",
+        "dom_structure",
+        "layout_geometry"
+      ],
+      "sampledNodeIds": ["n1", "n2"],
+      "totalCandidateNodes": 84,
+      "omittedNodes": 0,
+      "inaccessibleStyleSheets": 0
+    },
+    "style": {
+      "colors": [],
+      "typography": [],
+      "spacing": [],
+      "radii": [],
+      "shadows": [],
+      "zIndices": [],
+      "customProperties": [],
+      "responsiveConditions": []
+    },
+    "layout": { "nodes": [], "edges": [] },
+    "components": [],
+    "stateDiffs": [],
+    "motion": {
+      "prefersReducedMotion": false,
+      "transitions": [],
+      "animations": [],
+      "keyframeNames": [],
+      "stickyNodeIds": [],
+      "scrollContainerNodeIds": [],
+      "canvasNodeIds": [],
+      "mediaNodeIds": []
+    }
+  },
   "removedNodeIds": [],
   "truncated": false,
   "nextCursor": null
@@ -122,6 +191,54 @@ revision and scope.
 
 Node IDs are SDK-private handles. A3S Browser maps current node IDs to A3S
 observation-bound `@cN` refs. Callers never persist or act on a raw node ID.
+
+### UI understanding evidence
+
+The optional nested UI record describes browser-computed visual facts that the
+accessibility tree does not carry. It is additive evidence, not a replacement
+tree:
+
+- `style` groups observed colors by CSS property and node, and records
+  typography, spacing, radii, shadows, z-index values, safe document-root
+  design properties, and same-origin responsive conditions. Counts and
+  confidence make observations distinguishable from inferred design roles.
+- `layout` records current Flex, Grid, flow, overflow, order, geometry,
+  containing, offset-parent, scroll-container, and stacking-context
+  relationships.
+- `components` contains repeated structures only. A deterministic fingerprint
+  combines tag, accessible role, stable semantic state, bounded subtree shape,
+  and a computed-style summary. Class names alone cannot create a component
+  cluster, and the runtime does not guess a product component type.
+- `stateDiffs` compares a previously observed default state with a real hover,
+  focus, focus-visible, checked, expanded, selected, or disabled state. Test
+  Kit does not dispatch an event, move focus, or mutate state for collection.
+- `motion` records transitions, CSS and Web Animations, keyframe names, sticky
+  nodes, scroll containers, canvas and media surfaces, and the current
+  reduced-motion preference.
+
+`observationId` identifies this exact transient visual projection. It can
+change as focus or an animation changes computed state without advancing the
+page revision. `pageRevision`, viewport, and scope must still match the
+containing Page Context record. The Web driver rejects an unsupported
+protocol, stale binding, invalid identifier or geometry, unknown field,
+non-observational confidence, inconsistent truncation, excess JSON depth, or
+any collection/string/encoded-size budget violation.
+
+Installation defaults are 200 sampled UI nodes, 200 state candidates, 32 ms,
+and 256 KiB. The hard ceilings are 1,000 nodes, 1,000 state candidates, 100 ms,
+and 1 MiB. `maxUiNodes`, `maxUiStateSamples`, `maxUiDurationMs`, and
+`maxUiEncodedBytes` lower installation ceilings; request limits may lower them
+again. `uiUnderstanding={false}` disables the projection for an installation.
+Cross-origin stylesheet rules are never bypassed; their count is reported as
+inaccessible evidence. Custom-property values are admitted only for bounded,
+syntactically safe design values and never for secret-like names or URLs.
+
+The UI record exposes no `eval`, event dispatch, cookie, storage, network,
+filesystem, framework-internal state, or workspace operation. It cannot pass
+a test, click an element, or authorize a repair. Explicitly submitted findings
+carry the same bounded record inside their `untrusted: true` repair context so
+the authorized coding agent can correlate the selected node with the page's
+visual system.
 
 ### Geometry
 

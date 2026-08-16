@@ -219,13 +219,26 @@ After rendering, Test Kit publishes bounded, revisioned context:
 - Accessible semantics, DOM and open Shadow DOM structure, and form state.
 - Component identity, bounded source hints, and preferred semantic locators.
 - Viewport, document, and normalized coordinates for actionable elements.
-- Bounded computed styles, product facts, and explicit redaction.
+- Observed color, typography, spacing, radius, shadow, and safe design-token
+  profiles with source counts and confidence.
+- Flex, Grid, flow, scroll-container, and stacking relationships plus
+  deterministic repeated-component clusters that do not guess from class
+  names alone.
+- Real default-to-hover/focus/checked/expanded state differences and bounded
+  CSS, Web Animations, sticky, canvas, media, and responsive evidence.
+- Product facts, explicit redaction, and node/state/string/byte/time budgets.
 
 Mutation, resize, scroll, viewport, and navigation signals advance the surface
 revision. The review overlay lets a person mark one element or an ordered
 batch, attach repair intent, save a draft, and explicitly send it to the
 session-owning coding agent. A fresh browser run verifies admitted changes
 before acceptance.
+
+UI understanding is an additive `a3s.test.ui-understanding/1` evidence block
+inside Page Context. Its observation ID binds transient computed state without
+turning every animation frame or focus move into a new page revision. It does
+not replace the browser accessibility tree, execute page-authored code, infer
+component types from class names, or authorize an action or repair.
 
 The review surface follows `<html lang>` by default and provides complete
 English and Simplified Chinese workflow copy, including status announcements

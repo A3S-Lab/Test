@@ -520,6 +520,7 @@ fn observation(nodes: Vec<PageContextNode>) -> SurfaceObservation {
         components: Vec::new(),
         nodes,
         facts: Map::new(),
+        ui: None,
         removed_node_ids: Vec::new(),
         truncated: false,
         next_cursor: None,

@@ -29,9 +29,24 @@ The core does not depend on a browser, desktop perception, terminal emulation, C
 
 ## Understanding happens after rendering
 
-The browser accessibility tree is an important fact source, but it does not express component ownership, bounded source hints, multi-space geometry, visual viewport state, controlled product facts, or human repair state. Embedded Test Kit adds that information after rendering and publishes bounded Page Context under a monotonic revision.
+The browser already computes DOM structure, accessibility semantics, CSS layout, stacking, scrolling, and viewports. Replacing that renderer with another perception system would discard exact facts. Embedded Test Kit instead derives a bounded projection after rendering.
 
-Page context does not mutate the host DOM or replace browser observation. A3S Test checks driver semantics and the Test Kit revision inside one observation so it cannot combine state from different moments.
+```text
+browser render
+  ├── accessibility tree ── roles, names, and native state
+  ├── Page Context ───────── component ownership, locators, geometry, product facts
+  └── UI understanding ───── style profile, layout graph, repeated structures,
+                              state differences, responsive and motion facts
+                                      |
+                                      v
+                          one revision-bound observation
+```
+
+Page Context protocol `a3s.test.page-context/1` owns component boundaries, bounded source hints, multi-space geometry, visual viewport state, controlled product facts, and human repair context. Its optional nested `a3s.test.ui-understanding/1` record adds browser-computed visual facts: observed design tokens, Flex/Grid/flow and stacking relationships, deterministic repeated-structure fingerprints, real interaction-state differences, and motion evidence.
+
+The accessibility tree remains the semantic source of truth. UI understanding is neither another accessibility tree nor a screenshot model, and it cannot click, pass a test, claim product intent, or authorize a repair. Screenshots remain A3S Test-owned evidence; model interpretation is an optional advisory layer for surfaces such as canvas or remote desktops that lack useful DOM semantics.
+
+Page context never mutates the host DOM. Private node IDs live in a `WeakMap`, and mutation, resize, route, viewport, scroll, and form-state signals advance a monotonic page revision. Transient focus, hover, or animation state uses a separate UI `observationId`. A3S Test admits the accessibility snapshot, page revision, viewport, scope, protocol, and bounded UI evidence together or rejects the race.
 
 ## Four authority layers
 

@@ -696,6 +696,7 @@ fn page_context_observation() -> SurfaceObservation {
                 computed_styles: None,
             }],
             facts: Default::default(),
+            ui: None,
             removed_node_ids: Vec::new(),
             truncated: false,
             next_cursor: None,

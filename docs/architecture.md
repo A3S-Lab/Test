@@ -187,6 +187,16 @@ versioned semantic projection after a stable browser frame:
   candidates;
 - `getBoundingClientRect()` and the visual viewport supply CSS-pixel geometry,
   visibility, occlusion, transforms, and scroll-container relationships;
+- bounded computed-style sampling derives observed colors, typography,
+  spacing, radii, shadows, safe root design tokens, responsive conditions,
+  Flex/Grid/flow structure, stacking contexts, and motion facts;
+- deterministic structural fingerprints combine tag, role, stable semantic
+  state, bounded subtree shape, and observed style summaries to group repeated
+  components without treating class names as component truth;
+- naturally observed default, hover, focus, focus-visible, checked, expanded,
+  selected, and disabled states produce explicit style and accessibility
+  differences. Test Kit never synthesizes those interactions just to collect
+  evidence;
 - explicit component boundaries add stable ownership, source hints, readiness,
   and application facts without annotating every element;
 - `MutationObserver`, `ResizeObserver`, route, viewport, and scroll signals
@@ -195,6 +205,36 @@ versioned semantic projection after a stable browser frame:
   testing metadata into application DOM attributes;
 - the Web adapter captures the accessibility snapshot and Test Kit revision as
   one stable observation or rejects the race.
+
+The visual projection is nested protocol `a3s.test.ui-understanding/1`. It is
+not a second accessibility tree or a screenshot model. Its `pageRevision` and
+viewport must match the containing Page Context snapshot, while a separate
+`observationId` identifies transient computed state that may change during a
+CSS animation or focus transition. Node, state-sample, string, encoded-byte,
+and capture-time limits are caller-lowerable and locally capped. Every token
+retains observed properties, frequency, node evidence, and confidence; every
+layout or component record retains current node IDs. Unknown fields, stale
+bindings, invalid geometry, excess depth, or budget drift fail closed in the
+Web driver.
+
+```text
+browser render
+  ├── accessibility tree ── semantic roles, names, native state
+  ├── Page Context ───────── components, locators, geometry, product facts
+  └── UI understanding ───── style profile, layout graph, clusters,
+                              state differences, responsive and motion facts
+                                      |
+                                      v
+                          one revision-bound observation
+```
+
+These evidence sources remain independent. UI understanding cannot click,
+determine a test verdict, claim product intent, or create a repair. Screenshots
+remain A3S Test-owned evidence, and model interpretation remains an optional
+advisory provider path. When a reviewer explicitly submits a finding, the
+bounded UI block accompanies its untrusted repair context so the authorized
+coding agent can locate the affected visual system without rescanning the
+whole page.
 
 The overlay is optional and subordinate to the host page. Its default form is
 a compact, non-modal instrument panel with a single-line header, dense

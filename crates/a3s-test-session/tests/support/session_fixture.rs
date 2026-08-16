@@ -295,6 +295,7 @@ pub(crate) fn test_page_context() -> PageContextObservation {
             computed_styles: None,
         }],
         facts: serde_json::Map::new(),
+        ui: None,
         removed_node_ids: vec!["private-removed".to_string()],
         truncated: false,
         next_cursor: None,
