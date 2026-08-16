@@ -16,6 +16,10 @@ use support::testkit_browser::{
     run_review_workflow, verify_hide_until_restart_focus,
 };
 use support::testkit_bundle::bundle_browser_fixture;
+use support::web_evidence::{
+    assert_empty_browser_diagnostics, assert_nonempty_artifact, assert_png_artifact,
+    failed_run_summary,
+};
 use support::web_fixture::{get, start_static_site_fixture, start_testkit_fixture, WebFixture};
 use support::website::build_website;
 
@@ -121,6 +125,43 @@ fn website_testkit_acl_is_admitted() {
 }
 
 #[test]
+fn website_failure_summary_keeps_errors_without_dumping_passed_page_context() {
+    let report = serde_json::json!({
+        "status": "timed_out",
+        "scenarios": [{
+            "id": "desktop",
+            "status": "timed_out",
+            "cleanup_error": null,
+            "steps": [
+                {
+                    "id": "observe",
+                    "status": "passed",
+                    "duration_ms": 12,
+                    "output": { "page_context": "large-page-context-payload" },
+                    "error": null
+                },
+                {
+                    "id": "screenshot",
+                    "status": "timed_out",
+                    "duration_ms": 10_000,
+                    "error": {
+                        "code": "test.driver.web.command_unavailable",
+                        "message": "browser command exceeded 10000 ms"
+                    }
+                }
+            ]
+        }]
+    });
+
+    let summary = failed_run_summary(&report);
+
+    assert!(summary.contains("scenario desktop: timed_out"));
+    assert!(summary.contains("step screenshot: timed_out after 10000 ms"));
+    assert!(summary.contains("browser command exceeded 10000 ms"));
+    assert!(!summary.contains("large-page-context-payload"));
+}
+
+#[test]
 #[ignore = "requires website dependencies and the exact standalone agent-browser 0.26.x runtime"]
 fn real_agent_browser_runs_the_website_testkit_suite() {
     let Some(browser) = std::env::var_os("A3S_TEST_AGENT_BROWSER").map(PathBuf::from) else {
@@ -175,14 +216,20 @@ fn real_agent_browser_runs_the_website_testkit_suite() {
         .output()
         .expect("run website Test Kit E2E");
 
+    let report: serde_json::Value =
+        serde_json::from_slice(&output.stdout).unwrap_or_else(|error| {
+            panic!(
+                "website Test Kit E2E returned invalid JSON: {error}\nstdout:\n{}\nstderr:\n{}",
+                String::from_utf8_lossy(&output.stdout),
+                String::from_utf8_lossy(&output.stderr)
+            )
+        });
     assert!(
         output.status.success(),
-        "website Test Kit E2E failed\nstdout:\n{}\nstderr:\n{}",
-        String::from_utf8_lossy(&output.stdout),
+        "website Test Kit E2E failed\n{}\nstderr:\n{}",
+        failed_run_summary(&report),
         String::from_utf8_lossy(&output.stderr)
     );
-    let report: serde_json::Value =
-        serde_json::from_slice(&output.stdout).expect("website Test Kit JSON run report");
     assert_eq!(report["status"], "passed");
     let scenarios = report["scenarios"]
         .as_array()
@@ -194,10 +241,12 @@ fn real_agent_browser_runs_the_website_testkit_suite() {
     }
 
     for (scenario_index, step) in [
+        (0, "review-screenshot-evidence"),
         (0, "review-evidence"),
         (0, "semantic-evidence"),
         (0, "console-evidence"),
         (0, "page-error-evidence"),
+        (1, "mobile-layout-screenshot-evidence"),
         (1, "mobile-layout-evidence"),
         (1, "mobile-semantic-evidence"),
         (1, "mobile-console-evidence"),
@@ -213,6 +262,25 @@ fn real_agent_browser_runs_the_website_testkit_suite() {
             .map(PathBuf::from)
             .unwrap_or_else(|| panic!("website E2E step {step} omitted its evidence path"));
         assert_nonempty_artifact(temp.path(), &evidence_path);
+    }
+
+    for (scenario_index, step, width, height) in [
+        (0, "review-screenshot-evidence", 1440, 900),
+        (1, "mobile-layout-screenshot-evidence", 390, 844),
+    ] {
+        let evidence = report["scenarios"][scenario_index]["steps"]
+            .as_array()
+            .expect("website E2E steps")
+            .iter()
+            .find(|entry| entry["id"] == step)
+            .and_then(|entry| entry.pointer("/output/evidence/0"))
+            .unwrap_or_else(|| panic!("website E2E step {step} omitted its evidence"));
+        assert_eq!(evidence["media_type"], "image/png");
+        let evidence_path = evidence["path"]
+            .as_str()
+            .map(PathBuf::from)
+            .unwrap_or_else(|| panic!("website E2E step {step} omitted its evidence path"));
+        assert_png_artifact(temp.path(), &evidence_path, width, height);
     }
 
     assert_empty_browser_diagnostics(&report, temp.path());
@@ -1180,74 +1248,6 @@ fn suite(origin: &str) -> String {
 }}
 "##
     )
-}
-
-fn assert_nonempty_artifact(workspace: &Path, path: &Path) {
-    let workspace = workspace.canonicalize().expect("canonical E2E workspace");
-    let path = if path.is_absolute() {
-        path.to_path_buf()
-    } else {
-        workspace.join(path)
-    }
-    .canonicalize()
-    .expect("canonical E2E evidence");
-    assert!(
-        path.starts_with(&workspace),
-        "screenshot evidence escaped the E2E workspace: {path:?}"
-    );
-    assert!(
-        path.metadata().expect("screenshot metadata").len() > 0,
-        "screenshot evidence must not be empty"
-    );
-}
-
-fn assert_empty_browser_diagnostics(report: &serde_json::Value, workspace: &Path) {
-    for scenario in report["scenarios"]
-        .as_array()
-        .expect("website E2E scenarios")
-    {
-        let scenario_id = scenario["id"].as_str().unwrap_or("unknown");
-        for (step_suffix, pointer, label) in [
-            ("console-evidence", "/data/messages", "console messages"),
-            ("page-error-evidence", "/data/errors", "page errors"),
-        ] {
-            let step = scenario["steps"]
-                .as_array()
-                .expect("website E2E steps")
-                .iter()
-                .find(|entry| {
-                    entry["id"]
-                        .as_str()
-                        .is_some_and(|id| id.ends_with(step_suffix))
-                })
-                .unwrap_or_else(|| {
-                    panic!("website E2E scenario {scenario_id} omitted {step_suffix}")
-                });
-            let step_id = step["id"].as_str().unwrap_or(step_suffix);
-            let evidence_path = step
-                .pointer("/output/evidence/0/path")
-                .and_then(serde_json::Value::as_str)
-                .map(PathBuf::from)
-                .unwrap_or_else(|| panic!("website E2E step {step_id} omitted its evidence path"));
-            let evidence_path = if evidence_path.is_absolute() {
-                evidence_path
-            } else {
-                workspace.join(evidence_path)
-            };
-            let evidence: serde_json::Value = serde_json::from_slice(
-                &std::fs::read(&evidence_path)
-                    .unwrap_or_else(|error| panic!("read {label} evidence: {error}")),
-            )
-            .unwrap_or_else(|error| panic!("parse {label} evidence: {error}"));
-            assert_eq!(
-                evidence
-                    .pointer(pointer)
-                    .and_then(serde_json::Value::as_array),
-                Some(&Vec::new()),
-                "built website scenario {scenario_id} emitted unexpected {label}: {evidence}"
-            );
-        }
-    }
 }
 
 fn private_runtime_directories() -> BTreeSet<PathBuf> {

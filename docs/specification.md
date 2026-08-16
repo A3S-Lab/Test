@@ -278,8 +278,10 @@ dispatch or adapter writes. After screenshot, download, HAR, trace, or video
 commands complete, the expected fresh output must exist as a regular file that
 still resolves inside that root. Existing regular output is removed before a
 new capture so a zero-exit command cannot reuse stale evidence. Reconnecting an
-active video validates but preserves its in-progress file. Any output failure
-causes the turn to fail with
+active video validates but preserves its in-progress file. A Web screenshot
+must contain 1 byte through 32 MiB; empty or oversized output is rejected,
+receives a bounded cleanup attempt, and is never returned as evidence. Any
+output failure causes the turn to fail with
 `test.driver.web.artifact_output_invalid` and returns no evidence.
 
 The browser runtime/socket directory is canonicalized and bound to its

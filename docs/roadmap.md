@@ -183,9 +183,10 @@ snapshot. Pages without the SDK retain the existing Web behavior.
       verify single submission, ordered batch submission, focused and complete
       accessibility evidence, empty browser diagnostics, and exact cleanup on
       macOS and Windows CI
-- [ ] Restore PNG evidence to the production website suite after the pinned Web
-      runtime can certify bounded screenshot capture without hanging; semantic
-      evidence remains required independently
+- [x] Restore bounded desktop and mobile PNG evidence to the production website
+      suite under the pinned Web runtime, validate its signature, viewport
+      dimensions, media type, byte ceiling, and exact cleanup, and retain
+      independent interactive plus complete semantic evidence
 
 ## M7: Page-context observation and targeting
 

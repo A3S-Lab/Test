@@ -183,6 +183,10 @@ suite "website-testkit-experience" {
             text = "2 个问题"
         }
 
+        screenshot "review-screenshot-evidence" {
+            path = "screenshots/website-testkit.png"
+        }
+
         accessibility "review-evidence" {
             path = "evidence/review-interactive.json"
             interactive = true
@@ -270,6 +274,10 @@ suite "website-testkit-experience" {
 
         snapshot "mobile-localized-layout-component" {
             interactive = true
+        }
+
+        screenshot "mobile-layout-screenshot-evidence" {
+            path = "screenshots/website-testkit-mobile.png"
         }
 
         accessibility "mobile-layout-evidence" {

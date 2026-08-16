@@ -5,7 +5,8 @@ use tokio::io::AsyncReadExt;
 
 use crate::path_security::{is_link_like, normalize_canonical_path};
 
-pub(crate) const MAX_GROUNDING_IMAGE_BYTES: u64 = 32 * 1_024 * 1_024;
+pub(crate) const MAX_SCREENSHOT_BYTES: u64 = 32 * 1_024 * 1_024;
+pub(crate) const MAX_GROUNDING_IMAGE_BYTES: u64 = MAX_SCREENSHOT_BYTES;
 
 pub(crate) async fn prepare_artifact_root(path: &Path) -> Result<PathBuf, DriverError> {
     let absolute = absolute_path(path)?;

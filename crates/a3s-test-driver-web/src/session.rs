@@ -23,7 +23,7 @@ use crate::actions::{
 };
 use crate::artifact::{
     admit_artifact_path, prepare_artifact_path, prepare_artifact_root, read_bounded_artifact,
-    validate_artifact_file, MAX_GROUNDING_IMAGE_BYTES,
+    validate_artifact_file, MAX_GROUNDING_IMAGE_BYTES, MAX_SCREENSHOT_BYTES,
 };
 use crate::capabilities;
 use crate::process::{create_runtime_directory, terminate_owned_session, SessionRegistration};
@@ -1106,7 +1106,12 @@ impl AgentBrowserSession {
         let data = self
             .execute_command(vec!["screenshot".into(), path.as_os_str().to_os_string()])
             .await?;
-        validate_artifact_file(&self.artifacts_dir, &path).await?;
+        if let Err(error) =
+            read_bounded_artifact(&self.artifacts_dir, &path, MAX_SCREENSHOT_BYTES).await
+        {
+            let _ = tokio::fs::remove_file(&path).await;
+            return Err(error);
+        }
         Ok(StepOutput::new("screenshot captured")
             .with_data(data)
             .with_evidence(evidence(requested, &path, media_type_for_path(&path))))

@@ -898,14 +898,24 @@ worker threads on drop. No fixed port or external website is part of the E2E
 contract.
 
 The normal workspace gate exercises the fixture's route and lifecycle
-contract without a browser. A dedicated macOS CI job installs the exact
-admitted standalone `agent-browser` 0.26.0 runtime and runs the ignored real
-browser test explicitly. That path verifies semantic label targeting, form
-submission, an assertion, same-origin navigation, non-empty screenshot
-evidence, browser-level cross-domain containment with zero sentinel requests,
-and removal of the private browser runtime directory.
+contract without a browser. A dedicated macOS and Windows CI matrix installs
+the exact admitted standalone `agent-browser` 0.26.0 runtime and runs the
+ignored real browser tests explicitly. That path verifies semantic label
+targeting, form submission, an assertion, same-origin navigation, bounded
+screenshot evidence, browser-level cross-domain containment with zero sentinel
+requests, and removal of the private browser runtime directory. The same
+pinned runtime builds the production documentation site, captures desktop and
+mobile viewport PNGs, and verifies their signatures, exact dimensions, media
+types, 32 MiB byte ceilings, independent interactive and complete
+accessibility evidence, empty browser diagnostics, and exact cleanup.
+The production screenshot gate injects that exact Chrome Headless Shell rather
+than relying on a developer machine's bundled full Chrome. Full Chrome on
+macOS arm64 can leave `Page.captureScreenshot` waiting on a compositor frame;
+the command deadline and owned-process cleanup keep that failure bounded, but
+the locked CI certification path therefore uses Headless Shell. A developer
+run against bundled full Chrome is diagnostic rather than completion evidence.
 The ordinary Rust quality job is a fail-fast-disabled macOS, Linux, and Windows
-matrix; the real Chrome path remains isolated in its pinned macOS job.
+matrix; the real Chrome path remains isolated in its pinned browser job.
 
 Command executor errors carry a typed dispatch phase. Only an unavailable
 executable before dispatch is retryable. A timeout or output failure may have

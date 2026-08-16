@@ -14,6 +14,7 @@ use async_trait::async_trait;
 struct ArtifactExecutor {
     invocations: Mutex<Vec<CommandInvocation>>,
     materialize_outputs: bool,
+    artifact_size: Option<u64>,
 }
 
 impl ArtifactExecutor {
@@ -21,6 +22,15 @@ impl ArtifactExecutor {
         Self {
             invocations: Mutex::new(Vec::new()),
             materialize_outputs: true,
+            artifact_size: None,
+        }
+    }
+
+    fn with_artifact_size(artifact_size: u64) -> Self {
+        Self {
+            invocations: Mutex::new(Vec::new()),
+            materialize_outputs: true,
+            artifact_size: Some(artifact_size),
         }
     }
 
@@ -41,7 +51,12 @@ impl CommandExecutor for ArtifactExecutor {
                 if let Some(parent) = path.parent() {
                     std::fs::create_dir_all(parent).expect("fake artifact parent");
                 }
-                std::fs::write(path, b"fake-browser-artifact").expect("fake artifact");
+                if let Some(size) = self.artifact_size {
+                    let artifact = std::fs::File::create(path).expect("fake artifact");
+                    artifact.set_len(size).expect("size fake artifact");
+                } else {
+                    std::fs::write(path, b"fake-browser-artifact").expect("fake artifact");
+                }
             }
         }
         self.invocations.lock().unwrap().push(invocation);
@@ -221,6 +236,54 @@ async fn successful_browser_command_without_an_artifact_is_rejected() {
     assert_eq!(error.code(), "test.driver.web.artifact_output_invalid");
     assert_eq!(executor.invocation_count(), 2);
     assert!(!stale.exists());
+    session.close().await.expect("close session");
+}
+
+#[tokio::test]
+async fn oversized_screenshot_is_rejected_and_removed_after_browser_dispatch() {
+    const OVERSIZED_SCREENSHOT_BYTES: u64 = 32 * 1_024 * 1_024 + 1;
+
+    let temp = tempfile::tempdir().expect("temp dir");
+    let context = context(&temp);
+    let executor = Arc::new(ArtifactExecutor::with_artifact_size(
+        OVERSIZED_SCREENSHOT_BYTES,
+    ));
+    let mut session = driver(Arc::clone(&executor))
+        .open(&context)
+        .await
+        .expect("session");
+    let path = context.artifacts_dir.join("oversized.png");
+
+    let error = session
+        .execute(&screenshot("oversized.png"))
+        .await
+        .expect_err("oversized screenshot must be rejected");
+
+    assert_eq!(error.code(), "test.driver.web.artifact_output_invalid");
+    assert_eq!(executor.invocation_count(), 2);
+    assert!(!path.exists(), "invalid screenshot must not be retained");
+    session.close().await.expect("close session");
+}
+
+#[tokio::test]
+async fn empty_screenshot_is_rejected_and_removed_after_browser_dispatch() {
+    let temp = tempfile::tempdir().expect("temp dir");
+    let context = context(&temp);
+    let executor = Arc::new(ArtifactExecutor::with_artifact_size(0));
+    let mut session = driver(Arc::clone(&executor))
+        .open(&context)
+        .await
+        .expect("session");
+    let path = context.artifacts_dir.join("empty.png");
+
+    let error = session
+        .execute(&screenshot("empty.png"))
+        .await
+        .expect_err("empty screenshot must be rejected");
+
+    assert_eq!(error.code(), "test.driver.web.artifact_output_invalid");
+    assert_eq!(executor.invocation_count(), 2);
+    assert!(!path.exists(), "invalid screenshot must not be retained");
     session.close().await.expect("close session");
 }
 

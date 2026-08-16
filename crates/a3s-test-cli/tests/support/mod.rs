@@ -9,6 +9,8 @@ pub mod testkit_browser;
 #[allow(dead_code)]
 pub mod testkit_bundle;
 #[allow(dead_code)]
+pub mod web_evidence;
+#[allow(dead_code)]
 pub mod web_fixture;
 #[allow(dead_code)]
 pub mod website;

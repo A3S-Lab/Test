@@ -49,6 +49,11 @@
 
 ### Fixed
 
+- Restored desktop and mobile PNG evidence to the production website browser
+  regression. Empty or greater-than-32-MiB Web screenshots are now rejected
+  with an immediate artifact-cleanup attempt, while the pinned-runtime suite
+  verifies PNG identity, viewport dimensions, media type, independent
+  accessibility evidence, empty diagnostics, and cleanup.
 - Replaced the homepage's indefinite Page Context loading state with an
   actionable retry message after the bounded capture deadline, and corrected
   website regression documentation to describe the semantic evidence it
