@@ -1,5 +1,56 @@
 use super::*;
 use a3s_test_core::{StepOutput, Target};
+use clap::Parser;
+
+#[test]
+fn parses_an_explicit_synthetic_microphone_profile() {
+    let cli = crate::Cli::try_parse_from([
+        "a3s-test",
+        "agent",
+        "start",
+        "http://127.0.0.1:4180",
+        "--session",
+        "voice",
+        "--goal",
+        "Test realtime voice",
+        "--success",
+        "The session is listening",
+        "--browser-microphone",
+        "synthetic",
+    ])
+    .expect("synthetic microphone CLI");
+    let crate::Commands::Agent(AgentArgs {
+        command: AgentCommand::Start(args),
+    }) = cli.command
+    else {
+        panic!("expected agent start command");
+    };
+
+    assert_eq!(
+        args.browser_microphone,
+        crate::BrowserMicrophoneArg::Synthetic
+    );
+}
+
+#[test]
+fn persists_the_microphone_profile_without_breaking_legacy_metadata() {
+    let mut state = test_state(None);
+    state.browser.microphone = StoredBrowserMicrophone::Synthetic;
+    let encoded = serde_json::to_value(&state).expect("session metadata");
+    assert_eq!(encoded["browser"]["microphone"], "synthetic");
+
+    let mut legacy = encoded;
+    legacy["browser"]
+        .as_object_mut()
+        .expect("browser config")
+        .remove("microphone");
+    let decoded: AgentSessionState =
+        serde_json::from_value(legacy).expect("legacy session metadata");
+    assert_eq!(
+        decoded.browser.microphone,
+        StoredBrowserMicrophone::Disabled
+    );
+}
 
 #[test]
 fn ref_actions_require_the_latest_observation() {
@@ -262,6 +313,7 @@ fn test_state(latest_observation: Option<u64>) -> AgentSessionState {
             headed: false,
             command_timeout_ms: 30_000,
             idle_timeout_ms: 300_000,
+            microphone: Default::default(),
         },
         namespace: "namespace".to_string(),
         driver_session: "agent-test".to_string(),

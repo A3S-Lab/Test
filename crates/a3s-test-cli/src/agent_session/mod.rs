@@ -20,7 +20,7 @@ use a3s_test_core::{
 };
 use a3s_test_driver_web::{
     AgentBrowserConfig, AgentBrowserConnectionConfig, AgentBrowserDriver, AgentBrowserSession,
-    BrowserCommand, BrowserNetworkPolicy,
+    BrowserCommand, BrowserMicrophone, BrowserNetworkPolicy,
 };
 use anyhow::{Context, Result};
 use serde::Serialize;
@@ -42,7 +42,7 @@ use self::runtime::{
 use self::store::{
     AgentSessionError, AgentSessionReport, AgentSessionState, AgentSessionStatus,
     AgentSessionStore, StoredBrowserConfig, StoredBrowserContainment, StoredBrowserDriver,
-    SESSION_SCHEMA_VERSION,
+    StoredBrowserMicrophone, SESSION_SCHEMA_VERSION,
 };
 use self::validation::{compact_target, validate_session_id};
 use super::{validate_timeout, BrowserDriverKind};
@@ -328,6 +328,10 @@ async fn start(args: StartArgs) -> Result<ExitCode> {
             headed: args.headed,
             command_timeout_ms: args.command_timeout_ms,
             idle_timeout_ms: args.idle_timeout_ms,
+            microphone: match args.browser_microphone {
+                super::BrowserMicrophoneArg::Disabled => StoredBrowserMicrophone::Disabled,
+                super::BrowserMicrophoneArg::Synthetic => StoredBrowserMicrophone::Synthetic,
+            },
         },
         namespace: session_namespace(&workspace, &args.session),
         driver_session: driver_session_id(&args.session),
@@ -799,6 +803,10 @@ async fn connect(
         headed: state.browser.headed,
         command_timeout: Duration::from_millis(state.browser.command_timeout_ms),
         idle_timeout: Duration::from_millis(state.browser.idle_timeout_ms),
+        microphone: match state.browser.microphone {
+            StoredBrowserMicrophone::Disabled => BrowserMicrophone::Disabled,
+            StoredBrowserMicrophone::Synthetic => BrowserMicrophone::Synthetic,
+        },
         network_policy: stored_browser_network_policy(state, purpose)?,
     });
     driver

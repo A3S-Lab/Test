@@ -12,6 +12,18 @@ pub enum BrowserCommand {
     Standalone { executable: PathBuf },
 }
 
+/// Explicit microphone behavior for a browser session.
+///
+/// Real device capture is intentionally not automated. The synthetic profile
+/// is opt-in and gives Chromium a deterministic local media device while
+/// accepting the browser permission prompt without human intervention.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub enum BrowserMicrophone {
+    #[default]
+    Disabled,
+    Synthetic,
+}
+
 impl BrowserCommand {
     pub(crate) fn program(&self) -> &Path {
         match self {
@@ -45,7 +57,14 @@ impl BrowserCommand {
         )
     }
 
-    pub(crate) fn enforced_headless_environment(&self) -> (OsString, OsString) {
+    pub(crate) fn launch_arguments_environment(
+        &self,
+        headed: bool,
+        microphone: BrowserMicrophone,
+    ) -> Option<(OsString, OsString)> {
+        if headed && microphone == BrowserMicrophone::Disabled {
+            return None;
+        }
         let (name, inherited) = match self {
             Self::A3s { .. } => (
                 "A3S_USE_BROWSER_ARGS",
@@ -56,7 +75,15 @@ impl BrowserCommand {
                 first_environment_value(&["AGENT_BROWSER_ARGS"]),
             ),
         };
-        (OsString::from(name), with_enforced_headless(inherited))
+        let mut arguments = inherited.unwrap_or_default();
+        if !headed {
+            append_launch_argument(&mut arguments, "--headless=new");
+        }
+        if microphone == BrowserMicrophone::Synthetic {
+            append_launch_argument(&mut arguments, "--use-fake-device-for-media-stream");
+            append_launch_argument(&mut arguments, "--use-fake-ui-for-media-stream");
+        }
+        (!arguments.is_empty()).then(|| (OsString::from(name), OsString::from(arguments)))
     }
 
     pub(crate) fn runtime_environment(&self, runtime_dir: &Path) -> (OsString, OsString) {
@@ -140,13 +167,17 @@ fn first_environment_value(names: &[&str]) -> Option<String> {
     })
 }
 
-fn with_enforced_headless(inherited: Option<String>) -> OsString {
-    let mut arguments = inherited.unwrap_or_default();
+fn append_launch_argument(arguments: &mut String, value: &str) {
+    if arguments
+        .split([',', '\n'])
+        .any(|argument| argument.trim() == value)
+    {
+        return;
+    }
     if !arguments.is_empty() {
         arguments.push(',');
     }
-    arguments.push_str("--headless=new");
-    OsString::from(arguments)
+    arguments.push_str(value);
 }
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
@@ -245,6 +276,7 @@ pub struct AgentBrowserConfig {
     pub headed: bool,
     pub command_timeout: Duration,
     pub idle_timeout: Duration,
+    pub microphone: BrowserMicrophone,
     pub network_policy: BrowserNetworkPolicy,
 }
 
@@ -344,15 +376,26 @@ fn invalid_domain_pattern(value: &str) -> DriverError {
 
 #[cfg(test)]
 mod tests {
-    use super::{with_enforced_headless, BrowserNetworkPolicy};
+    use std::path::PathBuf;
+
+    use super::{BrowserCommand, BrowserMicrophone, BrowserNetworkPolicy};
 
     #[test]
-    fn enforced_headless_preserves_existing_browser_arguments() {
+    fn launch_arguments_are_typed_and_deduplicated() {
+        let command = BrowserCommand::Standalone {
+            executable: PathBuf::from("agent-browser"),
+        };
         assert_eq!(
-            with_enforced_headless(Some("--no-sandbox,--disable-gpu".to_string())),
-            "--no-sandbox,--disable-gpu,--headless=new"
+            command.launch_arguments_environment(true, BrowserMicrophone::Synthetic),
+            Some((
+                "AGENT_BROWSER_ARGS".into(),
+                "--use-fake-device-for-media-stream,--use-fake-ui-for-media-stream".into(),
+            ))
         );
-        assert_eq!(with_enforced_headless(None), "--headless=new");
+        assert_eq!(
+            command.launch_arguments_environment(true, BrowserMicrophone::Disabled),
+            None
+        );
     }
 
     #[test]

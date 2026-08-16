@@ -31,6 +31,14 @@ pub(crate) enum StoredBrowserContainment {
     HostnameV1,
 }
 
+#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub(crate) enum StoredBrowserMicrophone {
+    #[default]
+    Disabled,
+    Synthetic,
+}
+
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub(crate) struct StoredBrowserConfig {
     pub(crate) driver: StoredBrowserDriver,
@@ -38,6 +46,8 @@ pub(crate) struct StoredBrowserConfig {
     pub(crate) headed: bool,
     pub(crate) command_timeout_ms: u64,
     pub(crate) idle_timeout_ms: u64,
+    #[serde(default)]
+    pub(crate) microphone: StoredBrowserMicrophone,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]

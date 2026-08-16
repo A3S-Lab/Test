@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use a3s_test_core::ModifierKey;
 use clap::{Args, Subcommand, ValueEnum};
 
-use super::super::BrowserDriverKind;
+use super::super::{BrowserDriverKind, BrowserMicrophoneArg};
 
 #[derive(Debug, Args)]
 pub(crate) struct AgentArgs {
@@ -119,6 +119,9 @@ pub(super) struct StartArgs {
     /// Override the browser driver executable.
     #[arg(long)]
     pub(super) browser_executable: Option<PathBuf>,
+    /// Synthetic grants a deterministic local microphone without using a real device.
+    #[arg(long, value_enum, default_value_t = BrowserMicrophoneArg::Disabled)]
+    pub(super) browser_microphone: BrowserMicrophoneArg,
     /// Show the browser window; omitted runs enforce headless execution.
     #[arg(long)]
     pub(super) headed: bool,

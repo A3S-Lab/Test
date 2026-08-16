@@ -13,7 +13,7 @@ mod runtime;
 mod session;
 
 pub use capabilities::{BrowserCapabilities, BrowserIntegration, WebCapability};
-pub use config::{AgentBrowserConfig, BrowserCommand, BrowserNetworkPolicy};
+pub use config::{AgentBrowserConfig, BrowserCommand, BrowserMicrophone, BrowserNetworkPolicy};
 pub use executor::{
     CommandError, CommandErrorKind, CommandExecutor, CommandInvocation, CommandOutput,
     TokioCommandExecutor,

@@ -528,6 +528,7 @@ async fn mcp_web_ingests_claims_and_completes_a_page_repair_durably() {
             headed: false,
             command_timeout: Duration::from_secs(5),
             idle_timeout: Duration::from_secs(30),
+            microphone: Default::default(),
             network_policy: BrowserNetworkPolicy::restricted_to_domains(["127.0.0.1"])
                 .expect("network policy"),
         },

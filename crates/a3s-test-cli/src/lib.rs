@@ -17,7 +17,7 @@ use a3s_test_driver_tui::{
 };
 use a3s_test_driver_web::{
     terminate_active_commands, AgentBrowserConfig, AgentBrowserDriver, BrowserCapabilities,
-    BrowserCommand,
+    BrowserCommand, BrowserMicrophone,
 };
 use a3s_test_runner::{ContractRegistry, RetryPolicy, RunResult, RunStatus, Runner, RunnerOptions};
 use anyhow::{Context, Result};
@@ -90,6 +90,22 @@ enum BrowserDriverKind {
     Standalone,
 }
 
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq, ValueEnum)]
+enum BrowserMicrophoneArg {
+    #[default]
+    Disabled,
+    Synthetic,
+}
+
+impl From<BrowserMicrophoneArg> for BrowserMicrophone {
+    fn from(value: BrowserMicrophoneArg) -> Self {
+        match value {
+            BrowserMicrophoneArg::Disabled => Self::Disabled,
+            BrowserMicrophoneArg::Synthetic => Self::Synthetic,
+        }
+    }
+}
+
 #[derive(Debug, Args)]
 struct CapabilitiesArgs {
     /// Browser driver integration.
@@ -116,6 +132,9 @@ struct RunArgs {
     /// Override the browser driver executable.
     #[arg(long)]
     browser_executable: Option<PathBuf>,
+    /// Synthetic grants a deterministic local microphone without using a real device.
+    #[arg(long, value_enum, default_value_t = BrowserMicrophoneArg::Disabled)]
+    browser_microphone: BrowserMicrophoneArg,
     /// Show the browser window; omitted runs enforce headless execution.
     #[arg(long)]
     headed: bool,
@@ -159,6 +178,9 @@ struct McpArgs {
     /// Override the browser driver executable used by Web MCP sessions.
     #[arg(long)]
     browser_executable: Option<PathBuf>,
+    /// Synthetic grants Web MCP sessions a deterministic local microphone.
+    #[arg(long, value_enum, default_value_t = BrowserMicrophoneArg::Disabled)]
+    browser_microphone: BrowserMicrophoneArg,
     /// Show Web MCP browser windows.
     #[arg(long)]
     headed: bool,
@@ -308,6 +330,7 @@ async fn capabilities(args: CapabilitiesArgs) -> Result<ExitCode> {
         headed: false,
         command_timeout: Duration::from_millis(args.command_timeout_ms),
         idle_timeout: Duration::from_secs(30),
+        microphone: BrowserMicrophone::Disabled,
         network_policy: Default::default(),
     });
     let capabilities = browser.capabilities().await.map_err(anyhow::Error::new)?;
@@ -353,10 +376,12 @@ async fn run(args: RunArgs) -> Result<ExitCode> {
             headed: args.headed,
             command_timeout: Duration::from_millis(args.command_timeout_ms),
             idle_timeout: Duration::from_millis(args.idle_timeout_ms),
+            microphone: args.browser_microphone.into(),
             network_policy: Default::default(),
         })));
     } else if args.browser_executable.is_some()
         || args.browser_driver != BrowserDriverKind::A3s
+        || args.browser_microphone != BrowserMicrophoneArg::Disabled
         || args.headed
     {
         anyhow::bail!("Web options were provided but the suite has no Web scenarios");
@@ -433,6 +458,7 @@ async fn serve_mcp(args: McpArgs) -> Result<ExitCode> {
             headed: args.headed,
             command_timeout: Duration::from_millis(args.command_timeout_ms),
             idle_timeout: Duration::from_millis(args.idle_timeout_ms),
+            microphone: args.browser_microphone.into(),
             network_policy,
         });
         drivers.push(Arc::new(mcp_web::McpWebDriver::new(
@@ -440,6 +466,7 @@ async fn serve_mcp(args: McpArgs) -> Result<ExitCode> {
             initial_url.clone(),
         )));
     } else if args.browser_executable.is_some()
+        || args.browser_microphone != BrowserMicrophoneArg::Disabled
         || args.headed
         || !args.web_allowed_domains.is_empty()
     {

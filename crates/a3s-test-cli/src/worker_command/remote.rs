@@ -273,6 +273,7 @@ async fn build_profiles(args: &WorkerServeArgs) -> Result<BuiltProfiles> {
             headed: false,
             command_timeout: Duration::from_millis(args.command_timeout_ms),
             idle_timeout: Duration::from_millis(args.idle_timeout_ms),
+            microphone: Default::default(),
             network_policy,
         };
         let browser =

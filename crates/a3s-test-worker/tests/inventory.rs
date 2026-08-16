@@ -32,6 +32,7 @@ fn standalone_web() -> WorkerSurfaceCapability {
                 WebCapability::NetworkRoutes,
                 WebCapability::PageErrors,
                 WebCapability::Screenshots,
+                WebCapability::SyntheticMicrophone,
                 WebCapability::Tabs,
                 WebCapability::Trace,
                 WebCapability::Uploads,

@@ -14,8 +14,8 @@ use a3s_test_core::{
 };
 use a3s_test_driver_web::{
     AgentBrowserConfig, AgentBrowserConnectionConfig, AgentBrowserDriver, BrowserCommand,
-    BrowserIntegration, BrowserNetworkPolicy, CommandError, CommandExecutor, CommandInvocation,
-    CommandOutput, WebCapability,
+    BrowserIntegration, BrowserMicrophone, BrowserNetworkPolicy, CommandError, CommandExecutor,
+    CommandInvocation, CommandOutput, WebCapability,
 };
 use async_trait::async_trait;
 
@@ -352,6 +352,7 @@ async fn maps_typed_actions_and_scopes_browser_lifecycle() {
         headed: false,
         command_timeout: Duration::from_secs(5),
         idle_timeout: Duration::from_secs(30),
+        microphone: Default::default(),
         network_policy: BrowserNetworkPolicy::restricted(
             ["https://example.test"],
             ["*.cdn.example.test"],
@@ -506,6 +507,7 @@ async fn scrolls_direct_click_targets_into_view_before_dispatch() {
             headed: false,
             command_timeout: Duration::from_secs(5),
             idle_timeout: Duration::from_secs(2),
+            microphone: Default::default(),
             network_policy: Default::default(),
         },
         executor.clone(),
@@ -559,6 +561,67 @@ async fn scrolls_direct_click_targets_into_view_before_dispatch() {
 }
 
 #[tokio::test]
+async fn synthetic_microphone_is_explicit_and_stable_across_session_turns() {
+    let temp = tempfile::tempdir().expect("tempdir");
+    let executor = Arc::new(RecordingExecutor::default());
+    let driver = AgentBrowserDriver::with_executor(
+        AgentBrowserConfig {
+            command: BrowserCommand::A3s {
+                executable: PathBuf::from("/opt/a3s"),
+            },
+            namespace: "voice".to_string(),
+            headed: true,
+            command_timeout: Duration::from_secs(5),
+            idle_timeout: Duration::from_secs(30),
+            microphone: BrowserMicrophone::Synthetic,
+            network_policy: BrowserNetworkPolicy::restricted(
+                ["http://127.0.0.1:4180"],
+                std::iter::empty::<String>(),
+            )
+            .expect("network policy"),
+        },
+        executor.clone(),
+    );
+    let mut session = driver
+        .open(&ScenarioContext {
+            run_id: "voice".to_string(),
+            scenario_id: "realtime".to_string(),
+            artifacts_dir: temp.path().join("artifacts"),
+        })
+        .await
+        .expect("session");
+
+    session
+        .execute(&step(
+            "open",
+            Action::Navigate {
+                url: "http://127.0.0.1:4180".to_string(),
+            },
+        ))
+        .await
+        .expect("navigate");
+    session
+        .execute(&step("observe", Action::Snapshot { interactive: true }))
+        .await
+        .expect("snapshot");
+    session.close().await.expect("close");
+
+    let invocations = executor.invocations.lock().unwrap();
+    assert!(invocations.len() >= 4);
+    assert!(!invocations[0]
+        .env
+        .contains_key(&OsString::from("A3S_USE_BROWSER_ARGS")));
+    for invocation in &invocations[1..] {
+        assert_eq!(
+            invocation.env.get(&OsString::from("A3S_USE_BROWSER_ARGS")),
+            Some(&OsString::from(
+                "--use-fake-device-for-media-stream,--use-fake-ui-for-media-stream"
+            ))
+        );
+    }
+}
+
+#[tokio::test]
 async fn standalone_driver_uses_the_upstream_policy_contract_and_a_safe_idle_floor() {
     let temp = tempfile::tempdir().expect("tempdir");
     let artifacts = temp.path().join("artifacts");
@@ -572,6 +635,7 @@ async fn standalone_driver_uses_the_upstream_policy_contract_and_a_safe_idle_flo
             headed: false,
             command_timeout: Duration::from_secs(5),
             idle_timeout: Duration::from_secs(2),
+            microphone: Default::default(),
             network_policy: BrowserNetworkPolicy::restricted_to_domains(["127.0.0.1"])
                 .expect("network policy"),
         },
@@ -660,6 +724,7 @@ async fn exposes_a_full_browser_snapshot_as_the_agent_observation() {
             headed: false,
             command_timeout: Duration::from_secs(5),
             idle_timeout: Duration::from_secs(2),
+            microphone: Default::default(),
             network_policy: Default::default(),
         },
         executor.clone(),
@@ -964,6 +1029,7 @@ async fn discovers_and_admits_the_typed_browser_protocol() {
             headed: false,
             command_timeout: Duration::from_secs(5),
             idle_timeout: Duration::from_secs(2),
+            microphone: Default::default(),
             network_policy: Default::default(),
         },
         executor.clone(),
@@ -1006,6 +1072,7 @@ async fn a3s_browser_reports_exact_origin_containment() {
             headed: false,
             command_timeout: Duration::from_secs(5),
             idle_timeout: Duration::from_secs(2),
+            microphone: Default::default(),
             network_policy: BrowserNetworkPolicy::restricted(
                 ["https://example.test"],
                 std::iter::empty::<&str>(),
@@ -1035,6 +1102,7 @@ async fn rejects_an_unadmitted_browser_version_before_opening_a_session() {
             headed: false,
             command_timeout: Duration::from_secs(5),
             idle_timeout: Duration::from_secs(2),
+            microphone: Default::default(),
             network_policy: Default::default(),
         },
         executor.clone(),
@@ -1077,6 +1145,7 @@ async fn marks_only_pre_dispatch_command_failures_as_retryable() {
                 headed: false,
                 command_timeout: Duration::from_secs(5),
                 idle_timeout: Duration::from_secs(2),
+                microphone: Default::default(),
                 network_policy: Default::default(),
             },
             executor.clone(),
@@ -1126,6 +1195,7 @@ async fn failed_initial_command_does_not_mask_failed_exact_cleanup() {
             headed: false,
             command_timeout: Duration::from_secs(5),
             idle_timeout: Duration::from_secs(2),
+            microphone: Default::default(),
             network_policy: Default::default(),
         },
         executor.clone(),
@@ -1172,6 +1242,7 @@ async fn maps_extended_web_actions_and_records_evidence() {
             headed: false,
             command_timeout: Duration::from_secs(5),
             idle_timeout: Duration::from_secs(2),
+            microphone: Default::default(),
             network_policy: Default::default(),
         },
         executor.clone(),
@@ -1393,6 +1464,7 @@ async fn rejects_artifact_parent_traversal_before_invoking_browser() {
             headed: false,
             command_timeout: Duration::from_secs(5),
             idle_timeout: Duration::from_secs(2),
+            microphone: Default::default(),
             network_policy: Default::default(),
         },
         executor.clone(),
@@ -1433,6 +1505,7 @@ async fn dropped_session_schedules_emergency_close() {
             headed: false,
             command_timeout: Duration::from_secs(5),
             idle_timeout: Duration::from_secs(2),
+            microphone: Default::default(),
             network_policy: Default::default(),
         },
         executor.clone(),
@@ -1478,6 +1551,7 @@ async fn persistent_connection_survives_handle_drop_until_explicit_close() {
             headed: false,
             command_timeout: Duration::from_secs(5),
             idle_timeout: Duration::from_secs(300),
+            microphone: Default::default(),
             network_policy: Default::default(),
         },
         executor.clone(),
@@ -1542,6 +1616,7 @@ async fn failed_close_kills_the_exact_daemon_from_its_private_pid_file() {
             headed: false,
             command_timeout: Duration::from_secs(5),
             idle_timeout: Duration::from_secs(2),
+            microphone: Default::default(),
             network_policy: Default::default(),
         },
         executor.clone(),
@@ -1574,6 +1649,7 @@ fn standalone_config(namespace: &str) -> AgentBrowserConfig {
         headed: false,
         command_timeout: Duration::from_secs(5),
         idle_timeout: Duration::from_secs(30),
+        microphone: Default::default(),
         network_policy: Default::default(),
     }
 }

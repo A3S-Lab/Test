@@ -87,6 +87,7 @@ async fn inventory(args: WorkerInventoryArgs) -> Result<ExitCode> {
             headed: false,
             command_timeout: Duration::from_millis(args.command_timeout_ms),
             idle_timeout: Duration::from_secs(30),
+            microphone: Default::default(),
             network_policy: Default::default(),
         });
         let capabilities = browser.capabilities().await.map_err(anyhow::Error::new)?;

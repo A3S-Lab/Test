@@ -24,7 +24,7 @@ use tokio_util::sync::CancellationToken;
 
 use self::config::{parse_config, AgentRunConfig};
 use self::session::{AgentHostSession, OriginObservationPolicy};
-use super::{browser_command, install_interrupt_handler, BrowserDriverKind};
+use super::{browser_command, install_interrupt_handler, BrowserDriverKind, BrowserMicrophoneArg};
 
 const MAX_CONFIG_BYTES: u64 = 1024 * 1024;
 const MAX_REPORT_BYTES: usize = 64 * 1024 * 1024;
@@ -41,6 +41,9 @@ pub(crate) struct AgentRunArgs {
     /// Override the browser driver executable.
     #[arg(long)]
     browser_executable: Option<PathBuf>,
+    /// Synthetic grants a deterministic local microphone without using a real device.
+    #[arg(long, value_enum, default_value_t = BrowserMicrophoneArg::Disabled)]
+    browser_microphone: BrowserMicrophoneArg,
     /// Show the browser window; omitted runs enforce headless execution.
     #[arg(long)]
     headed: bool,
@@ -163,6 +166,7 @@ async fn execute_with_executor(
         headed: args.headed,
         command_timeout: Duration::from_millis(args.command_timeout_ms),
         idle_timeout: Duration::from_millis(args.idle_timeout_ms),
+        microphone: args.browser_microphone.into(),
         network_policy,
     };
     let browser: Arc<dyn SurfaceDriver> = match executor {

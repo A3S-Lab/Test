@@ -41,9 +41,11 @@ pub(crate) fn invocation(
     env.insert(idle_name, idle_value);
     let (runtime_name, runtime_value) = config.command.runtime_environment(runtime_dir);
     env.insert(runtime_name, runtime_value);
-    if !config.headed {
-        let (headless_name, headless_value) = config.command.enforced_headless_environment();
-        env.insert(headless_name, headless_value);
+    if let Some((arguments_name, arguments_value)) = config
+        .command
+        .launch_arguments_environment(config.headed, config.microphone)
+    {
+        env.insert(arguments_name, arguments_value);
     }
     for (policy_name, policy_value) in config
         .command
@@ -515,6 +517,7 @@ mod tests {
                 headed,
                 command_timeout: Duration::from_secs(5),
                 idle_timeout: Duration::from_secs(30),
+                microphone: Default::default(),
                 network_policy: BrowserNetworkPolicy::default(),
             };
             let invocation = invocation(

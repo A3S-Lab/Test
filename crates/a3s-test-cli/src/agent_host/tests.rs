@@ -263,6 +263,7 @@ fn args(config: &Path, report: &Path) -> AgentRunArgs {
         config: config.to_path_buf(),
         browser_driver: BrowserDriverKind::Standalone,
         browser_executable: Some(PathBuf::from("fixture-agent-browser")),
+        browser_microphone: BrowserMicrophoneArg::Disabled,
         headed: false,
         command_timeout_ms: 5_000,
         idle_timeout_ms: 30_000,

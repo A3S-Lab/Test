@@ -80,6 +80,7 @@ fn driver(executor: Arc<ArtifactExecutor>) -> AgentBrowserDriver {
             headed: false,
             command_timeout: Duration::from_secs(5),
             idle_timeout: Duration::from_secs(5),
+            microphone: Default::default(),
             network_policy: Default::default(),
         },
         executor,
