@@ -244,6 +244,10 @@ snapshot. Pages without the SDK retain the existing Web behavior.
 - [x] Restore focus without scrolling to the last connected application
       control when tab-scoped hiding removes the review Shadow DOM, with direct
       React and real-Chromium active-element regressions
+- [x] Localize the complete review workflow in English and Simplified Chinese,
+      follow the page language by default, expose bounded host copy overrides,
+      and keep visible text, live announcements, status labels, and accessible
+      names on one typed message catalog
 - [ ] Complete and independently audit every review workflow with a screen
       reader
 
@@ -371,6 +375,9 @@ The completion work intentionally preserves these product boundaries:
       clear-on-copy, interaction blocking, panel dock, wireframe fade, and
       hide-until-tab-restart; restore application focus when hiding the UI and
       keep auto-send and animation pause non-persistent
+- [x] Keep the secondary tool tray and findings workspace mutually exclusive,
+      bound preferences to short viewports, and preserve mobile touch-target
+      and form-text sizing without changing the headless bridge
 - [x] Add an independently defined, categorized, searchable catalog of at
       least 65 common Web component types while retaining an explicit
       free-form component field

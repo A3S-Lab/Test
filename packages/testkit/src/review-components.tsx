@@ -1,9 +1,10 @@
 import { useState, type ReactNode } from "react";
 import type { RepairIntent, RepairSeverity, Rect } from "./types";
-import { MODE_LABEL, type LayoutCanvas, type LayoutSource, type OverlayTheme, type SelectionMode } from "./review-model";
+import { type LayoutCanvas, type LayoutSource, type OverlayTheme, type SelectionMode } from "./review-model";
 import { validLayoutRect } from "./review-utils";
 import { ComponentCatalogView } from "./component-catalog-view";
 import { REVIEW_KEY_SHORTCUTS } from "./review-input-policy";
+import { reviewModeLabel, useReviewI18n } from "./review-locale";
 
 export type ReviewMarkingToolbarProps = {
   marking: boolean;
@@ -28,37 +29,55 @@ export type ReviewMarkingToolbarProps = {
 
 export function ReviewMarkingToolbar(props: ReviewMarkingToolbarProps) {
   const [moreOpen, setMoreOpen] = useState(false);
+  const { t } = useReviewI18n();
+  const themeLabel = t(
+    props.theme === "system"
+      ? "themeSystem"
+      : props.theme === "light"
+        ? "themeLight"
+        : "themeDark",
+  );
+  const themeActionLabel = themeLabel.toLocaleLowerCase("en-US");
   const beginMarking = (value: SelectionMode) => {
     setMoreOpen(false);
     props.onStartMarking(value);
   };
+  const toggleWorkspace = () => {
+    setMoreOpen(false);
+    props.onToggleWorkspace();
+  };
+  const toggleMore = () => {
+    const next = !moreOpen;
+    setMoreOpen(next);
+    if (next && props.workspaceOpen) props.onToggleWorkspace();
+  };
 
-  return <section className="a3s-tools" aria-label="Mark page">
+  return <section className="a3s-tools" aria-label={t("markPage")}>
     <div className="a3s-toolbar-core">
       <div className="a3s-tool-group a3s-tool-group-primary">
-        {(["element", "multi", "text"] as const).map((value) => <ToolButton key={value} label={MODE_LABEL[value]} ariaLabel={`Mark ${MODE_LABEL[value].toLowerCase()}`} icon={value} pressed={props.marking && props.mode === value} keyShortcut={REVIEW_KEY_SHORTCUTS[value]} title={`Mark ${MODE_LABEL[value].toLowerCase()} (${REVIEW_KEY_SHORTCUTS[value]})`} onClick={() => beginMarking(value)} />)}
+        {(["element", "multi", "text"] as const).map((value) => { const label = reviewModeLabel(t, value); const actionLabel = label.toLocaleLowerCase("en-US"); return <ToolButton key={value} label={label} ariaLabel={t("markAction", { mode: actionLabel })} icon={value} pressed={props.marking && props.mode === value} keyShortcut={REVIEW_KEY_SHORTCUTS[value]} title={t("markActionWithShortcut", { mode: actionLabel, shortcut: REVIEW_KEY_SHORTCUTS[value] })} onClick={() => beginMarking(value)} />; })}
       </div>
       <span className="a3s-tool-divider" aria-hidden="true" />
-      <button type="button" className="a3s-workspace-toggle" data-tooltip="Findings" aria-label={props.workspaceOpen ? "Hide review workspace" : "Open review workspace"} aria-expanded={props.workspaceOpen} onClick={props.onToggleWorkspace}>
+      <button type="button" className="a3s-workspace-toggle" data-tooltip={t("findings")} aria-label={t(props.workspaceOpen ? "hideReviewWorkspace" : "openReviewWorkspace")} aria-expanded={props.workspaceOpen} onClick={toggleWorkspace}>
         <ToolGlyph name="inbox" />
-        <span className="a3s-sr-only">Findings</span>
+        <span className="a3s-sr-only">{t("findings")}</span>
         {props.findingCount > 0 && <span className="a3s-tool-count" aria-hidden="true">{props.findingCount}</span>}
       </button>
-      <ToolButton label="More tools" ariaLabel="More review tools" icon="more" expanded={moreOpen} onClick={() => setMoreOpen((current) => !current)} />
-      {props.marking && <ToolButton label="Cancel" ariaLabel="Cancel marking" icon="close" className="danger" onClick={props.onCancelMarking} />}
+      <ToolButton label={t("moreTools")} ariaLabel={t("moreReviewTools")} icon="more" expanded={moreOpen} onClick={toggleMore} />
+      {props.marking && <ToolButton label={t("cancel")} ariaLabel={t("cancelMarking")} icon="close" className="danger" onClick={props.onCancelMarking} />}
     </div>
-    <div className="a3s-tool-tray" hidden={!moreOpen} role="group" aria-label="More review tools">
+    <div className="a3s-tool-tray" hidden={!moreOpen} role="group" aria-label={t("moreReviewTools")}>
       <div className="a3s-tool-tray-copy">
-        <strong>Review tools</strong>
-        <span>{props.marking ? `${MODE_LABEL[props.mode]} mode active` : "Mark, inspect, and send"}</span>
+        <strong>{t("reviewTools")}</strong>
+        <span>{props.marking ? t("modeActive", { mode: reviewModeLabel(t, props.mode) }) : t("markInspectSend")}</span>
       </div>
       <div className="a3s-tool-group">
-        {(["area", "draw"] as const).map((value) => <ToolButton key={value} label={MODE_LABEL[value]} ariaLabel={`Mark ${MODE_LABEL[value].toLowerCase()}`} icon={value} pressed={props.marking && props.mode === value} keyShortcut={REVIEW_KEY_SHORTCUTS[value]} title={`Mark ${MODE_LABEL[value].toLowerCase()} (${REVIEW_KEY_SHORTCUTS[value]})`} onClick={() => beginMarking(value)} />)}
-        <ToolButton label="Layout" ariaLabel="Layout" icon="layout" pressed={props.layoutMode} title="Toggle Layout Mode (L)" keyShortcut={REVIEW_KEY_SHORTCUTS.layout} onClick={() => { setMoreOpen(false); props.onToggleLayout(); }} />
-        <ToolButton label={props.paused ? "Resume" : "Pause"} ariaLabel={props.paused ? "Resume page animations" : "Pause page animations"} icon={props.paused ? "play" : "pause"} pressed={props.paused} title="Pause or resume page motion (P)" keyShortcut={REVIEW_KEY_SHORTCUTS.pause} onClick={props.onTogglePause} />
-        <ToolButton label={props.markersVisible ? "Hide markers" : "Show markers"} ariaLabel={props.markersVisible ? "Hide markers" : "Show markers"} icon={props.markersVisible ? "eye" : "eye-off"} pressed={props.markersVisible} title="Show or hide finding markers (H)" keyShortcut={REVIEW_KEY_SHORTCUTS.markers} onClick={props.onToggleMarkers} />
-        <ToolButton label={`Auto-send · ${props.autoSendEnabled ? "on" : "off"}`} ariaLabel={`Turn auto-send ${props.autoSendEnabled ? "off" : "on"}`} icon="send" pressed={props.autoSendEnabled} onClick={props.onToggleAutoSend} />
-        <ToolButton label={`Theme · ${props.theme}`} ariaLabel={`Change overlay theme; current theme is ${props.theme}`} icon="theme" onClick={props.onCycleTheme} />
+        {(["area", "draw"] as const).map((value) => { const label = reviewModeLabel(t, value); const actionLabel = label.toLocaleLowerCase("en-US"); return <ToolButton key={value} label={label} ariaLabel={t("markAction", { mode: actionLabel })} icon={value} pressed={props.marking && props.mode === value} keyShortcut={REVIEW_KEY_SHORTCUTS[value]} title={t("markActionWithShortcut", { mode: actionLabel, shortcut: REVIEW_KEY_SHORTCUTS[value] })} onClick={() => beginMarking(value)} />; })}
+        <ToolButton label={t("layout")} ariaLabel={t("layout")} icon="layout" pressed={props.layoutMode} title={t("toggleLayoutMode")} keyShortcut={REVIEW_KEY_SHORTCUTS.layout} onClick={() => { setMoreOpen(false); props.onToggleLayout(); }} />
+        <ToolButton label={t(props.paused ? "resume" : "pause")} ariaLabel={t(props.paused ? "resumePageAnimations" : "pausePageAnimations")} icon={props.paused ? "play" : "pause"} pressed={props.paused} title={t("pauseOrResumeMotion")} keyShortcut={REVIEW_KEY_SHORTCUTS.pause} onClick={props.onTogglePause} />
+        <ToolButton label={t(props.markersVisible ? "hideMarkers" : "showMarkers")} ariaLabel={t(props.markersVisible ? "hideMarkers" : "showMarkers")} icon={props.markersVisible ? "eye" : "eye-off"} pressed={props.markersVisible} title={t("showOrHideMarkers")} keyShortcut={REVIEW_KEY_SHORTCUTS.markers} onClick={props.onToggleMarkers} />
+        <ToolButton label={t(props.autoSendEnabled ? "autoSendOn" : "autoSendOff")} ariaLabel={t(props.autoSendEnabled ? "turnAutoSendOff" : "turnAutoSendOn")} icon="send" pressed={props.autoSendEnabled} onClick={props.onToggleAutoSend} />
+        <ToolButton label={t("themeCurrent", { theme: themeLabel })} ariaLabel={t("changeTheme", { theme: themeActionLabel })} icon="theme" onClick={props.onCycleTheme} />
         {props.settings}
       </div>
     </div>
@@ -113,6 +132,7 @@ export type FindingEditorProps = {
 };
 
 export function FindingEditor(props: FindingEditorProps) {
+  const { t } = useReviewI18n();
   const [detailsOpen, setDetailsOpen] = useState(() => Boolean(
     props.successCriteria.trim()
       || props.intent !== "fix"
@@ -122,19 +142,19 @@ export function FindingEditor(props: FindingEditorProps) {
 
   return <section className="a3s-editor">
     <header className="a3s-editor-header">
-      <span className="a3s-editor-index" aria-hidden="true">01</span>
-      <span><strong>{props.editing ? "Edit finding" : "New finding"}</strong><small className="a3s-editor-target" title={props.label}>{props.label}</small></span>
+      <span className="a3s-editor-index" aria-hidden="true"><ToolGlyph name="element" /></span>
+      <span><strong>{t(props.editing ? "editFinding" : "newFinding")}</strong><small className="a3s-editor-target" title={props.label}>{props.label}</small></span>
     </header>
     <div className="a3s-editor-scroll">
-      <label className="a3s-editor-request">Requested fix<textarea autoFocus maxLength={8192} value={props.instruction} onChange={(event) => props.onInstruction(event.target.value)} placeholder="Describe what should change" /></label>
-      <button type="button" className="a3s-editor-details" aria-expanded={detailsOpen} onClick={() => setDetailsOpen((current) => !current)}><span>Details</span><small>criteria, severity, intent</small><i aria-hidden="true" /></button>
+      <label className="a3s-editor-request">{t("requestedFix")}<textarea autoFocus maxLength={8192} value={props.instruction} onChange={(event) => props.onInstruction(event.target.value)} placeholder={t("describeChange")} /></label>
+      <button type="button" className="a3s-editor-details" aria-expanded={detailsOpen} onClick={() => setDetailsOpen((current) => !current)}><span>{t("details")}</span><small>{t("detailsSummary")}</small><i aria-hidden="true" /></button>
       {detailsOpen && <div className="a3s-editor-options">
-        <label>Success criteria <span>optional</span><textarea maxLength={4096} value={props.successCriteria} onChange={(event) => props.onSuccessCriteria(event.target.value)} placeholder="What should be visibly true after the fix?" /></label>
-        <div className="a3s-fields"><label>Severity<select value={props.severity} onChange={(event) => props.onSeverity(event.target.value as RepairSeverity)}><option value="blocking">Blocking</option><option value="important">Important</option><option value="suggestion">Suggestion</option></select></label><label>Intent<select value={props.intent} onChange={(event) => props.onIntent(event.target.value as RepairIntent)}><option value="fix">Fix</option><option value="change">Change</option><option value="question">Question</option><option value="approve">Approve</option></select></label></div>
-        {props.conflictOptions.length > 0 && <fieldset className="a3s-conflicts"><legend>Conflicts with another draft <span>optional</span></legend><small>Select requests that cannot both be satisfied. A3S Test will ask for clarification without interpreting their wording.</small>{props.conflictOptions.map((option) => <label key={option.id}><input type="checkbox" checked={option.checked} onChange={(event) => props.onConflict(option.id, event.target.checked)} /><span>{option.label}</span></label>)}</fieldset>}
+        <label>{t("successCriteria")} <span>{t("optional")}</span><textarea maxLength={4096} value={props.successCriteria} onChange={(event) => props.onSuccessCriteria(event.target.value)} placeholder={t("successCriteriaPlaceholder")} /></label>
+        <div className="a3s-fields"><label>{t("severity")}<select value={props.severity} onChange={(event) => props.onSeverity(event.target.value as RepairSeverity)}><option value="blocking">{t("severityBlocking")}</option><option value="important">{t("severityImportant")}</option><option value="suggestion">{t("severitySuggestion")}</option></select></label><label>{t("intent")}<select value={props.intent} onChange={(event) => props.onIntent(event.target.value as RepairIntent)}><option value="fix">{t("intentFix")}</option><option value="change">{t("intentChange")}</option><option value="question">{t("intentQuestion")}</option><option value="approve">{t("intentApprove")}</option></select></label></div>
+        {props.conflictOptions.length > 0 && <fieldset className="a3s-conflicts"><legend>{t("conflictsWithDraft")} <span>{t("optional")}</span></legend><small>{t("conflictHelp")}</small>{props.conflictOptions.map((option) => <label key={option.id}><input type="checkbox" checked={option.checked} onChange={(event) => props.onConflict(option.id, event.target.checked)} /><span>{option.label}</span></label>)}</fieldset>}
       </div>}
     </div>
-    <div className="a3s-actions">{props.onDelete && <button type="button" className="danger" onClick={props.onDelete}>Delete draft</button>}<button type="button" className="quiet" onClick={props.onCancel}>Cancel</button><button type="button" className="a3s-save-draft" disabled={!props.instruction.trim()} onClick={props.onSave}>{props.editing ? "Save changes" : "Add draft"}</button><button type="button" className="a3s-send-now" disabled={!props.instruction.trim()} onClick={props.onSend}>Send and auto-fix</button></div>
+    <div className="a3s-actions">{props.onDelete && <button type="button" className="danger" onClick={props.onDelete}>{t("deleteDraft")}</button>}<button type="button" className="quiet" onClick={props.onCancel}>{t("cancel")}</button><button type="button" className="a3s-save-draft" disabled={!props.instruction.trim()} onClick={props.onSave}>{t(props.editing ? "saveChanges" : "addDraft")}</button><button type="button" className="a3s-send-now" disabled={!props.instruction.trim()} onClick={props.onSend}>{t("sendAndAutoFix")}</button></div>
   </section>;
 }
 
@@ -157,33 +177,34 @@ export type LayoutComposerProps = {
 };
 
 export function LayoutComposer(props: LayoutComposerProps) {
+  const { t } = useReviewI18n();
   const helpId = `${props.idPrefix}-layout-help`;
   const updateNumber = (field: keyof Rect, value: number) => {
     if (Number.isFinite(value)) props.onTarget(field, value);
   };
-  return <section className="a3s-layout" aria-label="Layout repair intent">
-    <p id={helpId}>Describe placement and rearrangement as typed repair intent. The overlay previews coordinates without changing the page.</p>
-    <label>Purpose <span>optional</span><input type="text" aria-label="Layout purpose" aria-describedby={helpId} maxLength={512} value={props.purpose} onChange={(event) => props.onPurpose(event.target.value)} placeholder="What should this layout help people do?" /></label>
+  return <section className="a3s-layout" aria-label={t("layoutRepairIntent")}>
+    <p id={helpId}>{t("layoutHelp")}</p>
+    <label>{t("purpose")} <span>{t("optional")}</span><input type="text" aria-label={t("layoutPurpose")} aria-describedby={helpId} maxLength={512} value={props.purpose} onChange={(event) => props.onPurpose(event.target.value)} placeholder={t("layoutPurposePlaceholder")} /></label>
     <div className="a3s-layout-fields">
-      <label>Canvas<select aria-label="Layout canvas" value={props.canvas} onChange={(event) => props.onCanvas(event.target.value as LayoutCanvas)}><option value="page">Current page</option><option value="wireframe">Wireframe</option></select></label>
-      <label>Component<input type="text" aria-label="Layout component type" maxLength={256} value={props.componentType} onChange={(event) => props.onComponentType(event.target.value)} placeholder="Section" /></label>
+      <label>{t("canvas")}<select aria-label={t("layoutCanvas")} value={props.canvas} onChange={(event) => props.onCanvas(event.target.value as LayoutCanvas)}><option value="page">{t("currentPage")}</option><option value="wireframe">{t("wireframe")}</option></select></label>
+      <label>{t("component")}<input type="text" aria-label={t("layoutComponentType")} maxLength={256} value={props.componentType} onChange={(event) => props.onComponentType(event.target.value)} placeholder={t("componentPlaceholder")} /></label>
     </div>
     <ComponentCatalogView selected={props.componentType} onSelect={props.onComponentType} />
-    <button type="button" aria-pressed={props.markingMode === "layout_place"} className={props.markingMode === "layout_place" ? "selected" : ""} disabled={!props.componentType.trim()} onClick={props.onPlace}>Draw placement</button>
+    <button type="button" aria-pressed={props.markingMode === "layout_place"} className={props.markingMode === "layout_place" ? "selected" : ""} disabled={!props.componentType.trim()} onClick={props.onPlace}>{t("drawPlacement")}</button>
     <div className="a3s-layout-source">
-      <span>Section to rearrange</span>
-      <strong>{props.source?.label ?? "No section selected"}</strong>
-      <button type="button" aria-pressed={props.markingMode === "layout_source"} className={props.markingMode === "layout_source" ? "selected" : ""} onClick={props.onSelectSource}>Select section on page</button>
+      <span>{t("sectionToRearrange")}</span>
+      <strong>{props.source?.label ?? t("noSectionSelected")}</strong>
+      <button type="button" aria-pressed={props.markingMode === "layout_source"} className={props.markingMode === "layout_source" ? "selected" : ""} onClick={props.onSelectSource}>{t("selectSectionOnPage")}</button>
     </div>
-    <div className="a3s-layout-fields" aria-label="Layout destination in viewport CSS pixels">
-      <label>X<input type="number" aria-label="Layout x" step="1" value={props.target.x} onChange={(event) => updateNumber("x", event.currentTarget.valueAsNumber)} /></label>
-      <label>Y<input type="number" aria-label="Layout y" step="1" value={props.target.y} onChange={(event) => updateNumber("y", event.currentTarget.valueAsNumber)} /></label>
-      <label>Width<input type="number" aria-label="Layout width" min="8" step="1" value={props.target.width} onChange={(event) => updateNumber("width", event.currentTarget.valueAsNumber)} /></label>
-      <label>Height<input type="number" aria-label="Layout height" min="8" step="1" value={props.target.height} onChange={(event) => updateNumber("height", event.currentTarget.valueAsNumber)} /></label>
+    <div className="a3s-layout-fields" aria-label={t("layoutDestinationPixels")}>
+      <label>X<input type="number" aria-label={t("layoutX")} step="1" value={props.target.x} onChange={(event) => updateNumber("x", event.currentTarget.valueAsNumber)} /></label>
+      <label>Y<input type="number" aria-label={t("layoutY")} step="1" value={props.target.y} onChange={(event) => updateNumber("y", event.currentTarget.valueAsNumber)} /></label>
+      <label>{t("width")}<input type="number" aria-label={t("layoutWidth")} min="8" step="1" value={props.target.width} onChange={(event) => updateNumber("width", event.currentTarget.valueAsNumber)} /></label>
+      <label>{t("height")}<input type="number" aria-label={t("layoutHeight")} min="8" step="1" value={props.target.height} onChange={(event) => updateNumber("height", event.currentTarget.valueAsNumber)} /></label>
     </div>
     <div className="a3s-actions">
-      <button type="button" className={props.markingMode === "layout_destination" ? "selected" : ""} aria-pressed={props.markingMode === "layout_destination"} disabled={!props.source} onClick={props.onDrawDestination}>Draw destination</button>
-      <button type="button" disabled={!props.source || !validLayoutRect(props.target)} onClick={props.onCreateRearrange}>Create rearrange draft</button>
+      <button type="button" className={props.markingMode === "layout_destination" ? "selected" : ""} aria-pressed={props.markingMode === "layout_destination"} disabled={!props.source} onClick={props.onDrawDestination}>{t("drawDestination")}</button>
+      <button type="button" disabled={!props.source || !validLayoutRect(props.target)} onClick={props.onCreateRearrange}>{t("createRearrangeDraft")}</button>
     </div>
   </section>;
 }

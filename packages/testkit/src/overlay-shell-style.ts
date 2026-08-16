@@ -18,7 +18,7 @@ button, input, textarea, select {
   inset: 0;
   pointer-events: none;
   color: var(--a3s-text);
-  font: 12.5px/1.45 ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font: 13px/1.55 "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   --a3s-marker-color: #7157c9;
   --a3s-wireframe-fade: .16;
   --a3s-bg: #0b1426;
@@ -228,7 +228,7 @@ button.danger {
   position: fixed;
   right: 20px;
   bottom: 20px;
-  width: min(346px, calc(100vw - 40px));
+  width: min(410px, calc(100vw - 40px));
   overflow: visible;
   border: 0;
   background: transparent;
@@ -251,26 +251,26 @@ button.danger {
 .a3s-command-bar {
   display: flex;
   min-width: 0;
-  height: 52px;
-  padding: 5px;
+  height: 58px;
+  padding: 6px;
   border: 1px solid var(--a3s-toolbar-line);
-  border-radius: 15px;
+  border-radius: 16px;
   background: color-mix(in srgb, var(--a3s-toolbar) 97%, transparent);
   box-shadow: 0 20px 52px rgb(5 10 20 / 26%), 0 2px 8px rgb(5 10 20 / 18%);
   color: var(--a3s-toolbar-text);
   pointer-events: auto;
   align-items: center;
-  gap: 6px;
+  gap: 7px;
   backdrop-filter: blur(14px);
 }
 
 .a3s-command-bar > header {
   display: grid;
-  min-width: 66px;
-  height: 42px;
-  padding: 0 3px 0 1px;
+  min-width: 116px;
+  height: 46px;
+  padding: 0 5px 0 1px;
   border-right: 1px solid var(--a3s-toolbar-line);
-  grid-template-columns: 32px 28px;
+  grid-template-columns: 32px minmax(48px, 1fr) 30px;
   align-items: center;
   gap: 3px;
 }
@@ -299,11 +299,8 @@ button.danger {
 }
 
 .a3s-command-bar > header > span:nth-child(2) {
-  position: fixed;
-  width: 1px;
-  height: 1px;
+  min-width: 0;
   overflow: hidden;
-  clip-path: inset(50%);
 }
 
 .a3s-panel-title,
@@ -315,23 +312,23 @@ button.danger {
 }
 
 .a3s-panel-title {
-  color: var(--a3s-text);
-  font-size: 12px;
-  line-height: 1.15;
+  color: var(--a3s-toolbar-text);
+  font-size: 11.5px;
+  line-height: 1.2;
 }
 
 .a3s-panel-description {
   margin-top: 2px;
-  color: var(--a3s-faint);
+  color: var(--a3s-toolbar-muted);
   font-size: 9px;
-  line-height: 1.15;
+  line-height: 1.25;
 }
 
 .a3s-close {
   display: grid;
-  width: 28px;
-  height: 28px;
-  min-height: 28px;
+  width: 30px;
+  height: 30px;
+  min-height: 30px;
   padding: 0;
   border-color: transparent;
   background: transparent;
@@ -398,9 +395,9 @@ button.danger {
 .a3s-settings > .a3s-disclosure {
   position: relative;
   display: grid;
-  width: 36px;
-  height: 36px;
-  min-height: 36px;
+  width: 38px;
+  height: 38px;
+  min-height: 38px;
   padding: 0;
   border-color: transparent;
   border-radius: 8px;
@@ -447,18 +444,20 @@ button.danger {
   bottom: calc(100% + 9px);
   left: 50%;
   z-index: 12;
-  padding: 5px 7px;
+  max-width: min(260px, calc(100vw - 24px));
+  padding: 6px 8px;
   border-radius: 6px;
   border: 1px solid rgb(255 255 255 / 9%);
   background: #0e1015;
   color: #f7f8fb;
   content: attr(data-tooltip);
-  font-size: 10px;
+  font-size: 10.5px;
   font-weight: 650;
   opacity: 0;
   pointer-events: none;
   transform: translate(-50%, 3px);
   transition: opacity 120ms ease, transform 120ms ease;
+  text-align: center;
   white-space: nowrap;
 }
 

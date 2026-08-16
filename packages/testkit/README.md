@@ -24,7 +24,7 @@ export function App() {
       >
         <Checkout />
       </A3STestBoundary>
-      <A3SReviewOverlay enabled={import.meta.env.DEV} />
+      <A3SReviewOverlay enabled={import.meta.env.DEV} locale="auto" />
     </A3STestKit>
   );
 }
@@ -35,6 +35,23 @@ The framework-neutral entry point exports `installTestKit`,
 the provider, component boundary, and optional Shadow DOM review overlay.
 `installTestKit` also requires `enabled: true`; omitted or false-like runtime
 configuration fails closed.
+
+The review UI supports `locale="auto" | "en" | "zh-CN"`. `auto` is the
+default and resolves every `zh-*` page language to Simplified Chinese; other
+page languages use English. Set the locale explicitly when the overlay should
+not follow `<html lang>`:
+
+```tsx
+<A3SReviewOverlay
+  enabled={import.meta.env.DEV}
+  locale="zh-CN"
+  messages={{ reviewTitle: "页面评审" }}
+/>
+```
+
+`messages` accepts only known review-message keys. Empty values and strings
+longer than 2,048 characters are ignored, so host copy customization remains
+bounded presentation data.
 
 The runtime derives context after browser rendering. It reads semantic DOM,
 open Shadow DOM, form state, layout, and viewport facts without adding test
@@ -134,7 +151,10 @@ projection.
 
 The compact review dock keeps marking controls available without covering the
 application. Target-attached editors preserve page context, while saved drafts
-move into a separate workspace with pinned single and batch send actions.
+move into a separate workspace with pinned single and batch send actions. The
+secondary tool tray and findings workspace are mutually exclusive, preventing
+stacked floating surfaces. Short viewports keep preferences internally
+scrollable, and mobile controls use touch-sized targets and 16-pixel form text.
 
 Animation pause is ownership-safe: Test Kit freezes running and newly started
 page motion while pause is active, then resumes only animations and media it

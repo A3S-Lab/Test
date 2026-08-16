@@ -4,6 +4,11 @@
 
 ### Added
 
+- Added English and Simplified Chinese review locales across visible controls,
+  status labels, live announcements, and accessible names. The new
+  `locale="auto" | "en" | "zh-CN"` option follows the page language by
+  default, while typed `messages` overrides admit only known, non-empty values
+  up to 2,048 characters.
 - Added a loopback-only independent screen-reader audit fixture, canonical
   15-workflow manifest, strict revision-bound audit artifact, bounded evidence
   verifier, and separate all-passed closure gate. The shared real-browser
@@ -22,6 +27,10 @@
 
 ### Changed
 
+- Refined the review Dock, target editor, findings workspace, markers, and
+  preferences with clearer hierarchy and typography, mutually exclusive tool
+  and findings surfaces, scroll-safe short-viewport settings, 44-pixel mobile
+  targets, and mobile form sizing that avoids browser zoom.
 - Rebuilt the embedded review surface as a compact floating dock with a
   secondary tool tray, target-attached finding editor, pinned batch workspace,
   and one aggregate marker per multi-selection finding. Direct `E`, `M`, `T`,
@@ -59,6 +68,8 @@
 
 ### Fixed
 
+- Corrected localized Layout labels and made pointer multi-selection derive its
+  displayed count from selected node IDs instead of parsing English copy.
 - Separated staged documentation from the published install version. The
   homepage and repository README now pin the real stable release while main is
   ahead, disclose that state, and reject a version tag until both versions are

@@ -37,6 +37,49 @@ describe("React adapter and review overlay", () => {
     expect(getPageContextBridge()).toBeNull();
   });
 
+  it("follows the page language and applies bounded overlay message overrides", async () => {
+    const previousLanguage = document.documentElement.lang;
+    document.documentElement.lang = "zh-CN";
+    const view = render(<A3STestKit enabled page={{ id: "localized-review" }} repairStorage="memory"><button data-testid="localized-target">Checkout</button><A3SReviewOverlay enabled defaultOpen messages={{ reviewTitle: "页面评审" }} /></A3STestKit>);
+    await waitFor(() => expect(shadowQuery(".a3s-panel")).toBeTruthy());
+
+    const root = shadowQuery(".a3s-root");
+    expect(root.lang).toBe("zh-CN");
+    expect(shadowQuery(".a3s-panel-title").textContent).toBe("页面评审");
+    expect(shadowButton("元素")).toBeTruthy();
+    expect(shadowButton("元素").getAttribute("aria-label")).toBe("标记元素");
+    const workspaceToggle = shadowQuery("[aria-label='打开问题工作区']");
+    const moreTools = shadowButton("更多工具");
+    expect(shadowButton("主题 · 跟随系统").getAttribute("aria-label")).toBe("切换评审主题，当前为跟随系统");
+
+    fireEvent.click(workspaceToggle);
+    expect(workspaceToggle.getAttribute("aria-expanded")).toBe("true");
+    fireEvent.click(moreTools);
+    expect(moreTools.getAttribute("aria-expanded")).toBe("true");
+    expect(workspaceToggle.getAttribute("aria-expanded")).toBe("false");
+    fireEvent.click(workspaceToggle);
+    expect(workspaceToggle.getAttribute("aria-expanded")).toBe("true");
+    expect(moreTools.getAttribute("aria-expanded")).toBe("false");
+    fireEvent.click(workspaceToggle);
+
+    fireEvent.click(moreTools);
+    fireEvent.click(shadowButton("布局"));
+    expect((shadowQuery("[aria-label='布局组件类型']") as HTMLInputElement).value).toBe("区块");
+    fireEvent.click(moreTools);
+    fireEvent.click(shadowButton("布局"));
+
+    const target = document.querySelector<HTMLElement>("[data-testid=localized-target]")!;
+    setRect(target, { x: 100, y: 80, width: 120, height: 40 });
+    fireEvent.click(shadowButton("元素"));
+    target.dispatchEvent(pointerEventWithPath(target, 120, 90));
+    await waitFor(() => expect(shadowQuery(".a3s-editor").textContent).toContain("新建问题"));
+    expect(shadowQuery(".a3s-editor textarea").getAttribute("placeholder")).toBe("描述需要修改的内容");
+    expect(shadowButton("发送并自动修复")).toBeTruthy();
+
+    view.unmount();
+    document.documentElement.lang = previousLanguage;
+  });
+
   it("creates an element draft and sends one bounded repair", async () => {
     const onSubmitted = vi.fn();
     render(<A3STestKit enabled page={{ id: "review" }} repairStorage="memory"><main><button data-testid="target">Broken action</button></main><A3SReviewOverlay enabled defaultOpen onSubmitted={onSubmitted} /></A3STestKit>);
@@ -293,10 +336,10 @@ describe("React adapter and review overlay", () => {
     await waitFor(() => expect(shadowQuery(".a3s-panel")).toBeTruthy());
     setRect(document.querySelector("#target")!, { x: 20, y: 20, width: 80, height: 40 });
 
-    const theme = shadowButton("Theme · system");
+    const theme = shadowButton("Theme · System");
     fireEvent.click(theme);
     expect(shadowQuery(".a3s-root").dataset.theme).toBe("light");
-    fireEvent.click(shadowButton("Theme · light"));
+    fireEvent.click(shadowButton("Theme · Light"));
     expect(shadowQuery(".a3s-root").dataset.theme).toBe("dark");
 
     fireEvent.click(shadowButton("Draw"));
@@ -747,7 +790,7 @@ describe("React adapter and review overlay", () => {
     expect(shadowButton("Layout").getAttribute("aria-label")).toBe("Layout");
     expect(shadowButton("Pause").getAttribute("aria-label")).toBe("Pause page animations");
     expect(shadowButton("Auto-send · off").getAttribute("aria-label")).toBe("Turn auto-send on");
-    expect(shadowButton("Theme · system").getAttribute("aria-label")).toBe("Change overlay theme; current theme is system");
+    expect(shadowButton("Theme · System").getAttribute("aria-label")).toBe("Change overlay theme; current theme is system");
     expect(shadowQuery(".a3s-announcer").getAttribute("aria-atomic")).toBe("true");
     expect(shadowQuery(".a3s-list").hasAttribute("aria-live")).toBe(false);
     expect((shadowQuery(".a3s-list") as HTMLElement).tabIndex).toBe(0);
@@ -756,6 +799,7 @@ describe("React adapter and review overlay", () => {
     expect(launcher.getAttribute("aria-keyshortcuts")).toBe("Control+Shift+F Meta+Shift+F");
     expect(panel.getAttribute("aria-keyshortcuts")).toBe("Escape");
     expect(shadowButton("Element").getAttribute("aria-keyshortcuts")).toBe("E");
+    expect(shadowButton("Element").getAttribute("aria-label")).toBe("Mark element");
     expect(shadowButton("Multi").getAttribute("aria-keyshortcuts")).toBe("M");
     expect(shadowButton("Text").getAttribute("aria-keyshortcuts")).toBe("T");
     expect(shadowButton("Area").getAttribute("aria-keyshortcuts")).toBe("A");

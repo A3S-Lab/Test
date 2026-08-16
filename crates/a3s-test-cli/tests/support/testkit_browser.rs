@@ -571,6 +571,17 @@ fn exercise_host_interaction_blocking(command: &impl Fn(&[&str]) -> Output) {
 fn author_searchable_layout_placement(command: &impl Fn(&[&str]) -> Output) {
     click_accessible(
         command,
+        "switch from review tools to the findings workspace",
+        "button",
+        "Open review workspace",
+    );
+    wait_for(
+        command,
+        "wait for the mutually exclusive findings workspace",
+        "(()=>{const shadow=document.querySelector('[data-a3s-testkit-overlay]').shadowRoot;return !shadow.querySelector('.a3s-workspace')?.hidden&&shadow.querySelector('[aria-label=\"More review tools\"]')?.getAttribute('aria-expanded')==='false'})()",
+    );
+    click_accessible(
+        command,
         "open the component catalog",
         "button",
         "Component catalog · 90",

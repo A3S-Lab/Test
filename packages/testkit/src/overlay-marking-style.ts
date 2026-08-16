@@ -242,8 +242,17 @@ export const OVERLAY_MARKING_CSS = `
   border-radius: 999px;
   background: var(--a3s-violet);
   color: #ffffff;
-  font: 750 8px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
   place-items: center;
+}
+
+.a3s-editor-index svg {
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.65;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 .a3s-editor-header > span:last-child {
@@ -260,7 +269,8 @@ export const OVERLAY_MARKING_CSS = `
 
 .a3s-editor-header strong {
   color: var(--a3s-text);
-  font-size: 12.5px;
+  font-size: 13px;
+  letter-spacing: -.01em;
 }
 
 .a3s-editor-target {
@@ -272,7 +282,7 @@ export const OVERLAY_MARKING_CSS = `
 .a3s-editor-scroll {
   display: flex;
   min-height: 0;
-  padding: 13px;
+  padding: 14px;
   overflow: auto;
   overscroll-behavior: contain;
   scrollbar-color: var(--a3s-line-strong) transparent;
@@ -368,15 +378,19 @@ export const OVERLAY_MARKING_CSS = `
 }
 
 .a3s-editor > .a3s-actions {
-  padding: 10px 13px 11px;
+  padding: 11px 14px 12px;
   border-top: 1px solid var(--a3s-line);
   background: var(--a3s-panel);
 }
 
 .a3s-editor > .a3s-actions button {
-  min-height: 32px;
-  padding: 0 10px;
-  font-size: 10.5px;
+  min-height: 34px;
+  padding: 0 11px;
+  font-size: 11px;
+}
+
+.a3s-editor > .a3s-actions .a3s-send-now {
+  box-shadow: 0 7px 16px color-mix(in srgb, var(--a3s-blue-strong) 22%, transparent);
 }
 
 .a3s-editor > .a3s-actions button.danger {

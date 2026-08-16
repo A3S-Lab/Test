@@ -2,10 +2,8 @@ import type { CSSProperties } from "react";
 import type {
   PageContextBridge,
   RepairDraft,
-  RepairStatus,
   RepairTarget,
   Rect,
-  SubmittedRepair,
 } from "./types";
 import type { ReviewDraftItem } from "./review-storage";
 
@@ -75,25 +73,6 @@ export function markerRects(target: RepairTarget, bridge: PageContextBridge | nu
 
 export function repairId(prefix: string): string {
   return `finding-${prefix}-${globalThis.crypto?.randomUUID?.() ?? `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`}`;
-}
-
-export function targetSummary(target: RepairTarget): string {
-  if (target.layout?.kind === "placement") return `layout placement · ${target.layout.componentType} · ${target.layout.canvas}`;
-  if (target.layout?.kind === "rearrange") return `layout rearrangement · ${target.nodeIds.length} element${target.nodeIds.length === 1 ? "" : "s"}`;
-  if (target.kind === "text") return `text · ${target.selectedText?.slice(0, 36) ?? "selection"}`;
-  if (target.kind === "region") return `area · ${target.nodeIds.length} elements`;
-  if (target.kind === "drawing") return `drawing · ${target.nodeIds.length} elements`;
-  return `${target.nodeIds.length} element${target.nodeIds.length === 1 ? "" : "s"}`;
-}
-
-export function statusLabel(status: RepairStatus): string {
-  return status.replaceAll("_", " ");
-}
-
-export function repairAnnouncement(repair: SubmittedRepair): string {
-  if (repair.status === "needs_input") return `Repair needs input: ${repair.instruction}`;
-  if (repair.status === "review_ready") return `Repair ready for review: ${repair.instruction}`;
-  return `Repair ${statusLabel(repair.status)}: ${repair.instruction}`;
 }
 
 export type RectLike = Pick<DOMRect, "x" | "y" | "width" | "height">;

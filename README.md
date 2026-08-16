@@ -208,7 +208,7 @@ export function App() {
       >
         <Checkout />
       </A3STestBoundary>
-      <A3SReviewOverlay enabled={import.meta.env.DEV} />
+      <A3SReviewOverlay enabled={import.meta.env.DEV} locale="auto" />
     </A3STestKit>
   );
 }
@@ -226,6 +226,12 @@ revision. The review overlay lets a person mark one element or an ordered
 batch, attach repair intent, save a draft, and explicitly send it to the
 session-owning coding agent. A fresh browser run verifies admitted changes
 before acceptance.
+
+The review surface follows `<html lang>` by default and provides complete
+English and Simplified Chinese workflow copy, including status announcements
+and accessible names. Applications can pin `locale="en"` or `locale="zh-CN"`
+and override known, bounded presentation messages without changing the page
+context or repair protocols.
 
 The Web adapter resolves role, label, test ID, and placeholder targets across
 light DOM and open Shadow DOM for click, fill, and check actions. Pointer

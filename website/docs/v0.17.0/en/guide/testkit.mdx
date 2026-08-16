@@ -43,13 +43,39 @@ export function App() {
       >
         <Checkout />
       </A3STestBoundary>
-      <A3SReviewOverlay enabled={import.meta.env.DEV} />
+      <A3SReviewOverlay
+        enabled={import.meta.env.DEV}
+        locale="en"
+      />
     </A3STestKit>
   );
 }
 ```
 
 The framework-neutral entry exports `installTestKit`, `getPageContextBridge`, and protocol types. The React entry adds the provider, component boundary, and optional Shadow DOM overlay. `enabled` must explicitly be `true`; otherwise the runtime stays closed and rejects work.
+
+## Review language and project copy
+
+`A3SReviewOverlay` supports `locale="auto" | "en" | "zh-CN"`. The default,
+`auto`, follows `<html lang>`: every `zh-*` tag selects Simplified Chinese and
+other languages use English. Pass an explicit locale when the review surface
+must not follow the host page.
+
+Projects can override a bounded subset of interface copy:
+
+```tsx
+<A3SReviewOverlay
+  enabled={import.meta.env.DEV}
+  locale="en"
+  messages={{
+    reviewTitle: 'Page review',
+  }}
+/>
+```
+
+`messages` accepts only known message keys. Blank values and strings longer
+than 2,048 characters are ignored. Overrides affect presentation only; they
+never enter page context, repair instructions, or hidden agent input.
 
 ## What A3S Test can observe
 
@@ -69,11 +95,14 @@ MutationObserver, ResizeObserver, scrolling, viewport, and navigation signals ad
 Test Kit 0.4.0 presents review work as a compact floating dock. The primary
 controls stay available without covering the page, while marking tools,
 preferences, the focused editor, and the findings workspace open only when
-needed.
+needed. The secondary tool tray and findings workspace are mutually exclusive,
+so opening one automatically closes the other instead of stacking surfaces.
 
 The editor stays attached to the selected target so the page remains visible.
 Saved drafts move into a separate findings workspace with pinned single and
-batch send controls.
+batch send controls. Preferences scroll inside short desktop viewports. On
+mobile, primary controls provide at least 44-CSS-pixel touch targets and form
+text remains 16 pixels to prevent browser zoom.
 
 The overlay supports element, text, click or drag multi-selection, rectangular findings, and freehand findings. A reviewer can:
 
@@ -84,6 +113,11 @@ The overlay supports element, text, click or drag multi-selection, rectangular f
 5. Accept, reject, or reopen the result.
 
 With the overlay open, `E`, `M`, `T`, `A`, and `D` start element, multi, text, area, and draw marking. `L`, `P`, and `H` toggle Layout Mode, page motion, and marker visibility. Letter shortcuts never intercept input while focus is inside a text field or editor.
+
+The overlay lives in an open Shadow DOM. Localized labels, statuses, hints,
+live announcements, and ARIA names share one message catalog, while focus
+returns to a durable control after closing an editor, cancelling marking, or
+hiding the UI. Localization does not alter page-context or repair protocols.
 
 Layout Mode emits only typed `placement` or `rearrange` intent with viewport CSS-pixel targets. It never moves, reorders, or styles the host DOM.
 

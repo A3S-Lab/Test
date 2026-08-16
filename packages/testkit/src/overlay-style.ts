@@ -46,7 +46,7 @@ ${OVERLAY_SHELL_CSS}
   max-height: min(680px, calc(100vh - 92px));
   overflow: hidden;
   border: 0;
-  border-radius: 14px;
+  border-radius: 16px;
   background: var(--a3s-panel);
   box-shadow: var(--a3s-shadow);
   pointer-events: auto;
@@ -90,7 +90,7 @@ ${OVERLAY_SHELL_CSS}
 .a3s-workspace-header small {
   margin-top: 1px;
   color: var(--a3s-faint);
-  font-size: 9px;
+  font-size: 10px;
 }
 
 .a3s-workspace-scroll {
@@ -100,31 +100,30 @@ ${OVERLAY_SHELL_CSS}
 }
 
 .a3s-workspace > footer {
-  display: flex;
-  padding: 11px 12px;
+  display: grid;
+  padding: 10px 12px 12px;
   border-top: 1px solid var(--a3s-line);
   background: var(--a3s-bg);
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 5px;
+  grid-template-columns: 1fr;
+  gap: 8px;
 }
 
 .a3s-workspace > footer > div {
   display: flex;
   align-items: center;
-  gap: 5px;
+  gap: 6px;
 }
 
 .a3s-workspace-send-actions {
-  margin-left: auto;
+  width: 100%;
+  justify-content: flex-end;
 }
 
 .a3s-workspace > footer button {
-  min-height: 32px;
+  min-height: 34px;
   flex: 0 0 auto;
   padding: 0 9px;
-  font-size: 10px;
+  font-size: 11px;
 }
 
 .a3s-workspace > footer button:not(.quiet) {
@@ -145,16 +144,37 @@ ${OVERLAY_SHELL_CSS}
   z-index: 14;
   display: flex;
   width: min(380px, calc(100vw - 24px));
-  max-height: min(610px, calc(100vh - 92px));
+  max-height: min(610px, calc(100vh - 170px));
   padding: 14px;
   overflow: auto;
+  overscroll-behavior: contain;
   border: 0;
-  border-radius: 14px;
+  border-radius: 16px;
   background: var(--a3s-panel);
   box-shadow: var(--a3s-shadow);
   color: var(--a3s-text);
   flex-direction: column;
   gap: 11px;
+}
+
+.a3s-settings-content > button.quiet {
+  display: inline-flex;
+  width: fit-content;
+  height: auto;
+  min-height: 34px;
+  padding: 0 10px;
+  border-color: var(--a3s-line-strong);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--a3s-muted);
+  align-items: center;
+  place-items: initial;
+}
+
+.a3s-settings-content > button.quiet:hover {
+  border-color: var(--a3s-blue);
+  background: var(--a3s-soft);
+  color: var(--a3s-text);
 }
 
 .a3s-root[data-dock="left"] .a3s-settings-content {
@@ -194,6 +214,7 @@ ${OVERLAY_SHELL_CSS}
   border-radius: 8px;
   background: var(--a3s-bg);
   color: var(--a3s-text);
+  font-size: 13px;
 }
 
 .a3s-editor textarea::placeholder,
@@ -456,7 +477,7 @@ ${OVERLAY_MARKING_CSS}
 .a3s-human-actions button {
   min-height: 28px;
   padding: 0 7px;
-  font-size: 10px;
+  font-size: 11px;
 }
 
 .a3s-list {
@@ -475,6 +496,15 @@ ${OVERLAY_MARKING_CSS}
   background: var(--a3s-panel);
   flex-direction: column;
   gap: 7px;
+  transition: border-color 150ms ease, background-color 150ms ease, transform 150ms ease;
+}
+
+.a3s-item:hover {
+  border-color: var(--a3s-line-strong);
+}
+
+.a3s-item.submitted {
+  background: color-mix(in srgb, var(--a3s-blue-soft) 46%, var(--a3s-panel));
 }
 
 .a3s-item.is-hidden {
@@ -511,6 +541,11 @@ ${OVERLAY_MARKING_CSS}
   background: var(--a3s-violet-soft);
   color: var(--a3s-violet);
   font-size: 10px;
+  line-height: 1.35;
+}
+
+.a3s-root[lang="en"] .a3s-status,
+.a3s-root[lang="en"] .a3s-thread span {
   text-transform: capitalize;
 }
 
@@ -564,7 +599,6 @@ ${OVERLAY_MARKING_CSS}
 .a3s-thread span {
   color: var(--a3s-violet);
   font-size: 10px;
-  text-transform: capitalize;
 }
 
 .a3s-thread p {
@@ -604,10 +638,10 @@ ${OVERLAY_MARKING_CSS}
   }
 
   .a3s-command-bar > header {
-    min-width: 64px;
+    min-width: 108px;
     height: 46px;
     align-self: center;
-    grid-template-columns: 28px 28px;
+    grid-template-columns: 28px minmax(44px, 1fr) 30px;
   }
 
   .a3s-toolbar-core {
@@ -616,9 +650,9 @@ ${OVERLAY_MARKING_CSS}
 
   .a3s-tools button,
   .a3s-settings > .a3s-disclosure {
-    width: 40px;
-    height: 40px;
-    min-height: 40px;
+    width: 44px;
+    height: 44px;
+    min-height: 44px;
   }
 
   .a3s-tool-tray,
@@ -678,6 +712,23 @@ ${OVERLAY_MARKING_CSS}
     left: 0;
     width: auto;
   }
+
+  .a3s-settings input,
+  .a3s-settings select,
+  .a3s-layout input,
+  .a3s-layout select,
+  .a3s-catalog input,
+  .a3s-editor textarea,
+  .a3s-editor select,
+  .a3s-reply-label textarea {
+    font-size: 16px;
+  }
+
+  .a3s-workspace button,
+  .a3s-editor > .a3s-actions button,
+  .a3s-settings-content button {
+    min-height: 44px;
+  }
 }
 
 @media (max-width: 420px) {
@@ -691,14 +742,27 @@ ${OVERLAY_MARKING_CSS}
     min-width: 58px;
     padding-right: 2px;
     padding-left: 0;
+    grid-template-columns: 28px 28px;
     gap: 1px;
+  }
+
+  .a3s-command-bar > header > span:nth-child(2) {
+    position: fixed;
+    width: 1px;
+    height: 1px;
+    clip-path: inset(50%);
   }
 
   .a3s-tools button,
   .a3s-settings > .a3s-disclosure {
-    width: 38px;
-    height: 38px;
-    min-height: 38px;
+    width: 44px;
+    height: 44px;
+    min-height: 44px;
+  }
+
+  .a3s-toolbar-core,
+  .a3s-tool-group {
+    gap: 1px;
   }
 }
 

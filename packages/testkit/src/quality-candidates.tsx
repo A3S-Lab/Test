@@ -6,6 +6,7 @@ import type {
   RepairSeverity,
   RepairTarget,
 } from "./types";
+import { englishReviewTranslator, useReviewI18n, type ReviewTranslator } from "./review-locale";
 
 export type QualitySelection = {
   reportId: string;
@@ -29,35 +30,36 @@ export type QualityCandidatesProps = {
 };
 
 export function QualityCandidates({ reports, onReview, onDismiss }: QualityCandidatesProps) {
+  const { t } = useReviewI18n();
   if (reports.length === 0) return null;
-  return <section className="a3s-quality" aria-label="Contract findings">
+  return <section className="a3s-quality" aria-label={t("contractFindings")}>
     <div className="a3s-section-heading">
-      <strong>Contract findings</strong>
-      <small>Review before sending</small>
+      <strong>{t("contractFindings")}</strong>
+      <small>{t("reviewBeforeSending")}</small>
     </div>
     {reports.flatMap((report) => report.findings.map((finding) => (
       <article key={finding.id} className="a3s-quality-item">
-        <span className={`a3s-status status-${finding.severity}`}>{finding.severity}</span>
+        <span className={`a3s-status status-${finding.severity}`}>{t(finding.severity === "blocking" ? "severityBlocking" : finding.severity === "important" ? "severityImportant" : "severitySuggestion")}</span>
         <strong>{finding.message}</strong>
         <small>
           {report.contract} · {finding.rule_id}
-          {finding.observed_node_id ? " · target found" : " · choose target"}
+          {` · ${t(finding.observed_node_id ? "targetFound" : "chooseTarget")}`}
         </small>
         <div>
           <button
             type="button"
-            aria-label={`Review contract finding: ${finding.message}`}
+            aria-label={t("reviewContractFinding", { message: finding.message })}
             onClick={() => onReview(report.id, finding)}
           >
-            {finding.observed_node_id ? "Review finding" : "Choose target"}
+            {t(finding.observed_node_id ? "reviewFinding" : "chooseTargetAction")}
           </button>
           <button
             type="button"
             className="quiet"
-            aria-label={`Dismiss contract finding: ${finding.message}`}
+            aria-label={t("dismissContractFinding", { message: finding.message })}
             onClick={() => onDismiss(report.id, finding.id)}
           >
-            Dismiss
+            {t("dismiss")}
           </button>
         </div>
       </article>
@@ -65,16 +67,17 @@ export function QualityCandidates({ reports, onReview, onDismiss }: QualityCandi
   </section>;
 }
 
-export function qualitySuccessCriteria(finding: QualityFinding): string {
+export function qualitySuccessCriteria(finding: QualityFinding, t: ReviewTranslator = englishReviewTranslator): string {
   const expected = JSON.stringify(finding.expected);
   const summary = expected.length > 240 ? `${expected.slice(0, 237)}...` : expected;
-  return `Contract ${finding.rule_id} matches the expected value ${summary}`;
+  return t("contractCriteria", { rule: finding.rule_id, expected: summary });
 }
 
 export function resolveQualityCandidate(
   bridge: PageContextBridge,
   selection: QualitySelection,
   selectedNodeId?: string,
+  t: ReviewTranslator = englishReviewTranslator,
 ): QualityCandidate | null {
   const nodeId = selectedNodeId ?? selection.finding.observed_node_id;
   if (!nodeId || !bridge.resolve(nodeId)) return null;
@@ -83,7 +86,7 @@ export function resolveQualityCandidate(
     target: { kind: "node", nodeIds: [nodeId] },
     label: selection.finding.element_id ?? selection.finding.rule_id,
     instruction: selection.finding.message,
-    successCriteria: qualitySuccessCriteria(selection.finding),
+    successCriteria: qualitySuccessCriteria(selection.finding, t),
     intent: "fix",
     severity: selection.finding.severity,
   };

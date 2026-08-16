@@ -93,7 +93,7 @@ suite "website-testkit-experience" {
         }
 
         fill "single-instruction" {
-            target = label("Requested fix")
+            target = label("希望如何修改")
             value = "Increase the action label contrast without changing layout"
         }
 
@@ -102,7 +102,7 @@ suite "website-testkit-experience" {
         }
 
         click "send-single" {
-            target = role("button", "Send and auto-fix")
+            target = role("button", "发送并自动修复")
         }
 
         wait "single-receipt" {
@@ -130,7 +130,7 @@ suite "website-testkit-experience" {
         }
 
         fill "first-batch-instruction" {
-            target = label("Requested fix")
+            target = label("希望如何修改")
             value = "Clarify the context refresh state"
         }
 
@@ -139,7 +139,7 @@ suite "website-testkit-experience" {
         }
 
         click "save-first-batch-draft" {
-            target = role("button", "Add draft")
+            target = role("button", "加入草稿")
         }
 
         snapshot "after-first-batch-draft" {
@@ -163,7 +163,7 @@ suite "website-testkit-experience" {
         }
 
         fill "second-batch-instruction" {
-            target = label("Requested fix")
+            target = label("希望如何修改")
             value = "Announce which installer command was copied"
         }
 
@@ -172,7 +172,7 @@ suite "website-testkit-experience" {
         }
 
         click "save-second-batch-draft" {
-            target = role("button", "Add draft")
+            target = role("button", "加入草稿")
         }
 
         snapshot "batch-ready" {
@@ -180,7 +180,7 @@ suite "website-testkit-experience" {
         }
 
         click "send-batch" {
-            target = role("button", "Send selected (2)")
+            target = role("button", "发送选中项（2）")
         }
 
         wait "batch-receipt" {

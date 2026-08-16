@@ -43,13 +43,34 @@ export function App() {
       >
         <Checkout />
       </A3STestBoundary>
-      <A3SReviewOverlay enabled={import.meta.env.DEV} />
+      <A3SReviewOverlay
+        enabled={import.meta.env.DEV}
+        locale="zh-CN"
+      />
     </A3STestKit>
   );
 }
 ```
 
 框架无关入口导出 `installTestKit`、`getPageContextBridge` 和协议类型。React 入口增加 provider、组件边界与可选的 Shadow DOM overlay。`enabled` 必须明确为 `true`，否则运行时关闭并拒绝工作。
+
+## 中文界面与项目文案
+
+`A3SReviewOverlay` 支持 `locale="auto" | "en" | "zh-CN"`。默认值 `auto` 会读取页面的 `<html lang>`；任何 `zh-*` 语言标签都会使用简体中文，其余语言使用英文。中文站点建议像上面的示例一样显式传入 `locale="zh-CN"`，避免宿主页面语言配置错误时退回英文。
+
+项目可以受限覆盖少量界面文案：
+
+```tsx
+<A3SReviewOverlay
+  enabled={import.meta.env.DEV}
+  locale="zh-CN"
+  messages={{
+    reviewTitle: '页面评审',
+  }}
+/>
+```
+
+`messages` 只接受已知文案键。空字符串和超过 2,048 个字符的值会被忽略；这些内容只影响显示，不会进入页面上下文、修复指令或 Agent 的隐藏输入。
 
 ## A3S Test 能看到什么
 
@@ -66,9 +87,9 @@ MutationObserver、ResizeObserver、滚动、视口和导航信号会推进修�
 
 ## 人工标记与批量修复
 
-Test Kit 0.4.0 使用紧凑的悬浮 Dock 承载评审流程。主控件始终可用且不遮挡页面，标记工具、偏好设置、当前编辑器和问题工作区只在需要时展开。
+Test Kit 0.4.0 使用紧凑的悬浮 Dock 承载评审流程。主控件始终可用且不遮挡页面，标记工具、偏好设置、当前编辑器和问题工作区只在需要时展开。更多工具与问题工作区互斥，打开其中一个会自动收起另一个，避免浮层堆叠。
 
-编辑器会贴近选中目标并保留页面可见区域。保存后的草稿进入独立问题工作区，单项发送与批量发送操作固定在工作区底部。
+编辑器会贴近选中目标并保留页面可见区域。保存后的草稿进入独立问题工作区，单项发送与批量发送操作固定在工作区底部。短桌面视口中的偏好面板会在自身内部滚动；移动端主要操作使用至少 44 CSS 像素的触控目标，表单文字保持 16 像素，避免浏览器自动缩放。
 
 Overlay 支持元素、文本、点击或拖动多选、矩形和自由手绘标记。评审者可以：
 
@@ -79,6 +100,8 @@ Overlay 支持元素、文本、点击或拖动多选、矩形和自由手绘标
 5. 接受、拒绝或重新打开修复结果。
 
 Overlay 打开后，可以按 `E`、`M`、`T`、`A`、`D` 分别开始元素、多选、文本、区域和手绘标记；`L`、`P`、`H` 分别切换 Layout Mode、页面动画和标记显示。焦点位于输入框或编辑器时，字母快捷键不会接管输入。
+
+Overlay 位于开放的 Shadow DOM 中，中文按钮名称、状态、提示、实时播报和 ARIA 名称使用同一套文案目录。键盘焦点会在关闭编辑器、取消标记和隐藏组件时返回到稳定控件；这些本地化不会改变页面上下文协议或修复数据。
 
 Layout Mode 只生成类型化 `placement` 或 `rearrange` 意图和视口 CSS 像素目标。它不会直接移动、重排或修改宿主 DOM。
 

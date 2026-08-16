@@ -190,7 +190,7 @@ The React adapter exposes:
   repairEndpoint="/__a3s-test/repairs"
 >
   <Application />
-  <A3SReviewOverlay enabled={import.meta.env.DEV} />
+  <A3SReviewOverlay enabled={import.meta.env.DEV} locale="auto" />
 </A3STestKit>
 ```
 
@@ -254,6 +254,30 @@ Shadow DOM. Direct framework-neutral bridge inspection returns `null` on the
 server; enabling the runtime directly remains a browser-only operation and
 fails with a contextual error.
 
+### Review language and host copy
+
+`A3SReviewOverlay` accepts `locale="auto" | "en" | "zh-CN"`. The default,
+`auto`, reads `document.documentElement.lang` when the overlay renders. Every
+`zh-*` language tag resolves to the Simplified Chinese review UI; other tags
+resolve to English. The resolved language is also set on the Shadow DOM review
+root so localized control names, status labels, live announcements, and text
+use the correct language context.
+
+Set a language explicitly when the review surface should not follow the page:
+
+```tsx
+<A3SReviewOverlay
+  enabled={import.meta.env.DEV}
+  locale="zh-CN"
+  messages={{ reviewTitle: "页面评审" }}
+/>
+```
+
+`messages` is a typed, partial map of known review-message keys. Runtime
+admission ignores unknown keys, blank strings, and values longer than 2,048
+characters. Overrides affect presentation only; they are never added to page
+context, repair instructions, or hidden agent input.
+
 ## Human review and repair submission
 
 The optional overlay creates local draft findings from element click, selected
@@ -265,7 +289,11 @@ The overlay is an operate-mode instrument panel, not a second application
 shell. Its header stays one line, explanatory copy truncates, findings use
 compact separators instead of nested cards, and the host page remains the
 visual authority. Severity always has a text label. Quality markers use a
-distinct dashed treatment so color is not the sole distinction.
+distinct dashed treatment so color is not the sole distinction. Opening the
+secondary tool tray closes the findings workspace and opening the workspace
+closes the tray, so floating surfaces cannot obscure one another. Preferences
+remain scrollable within short desktop viewports. Mobile controls use
+44-CSS-pixel touch targets and 16-pixel form text to avoid accidental zoom.
 
 ### Deterministic quality candidates
 
@@ -514,7 +542,10 @@ closing the dialog, sending or deleting a draft, or completing a clarification
 reply. Hiding the overlay until the tab restarts returns focus to the last
 connected application control before the Shadow DOM disappears. Repair state
 changes and submission results use one visually hidden polite live region so a
-screen reader does not announce the entire finding list again.
+screen reader does not announce the entire finding list again. Chinese and
+English labels, descriptions, status messages, live announcements, and ARIA
+names share the same bounded message catalog rather than diverging into
+separate interaction implementations.
 
 Automated React tests cover dialog naming, control names, live-region messages,
 shortcut metadata and help content, and Shadow DOM focus restoration. The

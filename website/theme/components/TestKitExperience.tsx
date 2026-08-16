@@ -542,6 +542,7 @@ export function TestKitExperience({
           <A3SReviewOverlay
             defaultOpen
             enabled
+            locale={locale === 'zh' ? 'zh-CN' : 'en'}
             onSubmitted={(submitted) => {
               setRepairs(submitted);
               refreshAfterRender();

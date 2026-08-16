@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState, type CSSProperties } from "react";
+import { useEffect, useId, useMemo, useRef, useState, type CSSProperties } from "react";
 import { createPortal } from "react-dom";
 import { useBrowserLayoutEffect } from "./react-effect";
 import { getPageContextBridge } from "./runtime";
@@ -16,9 +16,11 @@ import { REVIEW_KEY_SHORTCUTS, useGlobalReviewShortcuts, useHostPointerBlocking,
 import { useReviewOverlayHost } from "./review-overlay-host";
 import type { A3SReviewOverlayProps } from "./review-overlay-types";
 export type { A3SReviewCopyEvent, A3SReviewOverlayProps } from "./review-overlay-types";
+export type { A3SReviewLocale, A3SReviewMessageKey, A3SReviewMessageOverrides } from "./review-locale";
 import { DEFAULT_REVIEW_PREFERENCES, loadReviewPreferences, loadReviewTabHidden, saveReviewPreferences, saveReviewTabHidden, type ReviewPreferences } from "./review-preferences";
-import { MODE_HINT, type LayoutCanvas, type LayoutSource, type SelectionMode } from "./review-model";
-import { appendDrawingPoint, drawingBounds, normalizedArea, rectStyle, rectValue, removeDraft, repairAnnouncement, repairId, statusLabel, targetSummary, validLayoutRect } from "./review-utils";
+import { type LayoutCanvas, type LayoutSource, type SelectionMode } from "./review-model";
+import { createReviewI18n, ReviewI18nProvider, reviewActorLabel, reviewModeHint, reviewRepairAnnouncement, reviewStatusLabel, reviewTargetSummary } from "./review-locale";
+import { appendDrawingPoint, drawingBounds, normalizedArea, rectStyle, rectValue, removeDraft, repairId, validLayoutRect } from "./review-utils";
 import { ReviewMarkers } from "./review-markers";
 import type { DesignAuditFinding, DesignAuditReportRecord, PageContextBridge, QualityFinding, QualityReportRecord, RepairDraft, RepairIntent, RepairSeverity, RepairTarget, Rect, SubmittedRepair } from "./types";
 
@@ -30,6 +32,8 @@ export function A3SReviewOverlay({
   enabled = false,
   defaultOpen = false,
   autoSend = false,
+  locale = "auto",
+  messages,
   copyToClipboard,
   onCopied,
   onDraftAdded,
@@ -38,6 +42,9 @@ export function A3SReviewOverlay({
   onDraftsCleared,
   onSubmitted,
 }: A3SReviewOverlayProps) {
+  const pageLanguage = typeof document === "undefined" ? "" : document.documentElement.lang;
+  const reviewI18n = useMemo(() => createReviewI18n(locale, messages, pageLanguage), [locale, messages, pageLanguage]);
+  const { t } = reviewI18n;
   const callbacks = useLatest({
     copyToClipboard,
     onCopied,
@@ -74,7 +81,7 @@ export function A3SReviewOverlay({
   const [layoutMode, setLayoutMode] = useState(false);
   const [layoutPurpose, setLayoutPurpose] = useState("");
   const [layoutCanvas, setLayoutCanvas] = useState<LayoutCanvas>("page");
-  const [layoutComponentType, setLayoutComponentType] = useState("Section");
+  const [layoutComponentType, setLayoutComponentType] = useState(() => reviewI18n.locale === "zh-CN" ? "区块" : "Section");
   const [layoutSource, setLayoutSource] = useState<LayoutSource | null>(null);
   const [layoutTarget, setLayoutTarget] = useState<Rect>({ x: 40, y: 120, width: 640, height: 240 });
   const [drafts, setDrafts] = useState<ReviewDraftItem[]>([]);
@@ -109,6 +116,7 @@ export function A3SReviewOverlay({
   const focusPanelOnOpenRef = useRef(false);
   const focusLauncherOnCloseRef = useRef(false);
   const restoreFocusRef = useRef<HTMLElement | null>(null);
+  const hiddenFocusRef = useRef<HTMLElement | null>(null);
   const lastApplicationFocusRef = useLastApplicationFocus(enabled, host);
   const idPrefix = useId().replace(/:/g, "");
 
@@ -158,20 +166,20 @@ export function A3SReviewOverlay({
     if (!next) setLayoutSource(null);
     setLayoutMode(next);
     if (next) setWorkspaceOpen(true);
-    announce(next ? "Layout mode enabled" : "Layout mode disabled");
+    announce(t(next ? "layoutModeEnabled" : "layoutModeDisabled"));
   }
 
   function togglePause() {
     const next = !paused;
     bridge?.setAnimationsPaused(next);
     setPaused(next);
-    announce(next ? "Page animations paused" : "Page animations resumed");
+    announce(t(next ? "animationsPaused" : "animationsResumed"));
   }
 
   function toggleMarkers() {
     const next = !markersVisible;
     setMarkersVisible(next);
-    announce(next ? "Finding markers shown" : "Finding markers hidden");
+    announce(t(next ? "markersShown" : "markersHidden"));
   }
 
   function changePreferences(value: ReviewPreferences) {
@@ -189,7 +197,7 @@ export function A3SReviewOverlay({
   }
 
   function hideUntilTabRestart() {
-    const applicationFocus = lastApplicationFocusRef.current;
+    hiddenFocusRef.current = lastApplicationFocusRef.current;
     if (typeof window !== "undefined") {
       saveReviewTabHidden(true);
     }
@@ -197,12 +205,16 @@ export function A3SReviewOverlay({
     bridge?.setAnimationsPaused(false);
     setPaused(false);
     setTabHidden(true);
-    queueMicrotask(() => {
-      if (applicationFocus?.isConnected) {
-        applicationFocus.focus({ preventScroll: true });
-      }
-    });
   }
+
+  useBrowserLayoutEffect(() => {
+    if (!tabHidden) return;
+    const applicationFocus = hiddenFocusRef.current;
+    hiddenFocusRef.current = null;
+    if (applicationFocus?.isConnected) {
+      applicationFocus.focus({ preventScroll: true });
+    }
+  }, [tabHidden]);
 
   function stopMarking(restoreFocus = true) {
     setMarking(false);
@@ -227,7 +239,7 @@ export function A3SReviewOverlay({
   function cancelMarking(restoreFocus = true) {
     stopMarking(restoreFocus);
     clearCandidate();
-    if (marking) announce("Marking cancelled");
+    if (marking) announce(t("markingCancelled"));
   }
 
   useEffect(() => {
@@ -253,8 +265,8 @@ export function A3SReviewOverlay({
           setDrafts(restored);
           setWorkspaceOpen(restored.length > 0);
           announce(restored.length > 0
-            ? `${restored.length} saved draft${restored.length === 1 ? "" : "s"} restored for this route`
-            : "Review drafts switched to this route");
+            ? t(restored.length === 1 ? "savedDraftRestoredForRouteOne" : "savedDraftRestoredForRouteMany", { count: restored.length })
+            : t("draftsSwitchedRoute"));
         }
       }
       if (event.type === "repair.submitted" || event.type === "repair.updated") {
@@ -265,8 +277,8 @@ export function A3SReviewOverlay({
         setQualityReports(bridge.listQualityReports());
         setWorkspaceOpen(true);
         announce(event.report.findings.length > 0
-          ? `${event.report.findings.length} contract finding${event.report.findings.length === 1 ? "" : "s"} available for review`
-          : `Contract ${event.report.contract} passed; prior findings cleared`);
+          ? t(event.report.findings.length === 1 ? "contractFindingAvailableOne" : "contractFindingAvailableMany", { count: event.report.findings.length })
+          : t("contractPassedCleared", { contract: event.report.contract }));
       }
       if (event.type === "quality.dismissed") {
         setQualityReports(bridge.listQualityReports());
@@ -275,15 +287,15 @@ export function A3SReviewOverlay({
         setDesignAuditReports(bridge.listDesignAuditReports());
         setWorkspaceOpen(true);
         announce(event.report.findings.length > 0
-          ? `${event.report.findings.length} advisory design suggestion${event.report.findings.length === 1 ? "" : "s"} available for review`
-          : "Prior design-audit suggestions cleared");
+          ? t(event.report.findings.length === 1 ? "designSuggestionAvailableOne" : "designSuggestionAvailableMany", { count: event.report.findings.length })
+          : t("designSuggestionsCleared"));
       }
       if (event.type === "design_audit.dismissed") {
         setDesignAuditReports(bridge.listDesignAuditReports());
       }
-      if (event.type === "repair.updated") announce(repairAnnouncement(event.repair));
+      if (event.type === "repair.updated") announce(reviewRepairAnnouncement(t, event.repair));
     });
-  }, [bridge]);
+  }, [bridge, t]);
 
   useEffect(() => {
     if (!enabled || !bridge || !mount) return;
@@ -295,9 +307,9 @@ export function A3SReviewOverlay({
     setDrafts(restored);
     if (restored.length > 0) setWorkspaceOpen(true);
     if (restored.length > 0) {
-      announce(`${restored.length} saved draft${restored.length === 1 ? "" : "s"} restored`);
+      announce(t(restored.length === 1 ? "savedDraftRestoredOne" : "savedDraftRestoredMany", { count: restored.length }));
     }
-  }, [bridge, enabled, mount]);
+  }, [bridge, enabled, mount, t]);
 
   useEffect(() => {
     if (!enabled || !bridge || !mount || restoredScopeRef.current === null) return;
@@ -361,7 +373,7 @@ export function A3SReviewOverlay({
     onToggleLayout: toggleLayoutMode,
     onTogglePause: togglePause,
     onToggleMarkers: toggleMarkers,
-    onCopyDrafts: () => void copyDraftsMarkdown(),
+    onCopyDrafts: () => void copyDrafts("markdown"),
     onClearDrafts: clearDrafts,
   });
 
@@ -399,7 +411,7 @@ export function A3SReviewOverlay({
         const points = appendDrawingPoint(drawingRef.current, event.clientX, event.clientY).slice(0, 2_000);
         const region = drawingBounds(points);
         const snapshot = bridge.snapshot({ detail: "summary", scope: { kind: "region", space: "viewport", ...region } });
-        stageCandidate({ kind: "drawing", nodeIds: snapshot.nodes.map((node) => node.id), region, drawing: points }, `${snapshot.nodes.length} elements near drawing`);
+        stageCandidate({ kind: "drawing", nodeIds: snapshot.nodes.map((node) => node.id), region, drawing: points }, t("elementsNearDrawing", { count: snapshot.nodes.length }));
         updateDrawing(null);
         updateArea(null);
         setHighlight(null);
@@ -414,21 +426,21 @@ export function A3SReviewOverlay({
         updateArea(null);
         setHighlight(null);
         if (region.width < 8 || region.height < 8) {
-          announce("Layout regions must be at least 8 by 8 CSS pixels");
+          announce(t("layoutRegionMinimum"));
           stopMarking(false);
           focusPanel();
           return;
         }
         if (mode === "layout_destination") {
           setLayoutTarget(region);
-          announce("Layout destination updated");
+          announce(t("layoutDestinationUpdated"));
           stopMarking(false);
           focusPanel();
           return;
         }
         const componentType = layoutComponentType.trim();
         if (!componentType) {
-          announce("Choose a component type before drawing its placement");
+          announce(t("chooseComponentBeforePlacement"));
           stopMarking(false);
           focusPanel();
           return;
@@ -445,10 +457,10 @@ export function A3SReviewOverlay({
               ...(layoutPurpose.trim() ? { purpose: layoutPurpose.trim() } : {}),
             },
           },
-          `${componentType} placement`,
+          t("layoutPlacementLabel", { component: componentType }),
           {
-            instruction: `Place ${componentType} in the selected layout region`,
-            successCriteria: `${componentType} is visibly present within the requested layout region`,
+            instruction: t("placeComponentInstruction", { component: componentType }),
+            successCriteria: t("placeComponentCriteria", { component: componentType }),
             intent: "change",
           },
         );
@@ -465,7 +477,7 @@ export function A3SReviewOverlay({
           mode === "multi"
             ? { kind: "node", nodeIds: snapshot.nodes.map((node) => node.id), region }
             : { kind: "region", nodeIds: snapshot.nodes.map((node) => node.id), region },
-          `${snapshot.nodes.length} elements in ${mode === "multi" ? "selection" : "area"}`,
+          t(mode === "multi" ? "elementsInSelection" : "elementsInArea", { count: snapshot.nodes.length }),
         );
         updateArea(null);
         setHighlight(null);
@@ -501,7 +513,6 @@ export function A3SReviewOverlay({
           kind: "node",
           nodeIds: Array.from(new Set([...(current?.nodeIds ?? []), node.id])),
         }));
-        setCandidateLabel((current) => current ? `${Number.parseInt(current, 10) + 1 || 2} selected elements` : "1 selected element");
       } else {
         if (pendingCandidateSource) {
           stagePendingCandidate(pendingCandidateSource, node.id);
@@ -538,14 +549,15 @@ export function A3SReviewOverlay({
         if (event.shiftKey && keyboardNodeIds.length > 0) {
           event.preventDefault();
           event.stopPropagation();
-          stageCandidate({ kind: "node", nodeIds: keyboardNodeIds }, `${keyboardNodeIds.length} selected elements`);
+          stageCandidate({ kind: "node", nodeIds: keyboardNodeIds }, t(keyboardNodeIds.length === 1 ? "selectedElementsOne" : "selectedElementsMany", { count: keyboardNodeIds.length }));
           stopMarking(false);
           return;
         }
         const next = Array.from(new Set([...keyboardNodeIds, node.id]));
         setKeyboardNodeIds(next);
-        setCandidateLabel(`${next.length} selected element${next.length === 1 ? "" : "s"}`);
-        announce(`${next.length} selected element${next.length === 1 ? "" : "s"}; press Shift+Enter to finish`);
+        const selectedLabel = t(next.length === 1 ? "selectedElementsOne" : "selectedElementsMany", { count: next.length });
+        setCandidateLabel(selectedLabel);
+        announce(t("selectionFinish", { count: selectedLabel }));
       } else {
         if (pendingCandidateSource) {
           stagePendingCandidate(pendingCandidateSource, node.id);
@@ -565,7 +577,7 @@ export function A3SReviewOverlay({
       document.removeEventListener("pointerup", onPointerUp, true);
       document.removeEventListener("keydown", onKeyDown, true);
     };
-  }, [bridge, host, keyboardNodeIds, layoutCanvas, layoutComponentType, layoutPurpose, marking, mode, pendingCandidateSource]);
+  }, [bridge, host, keyboardNodeIds, layoutCanvas, layoutComponentType, layoutPurpose, marking, mode, pendingCandidateSource, t]);
 
   if (!enabled || !bridge || !mount || tabHidden) return null;
 
@@ -592,9 +604,9 @@ export function A3SReviewOverlay({
   function reviewQualityFinding(reportId: string, finding: QualityFinding) {
     if (!bridge) return;
     const selection = { reportId, finding };
-    const resolved = resolveQualityCandidate(bridge, selection);
+    const resolved = resolveQualityCandidate(bridge, selection, undefined, t);
     if (!resolved) {
-      announce("Choose the page element that should satisfy this contract finding");
+      announce(t("chooseContractTarget"));
       startMarking("element", { kind: "quality", selection });
       return;
     }
@@ -618,9 +630,9 @@ export function A3SReviewOverlay({
   function reviewDesignAuditFinding(reportId: string, finding: DesignAuditFinding) {
     if (!bridge) return;
     const selection = { reportId, finding };
-    const resolved = resolveDesignAuditCandidate(bridge, selection);
+    const resolved = resolveDesignAuditCandidate(bridge, selection, undefined, t);
     if (!resolved) {
-      announce("Choose the page element associated with this design suggestion");
+      announce(t("chooseDesignTarget"));
       startMarking("element", { kind: "design_audit", selection });
       return;
     }
@@ -644,11 +656,11 @@ export function A3SReviewOverlay({
   function stagePendingCandidate(source: CandidateSource, nodeId: string) {
     if (!bridge) return;
     if (source.kind === "quality") {
-      const resolved = resolveQualityCandidate(bridge, source.selection, nodeId);
+      const resolved = resolveQualityCandidate(bridge, source.selection, nodeId, t);
       if (resolved) stageQualityCandidate(resolved);
       return;
     }
-    const resolved = resolveDesignAuditCandidate(bridge, source.selection, nodeId);
+    const resolved = resolveDesignAuditCandidate(bridge, source.selection, nodeId, t);
     if (resolved) stageDesignAuditCandidate(resolved);
   }
 
@@ -659,7 +671,7 @@ export function A3SReviewOverlay({
     setLayoutTarget(originalRegion);
     setHighlight(null);
     stopMarking(false);
-    announce(`Layout section selected: ${label}`);
+    announce(t("layoutSectionSelected", { label }));
     focusPanel();
   }
 
@@ -676,10 +688,10 @@ export function A3SReviewOverlay({
           ...(layoutPurpose.trim() ? { purpose: layoutPurpose.trim() } : {}),
         },
       },
-      `${layoutSource.label} rearrangement`,
+      t("layoutRearrangementLabel", { label: layoutSource.label }),
       {
-        instruction: `Move ${layoutSource.label} to the selected layout region`,
-        successCriteria: `${layoutSource.label} appears within the requested layout region`,
+        instruction: t("moveSectionInstruction", { label: layoutSource.label }),
+        successCriteria: t("moveSectionCriteria", { label: layoutSource.label }),
         intent: "change",
       },
     );
@@ -731,7 +743,7 @@ export function A3SReviewOverlay({
       });
       invokeCallback(wasEditing ? callbacks.current.onDraftUpdated : callbacks.current.onDraftAdded, structuredClone(draft));
       dismissCandidateSource(source);
-      announce(`${wasEditing ? "Draft updated" : "Draft added"}: ${draft.instruction}`);
+      announce(t(wasEditing ? "draftUpdated" : "draftAdded", { message: draft.instruction }));
       focusPanel();
     }
   }
@@ -744,7 +756,7 @@ export function A3SReviewOverlay({
       setConflictingDraftIds([]);
     }
     invokeCallback(callbacks.current.onDraftDeleted, structuredClone(draft));
-    announce(`Draft deleted: ${draft.instruction}`);
+    announce(t("draftDeleted", { message: draft.instruction }));
     focusPanel();
   }
 
@@ -756,7 +768,7 @@ export function A3SReviewOverlay({
     setEditingDraftId(null);
     setConflictingDraftIds([]);
     invokeCallback(callbacks.current.onDraftsCleared, cleared);
-    announce(`${cleared.length} draft${cleared.length === 1 ? "" : "s"} cleared`);
+    announce(t(cleared.length === 1 ? "draftClearedOne" : "draftClearedMany", { count: cleared.length }));
     focusPanel();
   }
 
@@ -773,7 +785,7 @@ export function A3SReviewOverlay({
       callbacks.current.onDraftsCleared,
       copied.map((draft) => structuredClone(draft)),
     );
-    announce(`${copied.length} copied draft${copied.length === 1 ? "" : "s"} cleared`);
+    announce(t(copied.length === 1 ? "copiedDraftClearedOne" : "copiedDraftClearedMany", { count: copied.length }));
     focusPanel();
   }
 
@@ -803,7 +815,7 @@ export function A3SReviewOverlay({
     }
     setEditingDraftId(item.draft.id);
     setCandidate(item.draft.target);
-    setCandidateLabel(targetSummary(item.draft.target));
+    setCandidateLabel(reviewTargetSummary(t, item.draft.target));
     setInstruction(item.draft.instruction);
     setSuccessCriteria(item.draft.successCriteria ?? "");
     setSeverity(item.draft.severity);
@@ -825,7 +837,7 @@ export function A3SReviewOverlay({
     invokeCallback(callbacks.current.onSubmitted, structuredClone(submitted));
     if (submitted.length > 0) {
       setWorkspaceOpen(true);
-      announce(`${submitted.length} finding${submitted.length === 1 ? "" : "s"} sent for repair`);
+      announce(t(submitted.length === 1 ? "findingSentOne" : "findingSentMany", { count: submitted.length }));
       focusPanel();
     }
     return submitted;
@@ -849,7 +861,8 @@ export function A3SReviewOverlay({
   ) {
     if (!bridge) return;
     if (!bridge.submitRepairAction({ findingId, action, ...(message?.trim() ? { message: message.trim() } : {}) })) return;
-    announce(action === "reply" ? "Reply sent to the coding agent" : `Repair ${action} action queued`);
+    const localizedAction = action === "accept" ? t("actionAccept") : action === "dismiss" ? t("actionDismiss") : action === "reopen" ? t("actionReopen") : action;
+    announce(action === "reply" ? t("replySent") : t("repairActionQueued", { action: localizedAction }));
     if (action === "reply") {
       setRestoreReplyFocusId(findingId);
       setReplyFindingId(null);
@@ -862,23 +875,15 @@ export function A3SReviewOverlay({
     queueMicrotask(() => setAnnouncement(message));
   }
 
-  async function copyDrafts() {
+  async function copyDrafts(format: "markdown" | "json" = "json") {
     if (!bridge || drafts.length === 0) return;
     const selected = drafts.filter((item) => item.selected).map((item) => item.draft);
     const copied = selected.length > 0 ? selected : drafts.map((item) => item.draft);
-    const text = JSON.stringify(bridge.exportRepairs(copied), null, 2);
+    const text = format === "markdown"
+      ? bridge.exportRepairsMarkdown(copied)
+      : JSON.stringify(bridge.exportRepairs(copied), null, 2);
     if (!await writeClipboard(text, callbacks.current.copyToClipboard)) return;
-    invokeCallback(callbacks.current.onCopied, { format: "json", text, drafts: structuredClone(copied) });
-    if (preferences.clearOnCopy) clearCopiedDrafts(copied);
-  }
-
-  async function copyDraftsMarkdown() {
-    if (!bridge || drafts.length === 0) return;
-    const selected = drafts.filter((item) => item.selected).map((item) => item.draft);
-    const copied = selected.length > 0 ? selected : drafts.map((item) => item.draft);
-    const text = bridge.exportRepairsMarkdown(copied);
-    if (!await writeClipboard(text, callbacks.current.copyToClipboard)) return;
-    invokeCallback(callbacks.current.onCopied, { format: "markdown", text, drafts: structuredClone(copied) });
+    invokeCallback(callbacks.current.onCopied, { format, text, drafts: structuredClone(copied) });
     if (preferences.clearOnCopy) clearCopiedDrafts(copied);
   }
 
@@ -900,22 +905,23 @@ export function A3SReviewOverlay({
     + qualityReports.reduce((count, report) => count + report.findings.length, 0)
     + designAuditReports.reduce((count, report) => count + report.findings.length, 0);
   const content = (
-    <div className="a3s-root" data-a3s-testkit-overlay="" data-theme={preferences.theme} data-dock={preferences.dock} style={rootStyle}>
+    <ReviewI18nProvider value={reviewI18n}>
+    <div className="a3s-root" data-a3s-testkit-overlay="" data-theme={preferences.theme} data-dock={preferences.dock} lang={reviewI18n.locale} style={rootStyle}>
       {layoutMode && layoutCanvas === "wireframe" && <div className="a3s-wireframe" aria-hidden="true" />}
       {(highlight || areaRect) && <div className="a3s-highlight" style={rectStyle(areaRect ?? highlight!)} aria-hidden="true"><span>01</span></div>}
       {editorPlacement && <div className="a3s-highlight is-candidate" style={rectStyle(editorPlacement.rect)} aria-hidden="true"><span>01</span></div>}
       {layoutMode && layoutSource && !candidate && <div className="a3s-layout-target-preview" style={rectStyle(layoutTarget)} aria-hidden="true" />}
       {drawingPath && <svg className="a3s-drawing" aria-hidden="true"><path d={drawingPath} /></svg>}
       <ReviewMarkers visible={markersVisible} bridge={bridge} drafts={drafts} repairs={repairs} qualityReports={qualityReports} designAuditReports={designAuditReports} onEditDraft={editDraft} />
-      <button ref={launchRef} className={`a3s-launch${marking ? " is-active" : ""}${open ? " is-open" : ""}`} type="button" title="Toggle review overlay (Ctrl/Command+Shift+F)" onClick={() => open ? closeOverlayFromControl() : openOverlay(true)} aria-expanded={open} aria-controls={`${idPrefix}-review-panel`} aria-keyshortcuts={REVIEW_KEY_SHORTCUTS.toggle}>
+      <button ref={launchRef} className={`a3s-launch${marking ? " is-active" : ""}${open ? " is-open" : ""}`} type="button" title={t("toggleReviewOverlay")} onClick={() => open ? closeOverlayFromControl() : openOverlay(true)} aria-expanded={open} aria-controls={`${idPrefix}-review-panel`} aria-keyshortcuts={REVIEW_KEY_SHORTCUTS.toggle}>
         <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.4" /><path d="m7.3 16 3.9-9.2c.3-.8 1.4-.8 1.8 0l3.8 9.2M9.2 12.5h5.7" /><path d="M4.8 15.4c3-2.5 6.3-2.8 9.7-.9 1.7.9 3.4.3 5.2-1.3-1 4.7-4 7.1-8.5 7.1" /></svg>
-        <span className="a3s-sr-only">A3S Review</span>
+        <span className="a3s-sr-only">{t("reviewLauncher")}</span>
         {findingCount > 0 && <span className="a3s-launch-count" aria-hidden="true">{findingCount}</span>}
       </button>
       <div className="a3s-announcer" role="status" aria-live="polite" aria-atomic="true">{announcement}</div>
       {open && <>
         {candidate && <div className="a3s-editor-popover" data-side={editorPlacement?.side ?? "right"} style={editorStyle}><FindingEditor
-          label={candidateLabel || `${candidate.nodeIds.length} selected elements`}
+          label={candidateLabel || t(candidate.nodeIds.length === 1 ? "selectedElementsOne" : "selectedElementsMany", { count: candidate.nodeIds.length })}
           instruction={instruction}
           successCriteria={successCriteria}
           severity={severity}
@@ -942,12 +948,12 @@ export function A3SReviewOverlay({
         /></div>}
         <aside ref={panelRef} id={`${idPrefix}-review-panel`} className="a3s-panel" aria-labelledby={`${idPrefix}-review-title`} aria-describedby={`${idPrefix}-review-description`} aria-keyshortcuts={REVIEW_KEY_SHORTCUTS.escape} role="dialog" aria-modal="false" tabIndex={-1}>
           <div className="a3s-command-bar">
-            <header><span className="a3s-panel-mark" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.4" /><path d="m7.3 16 3.9-9.2c.3-.8 1.4-.8 1.8 0l3.8 9.2M9.2 12.5h5.7" /><path d="M4.8 15.4c3-2.5 6.3-2.8 9.7-.9 1.7.9 3.4.3 5.2-1.3-1 4.7-4 7.1-8.5 7.1" /></svg></span><span><strong id={`${idPrefix}-review-title`} className="a3s-panel-title">Review</strong><small id={`${idPrefix}-review-description`} className="a3s-panel-description">Local until sent</small></span><button type="button" className="a3s-close" onClick={closeOverlayFromControl} aria-label="Close review overlay"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3.5 3.5 12.5 12.5M12.5 3.5 3.5 12.5" /></svg></button></header>
+            <header><span className="a3s-panel-mark" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.4" /><path d="m7.3 16 3.9-9.2c.3-.8 1.4-.8 1.8 0l3.8 9.2M9.2 12.5h5.7" /><path d="M4.8 15.4c3-2.5 6.3-2.8 9.7-.9 1.7.9 3.4.3 5.2-1.3-1 4.7-4 7.1-8.5 7.1" /></svg></span><span><strong id={`${idPrefix}-review-title`} className="a3s-panel-title">{t("reviewTitle")}</strong><small id={`${idPrefix}-review-description`} className="a3s-panel-description">{t("reviewDescription")}</small></span><button type="button" className="a3s-close" onClick={closeOverlayFromControl} aria-label={t("closeReviewOverlay")}><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3.5 3.5 12.5 12.5M12.5 3.5 3.5 12.5" /></svg></button></header>
             <ReviewMarkingToolbar marking={marking} mode={mode} layoutMode={layoutMode} paused={paused} markersVisible={markersVisible} autoSendEnabled={autoSendEnabled} theme={preferences.theme} findingCount={findingCount} workspaceOpen={workspaceOpen} settings={<ReviewSettings preferences={preferences} onChange={changePreferences} onHideUntilRestart={hideUntilTabRestart} />} onStartMarking={startMarking} onToggleLayout={toggleLayoutMode} onTogglePause={togglePause} onToggleMarkers={toggleMarkers} onToggleAutoSend={() => setAutoSendEnabled((current) => !current)} onCycleTheme={cycleTheme} onToggleWorkspace={() => setWorkspaceOpen((current) => !current)} onCancelMarking={cancelMarking} />
           </div>
-          {marking && <p className="a3s-hint" role="status">{MODE_HINT[mode]} Press Esc to cancel.</p>}
-          <section className="a3s-workspace" hidden={!workspaceOpen} aria-label="Review workspace">
-            <header className="a3s-workspace-header"><span><strong>Findings</strong><small>{findingCount > 0 ? `${findingCount} in this page` : "No saved findings"}</small></span><button type="button" className="a3s-close" aria-label="Close findings" onClick={() => setWorkspaceOpen(false)}><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3.5 3.5 12.5 12.5M12.5 3.5 3.5 12.5" /></svg></button></header>
+          {marking && <p className="a3s-hint" role="status">{reviewModeHint(t, mode)} {t("pressEscapeToCancel")}</p>}
+          <section className="a3s-workspace" hidden={!workspaceOpen} aria-label={t("reviewWorkspace")}>
+            <header className="a3s-workspace-header"><span><strong>{t("reviewWorkspace")}</strong><small>{findingCount > 0 ? t("inThisPage", { count: findingCount }) : t("noSavedFindings")}</small></span><button type="button" className="a3s-close" aria-label={t("closeFindings")} onClick={() => setWorkspaceOpen(false)}><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3.5 3.5 12.5 12.5M12.5 3.5 3.5 12.5" /></svg></button></header>
             <div className="a3s-workspace-scroll">
               {layoutMode && <LayoutComposer
                 idPrefix={idPrefix}
@@ -968,26 +974,27 @@ export function A3SReviewOverlay({
               />}
               <QualityCandidates reports={qualityReports} onReview={reviewQualityFinding} onDismiss={(reportId, findingId) => bridge.dismissQualityFinding(reportId, findingId)} />
               <DesignAuditCandidates reports={designAuditReports} onReview={reviewDesignAuditFinding} onDismiss={(reportId, findingId) => bridge.dismissDesignAuditFinding(reportId, findingId)} />
-              <section className="a3s-list" aria-label="Draft and submitted findings" tabIndex={0}>
+              <section className="a3s-list" aria-label={t("draftAndSubmittedFindings")} tabIndex={0}>
           {drafts.map((item) => <article key={item.draft.id} className={`a3s-item${item.hidden ? " is-hidden" : ""}`}>
-            <label><input type="checkbox" aria-label={`Select draft: ${item.draft.instruction}`} checked={item.selected} onChange={(event) => setDrafts((current) => current.map((candidate) => candidate.draft.id === item.draft.id ? { ...candidate, selected: event.target.checked } : candidate))} /><span><strong>{item.draft.instruction}</strong><small>{targetSummary(item.draft.target)} · draft</small></span></label>
-            <div><button type="button" aria-label={`Send draft for auto-fix: ${item.draft.instruction}`} onClick={() => submit([item.draft])}>Send and auto-fix</button><button type="button" className="quiet" aria-label={`Edit draft: ${item.draft.instruction}`} onClick={() => editDraft(item)}>Edit</button><button type="button" className="quiet" aria-label={`${item.hidden ? "Reopen" : "Hide"} marker for draft: ${item.draft.instruction}`} onClick={() => setDrafts((current) => current.map((candidate) => candidate.draft.id === item.draft.id ? { ...candidate, hidden: !candidate.hidden } : candidate))}>{item.hidden ? "Reopen marker" : "Hide marker"}</button><button type="button" className="quiet" aria-label={`Delete draft: ${item.draft.instruction}`} onClick={() => deleteDraft(item.draft)}>Delete</button></div>
+            <label><input type="checkbox" aria-label={t("selectDraft", { message: item.draft.instruction })} checked={item.selected} onChange={(event) => setDrafts((current) => current.map((candidate) => candidate.draft.id === item.draft.id ? { ...candidate, selected: event.target.checked } : candidate))} /><span><strong>{item.draft.instruction}</strong><small>{reviewTargetSummary(t, item.draft.target)} · {t("draft")}</small></span></label>
+            <div><button type="button" aria-label={t("sendDraftAutoFix", { message: item.draft.instruction })} onClick={() => submit([item.draft])}>{t("sendAndAutoFix")}</button><button type="button" className="quiet" aria-label={t("editDraftAction", { message: item.draft.instruction })} onClick={() => editDraft(item)}>{t("edit")}</button><button type="button" className="quiet" aria-label={t(item.hidden ? "reopenMarkerForDraft" : "hideMarkerForDraft", { message: item.draft.instruction })} onClick={() => setDrafts((current) => current.map((candidate) => candidate.draft.id === item.draft.id ? { ...candidate, hidden: !candidate.hidden } : candidate))}>{t(item.hidden ? "reopenMarker" : "hideMarker")}</button><button type="button" className="quiet" aria-label={t("deleteDraftAction", { message: item.draft.instruction })} onClick={() => deleteDraft(item.draft)}>{t("delete")}</button></div>
           </article>)}
           {repairs.map((repair) => {
             const replies = bridge.listRepairReplies(repair.id);
-            return <article key={repair.id} className="a3s-item submitted"><span className={`a3s-status status-${repair.status}`}>{statusLabel(repair.status)}</span><strong>{repair.instruction}</strong><small>{targetSummary(repair.target)} · revision {repair.contextRevision}</small>{replies.length > 0 && <ol className="a3s-thread" aria-label={`Repair conversation: ${repair.instruction}`}>{replies.map((reply) => <li key={reply.requestId}><span>{reply.actor}</span><p>{reply.message}</p></li>)}</ol>}{repair.status === "needs_input" && <div className="a3s-human-actions">{replyFindingId === repair.id ? <><label className="a3s-reply-label">Reply to the coding agent<textarea aria-label={`Reply to coding agent about: ${repair.instruction}`} autoFocus maxLength={8192} value={replyMessage} onChange={(event) => setReplyMessage(event.target.value)} /></label><button type="button" disabled={!replyMessage.trim()} onClick={() => submitHumanAction(repair.id, "reply", replyMessage)}>Send reply</button><button type="button" className="quiet" onClick={() => { setRestoreReplyFocusId(repair.id); setReplyFindingId(null); setReplyMessage(""); }}>Cancel reply</button></> : <button ref={(element) => { if (element) replyTriggerRefs.current.set(repair.id, element); else replyTriggerRefs.current.delete(repair.id); }} type="button" aria-label={`Reply about repair: ${repair.instruction}`} onClick={() => setReplyFindingId(repair.id)}>Reply</button>}</div>}{repair.status === "review_ready" && <div className="a3s-human-actions" aria-label={`Review repair: ${repair.instruction}`}><button type="button" aria-label={`Accept repair: ${repair.instruction}`} onClick={() => submitHumanAction(repair.id, "accept")}>Accept repair</button><button type="button" className="quiet" aria-label={`Reject repair: ${repair.instruction}`} onClick={() => submitHumanAction(repair.id, "dismiss")}>Reject</button><button type="button" className="quiet" aria-label={`Reopen repair: ${repair.instruction}`} onClick={() => submitHumanAction(repair.id, "reopen")}>Reopen</button></div>}{["resolved", "dismissed", "cancelled", "failed", "verification_failed"].includes(repair.status) && <div className="a3s-human-actions"><button type="button" className="quiet" aria-label={`Reopen repair: ${repair.instruction}`} onClick={() => submitHumanAction(repair.id, "reopen")}>Reopen</button></div>}</article>;
+            return <article key={repair.id} className="a3s-item submitted"><span className={`a3s-status status-${repair.status}`}>{reviewStatusLabel(t, repair.status)}</span><strong>{repair.instruction}</strong><small>{reviewTargetSummary(t, repair.target)} · {t("revision", { revision: repair.contextRevision })}</small>{replies.length > 0 && <ol className="a3s-thread" aria-label={t("repairConversation", { message: repair.instruction })}>{replies.map((reply) => <li key={reply.requestId}><span>{reviewActorLabel(t, reply.actor)}</span><p>{reply.message}</p></li>)}</ol>}{repair.status === "needs_input" && <div className="a3s-human-actions">{replyFindingId === repair.id ? <><label className="a3s-reply-label">{t("replyToCodingAgent")}<textarea aria-label={t("replyToCodingAgentAbout", { message: repair.instruction })} autoFocus maxLength={8192} value={replyMessage} onChange={(event) => setReplyMessage(event.target.value)} /></label><button type="button" disabled={!replyMessage.trim()} onClick={() => submitHumanAction(repair.id, "reply", replyMessage)}>{t("sendReply")}</button><button type="button" className="quiet" onClick={() => { setRestoreReplyFocusId(repair.id); setReplyFindingId(null); setReplyMessage(""); }}>{t("cancelReply")}</button></> : <button ref={(element) => { if (element) replyTriggerRefs.current.set(repair.id, element); else replyTriggerRefs.current.delete(repair.id); }} type="button" aria-label={t("replyAboutRepair", { message: repair.instruction })} onClick={() => setReplyFindingId(repair.id)}>{t("reply")}</button>}</div>}{repair.status === "review_ready" && <div className="a3s-human-actions" aria-label={t("reviewRepair", { message: repair.instruction })}><button type="button" aria-label={t("acceptRepairAction", { message: repair.instruction })} onClick={() => submitHumanAction(repair.id, "accept")}>{t("acceptRepair")}</button><button type="button" className="quiet" aria-label={t("rejectRepairAction", { message: repair.instruction })} onClick={() => submitHumanAction(repair.id, "dismiss")}>{t("reject")}</button><button type="button" className="quiet" aria-label={t("reopenRepairAction", { message: repair.instruction })} onClick={() => submitHumanAction(repair.id, "reopen")}>{t("reopen")}</button></div>}{["resolved", "dismissed", "cancelled", "failed", "verification_failed"].includes(repair.status) && <div className="a3s-human-actions"><button type="button" className="quiet" aria-label={t("reopenRepairAction", { message: repair.instruction })} onClick={() => submitHumanAction(repair.id, "reopen")}>{t("reopen")}</button></div>}</article>;
           })}
-          {drafts.length === 0 && repairs.length === 0 && qualityReports.length === 0 && designAuditReports.length === 0 && !candidate && <p className="a3s-empty">Mark an element to describe a fix. Contract findings and advisory design suggestions appear here when available.</p>}
+          {drafts.length === 0 && repairs.length === 0 && qualityReports.length === 0 && designAuditReports.length === 0 && !candidate && <p className="a3s-empty">{t("emptyWorkspace")}</p>}
               </section>
             </div>
             {drafts.length > 0 && <footer>
-              <div className="a3s-workspace-secondary-actions"><button type="button" className="quiet" title="Clear all local drafts (X)" aria-keyshortcuts={REVIEW_KEY_SHORTCUTS.clear} onClick={clearDrafts}>Clear drafts</button><button type="button" className="quiet" title="Copy selected drafts as Markdown (C)" aria-keyshortcuts={REVIEW_KEY_SHORTCUTS.copy} onClick={() => void copyDraftsMarkdown()}>Copy Markdown</button><button type="button" className="quiet" onClick={() => void copyDrafts()}>Copy JSON</button></div>
-              <div className="a3s-workspace-send-actions"><button type="button" disabled={selectedCount === 0} onClick={() => submit(drafts.filter((item) => item.selected).map((item) => item.draft))}>Send selected ({selectedCount})</button><button type="button" onClick={() => submit(drafts.map((item) => item.draft))}>Send all</button></div>
+              <div className="a3s-workspace-secondary-actions"><button type="button" className="quiet" title={t("clearDraftsTitle")} aria-keyshortcuts={REVIEW_KEY_SHORTCUTS.clear} onClick={clearDrafts}>{t("clearDrafts")}</button><button type="button" className="quiet" title={t("copyMarkdownTitle")} aria-keyshortcuts={REVIEW_KEY_SHORTCUTS.copy} onClick={() => void copyDrafts("markdown")}>{t("copyMarkdown")}</button><button type="button" className="quiet" onClick={() => void copyDrafts()}>{t("copyJson")}</button></div>
+              <div className="a3s-workspace-send-actions"><button type="button" disabled={selectedCount === 0} onClick={() => submit(drafts.filter((item) => item.selected).map((item) => item.draft))}>{t("sendSelected", { count: selectedCount })}</button><button type="button" onClick={() => submit(drafts.map((item) => item.draft))}>{t("sendAll")}</button></div>
             </footer>}
           </section>
         </aside>
       </>}
     </div>
+    </ReviewI18nProvider>
   );
   return createPortal(content, mount);
 }

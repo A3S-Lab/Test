@@ -1,5 +1,6 @@
 import { markerRects, rectStyle } from "./review-utils";
 import { designAuditRepairTarget } from "./design-audit-candidates";
+import { useReviewI18n } from "./review-locale";
 import type { ReviewDraftItem } from "./review-storage";
 import type {
   PageContextBridge,
@@ -19,6 +20,7 @@ export type ReviewMarkersProps = {
 };
 
 export function ReviewMarkers(props: ReviewMarkersProps) {
+  const { t } = useReviewI18n();
   if (!props.visible) return <div className="a3s-markers" />;
   const markers = [
     ...props.drafts
@@ -54,8 +56,8 @@ export function ReviewMarkers(props: ReviewMarkersProps) {
         <button
           type="button"
           className="a3s-marker-action"
-          data-tooltip={draft?.draft.instruction ?? "Open finding"}
-          aria-label={`Edit draft marker: ${draft?.draft.instruction ?? marker.id}`}
+          data-tooltip={draft?.draft.instruction ?? t("openFinding")}
+          aria-label={t("editDraftMarker", { message: draft?.draft.instruction ?? marker.id })}
           onClick={() => { if (draft) props.onEditDraft(draft); }}
         >
           <span className="a3s-marker-index" aria-hidden="true">{markerIndex + 1}</span>
