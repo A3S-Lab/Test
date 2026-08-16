@@ -235,6 +235,8 @@ function Fixture() {
         <div id="motion-probe" aria-hidden="true">
           <span id="running-motion" />
           <span id="paused-motion" />
+          <span id="scroll-motion" />
+          <span id="view-motion" />
         </div>
         <section id="audit-controls" aria-labelledby="audit-controls-title">
           <h2 id="audit-controls-title">Screen-reader audit controls</h2>

@@ -15,6 +15,22 @@ function giveEveryElementGeometry(): void {
   }
 }
 
+function setOverflowMetrics(
+  element: Element,
+  metrics: {
+    clientWidth: number;
+    clientHeight: number;
+    scrollWidth: number;
+    scrollHeight: number;
+    scrollLeft: number;
+    scrollTop: number;
+  },
+): void {
+  for (const [property, value] of Object.entries(metrics)) {
+    Object.defineProperty(element, property, { value, configurable: true });
+  }
+}
+
 describe("rendered UI understanding", () => {
   it("extracts observed design tokens, layout, repeated components, and motion", () => {
     document.documentElement.style.setProperty(
@@ -125,6 +141,147 @@ describe("rendered UI understanding", () => {
         "dom_structure",
         "layout_geometry",
       ]),
+    });
+  });
+
+  it("distinguishes overflowing content, active clipping, and animation timelines", () => {
+    document.body.innerHTML = `
+      <section id="clipped" dir="rtl" style="overflow-x:hidden;overflow-y:auto">
+        <div>Wide content</div>
+      </section>
+      <section id="visible" style="overflow:visible">Visible overflow</section>
+      <div id="animated" style="animation-name:reveal;animation-duration:1s;animation-timeline:view();animation-range-start:entry 10%;animation-range-end:cover 80%">Animated</div>
+      <div id="scroll-animated">Scroll driven</div>
+      <div id="timed" style="animation-name:pulse;animation-duration:240ms">Timed</div>
+      <div id="named" style="animation-name:enter;animation-duration:1s;animation-timeline:--story">Named timeline</div>
+    `;
+    giveEveryElementGeometry();
+    const clipped = document.querySelector("#clipped")!;
+    const visible = document.querySelector("#visible")!;
+    const animated = document.querySelector("#animated")!;
+    const scrollAnimated = document.querySelector("#scroll-animated")!;
+    setOverflowMetrics(clipped, {
+      clientWidth: 160,
+      clientHeight: 80,
+      scrollWidth: 280,
+      scrollHeight: 80,
+      scrollLeft: -24,
+      scrollTop: 0,
+    });
+    setOverflowMetrics(visible, {
+      clientWidth: 160,
+      clientHeight: 80,
+      scrollWidth: 260,
+      scrollHeight: 80,
+      scrollLeft: 0,
+      scrollTop: 0,
+    });
+    Object.defineProperty(animated, "getAnimations", {
+      configurable: true,
+      value: () => [
+        {
+          playState: "running",
+          timeline: { constructor: { name: "ViewTimeline" } },
+        },
+      ],
+    });
+    Object.defineProperty(scrollAnimated, "getAnimations", {
+      configurable: true,
+      value: () => [
+        {
+          playState: "running",
+          timeline: { constructor: { name: "ScrollTimeline" } },
+        },
+      ],
+    });
+    const bridge = installTestKit({
+      enabled: true,
+      page: { id: "ui-overflow-and-timeline" },
+      repairStorage: "memory",
+      maxUiDurationMs: 100,
+      maxUiEncodedBytes: 262_144,
+    });
+
+    const snapshot = bridge.snapshot({ detail: "forensic" });
+    const clippedId = snapshot.nodes.find(
+      (node) => node.attributes?.id === "clipped",
+    )!.id;
+    const visibleId = snapshot.nodes.find(
+      (node) => node.attributes?.id === "visible",
+    )!.id;
+    const animatedId = snapshot.nodes.find(
+      (node) => node.attributes?.id === "animated",
+    )!.id;
+    const timedId = snapshot.nodes.find(
+      (node) => node.attributes?.id === "timed",
+    )!.id;
+    const scrollAnimatedId = snapshot.nodes.find(
+      (node) => node.attributes?.id === "scroll-animated",
+    )!.id;
+    const namedId = snapshot.nodes.find(
+      (node) => node.attributes?.id === "named",
+    )!.id;
+    const clippedLayout = snapshot.ui!.layout.nodes.find(
+      (node) => node.nodeId === clippedId,
+    )!;
+    const visibleLayout = snapshot.ui!.layout.nodes.find(
+      (node) => node.nodeId === visibleId,
+    )!;
+    const animation = snapshot.ui!.motion.animations.find(
+      (entry) => entry.nodeId === animatedId,
+    )!;
+    const timedAnimation = snapshot.ui!.motion.animations.find(
+      (entry) => entry.nodeId === timedId,
+    )!;
+    const scrollAnimation = snapshot.ui!.motion.animations.find(
+      (entry) => entry.nodeId === scrollAnimatedId,
+    )!;
+    const namedAnimation = snapshot.ui!.motion.animations.find(
+      (entry) => entry.nodeId === namedId,
+    )!;
+
+    expect(clippedLayout.overflowMetrics).toEqual({
+      clientWidth: 160,
+      clientHeight: 80,
+      scrollWidth: 280,
+      scrollHeight: 80,
+      scrollLeft: -24,
+      scrollTop: 0,
+      overflowingX: true,
+      overflowingY: false,
+      clipsX: true,
+      clipsY: false,
+    });
+    expect(visibleLayout.overflowMetrics).toMatchObject({
+      overflowingX: true,
+      clipsX: false,
+    });
+    expect(animation).toMatchObject({
+      rangeStarts: ["entry 10%"],
+      rangeEnds: ["cover 80%"],
+      timelines: expect.arrayContaining([
+        { value: "view()", kind: "view", source: "computed_style" },
+        {
+          value: "(view-timeline)",
+          kind: "view",
+          source: "web_animations",
+        },
+      ]),
+    });
+    expect(timedAnimation.timelines).toContainEqual({
+      value: "auto",
+      kind: "document",
+      source: "computed_style",
+    });
+    expect(scrollAnimation.timelines).toContainEqual({
+      value: "(scroll-timeline)",
+      kind: "scroll",
+      source: "web_animations",
+    });
+    expect(namedAnimation.timelines).toContainEqual({
+      value: "--story",
+      kind: "named",
+      source: "computed_style",
     });
   });
 

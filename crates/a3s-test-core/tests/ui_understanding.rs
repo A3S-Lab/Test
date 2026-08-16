@@ -45,7 +45,7 @@ fn snapshot_value() -> serde_json::Value {
                 "reasons": []
             },
             "evidence": {
-                "sourceKinds": ["computed_style", "dom_structure", "layout_geometry"],
+                "sourceKinds": ["computed_style", "dom_structure", "layout_geometry", "web_animations"],
                 "sampledNodeIds": ["n1", "n2", "n3"],
                 "totalCandidateNodes": 3,
                 "omittedNodes": 0,
@@ -72,8 +72,20 @@ fn snapshot_value() -> serde_json::Value {
                     "nodeId": "n1",
                     "display": "flex",
                     "position": "static",
-                    "overflowX": "visible",
+                    "overflowX": "hidden",
                     "overflowY": "visible",
+                    "overflowMetrics": {
+                        "clientWidth": 240,
+                        "clientHeight": 160,
+                        "scrollWidth": 360,
+                        "scrollHeight": 160,
+                        "scrollLeft": -12,
+                        "scrollTop": 0,
+                        "overflowingX": true,
+                        "overflowingY": false,
+                        "clipsX": true,
+                        "clipsY": false
+                    },
                     "order": "0",
                     "stackingContextReasons": [],
                     "flex": {
@@ -100,7 +112,26 @@ fn snapshot_value() -> serde_json::Value {
             "motion": {
                 "prefersReducedMotion": false,
                 "transitions": [],
-                "animations": [],
+                "animations": [{
+                    "nodeId": "n2",
+                    "names": ["reveal"],
+                    "durations": ["1s"],
+                    "delays": ["0s"],
+                    "iterationCounts": ["1"],
+                    "playStates": ["running"],
+                    "sources": ["css", "web_animations"],
+                    "timelines": [{
+                        "value": "view()",
+                        "kind": "view",
+                        "source": "computed_style"
+                    }, {
+                        "value": "(view-timeline)",
+                        "kind": "view",
+                        "source": "web_animations"
+                    }],
+                    "rangeStarts": ["entry 10%"],
+                    "rangeEnds": ["cover 80%"]
+                }],
                 "keyframeNames": [],
                 "stickyNodeIds": [],
                 "scrollContainerNodeIds": [],
@@ -122,6 +153,9 @@ fn admits_typed_ui_understanding_and_preserves_legacy_snapshots() {
     assert_eq!(ui.protocol, UI_UNDERSTANDING_PROTOCOL);
     assert_eq!(ui.page_revision, 9);
     assert_eq!(ui.components[0].member_count, 2);
+    assert_eq!(ui.layout.nodes[0].overflow_metrics.scroll_left, -12.0);
+    assert!(ui.layout.nodes[0].overflow_metrics.clips_x);
+    assert_eq!(ui.motion.animations[0].timelines.len(), 2);
     ui.validate(
         snapshot.revision,
         snapshot.page.as_ref().map(|page| &page.viewport),
@@ -163,6 +197,96 @@ fn rejects_ui_understanding_that_exceeds_its_bound_revision_or_budget() {
 
     let mut value = snapshot_value();
     value["ui"]["budget"]["used"]["nodes"] = json!(201);
+    let snapshot: PageContextSnapshot =
+        serde_json::from_value(value).expect("structurally typed snapshot");
+    assert!(snapshot
+        .ui
+        .as_ref()
+        .expect("UI understanding")
+        .validate(
+            snapshot.revision,
+            snapshot.page.as_ref().map(|page| &page.viewport),
+        )
+        .is_err());
+}
+
+#[test]
+fn rejects_inconsistent_overflow_metrics() {
+    let mut value = snapshot_value();
+    value["ui"]["layout"]["nodes"][0]["overflowX"] = json!("unknown");
+    let snapshot: PageContextSnapshot =
+        serde_json::from_value(value).expect("structurally typed snapshot");
+    assert!(snapshot
+        .ui
+        .as_ref()
+        .expect("UI understanding")
+        .validate(
+            snapshot.revision,
+            snapshot.page.as_ref().map(|page| &page.viewport),
+        )
+        .is_err());
+
+    let mut value = snapshot_value();
+    value["ui"]["layout"]["nodes"][0]["overflowMetrics"]["scrollWidth"] = json!(120);
+    let snapshot: PageContextSnapshot =
+        serde_json::from_value(value).expect("structurally typed snapshot");
+    assert!(snapshot
+        .ui
+        .as_ref()
+        .expect("UI understanding")
+        .validate(
+            snapshot.revision,
+            snapshot.page.as_ref().map(|page| &page.viewport),
+        )
+        .is_err());
+
+    let mut value = snapshot_value();
+    value["ui"]["layout"]["nodes"][0]["overflowMetrics"]["clipsX"] = json!(false);
+    let snapshot: PageContextSnapshot =
+        serde_json::from_value(value).expect("structurally typed snapshot");
+    assert!(snapshot
+        .ui
+        .as_ref()
+        .expect("UI understanding")
+        .validate(
+            snapshot.revision,
+            snapshot.page.as_ref().map(|page| &page.viewport),
+        )
+        .is_err());
+
+    let mut value = snapshot_value();
+    value["ui"]["layout"]["nodes"][0]["overflowMetrics"]["clientHeight"] = json!(-1);
+    let snapshot: PageContextSnapshot =
+        serde_json::from_value(value).expect("structurally typed snapshot");
+    assert!(snapshot
+        .ui
+        .as_ref()
+        .expect("UI understanding")
+        .validate(
+            snapshot.revision,
+            snapshot.page.as_ref().map(|page| &page.viewport),
+        )
+        .is_err());
+}
+
+#[test]
+fn rejects_inconsistent_animation_timeline_evidence() {
+    let mut value = snapshot_value();
+    value["ui"]["motion"]["animations"][0]["timelines"] = json!([]);
+    let snapshot: PageContextSnapshot =
+        serde_json::from_value(value).expect("structurally typed snapshot");
+    assert!(snapshot
+        .ui
+        .as_ref()
+        .expect("UI understanding")
+        .validate(
+            snapshot.revision,
+            snapshot.page.as_ref().map(|page| &page.viewport),
+        )
+        .is_err());
+
+    let mut value = snapshot_value();
+    value["ui"]["motion"]["animations"][0]["sources"] = json!(["css"]);
     let snapshot: PageContextSnapshot =
         serde_json::from_value(value).expect("structurally typed snapshot");
     assert!(snapshot

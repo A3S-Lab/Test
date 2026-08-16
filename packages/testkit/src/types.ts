@@ -205,6 +205,19 @@ export type UIGridLayout = {
   gap: string;
 };
 
+export type UIOverflowMetrics = {
+  clientWidth: number;
+  clientHeight: number;
+  scrollWidth: number;
+  scrollHeight: number;
+  scrollLeft: number;
+  scrollTop: number;
+  overflowingX: boolean;
+  overflowingY: boolean;
+  clipsX: boolean;
+  clipsY: boolean;
+};
+
 export type UILayoutNode = {
   nodeId: string;
   parentNodeId?: string;
@@ -213,6 +226,7 @@ export type UILayoutNode = {
   rect?: Rect;
   overflowX: string;
   overflowY: string;
+  overflowMetrics: UIOverflowMetrics;
   order: string;
   stackingContextReasons: string[];
   flex?: UIFlexLayout;
@@ -287,6 +301,18 @@ export type UIAnimationProfile = {
   iterationCounts: string[];
   playStates: string[];
   sources: Array<"css" | "web_animations">;
+  timelines: UIAnimationTimeline[];
+  rangeStarts: string[];
+  rangeEnds: string[];
+};
+
+export type UIAnimationTimelineKind =
+  "document" | "scroll" | "view" | "named" | "none" | "unknown";
+
+export type UIAnimationTimeline = {
+  value: string;
+  kind: UIAnimationTimelineKind;
+  source: "computed_style" | "web_animations";
 };
 
 export type UIMotionProfile = {

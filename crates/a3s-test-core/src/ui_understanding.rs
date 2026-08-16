@@ -200,12 +200,28 @@ pub struct UiLayoutNode {
     pub rect: Option<PageContextRect>,
     pub overflow_x: String,
     pub overflow_y: String,
+    pub overflow_metrics: UiOverflowMetrics,
     pub order: String,
     pub stacking_context_reasons: Vec<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub flex: Option<UiFlexLayout>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub grid: Option<UiGridLayout>,
+}
+
+#[derive(Clone, Debug, Deserialize, JsonSchema, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct UiOverflowMetrics {
+    pub client_width: f64,
+    pub client_height: f64,
+    pub scroll_width: f64,
+    pub scroll_height: f64,
+    pub scroll_left: f64,
+    pub scroll_top: f64,
+    pub overflowing_x: bool,
+    pub overflowing_y: bool,
+    pub clips_x: bool,
+    pub clips_y: bool,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
@@ -338,12 +354,41 @@ pub struct UiAnimationProfile {
     pub iteration_counts: Vec<String>,
     pub play_states: Vec<String>,
     pub sources: Vec<UiAnimationSource>,
+    pub timelines: Vec<UiAnimationTimeline>,
+    pub range_starts: Vec<String>,
+    pub range_ends: Vec<String>,
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum UiAnimationSource {
     Css,
+    WebAnimations,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct UiAnimationTimeline {
+    pub value: String,
+    pub kind: UiAnimationTimelineKind,
+    pub source: UiAnimationTimelineSource,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum UiAnimationTimelineKind {
+    Document,
+    Scroll,
+    View,
+    Named,
+    None,
+    Unknown,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum UiAnimationTimelineSource {
+    ComputedStyle,
     WebAnimations,
 }
 
@@ -494,6 +539,42 @@ impl UiUnderstandingSnapshot {
                 "UI understanding component or state evidence is invalid",
             ));
         }
+        if self.motion.animations.iter().any(|animation| {
+            animation.names.is_empty()
+                || animation.names.len() > 16
+                || animation.durations.is_empty()
+                || animation.durations.len() > 16
+                || animation.delays.is_empty()
+                || animation.delays.len() > 16
+                || animation.iteration_counts.is_empty()
+                || animation.iteration_counts.len() > 16
+                || animation.play_states.is_empty()
+                || animation.play_states.len() > 16
+                || animation.sources.is_empty()
+                || animation.sources.len() > 2
+                || has_duplicates(animation.sources.iter().map(|source| *source as u8))
+                || animation.timelines.is_empty()
+                || animation.timelines.len() > 32
+                || animation.range_starts.is_empty()
+                || animation.range_starts.len() > 16
+                || animation.range_ends.is_empty()
+                || animation.range_ends.len() > 16
+                || animation
+                    .timelines
+                    .iter()
+                    .any(|timeline| timeline.value.is_empty())
+                || animation
+                    .sources
+                    .contains(&UiAnimationSource::WebAnimations)
+                    != animation
+                        .timelines
+                        .iter()
+                        .any(|timeline| timeline.source == UiAnimationTimelineSource::WebAnimations)
+        }) {
+            return Err(UiUnderstandingValidationError::new(
+                "UI understanding animation evidence is invalid",
+            ));
+        }
         Ok(())
     }
 
@@ -548,7 +629,7 @@ impl UiUnderstandingSnapshot {
                         || !rect.height.is_finite()
                         || rect.width < 0.0
                         || rect.height < 0.0
-                })
+                }) || !valid_overflow_metrics(node)
             })
         {
             return Err(UiUnderstandingValidationError::new(
@@ -557,6 +638,33 @@ impl UiUnderstandingSnapshot {
         }
         Ok(())
     }
+}
+
+fn valid_overflow_metrics(node: &UiLayoutNode) -> bool {
+    let metrics = &node.overflow_metrics;
+    valid_overflow_value(&node.overflow_x)
+        && valid_overflow_value(&node.overflow_y)
+        && metrics.client_width.is_finite()
+        && metrics.client_width >= 0.0
+        && metrics.client_height.is_finite()
+        && metrics.client_height >= 0.0
+        && metrics.scroll_width.is_finite()
+        && metrics.scroll_width >= metrics.client_width
+        && metrics.scroll_height.is_finite()
+        && metrics.scroll_height >= metrics.client_height
+        && metrics.scroll_left.is_finite()
+        && metrics.scroll_top.is_finite()
+        && metrics.overflowing_x == (metrics.scroll_width > metrics.client_width)
+        && metrics.overflowing_y == (metrics.scroll_height > metrics.client_height)
+        && metrics.clips_x == (metrics.overflowing_x && node.overflow_x != "visible")
+        && metrics.clips_y == (metrics.overflowing_y && node.overflow_y != "visible")
+}
+
+fn valid_overflow_value(value: &str) -> bool {
+    matches!(
+        value,
+        "visible" | "hidden" | "clip" | "scroll" | "auto" | "overlay"
+    )
 }
 
 fn validate_scope(scope: &UiContextScope) -> Result<(), UiUnderstandingValidationError> {

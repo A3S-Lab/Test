@@ -399,7 +399,9 @@ fn real_agent_browser_runs_the_embedded_testkit_suite() {
         "a3s.test.ui-understanding/1",
         "observationId",
         "computed_style",
+        "overflowMetrics",
         "responsiveConditions",
+        "rangeStarts",
         "stateDiffs",
         "prefersReducedMotion",
     ] {
@@ -712,21 +714,19 @@ fn verify_testkit_ui_understanding_through_driver(browser: &Path, origin: &str) 
     assert_process_success("capture UI understanding through the Web driver", &output);
     let report: serde_json::Value =
         serde_json::from_slice(&output.stdout).expect("UI understanding run report");
-    let ui = report["scenarios"][0]["steps"]
+    let snapshot = report["scenarios"][0]["steps"]
         .as_array()
         .expect("UI understanding steps")
         .iter()
         .find(|step| step["id"] == "context")
-        .and_then(|step| step.pointer("/output/page_context/snapshot/ui"))
+        .and_then(|step| step.pointer("/output/page_context/snapshot"))
+        .expect("page context in the stable observation");
+    let ui = snapshot
+        .pointer("/ui")
         .expect("typed UI understanding in the stable observation");
     assert_eq!(ui["protocol"], "a3s.test.ui-understanding/1");
-    let page_revision = report["scenarios"][0]["steps"]
-        .as_array()
-        .expect("UI understanding steps")
-        .iter()
-        .find(|step| step["id"] == "context")
-        .and_then(|step| step.pointer("/output/page_context/snapshot/revision"))
-        .and_then(serde_json::Value::as_u64)
+    let page_revision = snapshot["revision"]
+        .as_u64()
         .expect("page-context revision");
     assert_eq!(ui["pageRevision"].as_u64(), Some(page_revision));
     assert!(
@@ -735,6 +735,52 @@ fn verify_testkit_ui_understanding_through_driver(browser: &Path, origin: &str) 
             .is_some_and(|nodes| !nodes.is_empty()),
         "UI understanding must retain bounded layout evidence: {ui}"
     );
+    let nested_layout = ui["layout"]["nodes"]
+        .as_array()
+        .and_then(|nodes| {
+            nodes.iter().find(|node| {
+                node["overflowY"] == "auto"
+                    && node
+                        .pointer("/overflowMetrics/clientHeight")
+                        .and_then(serde_json::Value::as_f64)
+                        == Some(140.0)
+                    && node
+                        .pointer("/overflowMetrics/scrollHeight")
+                        .and_then(serde_json::Value::as_f64)
+                        == Some(400.0)
+            })
+        })
+        .expect("fixture overflow layout evidence");
+    let overflow = &nested_layout["overflowMetrics"];
+    assert!(
+        overflow["scrollHeight"]
+            .as_f64()
+            .zip(overflow["clientHeight"].as_f64())
+            .is_some_and(|(scroll, client)| scroll > client)
+            && overflow["overflowingY"] == true
+            && overflow["clipsY"] == true,
+        "vertical overflow and clipping evidence is inconsistent: {nested_layout}"
+    );
+
+    let animations = ui["motion"]["animations"]
+        .as_array()
+        .expect("UI animation evidence");
+    for kind in ["scroll", "view"] {
+        let animation = animations
+            .iter()
+            .find(|animation| {
+                animation["timelines"].as_array().is_some_and(|timelines| {
+                    timelines.iter().any(|timeline| timeline["kind"] == kind)
+                })
+            })
+            .unwrap_or_else(|| panic!("animation timeline kind {kind:?} missing: {ui}"));
+        assert!(
+            animation["rangeStarts"]
+                .as_array()
+                .is_some_and(|ranges| !ranges.is_empty()),
+            "animation range evidence missing for {kind:?}: {animation}"
+        );
+    }
     assert!(
         ui["budget"]["used"]["encodedBytes"]
             .as_u64()

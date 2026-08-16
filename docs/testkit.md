@@ -169,13 +169,58 @@ for one request with `"ui": false`.
       "customProperties": [],
       "responsiveConditions": []
     },
-    "layout": { "nodes": [], "edges": [] },
+    "layout": {
+      "nodes": [
+        {
+          "nodeId": "n1",
+          "display": "block",
+          "position": "static",
+          "rect": { "x": 24, "y": 120, "width": 320, "height": 240 },
+          "overflowX": "hidden",
+          "overflowY": "auto",
+          "overflowMetrics": {
+            "clientWidth": 320,
+            "clientHeight": 240,
+            "scrollWidth": 320,
+            "scrollHeight": 480,
+            "scrollLeft": 0,
+            "scrollTop": 80,
+            "overflowingX": false,
+            "overflowingY": true,
+            "clipsX": false,
+            "clipsY": true
+          },
+          "order": "0",
+          "stackingContextReasons": []
+        }
+      ],
+      "edges": []
+    },
     "components": [],
     "stateDiffs": [],
     "motion": {
       "prefersReducedMotion": false,
       "transitions": [],
-      "animations": [],
+      "animations": [
+        {
+          "nodeId": "n2",
+          "names": ["reveal"],
+          "durations": ["1s"],
+          "delays": ["0s"],
+          "iterationCounts": ["1"],
+          "playStates": ["running"],
+          "sources": ["css"],
+          "timelines": [
+            {
+              "value": "view()",
+              "kind": "view",
+              "source": "computed_style"
+            }
+          ],
+          "rangeStarts": ["entry 10%"],
+          "rangeEnds": ["cover 80%"]
+        }
+      ],
       "keyframeNames": [],
       "stickyNodeIds": [],
       "scrollContainerNodeIds": [],
@@ -204,7 +249,9 @@ tree:
   confidence make observations distinguishable from inferred design roles.
 - `layout` records current Flex, Grid, flow, overflow, order, geometry,
   containing, offset-parent, scroll-container, and stacking-context
-  relationships.
+  relationships. Each node also carries exact client and scroll extents,
+  signed scroll offsets, per-axis overflow, and whether that overflow is
+  currently clipped.
 - `components` contains repeated structures only. A deterministic fingerprint
   combines tag, accessible role, stable semantic state, bounded subtree shape,
   and a computed-style summary. Class names alone cannot create a component
@@ -212,15 +259,19 @@ tree:
 - `stateDiffs` compares a previously observed default state with a real hover,
   focus, focus-visible, checked, expanded, selected, or disabled state. Test
   Kit does not dispatch an event, move focus, or mutate state for collection.
-- `motion` records transitions, CSS and Web Animations, keyframe names, sticky
+- `motion` records transitions, CSS and Web Animations, keyframe names,
+  document/scroll/view/named timeline evidence, animation ranges, sticky
   nodes, scroll containers, canvas and media surfaces, and the current
-  reduced-motion preference.
+  reduced-motion preference. Named timelines remain `named` unless the browser
+  exposes a resolved Web Animations timeline; the runtime does not invent a
+  scroll or view classification.
 
 `observationId` identifies this exact transient visual projection. It can
 change as focus or an animation changes computed state without advancing the
 page revision. `pageRevision`, viewport, and scope must still match the
 containing Page Context record. The Web driver rejects an unsupported
-protocol, stale binding, invalid identifier or geometry, unknown field,
+protocol, stale binding, invalid identifier or geometry, inconsistent
+overflow/clipping derivation, malformed timeline evidence, unknown field,
 non-observational confidence, inconsistent truncation, excess JSON depth, or
 any collection/string/encoded-size budget violation.
 
@@ -870,9 +921,10 @@ cargo test -p a3s-test-cli --test repair_e2e --locked -- \
 ```
 
 The real Test Kit browser suite runs separately. It proves page-local draft
-restoration and semantic rebinding, spatial marker editing, keyboard-only
-review controls and multi-selection, explicit host-interaction blocking,
-searchable component selection, pointer-authored Layout placement, and the
+restoration and semantic rebinding, rendered overflow/clipping metrics,
+scroll/view animation timelines, spatial marker editing, keyboard-only review
+controls and multi-selection, explicit host-interaction blocking, searchable
+component selection, pointer-authored Layout placement, and the
 accessibility-tree and focus contracts:
 
 ```bash

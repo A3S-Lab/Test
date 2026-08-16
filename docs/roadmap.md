@@ -340,7 +340,7 @@ is not a requirement.
 
 | Capability family | Existing foundation | Remaining completion work |
 | --- | --- | --- |
-| Autonomous page understanding | Bounded semantic context, component/source boundaries, locator candidates, accessibility state, geometry, observed style profiles, layout graphs, repeated-component clusters, state differences, and motion facts | None; keep the browser accessibility tree, Page Context, and UI understanding as independent evidence |
+| Autonomous page understanding | Bounded semantic context, component/source boundaries, locator candidates, accessibility state, geometry, observed style profiles, layout graphs with overflow/clipping metrics, repeated-component clusters, state differences, and timeline-aware motion facts | None; keep the browser accessibility tree, Page Context, and UI understanding as independent evidence |
 | Human capture | Element, text, multi-element, rectangular area, freehand drawing, draft edit/delete, and single/selected/all submission | Restore page-local drafts safely, add global marker controls, clear-all, and direct spatial draft editing |
 | Layout authoring | Typed non-mutating placement and rearrangement intents, page/wireframe canvases, purpose, pointer regions, keyboard source selection, and explicit target geometry | Add a searchable 65+ component catalog and adjustable wireframe page fade while preserving free-form component types |
 | Review controls | Pause/resume, manual theme, visible auto-send opt-in, focus restoration, named controls, and live announcements | Add documented global shortcuts with editable-target guards, persisted presentation preferences, explicit interaction blocking, movable docking, and hide-until-tab-restart |
@@ -568,11 +568,14 @@ The completion work intentionally preserves these product boundaries:
       computed-style samples
 - [x] Publish Flex, Grid, flow, overflow, containing, scroll-container, and
       stacking-context relationships as a current-node layout graph
+- [x] Record client and scroll extents, signed scroll offsets, per-axis
+      overflow, and derived active clipping with strict consistency checks
 - [x] Cluster repeated structures with deterministic tag, role, semantic
       state, subtree, and style fingerprints instead of class-name guessing
 - [x] Record only naturally observed interaction-state style/accessibility
       differences and keep transient state under a separate observation ID
-- [x] Detect CSS and Web Animations, transitions, keyframes, sticky behavior,
+- [x] Detect CSS and Web Animations, transitions, keyframes, document, scroll,
+      view, and unresolved named timelines, animation ranges, sticky behavior,
       scroll containers, canvas, and media while respecting reduced motion
 - [x] Bind every record to page revision, viewport, scope, evidence sources,
       and caller-lowerable node, state, string, byte, and time budgets

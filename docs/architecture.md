@@ -189,7 +189,8 @@ versioned semantic projection after a stable browser frame:
   visibility, occlusion, transforms, and scroll-container relationships;
 - bounded computed-style sampling derives observed colors, typography,
   spacing, radii, shadows, safe root design tokens, responsive conditions,
-  Flex/Grid/flow structure, stacking contexts, and motion facts;
+  Flex/Grid/flow structure, exact client/scroll extents, clipping state,
+  stacking contexts, animation timelines and ranges, and motion facts;
 - deterministic structural fingerprints combine tag, role, stable semantic
   state, bounded subtree shape, and observed style summaries to group repeated
   components without treating class names as component truth;
@@ -214,15 +215,15 @@ CSS animation or focus transition. Node, state-sample, string, encoded-byte,
 and capture-time limits are caller-lowerable and locally capped. Every token
 retains observed properties, frequency, node evidence, and confidence; every
 layout or component record retains current node IDs. Unknown fields, stale
-bindings, invalid geometry, excess depth, or budget drift fail closed in the
-Web driver.
+bindings, invalid geometry, inconsistent overflow/clipping or timeline
+evidence, excess depth, or budget drift fail closed in the Web driver.
 
 ```text
 browser render
   ├── accessibility tree ── semantic roles, names, native state
   ├── Page Context ───────── components, locators, geometry, product facts
   └── UI understanding ───── style profile, layout graph, clusters,
-                              state differences, responsive and motion facts
+                              overflow/clipping, states, timelines and motion
                                       |
                                       v
                           one revision-bound observation

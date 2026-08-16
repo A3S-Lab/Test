@@ -238,11 +238,13 @@ After rendering, Test Kit publishes bounded, revisioned context:
 - Viewport, document, and normalized coordinates for actionable elements.
 - Observed color, typography, spacing, radius, shadow, and safe design-token
   profiles with source counts and confidence.
-- Flex, Grid, flow, scroll-container, and stacking relationships plus
-  deterministic repeated-component clusters that do not guess from class
-  names alone.
+- Flex, Grid, flow, scroll-container, and stacking relationships; exact
+  client/scroll extents, signed offsets, and derived overflow/clipping state;
+  plus deterministic repeated-component clusters that do not guess from
+  class names alone.
 - Real default-to-hover/focus/checked/expanded state differences and bounded
-  CSS, Web Animations, sticky, canvas, media, and responsive evidence.
+  CSS, Web Animations, document/scroll/view timelines, animation ranges,
+  sticky, canvas, media, and responsive evidence.
 - Product facts, explicit redaction, and node/state/string/byte/time budgets.
 
 Mutation, resize, scroll, viewport, and navigation signals advance the surface

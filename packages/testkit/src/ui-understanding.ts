@@ -4,13 +4,8 @@ import {
   type ContextNode,
   type ContextScope,
   type PageViewport,
-  type Rect,
-  type UIAnimationProfile,
   type UIComponentCluster,
   type UIEvidenceSourceKind,
-  type UILayoutEdge,
-  type UILayoutNode,
-  type UIMotionProfile,
   type UIObservedToken,
   type UIResponsiveCondition,
   type UIStateDiff,
@@ -20,6 +15,16 @@ import {
   type UITruncationReason,
 } from "./types";
 import { canObserveUIState, UIStateTracker } from "./ui-understanding-state";
+import {
+  composedChildren,
+  monotonicNow,
+  normalizeCss,
+  styleValue,
+  type UISample,
+  type UIUnderstandingIdentity,
+} from "./ui-understanding-dom";
+import { captureUILayoutGraph } from "./ui-understanding-layout";
+import { captureUIMotionProfile } from "./ui-understanding-motion";
 import {
   finalizeUIUnderstandingSnapshot,
   uiFingerprint,
@@ -73,9 +78,7 @@ export type UIUnderstandingCaptureLimits = {
   durationMs: number;
 };
 
-export type UIUnderstandingIdentity = {
-  idFor(element: Element): string;
-};
+export type { UIUnderstandingIdentity } from "./ui-understanding-dom";
 
 export type UIUnderstandingCapture = {
   elements: Element[];
@@ -128,13 +131,6 @@ class TokenAccumulator {
   }
 }
 
-type Sample = {
-  element: Element;
-  nodeId: string;
-  node: ContextNode | undefined;
-  style: CSSStyleDeclaration;
-};
-
 type StylesheetEvidence = {
   responsiveConditions: UIResponsiveCondition[];
   keyframeNames: string[];
@@ -149,7 +145,7 @@ export function captureUIUnderstanding(
   const deadline = started + input.limits.durationMs;
   const nodeById = new Map(input.nodes.map((node) => [node.id, node]));
   const candidates = input.elements.filter(isUICandidate);
-  const samples: Sample[] = [];
+  const samples: UISample[] = [];
   const stateDiffs: UIStateDiff[] = [];
   const reasons = new Set<UITruncationReason>();
   const sourceKinds = new Set<UIEvidenceSourceKind>();
@@ -203,9 +199,13 @@ export function captureUIUnderstanding(
   if (stateSamples > 0) sourceKinds.add("accessibility_state");
 
   const style = styleProfile(samples, input.limits.stringBytes);
-  const layout = layoutGraph(samples, input.identity, input.limits.stringBytes);
+  const layout = captureUILayoutGraph(
+    samples,
+    input.identity,
+    input.limits.stringBytes,
+  );
   const components = componentClusters(samples, input.limits.stringBytes);
-  const motion = motionProfile(samples, input.limits.stringBytes);
+  const motion = captureUIMotionProfile(samples, input.limits.stringBytes);
   const stylesheet = stylesheetEvidence(deadline, input.limits.stringBytes);
   style.responsiveConditions = stylesheet.responsiveConditions;
   motion.keyframeNames = stylesheet.keyframeNames;
@@ -255,7 +255,7 @@ export function captureUIUnderstanding(
 }
 
 function styleProfile(
-  samples: Sample[],
+  samples: UISample[],
   maxStringBytes: number,
 ): UIStyleProfile {
   const colors = new TokenAccumulator();
@@ -390,131 +390,8 @@ function customProperties(
     });
 }
 
-function layoutGraph(
-  samples: Sample[],
-  identity: UIUnderstandingIdentity,
-  maxStringBytes: number,
-): { nodes: UILayoutNode[]; edges: UILayoutEdge[] } {
-  const nodes: UILayoutNode[] = [];
-  const edges: UILayoutEdge[] = [];
-  const edgeKeys = new Set<string>();
-  for (const sample of samples) {
-    const { element, nodeId, style } = sample;
-    const parent = composedParent(element);
-    const parentNodeId = parent ? identity.idFor(parent) : undefined;
-    const display =
-      boundedStyleValue(element, style, "display", maxStringBytes) || "inline";
-    const position =
-      boundedStyleValue(element, style, "position", maxStringBytes) || "static";
-    const rect = element.getBoundingClientRect();
-    const node: UILayoutNode = {
-      nodeId,
-      ...(parentNodeId ? { parentNodeId } : {}),
-      display,
-      position,
-      ...(rect.width > 0 || rect.height > 0 ? { rect: rectValue(rect) } : {}),
-      overflowX:
-        boundedStyleValue(element, style, "overflow-x", maxStringBytes) ||
-        "visible",
-      overflowY:
-        boundedStyleValue(element, style, "overflow-y", maxStringBytes) ||
-        "visible",
-      order: boundedStyleValue(element, style, "order", maxStringBytes) || "0",
-      stackingContextReasons: stackingContextReasons(element, style),
-    };
-    if (display.includes("flex")) {
-      node.flex = {
-        direction:
-          boundedStyleValue(element, style, "flex-direction", maxStringBytes) ||
-          "row",
-        wrap:
-          boundedStyleValue(element, style, "flex-wrap", maxStringBytes) ||
-          "nowrap",
-        justifyContent:
-          boundedStyleValue(
-            element,
-            style,
-            "justify-content",
-            maxStringBytes,
-          ) || "normal",
-        alignItems:
-          boundedStyleValue(element, style, "align-items", maxStringBytes) ||
-          "normal",
-        alignContent:
-          boundedStyleValue(element, style, "align-content", maxStringBytes) ||
-          "normal",
-        gap:
-          boundedStyleValue(element, style, "gap", maxStringBytes) || "normal",
-      };
-    }
-    if (display.includes("grid")) {
-      node.grid = {
-        templateColumns:
-          boundedStyleValue(
-            element,
-            style,
-            "grid-template-columns",
-            maxStringBytes,
-          ) || "none",
-        templateRows:
-          boundedStyleValue(
-            element,
-            style,
-            "grid-template-rows",
-            maxStringBytes,
-          ) || "none",
-        autoFlow:
-          boundedStyleValue(element, style, "grid-auto-flow", maxStringBytes) ||
-          "row",
-        justifyItems:
-          boundedStyleValue(element, style, "justify-items", maxStringBytes) ||
-          "normal",
-        alignItems:
-          boundedStyleValue(element, style, "align-items", maxStringBytes) ||
-          "normal",
-        gap:
-          boundedStyleValue(element, style, "gap", maxStringBytes) || "normal",
-      };
-    }
-    nodes.push(node);
-    if (parentNodeId)
-      addEdge(edges, edgeKeys, parentNodeId, nodeId, "contains");
-    const scrollContainer = nearestScrollContainer(element);
-    if (scrollContainer)
-      addEdge(
-        edges,
-        edgeKeys,
-        identity.idFor(scrollContainer),
-        nodeId,
-        "scroll_container",
-      );
-    if (
-      element instanceof HTMLElement &&
-      element.offsetParent instanceof Element
-    ) {
-      const offsetParentId = identity.idFor(element.offsetParent);
-      if (offsetParentId !== parentNodeId)
-        addEdge(edges, edgeKeys, offsetParentId, nodeId, "offset_parent");
-    }
-  }
-  return { nodes, edges };
-}
-
-function addEdge(
-  edges: UILayoutEdge[],
-  keys: Set<string>,
-  fromNodeId: string,
-  toNodeId: string,
-  relation: UILayoutEdge["relation"],
-): void {
-  const key = `${relation}:${fromNodeId}:${toNodeId}`;
-  if (keys.has(key)) return;
-  keys.add(key);
-  edges.push({ fromNodeId, toNodeId, relation });
-}
-
 function componentClusters(
-  samples: Sample[],
+  samples: UISample[],
   maxStringBytes: number,
 ): UIComponentCluster[] {
   const byElement = new Map(samples.map((sample) => [sample.element, sample]));
@@ -550,7 +427,7 @@ function componentClusters(
 
 function structureSignature(
   element: Element,
-  samples: Map<Element, Sample>,
+  samples: Map<Element, UISample>,
   depth: number,
 ): string {
   const sample = samples.get(element);
@@ -579,117 +456,6 @@ function structureSignature(
     .slice(0, 8)
     .map((child) => structureSignature(child, samples, depth + 1));
   return `${semantic}[${children.join(",")}]`;
-}
-
-function motionProfile(
-  samples: Sample[],
-  maxStringBytes: number,
-): UIMotionProfile {
-  const transitions: UIMotionProfile["transitions"] = [];
-  const animations: UIAnimationProfile[] = [];
-  const stickyNodeIds: string[] = [];
-  const scrollContainerNodeIds: string[] = [];
-  const canvasNodeIds: string[] = [];
-  const mediaNodeIds: string[] = [];
-  for (const sample of samples) {
-    const { element, nodeId, style } = sample;
-    const position = styleValue(element, style, "position");
-    if (position === "sticky") stickyNodeIds.push(nodeId);
-    if (isScrollContainer(element, style)) scrollContainerNodeIds.push(nodeId);
-    if (element instanceof HTMLCanvasElement) canvasNodeIds.push(nodeId);
-    if (element instanceof HTMLMediaElement) mediaNodeIds.push(nodeId);
-
-    const transitionShorthand = styleValue(element, style, "transition");
-    const transitionProperty = styleValue(
-      element,
-      style,
-      "transition-property",
-    );
-    const transitionDuration = styleValue(
-      element,
-      style,
-      "transition-duration",
-    );
-    if (
-      (transitionShorthand && transitionShorthand !== "none") ||
-      hasNonZeroTime(transitionDuration)
-    ) {
-      transitions.push({
-        nodeId,
-        properties: boundedCssList(
-          transitionProperty || transitionShorthand,
-          maxStringBytes,
-        ),
-        durations: splitCssList(
-          transitionDuration ||
-            timesFromShorthand(transitionShorthand)[0] ||
-            "0s",
-        ),
-        delays: splitCssList(
-          styleValue(element, style, "transition-delay") ||
-            timesFromShorthand(transitionShorthand)[1] ||
-            "0s",
-        ),
-        timingFunctions: boundedCssList(
-          styleValue(element, style, "transition-timing-function") || "ease",
-          maxStringBytes,
-        ),
-      });
-    }
-
-    const animationName = styleValue(element, style, "animation-name");
-    const animationDuration = styleValue(element, style, "animation-duration");
-    const webAnimations = safeAnimations(element);
-    if (
-      (animationName && animationName !== "none") ||
-      hasNonZeroTime(animationDuration) ||
-      webAnimations.length > 0
-    ) {
-      const sources: UIAnimationProfile["sources"] = [];
-      if (
-        (animationName && animationName !== "none") ||
-        hasNonZeroTime(animationDuration)
-      )
-        sources.push("css");
-      if (webAnimations.length > 0) sources.push("web_animations");
-      animations.push({
-        nodeId,
-        names: boundedCssList(
-          animationName || "(web-animation)",
-          maxStringBytes,
-        ),
-        durations: splitCssList(animationDuration || "0s"),
-        delays: splitCssList(
-          styleValue(element, style, "animation-delay") || "0s",
-        ),
-        iterationCounts: boundedCssList(
-          styleValue(element, style, "animation-iteration-count") || "1",
-          maxStringBytes,
-        ),
-        playStates: Array.from(
-          new Set([
-            ...splitCssList(
-              styleValue(element, style, "animation-play-state") || "running",
-            ),
-            ...webAnimations.map((animation) => animation.playState),
-          ]),
-        ).map((value) => truncateUtf8(value, maxStringBytes)),
-        sources,
-      });
-    }
-  }
-  return {
-    prefersReducedMotion:
-      typeof matchMedia === "function" &&
-      matchMedia("(prefers-reduced-motion: reduce)").matches,
-    transitions: transitions.slice(0, 64),
-    animations: animations.slice(0, 64),
-    keyframeNames: [],
-    stickyNodeIds: stickyNodeIds.slice(0, 64),
-    scrollContainerNodeIds: scrollContainerNodeIds.slice(0, 64),
-    canvasNodeIds: canvasNodeIds.slice(0, 64),
-    mediaNodeIds: mediaNodeIds.slice(0, 64),
-  };
 }
 
 function stylesheetEvidence(
@@ -771,10 +537,6 @@ function isUICandidate(element: Element): boolean {
   );
 }
 
-function normalizeCss(value: string): string {
-  return value.trim().replace(/\s+/g, " ");
-}
-
 function isUninformativeCssValue(value: string): boolean {
   const compact = value.toLowerCase().replace(/\s/g, "");
   return (
@@ -788,27 +550,6 @@ function isUninformativeCssValue(value: string): boolean {
       "0px",
     ].includes(compact) || /^rgba?\(0,?0,?0,?0(?:\.0+)?\)$/.test(compact)
   );
-}
-
-function styleValue(
-  element: Element,
-  style: CSSStyleDeclaration,
-  property: string,
-): string {
-  const computed = normalizeCss(style.getPropertyValue(property));
-  if (computed) return computed;
-  if (element instanceof HTMLElement || element instanceof SVGElement)
-    return normalizeCss(element.style.getPropertyValue(property));
-  return "";
-}
-
-function boundedStyleValue(
-  element: Element,
-  style: CSSStyleDeclaration,
-  property: string,
-  maxStringBytes: number,
-): string {
-  return truncateUtf8(styleValue(element, style, property), maxStringBytes);
 }
 
 function safeCustomPropertyValue(name: string, value: string): boolean {
@@ -838,82 +579,6 @@ function safeCustomPropertyValue(name: string, value: string): boolean {
   return false;
 }
 
-function rectValue(rect: DOMRect | DOMRectReadOnly): Rect {
-  return {
-    x: rect.x,
-    y: rect.y,
-    width: rect.width,
-    height: rect.height,
-  };
-}
-
-function stackingContextReasons(
-  element: Element,
-  style: CSSStyleDeclaration,
-): string[] {
-  const result: string[] = [];
-  if (element === document.documentElement) result.push("root");
-  const position = styleValue(element, style, "position");
-  const zIndex = styleValue(element, style, "z-index");
-  if (["fixed", "sticky"].includes(position)) result.push(position);
-  if (
-    ["absolute", "relative"].includes(position) &&
-    zIndex &&
-    zIndex !== "auto"
-  )
-    result.push("positioned_z_index");
-  const opacity = Number.parseFloat(styleValue(element, style, "opacity"));
-  if (Number.isFinite(opacity) && opacity < 1) result.push("opacity");
-  if (!isNone(styleValue(element, style, "transform")))
-    result.push("transform");
-  if (!isNone(styleValue(element, style, "filter"))) result.push("filter");
-  if (styleValue(element, style, "isolation") === "isolate")
-    result.push("isolation");
-  if (!isNone(styleValue(element, style, "mix-blend-mode"), "normal"))
-    result.push("blend_mode");
-  if (
-    /transform|opacity|filter/.test(styleValue(element, style, "will-change"))
-  )
-    result.push("will_change");
-  return result;
-}
-
-function isNone(value: string, defaultValue = "none"): boolean {
-  return !value || value === defaultValue;
-}
-
-function composedParent(element: Element): Element | null {
-  if (element.parentElement) return element.parentElement;
-  const root = element.getRootNode();
-  return root instanceof ShadowRoot ? root.host : null;
-}
-
-function composedChildren(element: Element): Element[] {
-  return [
-    ...Array.from(element.children),
-    ...(element.shadowRoot ? Array.from(element.shadowRoot.children) : []),
-  ];
-}
-
-function nearestScrollContainer(element: Element): Element | null {
-  let current = composedParent(element);
-  while (current) {
-    const style = getComputedStyle(current);
-    if (isScrollContainer(current, style)) return current;
-    current = composedParent(current);
-  }
-  return null;
-}
-
-function isScrollContainer(
-  element: Element,
-  style: CSSStyleDeclaration,
-): boolean {
-  return /(auto|scroll|overlay|hidden)/.test(
-    `${styleValue(element, style, "overflow-x")} ${styleValue(element, style, "overflow-y")}`,
-  );
-}
-
 function implicitRole(element: Element): string {
   const tag = element.tagName.toLowerCase();
   if (tag === "a" && element.hasAttribute("href")) return "link";
@@ -923,39 +588,4 @@ function implicitRole(element: Element): string {
   if (tag === "nav") return "navigation";
   if (tag === "main") return "main";
   return "";
-}
-
-function splitCssList(value: string): string[] {
-  return value.split(",").map(normalizeCss).filter(Boolean).slice(0, 16);
-}
-
-function boundedCssList(value: string, maxStringBytes: number): string[] {
-  return splitCssList(value).map((part) => truncateUtf8(part, maxStringBytes));
-}
-
-function hasNonZeroTime(value: string): boolean {
-  return splitCssList(value).some((part) => {
-    const match = part.match(/^(-?[\d.]+)(ms|s)$/);
-    return match ? Number(match[1]) !== 0 : false;
-  });
-}
-
-function timesFromShorthand(
-  value: string,
-): [string | undefined, string | undefined] {
-  const times = value.match(/-?[\d.]+m?s/g) ?? [];
-  return [times[0], times[1]];
-}
-
-function safeAnimations(element: Element): Animation[] {
-  if (typeof element.getAnimations !== "function") return [];
-  try {
-    return element.getAnimations({ subtree: false }).slice(0, 16);
-  } catch {
-    return [];
-  }
-}
-
-function monotonicNow(): number {
-  return globalThis.performance?.now?.() ?? Date.now();
 }

@@ -6,18 +6,19 @@
 
 - Added the nested `a3s.test.ui-understanding/1` Page Context evidence
   protocol. Test Kit now derives bounded observed design tokens, typography,
-  Flex/Grid/flow and stacking relationships, deterministic repeated-component
-  clusters, real interaction-state differences, responsive conditions, and
-  CSS/Web Animations, sticky, scroll-container, canvas, and media motion
-  evidence after browser rendering. Every record binds an observation ID,
-  page revision, viewport, scope, provenance summary, and node/state/string/
-  byte/time budgets.
+  Flex/Grid/flow and stacking relationships, exact client/scroll extents,
+  signed offsets, overflow/clipping state, deterministic repeated-component
+  clusters, real interaction-state differences, responsive conditions,
+  document/scroll/view/named animation timelines and ranges, CSS/Web
+  Animations, sticky, scroll-container, canvas, and media motion evidence after
+  browser rendering. Every record binds an observation ID, page revision,
+  viewport, scope, provenance summary, and node/state/string/byte/time budgets.
 - Added strict Rust UI-understanding types and Web-driver admission. Protocol,
-  revision, viewport, identifiers, confidence, geometry, collection bounds,
-  truncation metadata, JSON depth, strings, and encoded size now fail closed
-  before the evidence reaches an agent. The same bounded UI evidence is
-  included in explicitly submitted repair context without gaining action,
-  verdict, or repair authority.
+  revision, viewport, identifiers, confidence, geometry, overflow/clipping and
+  animation-timeline consistency, collection bounds, truncation metadata, JSON
+  depth, strings, and encoded size now fail closed before the evidence reaches
+  an agent. The same bounded UI evidence is included in explicitly submitted
+  repair context without gaining action, verdict, or repair authority.
 - Added an explicit `--browser-microphone synthetic` profile to deterministic
   Web runs, persistent and direct agent runs, and Web MCP hosts. It persists
   across agent-session turns, injects only Chromium's fake-device and
