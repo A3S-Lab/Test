@@ -1,8 +1,13 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
-use crate::{Action, Expectation, PageContextLocator, SurfaceObservation, Target, WaitCondition};
+use crate::{
+    Action, Expectation, PageContextLocator, PageContextObservation, SurfaceObservation, Target,
+    WaitCondition,
+};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
+
+mod ui_projection;
 
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
 pub struct PageContextBindings {
@@ -38,20 +43,45 @@ impl PageContextRefError {
 
 /// Replaces driver-private page-context node identity with observation-scoped
 /// references and records the preferred stable target for each reference.
+/// Nested UI evidence reuses an unambiguous actionable `@cN` reference and
+/// receives a non-actionable `@uN` reference for every other node identity.
 #[must_use]
 pub fn bind_page_context_refs(observation: &mut SurfaceObservation) -> PageContextBindings {
-    let mut bindings = PageContextBindings::default();
     let Some(context) = observation.page_context.as_mut() else {
-        return bindings;
+        return PageContextBindings::default();
     };
-    bindings.revision = context.revision;
+    bind_page_context_observation_refs(context)
+}
+
+/// Projects one typed Page Context payload for a public observation or step
+/// output and returns the actionable bindings retained for that observation.
+#[must_use]
+pub fn bind_page_context_observation_refs(
+    context: &mut PageContextObservation,
+) -> PageContextBindings {
+    let mut bindings = PageContextBindings {
+        revision: context.revision,
+        ..PageContextBindings::default()
+    };
     let Some(snapshot) = context.snapshot.as_mut() else {
         return bindings;
     };
+    let mut actionable_refs = BTreeMap::new();
+    let mut seen_node_ids = BTreeSet::new();
+    let mut ambiguous_node_ids = BTreeSet::new();
     for (index, node) in snapshot.nodes.iter_mut().enumerate() {
+        let raw_id = node.id.clone();
         let reference = format!("@c{}", index + 1);
+        node.r#ref = None;
+        if !raw_id.is_empty() && !seen_node_ids.insert(raw_id.clone()) {
+            actionable_refs.remove(&raw_id);
+            ambiguous_node_ids.insert(raw_id.clone());
+        }
         if let Some(target) = preferred_page_context_target(&node.locators) {
             bindings.targets.insert(reference.clone(), target);
+            if !raw_id.is_empty() && !ambiguous_node_ids.contains(&raw_id) {
+                actionable_refs.insert(raw_id, reference.clone());
+            }
             node.r#ref = Some(reference);
         }
         node.id.clear();
@@ -59,6 +89,17 @@ pub fn bind_page_context_refs(observation: &mut SurfaceObservation) -> PageConte
         if let Some(geometry) = node.geometry.as_mut() {
             geometry.scroll_container_node_id = None;
         }
+    }
+    let page_revision = snapshot.revision;
+    let page_viewport = snapshot.page.as_ref().map(|page| page.viewport.clone());
+    // UI understanding is optional evidence. Omit it instead of exposing a
+    // private identity when projection cannot preserve its admitted bounds.
+    let keep_ui = snapshot.ui.as_mut().is_none_or(|ui| {
+        ui_projection::project_ui_evidence_refs(ui, &actionable_refs)
+            && ui.validate(page_revision, page_viewport.as_ref()).is_ok()
+    });
+    if !keep_ui {
+        snapshot.ui = None;
     }
     snapshot.removed_node_ids.clear();
     bindings
@@ -78,11 +119,12 @@ pub fn resolve_page_context_refs(
     mut action: Action,
     bindings: &PageContextBindings,
 ) -> Result<Action, PageContextRefError> {
+    validate_action_page_context_refs(&action)?;
     visit_action_targets(&mut action, |target| {
         let Target::Ref { value } = target else {
             return Ok(());
         };
-        if !is_page_context_ref(value) {
+        if !is_actionable_page_context_ref(value) {
             return Ok(());
         }
         *target = bindings.targets.get(value).cloned().ok_or_else(|| {
@@ -93,6 +135,21 @@ pub fn resolve_page_context_refs(
         Ok(())
     })?;
     Ok(action)
+}
+
+/// Rejects observation-only UI evidence refs before an action reaches any
+/// surface driver. Actionable Page Context refs remain revision-bound and are
+/// resolved separately by [`resolve_page_context_refs`].
+pub fn validate_action_page_context_refs(action: &Action) -> Result<(), PageContextRefError> {
+    if let Some(value) = action_targets(action).find_map(|target| match target {
+        Target::Ref { value } if is_ui_evidence_ref(value) => Some(value),
+        _ => None,
+    }) {
+        return Err(PageContextRefError::new(format!(
+            "UI evidence ref '{value}' is observation-only and not actionable"
+        )));
+    }
+    Ok(())
 }
 
 #[must_use]
@@ -206,7 +263,19 @@ fn target_is_page_context_ref(target: &Target) -> bool {
 }
 
 fn is_page_context_ref(value: &str) -> bool {
-    value.strip_prefix("@c").is_some_and(|suffix| {
+    is_actionable_page_context_ref(value) || is_ui_evidence_ref(value)
+}
+
+fn is_actionable_page_context_ref(value: &str) -> bool {
+    numbered_ref(value, "@c")
+}
+
+pub(crate) fn is_ui_evidence_ref(value: &str) -> bool {
+    numbered_ref(value, "@u")
+}
+
+fn numbered_ref(value: &str, prefix: &str) -> bool {
+    value.strip_prefix(prefix).is_some_and(|suffix| {
         !suffix.is_empty() && suffix.chars().all(|character| character.is_ascii_digit())
     })
 }

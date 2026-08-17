@@ -3,8 +3,8 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use a3s_test_core::{
-    Action, DriverError, DriverSession, ScenarioContext, StepOutput, Surface, SurfaceDriver,
-    TestScenario, TestStep, TestSuite,
+    Action, DriverError, DriverSession, PageContextObservation, PageContextSnapshot,
+    ScenarioContext, StepOutput, Surface, SurfaceDriver, TestScenario, TestStep, TestSuite,
 };
 use a3s_test_runner::{RetryPolicy, RunStatus, Runner, RunnerOptions};
 use async_trait::async_trait;
@@ -20,6 +20,8 @@ struct FakeDriver {
 #[derive(Clone, Copy)]
 enum Behavior {
     Pass,
+    PageContext,
+    UnexpectedDispatch,
     Fail,
     Hang,
 }
@@ -60,6 +62,11 @@ impl DriverSession for FakeSession {
     async fn execute(&mut self, _step: &TestStep) -> Result<StepOutput, DriverError> {
         match self.behavior {
             Behavior::Pass => Ok(StepOutput::new("ok")),
+            Behavior::PageContext => Ok(StepOutput::new("page context")
+                .with_page_context(private_page_context_observation())),
+            Behavior::UnexpectedDispatch => {
+                panic!("observation-only UI ref reached the surface driver")
+            }
             Behavior::Fail => Err(DriverError::new("fake.failure", "planned failure")),
             Behavior::Hang => std::future::pending().await,
         }
@@ -73,6 +80,49 @@ impl DriverSession for FakeSession {
             CloseBehavior::Hang => std::future::pending().await,
         }
     }
+}
+
+fn private_page_context_observation() -> PageContextObservation {
+    let snapshot: PageContextSnapshot = serde_json::from_value(serde_json::json!({
+        "protocol": "a3s.test.page-context/1",
+        "sdkVersion": "0.4.0",
+        "revision": 1,
+        "page": null,
+        "components": [],
+        "nodes": [{
+            "id": "private-runner-node",
+            "parentId": null,
+            "componentId": null,
+            "tag": "button",
+            "role": "button",
+            "name": "Continue",
+            "text": "Continue",
+            "description": null,
+            "testId": "continue",
+            "geometry": null,
+            "state": {
+                "visible": true,
+                "disabled": false,
+                "checked": null,
+                "selected": null,
+                "expanded": null,
+                "focused": false,
+                "readonly": null,
+                "required": null,
+                "invalid": null
+            },
+            "locators": [{ "type": "test_id", "value": "continue" }],
+            "classes": null,
+            "attributes": null,
+            "computedStyles": null
+        }],
+        "facts": {},
+        "removedNodeIds": ["private-removed-node"],
+        "truncated": false,
+        "nextCursor": null
+    }))
+    .expect("typed private Page Context fixture");
+    PageContextObservation::from_snapshot(snapshot)
 }
 
 fn suite(timeout_ms: u64) -> TestSuite {
@@ -129,6 +179,50 @@ async fn closes_surface_after_success() {
         .await;
 
     assert_eq!(result.status, RunStatus::Passed);
+    assert_eq!(closes.load(Ordering::SeqCst), 1);
+}
+
+#[tokio::test]
+async fn projects_private_page_context_refs_before_persisting_step_output() {
+    let closes = Arc::new(AtomicUsize::new(0));
+    let result = runner(Behavior::PageContext, Arc::clone(&closes))
+        .run(&suite(1_000), CancellationToken::new())
+        .await;
+
+    let snapshot = result.scenarios[0].steps[0]
+        .output
+        .as_ref()
+        .and_then(|output| output.page_context.as_ref())
+        .and_then(|context| context.snapshot.as_ref())
+        .expect("public Page Context output");
+    assert!(snapshot.nodes[0].id.is_empty());
+    assert_eq!(snapshot.nodes[0].r#ref.as_deref(), Some("@c1"));
+    assert!(snapshot.removed_node_ids.is_empty());
+    assert_eq!(closes.load(Ordering::SeqCst), 1);
+}
+
+#[tokio::test]
+async fn rejects_ui_evidence_refs_before_surface_dispatch() {
+    let closes = Arc::new(AtomicUsize::new(0));
+    let mut ref_suite = suite(1_000);
+    ref_suite.scenarios[0].steps[0].action = Action::Click {
+        target: a3s_test_core::Target::Ref {
+            value: "@u1".to_string(),
+        },
+    };
+
+    let result = runner(Behavior::UnexpectedDispatch, Arc::clone(&closes))
+        .run(&ref_suite, CancellationToken::new())
+        .await;
+
+    assert_eq!(result.status, RunStatus::Failed);
+    assert_eq!(
+        result.scenarios[0].steps[0]
+            .error
+            .as_ref()
+            .map(|error| error.code.as_str()),
+        Some("test.run.context_ref_invalid")
+    );
     assert_eq!(closes.load(Ordering::SeqCst), 1);
 }
 

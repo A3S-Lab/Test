@@ -8,8 +8,9 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use a3s_test_core::{
-    Action, ContractOutcome, DriverError, DriverSession, ScenarioContext, StepOutput, Surface,
-    SurfaceContract, SurfaceDriver, TestScenario, TestStep, TestSuite,
+    bind_page_context_observation_refs, validate_action_page_context_refs, Action, ContractOutcome,
+    DriverError, DriverSession, ScenarioContext, StepOutput, Surface, SurfaceContract,
+    SurfaceDriver, TestScenario, TestStep, TestSuite,
 };
 use futures::{stream, StreamExt};
 use serde::{Deserialize, Serialize};
@@ -410,6 +411,12 @@ impl Runner {
     }
 
     async fn execute_once(&self, session: &mut dyn DriverSession, step: &TestStep) -> StepAttempt {
+        if let Err(error) = validate_action_page_context_refs(&step.action) {
+            return StepAttempt::failed(
+                DriverError::new("test.run.context_ref_invalid", error.message()),
+                None,
+            );
+        }
         let Action::VerifyContract {
             contract,
             variant,
@@ -417,7 +424,12 @@ impl Runner {
         } = &step.action
         else {
             return match session.execute(step).await {
-                Ok(output) => StepAttempt::passed(output),
+                Ok(mut output) => {
+                    if let Some(page_context) = output.page_context.as_mut() {
+                        let _ = bind_page_context_observation_refs(page_context);
+                    }
+                    StepAttempt::passed(output)
+                }
                 Err(error) => StepAttempt::failed(error, None),
             };
         };

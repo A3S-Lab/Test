@@ -765,9 +765,17 @@ fn parse_target(value: &Value, path: &str) -> Result<Target, SpecError> {
         return Err(type_error(path, "target must use a typed locator function"));
     };
     match (name.as_str(), arguments.as_slice()) {
-        ("ref", [value]) => Ok(Target::Ref {
-            value: target_argument(value, path)?,
-        }),
+        ("ref", [value]) => {
+            let value = target_argument(value, path)?;
+            if crate::page_context::is_ui_evidence_ref(&value) {
+                return Err(SpecError::new(
+                    "test.spec.target_observation_only",
+                    path,
+                    "UI evidence refs are observation-only and cannot be action targets",
+                ));
+            }
+            Ok(Target::Ref { value })
+        }
         ("css", [value]) => Ok(Target::Css {
             selector: target_argument(value, path)?,
         }),

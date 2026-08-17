@@ -1154,6 +1154,11 @@ the direct CLI all consume the same observation contract. `@cN` never exposes
 the Test Kit's private node identity. Before a proposed `@cN` action reaches
 the driver, it resolves to the preferred test ID, role, label, placeholder,
 text, or CSS locator and the driver revalidates the observation revision.
+Nested UI evidence reuses that `@cN` only for one unambiguous actionable node.
+Layout-only and other evidence identities receive observation-scoped `@uN`
+refs so relationships remain inspectable without leaking Test Kit handles.
+Core rejects `@uN` as an action target and drops the optional UI record if the
+projection cannot preserve its admitted size and integrity constraints.
 
 The HTTP provider is a Layer 4 proposal adapter. It cannot claim browser
 observation, determine a verdict, execute actions itself, or authorize repair.

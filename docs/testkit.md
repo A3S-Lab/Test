@@ -257,8 +257,15 @@ for one request with `"ui": false`.
 }
 ```
 
-Node IDs are SDK-private handles. A3S Browser maps current node IDs to A3S
+Node IDs are SDK-private handles. A3S Test Core maps current node IDs to
 observation-bound `@cN` refs. Callers never persist or act on a raw node ID.
+Nested UI evidence reuses `@cN` when the identity belongs to one uniquely
+actionable node and projects every other identity to an observation-only
+`@uN` ref. `@uN` connects style, layout, component, state, and motion evidence
+without becoming an action target; Core rejects an attempted `@uN` action
+before driver dispatch. If projection cannot retain the admitted encoded-size
+budget and graph integrity, A3S Test omits the optional UI record instead of
+returning a private identity.
 
 ### UI understanding evidence
 

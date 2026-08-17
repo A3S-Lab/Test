@@ -48,6 +48,8 @@ The accessibility tree remains the semantic source of truth. UI understanding is
 
 Page context never mutates the host DOM. Private node IDs live in a `WeakMap`, and mutation, resize, route, viewport, scroll, and form-state signals advance a monotonic page revision. Transient focus, hover, or animation state uses a separate UI `observationId`. A3S Test admits the accessibility snapshot, page revision, viewport, scope, protocol, and bounded UI evidence together or rejects the race.
 
+Public observations never expose those private node IDs. A uniquely actionable node uses the same observation-bound `@cN` ref in Page Context and UI evidence; layout-only evidence uses a read-only `@uN` ref. `@uN` preserves inspectable style, layout, state, and motion relationships but is rejected as an action target. If projection cannot preserve the admitted byte budget and graph integrity, A3S Test omits the optional UI evidence instead of leaking an internal identity.
+
 ## Four authority layers
 
 1. **Deterministic facts**: driver observations, Test Kit context, file digests, local assertions, and evidence.

@@ -1,12 +1,17 @@
 mod support;
 
-use std::collections::BTreeSet;
 use std::net::TcpStream;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::time::Duration;
 
-use support::browser_process::bounded_output;
+use support::browser_process::{
+    assert_no_new_private_runtime_directories, assert_process_success, bounded_output,
+    private_runtime_directories, StandaloneBrowserSessionCleanup,
+};
+use support::browser_zoom::{
+    assert_approx, capture_testkit_zoom_geometry, json_number, set_browser_page_scale,
+};
 use support::testkit_accessibility::{
     exercise_repair_status_accessibility, exercise_review_candidate_accessibility,
     verify_audit_fixture_reset,
@@ -16,11 +21,15 @@ use support::testkit_browser::{
     run_review_workflow, verify_hide_until_restart_focus,
 };
 use support::testkit_bundle::bundle_browser_fixture;
+use support::ui_understanding::verify_testkit_ui_understanding_through_driver;
 use support::web_evidence::{
     assert_empty_browser_diagnostics, assert_nonempty_artifact, assert_png_artifact,
     failed_run_summary,
 };
-use support::web_fixture::{get, start_static_site_fixture, start_testkit_fixture, WebFixture};
+use support::web_fixture::{
+    assert_blocked_sentinel_reachable, get, start_static_site_fixture, start_testkit_fixture,
+    WebFixture,
+};
 use support::website::build_website;
 
 const WEBSITE_TESTKIT_SUITE: &str = include_str!("../../../tests/e2e/website-testkit.acl");
@@ -406,7 +415,7 @@ fn real_agent_browser_runs_the_embedded_testkit_suite() {
     );
     let (_bundle_workspace, bundle) = bundle_browser_fixture("bundle TestKit fixture");
     let fixture = start_testkit_fixture(bundle).expect("start TestKit fixture");
-    verify_testkit_ui_understanding_through_driver(&browser, &fixture.origin());
+    verify_testkit_ui_understanding_through_driver(&binary(), &browser, &fixture.origin());
     let workflow_manifest = get(&fixture.origin(), "/screen-reader-workflows.json")
         .expect("read screen-reader workflow manifest from shared fixture");
     assert_eq!(workflow_manifest.status, 200);
@@ -741,143 +750,6 @@ fn real_agent_browser_runs_the_embedded_testkit_suite() {
     assert_process_success("close TestKit browser session", &closed);
 }
 
-fn verify_testkit_ui_understanding_through_driver(browser: &Path, origin: &str) {
-    let temp = tempfile::tempdir().expect("temporary UI understanding workspace");
-    let manifest = temp.path().join("ui-understanding.acl");
-    let suite = format!(
-        r#"suite "ui-understanding" {{
-    version = 1
-    scenario "rendered-context" {{
-        name = "Capture rendered UI understanding"
-        surface = "web"
-        timeout_ms = 60000
-        navigate "open" {{ url = "{origin}" }}
-        snapshot "context" {{ interactive = true }}
-        expect "fixture-ready" {{ text = "Embedded TestKit E2E" }}
-    }}
-}}
-"#
-    );
-    std::fs::write(&manifest, suite).expect("write UI understanding suite");
-    let output = Command::new(binary())
-        .args([
-            "run",
-            manifest.to_str().expect("UTF-8 UI understanding path"),
-            "--browser-driver",
-            "standalone",
-            "--browser-executable",
-            browser.to_str().expect("UTF-8 browser path"),
-            "--command-timeout-ms",
-            "60000",
-            "--idle-timeout-ms",
-            "15000",
-            "--cleanup-timeout-ms",
-            "15000",
-            "--infrastructure-retries",
-            "0",
-            "--json",
-        ])
-        .current_dir(temp.path())
-        .output()
-        .expect("run UI understanding suite");
-    assert_process_success("capture UI understanding through the Web driver", &output);
-    let report: serde_json::Value =
-        serde_json::from_slice(&output.stdout).expect("UI understanding run report");
-    let snapshot = report["scenarios"][0]["steps"]
-        .as_array()
-        .expect("UI understanding steps")
-        .iter()
-        .find(|step| step["id"] == "context")
-        .and_then(|step| step.pointer("/output/page_context/snapshot"))
-        .expect("page context in the stable observation");
-    let ui = snapshot
-        .pointer("/ui")
-        .expect("typed UI understanding in the stable observation");
-    assert_eq!(ui["protocol"], "a3s.test.ui-understanding/1");
-    let page_revision = snapshot["revision"]
-        .as_u64()
-        .expect("page-context revision");
-    assert_eq!(ui["pageRevision"].as_u64(), Some(page_revision));
-    assert!(
-        ui["layout"]["nodes"]
-            .as_array()
-            .is_some_and(|nodes| !nodes.is_empty()),
-        "UI understanding must retain bounded layout evidence: {ui}"
-    );
-    let nested_layout = ui["layout"]["nodes"]
-        .as_array()
-        .and_then(|nodes| {
-            nodes.iter().find(|node| {
-                node["overflowY"] == "auto"
-                    && node
-                        .pointer("/overflowMetrics/clientHeight")
-                        .and_then(serde_json::Value::as_f64)
-                        == Some(140.0)
-                    && node
-                        .pointer("/overflowMetrics/scrollHeight")
-                        .and_then(serde_json::Value::as_f64)
-                        == Some(400.0)
-            })
-        })
-        .expect("fixture overflow layout evidence");
-    let overflow = &nested_layout["overflowMetrics"];
-    assert!(
-        overflow["scrollHeight"]
-            .as_f64()
-            .zip(overflow["clientHeight"].as_f64())
-            .is_some_and(|(scroll, client)| scroll > client)
-            && overflow["overflowingY"] == true
-            && overflow["clipsY"] == true,
-        "vertical overflow and clipping evidence is inconsistent: {nested_layout}"
-    );
-
-    let box_layout = ui["layout"]["nodes"]
-        .as_array()
-        .and_then(|nodes| {
-            nodes.iter().find(|node| {
-                node.pointer("/boxModel/writingMode")
-                    .and_then(serde_json::Value::as_str)
-                    == Some("vertical-rl")
-                    && node
-                        .pointer("/boxModel/direction")
-                        .and_then(serde_json::Value::as_str)
-                        == Some("rtl")
-            })
-        })
-        .expect("fixture box-model layout evidence");
-    assert_eq!(box_layout["boxModel"]["boxSizing"], "border-box");
-    assert_eq!(box_layout["boxModel"]["margin"]["left"], "16px");
-    assert_eq!(box_layout["boxModel"]["borderWidth"]["right"], "2px");
-    assert_eq!(box_layout["boxModel"]["padding"]["bottom"], "7px");
-
-    let animations = ui["motion"]["animations"]
-        .as_array()
-        .expect("UI animation evidence");
-    for kind in ["scroll", "view"] {
-        let animation = animations
-            .iter()
-            .find(|animation| {
-                animation["timelines"].as_array().is_some_and(|timelines| {
-                    timelines.iter().any(|timeline| timeline["kind"] == kind)
-                })
-            })
-            .unwrap_or_else(|| panic!("animation timeline kind {kind:?} missing: {ui}"));
-        assert!(
-            animation["rangeStarts"]
-                .as_array()
-                .is_some_and(|ranges| !ranges.is_empty()),
-            "animation range evidence missing for {kind:?}: {animation}"
-        );
-    }
-    assert!(
-        ui["budget"]["used"]["encodedBytes"]
-            .as_u64()
-            .zip(ui["budget"]["limits"]["encodedBytes"].as_u64())
-            .is_some_and(|(used, limit)| used <= limit),
-        "UI understanding must stay within its declared byte budget: {ui}"
-    );
-}
-
 fn run_agent_domain_containment(browser: &Path, fixture: &WebFixture, workspace: &Path) {
     let mut cleanup = AgentSessionCleanup::new(workspace, "domain-containment");
     let fixture_url = format!("{}/origin-policy.html", fixture.origin());
@@ -979,66 +851,10 @@ fn run_agent_domain_containment(browser: &Path, fixture: &WebFixture, workspace:
     assert!(abort_json["cleanup_error"].is_null());
 }
 
-fn assert_blocked_sentinel_reachable(fixture: &WebFixture) {
-    let health = get(&fixture.blocked_origin(), "/health").expect("blocked sentinel health");
-    assert_eq!(health.status, 200);
-    assert_eq!(health.body, b"ready");
-    assert_eq!(
-        fixture.blocked_requests(),
-        [support::web_fixture::RecordedRequest {
-            method: "GET".to_string(),
-            path: "/health".to_string(),
-        }]
-    );
-    fixture.clear_blocked_requests();
-}
-
 struct AgentSessionCleanup {
     workspace: PathBuf,
     session: &'static str,
     armed: bool,
-}
-
-struct StandaloneBrowserSessionCleanup {
-    browser: PathBuf,
-    session: String,
-    armed: bool,
-}
-
-impl StandaloneBrowserSessionCleanup {
-    fn new(browser: &Path, session: &str) -> Self {
-        Self {
-            browser: browser.to_path_buf(),
-            session: session.to_string(),
-            armed: false,
-        }
-    }
-
-    fn arm(&mut self) {
-        self.armed = true;
-    }
-
-    fn close(&mut self) -> std::process::Output {
-        let output = close_standalone_browser_session(&self.browser, &self.session);
-        if output.status.success() {
-            self.armed = false;
-        }
-        output
-    }
-}
-
-impl Drop for StandaloneBrowserSessionCleanup {
-    fn drop(&mut self) {
-        if self.armed {
-            let _ = close_standalone_browser_session(&self.browser, &self.session);
-        }
-    }
-}
-
-fn close_standalone_browser_session(browser: &Path, session: &str) -> std::process::Output {
-    let mut command = Command::new(browser);
-    command.args(["--session", session, "close"]);
-    bounded_output(&mut command, "close standalone browser session")
 }
 
 impl AgentSessionCleanup {
@@ -1078,105 +894,6 @@ fn abort_agent_session(workspace: &Path, session: &str) -> std::process::Output 
         .output()
         .expect("abort agent session cleanup")
 }
-
-fn assert_process_success(context: &str, output: &std::process::Output) {
-    assert!(
-        output.status.success(),
-        "{context} failed\nstdout:\n{}\nstderr:\n{}",
-        String::from_utf8_lossy(&output.stdout),
-        String::from_utf8_lossy(&output.stderr)
-    );
-}
-
-fn capture_testkit_zoom_geometry(
-    command: &impl Fn(&[&str]) -> std::process::Output,
-    context: &str,
-) -> serde_json::Value {
-    let output = command(&[
-        "eval",
-        "(()=>{const snapshot=window[Symbol.for('a3s.test.page-context')].snapshot({detail:'forensic'});const target=snapshot.nodes.find(node=>node.testId==='zoom-edge');return JSON.stringify({page:snapshot.page,target});})()",
-    ]);
-    assert_process_success(context, &output);
-    let encoded: String = serde_json::from_slice(&output.stdout)
-        .unwrap_or_else(|error| panic!("{context} did not return an encoded JSON string: {error}"));
-    serde_json::from_str(&encoded)
-        .unwrap_or_else(|error| panic!("{context} returned invalid TestKit JSON: {error}"))
-}
-
-fn set_browser_page_scale(
-    cdp_url: &str,
-    factor: f64,
-    command: &impl Fn(&[&str]) -> std::process::Output,
-) {
-    let port = cdp_url
-        .split_once("://")
-        .and_then(|(_, rest)| rest.split('/').next())
-        .and_then(|authority| authority.rsplit_once(':'))
-        .map(|(_, port)| port)
-        .unwrap_or_else(|| panic!("browser returned an invalid CDP URL: {cdp_url}"));
-    let output = Command::new("node")
-        .args([
-            "--input-type=module",
-            "-e",
-            CDP_PAGE_SCALE_SCRIPT,
-            port,
-            &factor.to_string(),
-        ])
-        .output()
-        .expect("run bounded CDP page-scale helper");
-    assert_process_success("set browser page scale", &output);
-    let expected = format!("visualViewport.scale==={factor}");
-    let wait = command(&["wait", "--fn", &expected]);
-    assert_process_success("wait for browser page scale", &wait);
-}
-
-fn assert_approx(actual: Option<&serde_json::Value>, expected: f64, epsilon: f64, label: &str) {
-    let actual = actual
-        .and_then(serde_json::Value::as_f64)
-        .unwrap_or_else(|| panic!("{label} was not a number"));
-    assert!(
-        (actual - expected).abs() <= epsilon,
-        "{label}: expected {expected} ± {epsilon}, got {actual}"
-    );
-}
-
-fn json_number(value: &serde_json::Value, pointer: &str, label: &str) -> f64 {
-    value
-        .pointer(pointer)
-        .and_then(serde_json::Value::as_f64)
-        .unwrap_or_else(|| panic!("{label} was not a number"))
-}
-
-const CDP_PAGE_SCALE_SCRIPT: &str = r#"
-const port = process.argv[1];
-const factor = Number(process.argv[2]);
-if (!/^\d{1,5}$/.test(port) || !Number.isFinite(factor) || factor < 0.25 || factor > 5) {
-  throw new Error("invalid bounded page-scale arguments");
-}
-const response = await fetch(`http://127.0.0.1:${port}/json/list`);
-if (!response.ok) throw new Error(`CDP target discovery returned ${response.status}`);
-const targets = await response.json();
-const page = targets.find((target) => target.type === "page");
-if (!page?.webSocketDebuggerUrl) throw new Error("CDP page target missing");
-await new Promise((resolve, reject) => {
-  const socket = new WebSocket(page.webSocketDebuggerUrl);
-  const timer = setTimeout(() => reject(new Error("CDP page-scale command timed out")), 5_000);
-  socket.onopen = () => socket.send(JSON.stringify({
-    id: 1,
-    method: "Emulation.setPageScaleFactor",
-    params: { pageScaleFactor: factor },
-  }));
-  socket.onmessage = (event) => {
-    const message = JSON.parse(event.data);
-    if (message.id !== 1) return;
-    clearTimeout(timer);
-    socket.close();
-    if (message.error) reject(new Error(JSON.stringify(message.error)));
-    else resolve();
-  };
-  socket.onerror = () => reject(new Error("CDP WebSocket failed"));
-});
-"#;
 
 fn suite(origin: &str) -> String {
     format!(
@@ -1248,37 +965,4 @@ fn suite(origin: &str) -> String {
 }}
 "##
     )
-}
-
-fn private_runtime_directories() -> BTreeSet<PathBuf> {
-    #[cfg(unix)]
-    let root = Path::new("/tmp");
-    #[cfg(not(unix))]
-    let root = std::env::temp_dir();
-
-    std::fs::read_dir(root)
-        .into_iter()
-        .flatten()
-        .filter_map(Result::ok)
-        .map(|entry| entry.path())
-        .filter(|path| {
-            path.file_name()
-                .and_then(|name| name.to_str())
-                .is_some_and(|name| name.starts_with("a3st-"))
-        })
-        .collect()
-}
-
-fn assert_no_new_private_runtime_directories(before: &BTreeSet<PathBuf>) {
-    for _ in 0..20 {
-        let current = private_runtime_directories();
-        let leaked = current.difference(before).cloned().collect::<Vec<_>>();
-        if leaked.is_empty() {
-            return;
-        }
-        std::thread::sleep(Duration::from_millis(50));
-    }
-    let current = private_runtime_directories();
-    let leaked = current.difference(before).collect::<Vec<_>>();
-    panic!("browser runtime directories leaked after E2E cleanup: {leaked:?}");
 }

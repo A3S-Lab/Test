@@ -175,6 +175,29 @@ suite "gui-vision" {
 }
 
 #[test]
+fn rejects_ui_evidence_refs_during_acl_admission() {
+    let error = TestSuite::from_acl(
+        r#"
+suite "invalid-ui-ref" {
+    scenario "page" {
+        surface = "web"
+        click "evidence-only" {
+            target = ref("@u1")
+        }
+    }
+}
+"#,
+    )
+    .expect_err("UI evidence ref must not become an ACL action target");
+
+    assert_eq!(error.code(), "test.spec.target_observation_only");
+    assert_eq!(
+        error.path(),
+        "suite.invalid-ui-ref.scenario.page.click.evidence-only.target"
+    );
+}
+
+#[test]
 fn parses_typed_terminal_actions_and_regex_wait() {
     let suite = TestSuite::from_acl(
         r#"

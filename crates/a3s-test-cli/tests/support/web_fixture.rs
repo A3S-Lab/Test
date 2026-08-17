@@ -69,6 +69,20 @@ impl WebFixture {
     }
 }
 
+pub fn assert_blocked_sentinel_reachable(fixture: &WebFixture) {
+    let health = get(&fixture.blocked_origin(), "/health").expect("blocked sentinel health");
+    assert_eq!(health.status, 200);
+    assert_eq!(health.body, b"ready");
+    assert_eq!(
+        fixture.blocked_requests(),
+        [RecordedRequest {
+            method: "GET".to_string(),
+            path: "/health".to_string(),
+        }]
+    );
+    fixture.clear_blocked_requests();
+}
+
 pub fn start_testkit_fixture(bundle: Vec<u8>) -> io::Result<TestKitFixture> {
     let repaired = Arc::new(AtomicBool::new(false));
     FixtureServer::start(Site::TestKit {

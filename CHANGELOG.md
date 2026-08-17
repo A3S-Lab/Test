@@ -45,6 +45,13 @@
 
 ### Fixed
 
+- Projected every private UI-understanding node identity into an
+  observation-scoped ref before returning public Page Context observations or
+  deterministic snapshot outputs. Unambiguous actionable nodes reuse `@cN`;
+  evidence-only nodes receive non-actionable `@uN` refs, attempted `@uN`
+  actions fail during ACL admission or before driver dispatch, and evidence
+  that no longer fits its admitted byte budget is omitted instead of leaking
+  an internal handle.
 - Rejected structurally ambiguous rendered UI evidence at the Rust Web-driver
   boundary. Duplicate layout nodes or edges, dangling edge targets,
   contradictory containment, repeated evidence references, invalid component

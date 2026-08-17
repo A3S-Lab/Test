@@ -586,6 +586,9 @@ The completion work intentionally preserves these product boundaries:
       scroll containers, canvas, and media while respecting reduced motion
 - [x] Bind every record to page revision, viewport, scope, evidence sources,
       and caller-lowerable node, state, string, byte, and time budgets
+- [x] Project private UI node identities to actionable `@cN` or read-only
+      `@uN` observation refs, rejecting `@uN` actions and omitting evidence
+      that cannot remain valid within its admitted encoded-size budget
 - [x] Add strict Rust admission, including layout-graph and component-reference
       integrity, repair-context propagation, unit tests, and a real Chromium
       driver regression without granting action, verdict, or repair authority
