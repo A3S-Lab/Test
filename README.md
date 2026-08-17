@@ -259,9 +259,9 @@ inside Page Context. Its observation ID binds transient computed state without
 turning every animation frame or focus move into a new page revision. It does
 not replace the browser accessibility tree, execute page-authored code, infer
 component types from class names, or authorize an action or repair.
-At the Web boundary, duplicate graph relationships, dangling edge targets,
-inconsistent component membership, stale bindings, invalid geometry, and
-budget drift fail closed before evidence reaches an agent.
+At the Web boundary, duplicate graph relationships, missing parents or edge
+endpoints, inconsistent component membership, stale bindings, invalid
+geometry, and budget drift fail closed before evidence reaches an agent.
 
 The review surface follows `<html lang>` by default and provides complete
 English and Simplified Chinese workflow copy, including status announcements

@@ -315,6 +315,11 @@ function Fixture() {
         <section id="layout-section" data-testid="layout-section" tabIndex={-1}>
           Layout source section
         </section>
+        <div id="unboxed-layout">
+          <button id="unboxed-action" data-testid="unboxed-action">
+            Unboxed action
+          </button>
+        </div>
         <div id="nested">
           <div className="virtual-space">
             <button id="virtual-row">{row}</button>

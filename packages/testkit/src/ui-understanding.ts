@@ -199,11 +199,7 @@ export function captureUIUnderstanding(
   if (stateSamples > 0) sourceKinds.add("accessibility_state");
 
   const style = styleProfile(samples, input.limits.stringBytes);
-  const layout = captureUILayoutGraph(
-    samples,
-    input.identity,
-    input.limits.stringBytes,
-  );
+  const layout = captureUILayoutGraph(samples, input.limits.stringBytes);
   const components = componentClusters(samples, input.limits.stringBytes);
   const motion = captureUIMotionProfile(samples, input.limits.stringBytes);
   const stylesheet = stylesheetEvidence(deadline, input.limits.stringBytes);

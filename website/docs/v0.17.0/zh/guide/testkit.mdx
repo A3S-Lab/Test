@@ -118,7 +118,7 @@ MutationObserver、ResizeObserver、滚动、视口和导航信号会推进修�
 | 状态差分 | 从已观察的默认状态到真实 hover、focus、focus-visible、checked、expanded、selected 或 disabled 状态的变化。Test Kit 不会为了采集而主动触发交互。                                                               |
 | 动效画像 | transition、CSS 与 Web Animations、document/scroll/view/具名时间轴、animation range、关键帧名称、sticky 与滚动节点、canvas、媒体界面和 reduced-motion 偏好。                                                  |
 
-记录使用独立的 `observationId`，因为焦点、悬停或运行中的动画可能改变 computed state，却不改变页面语义修订号。它的 `pageRevision`、viewport 与 scope 仍必须和外层 Page Context 一致。物理盒模型边值与书写模式、文本方向分别记录，Test Kit 不会据此虚构逻辑布局意图。浏览器没有暴露已解析的 Web Animations 时间轴时，具名 CSS 时间轴只记录为 `named`，Test Kit 不会猜测它由滚动还是视图驱动。Web 驱动会拒绝过期绑定、未知字段、非法几何、格式错误的盒模型证据、互相矛盾的 overflow/裁剪或时间轴证据、不一致的截断信息和预算越界。它还会拒绝重复布局节点或边、指向不存在目标的边、与 `parentNodeId` 冲突的包含关系、重复证据引用、不属于成员集合的组件代表节点，以及超出声明采样节点数的布局数据。
+记录使用独立的 `observationId`，因为焦点、悬停或运行中的动画可能改变 computed state，却不改变页面语义修订号。它的 `pageRevision`、viewport 与 scope 仍必须和外层 Page Context 一致。物理盒模型边值与书写模式、文本方向分别记录，Test Kit 不会据此虚构逻辑布局意图。浏览器没有暴露已解析的 Web Animations 时间轴时，具名 CSS 时间轴只记录为 `named`，Test Kit 不会猜测它由滚动还是视图驱动。Web 驱动会拒绝过期绑定、未知字段、非法几何、格式错误的盒模型证据、互相矛盾的 overflow/裁剪或时间轴证据、不一致的截断信息和预算越界。它还会拒绝重复布局节点或边、缺失的父节点或任一边端点、与 `parentNodeId` 冲突的包含关系、重复证据引用、不属于成员集合的组件代表节点，以及超出声明采样节点数的布局数据。
 
 默认预算为 200 个采样节点、200 个状态候选、32 毫秒和 256 KiB。`maxUiNodes`、`maxUiStateSamples`、`maxUiDurationMs` 与 `maxUiEncodedBytes` 可以降低安装上限，每次 `snapshot()` 请求还可以继续收紧。单次请求使用 `snapshot({ ui: false })` 关闭；整个安装不需要该投影时使用 `uiUnderstanding={false}`。
 

@@ -59,6 +59,15 @@ fn validate_layout_graph(
             ));
         }
     }
+    if nodes.values().any(|node| {
+        node.parent_node_id
+            .as_deref()
+            .is_some_and(|parent| !nodes.contains_key(parent))
+    }) {
+        return Err(UiUnderstandingValidationError::new(
+            "UI understanding layout parent identities are inconsistent",
+        ));
+    }
 
     let mut edges = HashSet::with_capacity(snapshot.layout.edges.len());
     let mut owners = HashSet::with_capacity(snapshot.layout.edges.len());
@@ -74,6 +83,7 @@ fn validate_layout_graph(
         if edge.from_node_id.is_empty()
             || edge.to_node_id.is_empty()
             || edge.from_node_id == edge.to_node_id
+            || !nodes.contains_key(edge.from_node_id.as_str())
             || target.is_none()
             || !edges.insert(edge_key)
             || !owners.insert(owner_key)

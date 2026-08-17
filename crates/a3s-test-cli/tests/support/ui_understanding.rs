@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 use std::path::Path;
 use std::process::Command;
 
@@ -67,6 +68,7 @@ pub fn verify_testkit_ui_understanding_through_driver(binary: &Path, browser: &P
             .is_some_and(|nodes| !nodes.is_empty()),
         "UI understanding must retain bounded layout evidence: {ui}"
     );
+    verify_closed_layout_graph(snapshot, ui);
     verify_overflow_evidence(ui);
     verify_box_model_evidence(ui);
     verify_animation_evidence(ui);
@@ -76,6 +78,55 @@ pub fn verify_testkit_ui_understanding_through_driver(binary: &Path, browser: &P
             .zip(ui["budget"]["limits"]["encodedBytes"].as_u64())
             .is_some_and(|(used, limit)| used <= limit),
         "UI understanding must stay within its declared byte budget: {ui}"
+    );
+}
+
+fn verify_closed_layout_graph(snapshot: &serde_json::Value, ui: &serde_json::Value) {
+    let nodes = ui["layout"]["nodes"].as_array().expect("UI layout nodes");
+    let node_ids = nodes
+        .iter()
+        .map(|node| {
+            node["nodeId"]
+                .as_str()
+                .expect("projected UI layout node ref")
+        })
+        .collect::<HashSet<_>>();
+    for node in nodes {
+        if let Some(parent) = node["parentNodeId"].as_str() {
+            assert!(
+                node_ids.contains(parent),
+                "UI layout parent is outside the sampled graph: {node}"
+            );
+        }
+    }
+    for edge in ui["layout"]["edges"].as_array().expect("UI layout edges") {
+        let source = edge["fromNodeId"].as_str().expect("layout edge source");
+        let target = edge["toNodeId"].as_str().expect("layout edge target");
+        assert!(
+            node_ids.contains(source) && node_ids.contains(target),
+            "UI layout edge escapes the sampled graph: {edge}"
+        );
+    }
+
+    let action_ref = snapshot["nodes"]
+        .as_array()
+        .and_then(|nodes| nodes.iter().find(|node| node["testId"] == "unboxed-action"))
+        .and_then(|node| node["ref"].as_str())
+        .expect("unboxed action observation ref");
+    let action_layout = nodes
+        .iter()
+        .find(|node| node["nodeId"] == action_ref)
+        .expect("unboxed action layout evidence");
+    let parent_ref = action_layout["parentNodeId"]
+        .as_str()
+        .expect("nearest sampled ancestor for unboxed action");
+    let parent_layout = nodes
+        .iter()
+        .find(|node| node["nodeId"] == parent_ref)
+        .expect("sampled parent layout evidence");
+    assert_ne!(
+        parent_layout["display"], "contents",
+        "display: contents ancestor must not become an unboxed layout node"
     );
 }
 

@@ -298,6 +298,60 @@ describe("rendered UI understanding", () => {
     });
   });
 
+  it("keeps layout relationships inside the sampled graph", () => {
+    document.body.innerHTML = `
+      <main id="layout-root">
+        <div id="unboxed-parent" style="display:contents;overflow:hidden">
+          <button id="nested-action">Continue</button>
+        </div>
+      </main>
+    `;
+    const root = document.querySelector<HTMLElement>("#layout-root")!;
+    const unboxedParent =
+      document.querySelector<HTMLElement>("#unboxed-parent")!;
+    const action = document.querySelector<HTMLButtonElement>("#nested-action")!;
+    setRect(root, { x: 20, y: 30, width: 320, height: 120 });
+    setRect(unboxedParent, { x: 0, y: 0, width: 0, height: 0 });
+    setRect(action, { x: 40, y: 50, width: 120, height: 40 });
+    Object.defineProperty(action, "offsetParent", {
+      configurable: true,
+      value: unboxedParent,
+    });
+
+    const bridge = installTestKit({
+      enabled: true,
+      page: { id: "ui-closed-layout-graph" },
+      repairStorage: "memory",
+      maxUiDurationMs: 100,
+    });
+    const snapshot = bridge.snapshot({ detail: "forensic" });
+    const rootId = snapshot.nodes.find(
+      (node) => node.attributes?.id === "layout-root",
+    )!.id;
+    const unboxedParentId = snapshot.nodes.find(
+      (node) => node.attributes?.id === "unboxed-parent",
+    )!.id;
+    const actionId = snapshot.nodes.find(
+      (node) => node.attributes?.id === "nested-action",
+    )!.id;
+    const layout = snapshot.ui!.layout;
+    const layoutNodeIds = new Set(layout.nodes.map((node) => node.nodeId));
+
+    expect(layoutNodeIds).not.toContain(unboxedParentId);
+    expect(
+      layout.nodes.find((node) => node.nodeId === actionId)?.parentNodeId,
+    ).toBe(rootId);
+    expect(layout.edges).not.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ fromNodeId: unboxedParentId }),
+      ]),
+    );
+    for (const edge of layout.edges) {
+      expect(layoutNodeIds.has(edge.fromNodeId)).toBe(true);
+      expect(layoutNodeIds.has(edge.toNodeId)).toBe(true);
+    }
+  });
+
   it("enforces caller and installation budgets and can be disabled per snapshot", () => {
     document.body.innerHTML = Array.from(
       { length: 12 },

@@ -178,6 +178,18 @@ fn assert_ui_validation_fails(value: serde_json::Value, case: &str) {
     assert!(result.is_err(), "accepted {case}");
 }
 
+fn append_layout_node(value: &mut serde_json::Value, node_id: &str) {
+    let mut node = value["ui"]["layout"]["nodes"][0].clone();
+    node["nodeId"] = json!(node_id);
+    node.as_object_mut()
+        .expect("layout node")
+        .remove("parentNodeId");
+    value["ui"]["layout"]["nodes"]
+        .as_array_mut()
+        .expect("layout nodes")
+        .push(node);
+}
+
 #[test]
 fn admits_typed_ui_understanding_and_preserves_legacy_snapshots() {
     let snapshot: PageContextSnapshot =
@@ -343,6 +355,20 @@ fn rejects_inconsistent_ui_graph_and_reference_sets() {
     assert_ui_validation_fails(value, "layout edge with a missing target");
 
     let mut value = snapshot_value();
+    value["ui"]["layout"]["edges"] = json!([{
+        "fromNodeId": "missing",
+        "toNodeId": "n1",
+        "relation": "scroll_container"
+    }]);
+    assert_ui_validation_fails(value, "layout edge with a missing source");
+
+    let mut value = snapshot_value();
+    value["ui"]["layout"]["nodes"][0]["parentNodeId"] = json!("missing");
+    assert_ui_validation_fails(value, "layout node with a missing parent");
+
+    let mut value = snapshot_value();
+    append_layout_node(&mut value, "n2");
+    append_layout_node(&mut value, "n3");
     value["ui"]["layout"]["nodes"][0]["parentNodeId"] = json!("n2");
     value["ui"]["layout"]["edges"] = json!([{
         "fromNodeId": "n3",
@@ -352,6 +378,7 @@ fn rejects_inconsistent_ui_graph_and_reference_sets() {
     assert_ui_validation_fails(value, "contradictory containment edge");
 
     let mut value = snapshot_value();
+    append_layout_node(&mut value, "n2");
     value["ui"]["layout"]["edges"] = json!([{
         "fromNodeId": "n2",
         "toNodeId": "n1",

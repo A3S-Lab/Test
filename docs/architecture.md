@@ -218,8 +218,8 @@ retains observed properties, frequency, node evidence, and confidence; every
 layout or component record retains current node IDs. Unknown fields, stale
 bindings, invalid geometry, malformed box-model evidence, inconsistent
 overflow/clipping or timeline evidence, duplicate graph relationships,
-dangling edge targets, invalid component membership, excess depth, or budget
-drift fail closed in the Web driver.
+missing parents or edge endpoints, invalid component membership, excess depth,
+or budget drift fail closed in the Web driver.
 
 ```text
 browser render

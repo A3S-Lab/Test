@@ -47,6 +47,11 @@
 
 ### Fixed
 
+- Kept rendered UI layout graphs closed over their sampled nodes. Test Kit now
+  links children through unboxed `display: contents` ancestors to the nearest
+  sampled ancestor and omits scroll-container or offset-parent relationships
+  whose source was not sampled; Core rejects missing parents and either
+  missing edge endpoint before the graph reaches an agent.
 - Projected every private UI-understanding node identity into an
   observation-scoped ref before returning public Page Context observations or
   deterministic snapshot outputs. Unambiguous actionable nodes reuse `@cN`;
@@ -55,7 +60,7 @@
   that no longer fits its admitted byte budget is omitted instead of leaking
   an internal handle.
 - Rejected structurally ambiguous rendered UI evidence at the Rust Web-driver
-  boundary. Duplicate layout nodes or edges, dangling edge targets,
+  boundary. Duplicate layout nodes or edges, missing parents or edge endpoints,
   contradictory containment, repeated evidence references, invalid component
   membership, and layout counts above the sampled-node count now fail closed
   before reaching an agent.

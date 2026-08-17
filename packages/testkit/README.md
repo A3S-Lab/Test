@@ -89,9 +89,9 @@ Call `snapshot({ ui: false })` to omit it once, or set
 installed node, state, string, byte, and time ceilings. UI evidence binds its
 own observation ID to the containing page revision, viewport, and scope; the
 Web driver rejects protocol drift, stale bindings, invalid geometry,
-duplicate graph relationships, dangling edge targets, invalid component
-membership, and budget violations. It remains untrusted evidence with no
-action, verdict, or repair authority.
+duplicate graph relationships, missing parents or edge endpoints, invalid
+component membership, and budget violations. It remains untrusted evidence
+with no action, verdict, or repair authority.
 
 ## Deterministic quality findings
 

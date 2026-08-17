@@ -13,21 +13,24 @@ import {
   rectValue,
   styleValue,
   type UISample,
-  type UIUnderstandingIdentity,
 } from "./ui-understanding-dom";
 
 export function captureUILayoutGraph(
   samples: UISample[],
-  identity: UIUnderstandingIdentity,
   maxStringBytes: number,
 ): UILayoutGraph {
   const nodes: UILayoutNode[] = [];
   const edges: UILayoutEdge[] = [];
   const edgeKeys = new Set<string>();
+  const samplesByElement = new Map(
+    samples.map((sample) => [sample.element, sample] as const),
+  );
   for (const sample of samples) {
     const { element, nodeId, style } = sample;
-    const parent = composedParent(element);
-    const parentNodeId = parent ? identity.idFor(parent) : undefined;
+    const parentNodeId = nearestSampledAncestor(
+      element,
+      samplesByElement,
+    )?.nodeId;
     const display =
       boundedStyleValue(element, style, "display", maxStringBytes) || "inline";
     const position =
@@ -110,24 +113,34 @@ export function captureUILayoutGraph(
     if (parentNodeId)
       addEdge(edges, edgeKeys, parentNodeId, nodeId, "contains");
     const scrollContainer = nearestScrollContainer(element);
-    if (scrollContainer)
-      addEdge(
-        edges,
-        edgeKeys,
-        identity.idFor(scrollContainer),
-        nodeId,
-        "scroll_container",
-      );
+    const scrollContainerId = scrollContainer
+      ? samplesByElement.get(scrollContainer)?.nodeId
+      : undefined;
+    if (scrollContainerId)
+      addEdge(edges, edgeKeys, scrollContainerId, nodeId, "scroll_container");
     if (
       element instanceof HTMLElement &&
       element.offsetParent instanceof Element
     ) {
-      const offsetParentId = identity.idFor(element.offsetParent);
-      if (offsetParentId !== parentNodeId)
+      const offsetParentId = samplesByElement.get(element.offsetParent)?.nodeId;
+      if (offsetParentId && offsetParentId !== parentNodeId)
         addEdge(edges, edgeKeys, offsetParentId, nodeId, "offset_parent");
     }
   }
   return { nodes, edges };
+}
+
+function nearestSampledAncestor(
+  element: Element,
+  samplesByElement: ReadonlyMap<Element, UISample>,
+): UISample | undefined {
+  let current = composedParent(element);
+  while (current) {
+    const sample = samplesByElement.get(current);
+    if (sample) return sample;
+    current = composedParent(current);
+  }
+  return undefined;
 }
 
 function captureBoxModel(
