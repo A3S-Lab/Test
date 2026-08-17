@@ -10,9 +10,9 @@ use std::process::Stdio;
 use std::time::Duration;
 
 #[cfg(any(unix, windows))]
-use a3s_test_core::{
-    Action, Expectation, ScenarioContext, SurfaceDriver as _, Target, TestStep, WaitCondition,
-};
+use a3s_test_core::{Action, ScenarioContext, SurfaceDriver as _, TestStep, WaitCondition};
+#[cfg(unix)]
+use a3s_test_core::{Expectation, Target};
 use serde_json::Value;
 
 use super::*;
