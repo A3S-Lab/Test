@@ -296,11 +296,12 @@ classifications, 100/100 stable state windows, 100/100 transient-state
 rejections, and 15/15 positive plus 4/4 negative classifications in real
 Chromium without leaking a private runtime directory.
 
-## Assert rendered output and collection size
+## Assert rendered output, collection size, and order
 
-Action protocol revision 9 closes two false-positive gaps left by page-wide
-text and one-element visibility checks. Bind the expected copy to one exact
-target, or assert the number of visible matches produced by a stable locator:
+Action protocol revisions 9 and 10 close three false-positive gaps left by
+page-wide text and one-element visibility checks. Bind expected copy to one
+exact target, assert the number of visible matches, or compare the complete
+ordered text sequence produced by a stable locator:
 
 ```acl
 expect "total-copy" {
@@ -313,6 +314,23 @@ expect "total-copy" {
 expect "three-visible-rows" {
     target = css("[data-row]")
     visible_count = 3
+}
+
+expect "line-items" {
+    target = css("[data-line-item]")
+    rendered_texts = [
+        "Keyboard × 1",
+        "Mouse × 2",
+        "Shipping",
+        "Shipping"
+    ]
+    stable_for_ms = 300
+    sample_interval_ms = 25
+}
+
+expect "no-line-items" {
+    target = css("[data-missing-line-item]")
+    rendered_texts = []
 }
 
 expect "no-visible-errors" {
@@ -334,6 +352,16 @@ Shadow DOM. Hidden, `display: none`, `visibility: hidden`, fully transparent,
 and zero-geometry matches do not count. Observation refs and visual points are
 rejected because they identify one observation, not a repeatable collection.
 
+`rendered_texts` captures every visible match in locator traversal order and
+compares normalized text item by item. Order and duplicates are evidence, so
+`["Shipping", "Shipping"]` differs from both `["Shipping"]` and a reordered
+sequence. An empty locator set is the observed sequence `[]`, not a
+target-not-found error. ACL and the Web driver both enforce a 256-item bound;
+oversized observed collections fail with `test.driver.web.collection_limit`.
+Refs and visual points are rejected because neither describes a repeatable
+collection. Invalid selectors remain driver errors, while an exact observed
+sequence difference is `test.assert.rendered_texts`.
+
 The revision-9 evidence set classifies 600/600 deterministic Web cases with no
 misclassification: 100 text matches, 100 text mismatches, 100 missing targets,
 100 count matches including zero, 100 count mismatches, and 100 invalid
@@ -342,6 +370,15 @@ reject 200/200 transients as `test.assert.unstable`. A standalone Chromium CLI
 run verifies seven positive observations and seven negative classifications,
 including whitespace normalization, CSS and open-Shadow-DOM semantics, two
 100 ms stability windows, and no leaked private runtime directory.
+
+Revision 10 adds another 600/600 deterministic cases: ordered matches,
+reordered mismatches, duplicate/content mismatches, empty-sequence matches,
+empty-versus-expected mismatches, and invalid selectors. Combined runner
+datasets accept 300/300 stable scalar-text/sequence/count windows and reject
+300/300 transients. A standalone Chromium run proves 12 positive observations
+and 12 negative classifications, three accepted and three rejected 100 ms
+windows, exact duplicate/order evidence, open Shadow DOM traversal, and no
+private runtime leak.
 
 [Compare the workflows](https://a3s-lab.github.io/Test/guide/workflows.html)
 

@@ -65,6 +65,16 @@
         <li data-row="zero-geometry" class="zero-geometry">Zero geometry row</li>
       </ul>
 
+      <ul aria-label="Line items">
+        <li data-line-item="keyboard">
+          Keyboard
+          <strong>× 1</strong>
+        </li>
+        <li data-line-item="mouse">Mouse <strong>× 2</strong></li>
+        <li data-line-item="shipping-primary">Shipping</li>
+        <li data-line-item="shipping-duplicate">Shipping</li>
+      </ul>
+
       <p class="duplicate-copy">Duplicate copy</p>
       <p class="duplicate-copy">Duplicate copy</p>
 
@@ -72,6 +82,10 @@
       <ul aria-label="Transient rows">
         <li data-transient-row="persistent">Persistent row</li>
         <li data-transient-row="disappearing">Disappearing row</li>
+      </ul>
+      <ul aria-label="Transient line items">
+        <li data-transient-line-item="primary">Queued A</li>
+        <li data-transient-line-item="changing">Queued B</li>
       </ul>
 
       <rendered-summary></rendered-summary>
@@ -86,6 +100,8 @@
             <section aria-label="Shadow summary">
               <output data-testid="shadow-total">Shadow total <strong>$7.00</strong></output>
               <button type="button" aria-label="Shadow checkout">Checkout</button>
+              <span data-testid="shadow-line-item">Shadow A</span>
+              <span data-testid="shadow-line-item">Shadow B</span>
             </section>
           `;
         }
@@ -127,6 +143,28 @@
         }
         return rect;
       };
+
+      const changingLineItem = document.querySelector(
+        '[data-transient-line-item="changing"]',
+      );
+      const nativeLineItemInnerText = Object.getOwnPropertyDescriptor(
+        HTMLElement.prototype,
+        "innerText",
+      ).get;
+      let firstSequenceSample = true;
+      Object.defineProperty(changingLineItem, "innerText", {
+        configurable: true,
+        get() {
+          const value = nativeLineItemInnerText.call(this);
+          if (firstSequenceSample) {
+            firstSequenceSample = false;
+            queueMicrotask(() => {
+              this.textContent = "Changed B";
+            });
+          }
+          return value;
+        },
+      });
     </script>
   </body>
 </html>

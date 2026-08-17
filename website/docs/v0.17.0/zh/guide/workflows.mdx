@@ -38,7 +38,7 @@ a3s-test agent click <ref> --session <name> --observation <id> --json
 a3s-test agent finish --session <name> --status passed --summary <text> --json
 ```
 
-`agent act --action-json` 暴露完整动作 Schema。v0.17.0 的动作协议修订为 9，其中包含修订 7 的选择范围 `insert_text`、修订 8 的实时控件状态断言，以及修订 9 的目标绑定渲染输出断言。`insert_text` 仍然只作用于先前已经建立的编辑上下文，不携带新的目标或定位权限。
+`agent act --action-json` 暴露完整动作 Schema。v0.17.0 的动作协议修订为 10，其中包含修订 7 的选择范围 `insert_text`、修订 8 的实时控件状态断言、修订 9 的目标绑定渲染输出断言，以及修订 10 的有序渲染文本集合。`insert_text` 仍然只作用于先前已经建立的编辑上下文，不携带新的目标或定位权限。
 
 ## ACL 套件
 
@@ -133,9 +133,9 @@ Web 语义目标会穿透开放的 Shadow DOM，并识别原生多选框的 `lis
 
 当前检入证据覆盖 400/400 个确定性 Web 分类、100/100 个稳定状态窗口、100/100 个瞬态状态拒绝，以及真实 standalone Chromium 中 15/15 个正向检查、4/4 个负向错误分类和零私有运行目录泄漏。
 
-## 证明文案属于正确组件，重复项数量也正确
+## 证明文案、重复项数量和渲染顺序都正确
 
-页面级文字断言可能因为同一句话出现在错误区域而误通过；单元素可见性断言也无法发现列表漏项或重复渲染。修订 9 直接观察这两个事实。
+页面级文字断言可能因为同一句话出现在错误区域而误通过；单元素可见性断言也无法发现列表漏项、重复或错序。修订 9 与修订 10 直接观察这些事实。
 
 ```acl
 expect "total-copy" {
@@ -150,6 +150,18 @@ expect "three-visible-lines" {
     visible_count = 3
 }
 
+expect "ordered-lines" {
+    target = css("[data-order-line]")
+    rendered_texts = ["Keyboard × 1", "Mouse × 2", "Shipping", "Shipping"]
+    stable_for_ms = 300
+    sample_interval_ms = 25
+}
+
+expect "no-lines" {
+    target = css("[data-missing-order-line]")
+    rendered_texts = []
+}
+
 expect "no-visible-errors" {
     target = role("alert", "Checkout error")
     visible_count = 0
@@ -162,12 +174,13 @@ expect "no-visible-errors" {
 | ------------------------------ | ------------------------------ | -------------------------------------------------------------------------- |
 | 这个组件实际渲染了什么文案     | 唯一可见目标及其规范化渲染文本 | 零个或多个目标属于驱动错误；已观察文案不同才是 `test.assert.rendered_text` |
 | 这个定位器产生了多少个可见元素 | 完整可见集合，包括空集合       | 非法定位器属于驱动错误；已观察数量不同才是 `test.assert.visible_count`     |
+| 可见文案有哪些，顺序是否正确   | 保留重复项的完整规范化文本向量 | 非法或超限集合属于驱动错误；向量不同时才是 `test.assert.rendered_texts`    |
 
-文本规范化会去掉两端空白并折叠连续空白，所以嵌套标签和格式换行不会制造偶然差异。`visible_count = 0` 是定位器实际求值后的正向证据，不是“ref 找不到”的捷径。因此 ACL 的数量断言接受语义或 CSS 定位器，但拒绝观察 ref 与 visual point。
+文本规范化会去掉两端空白并折叠连续空白，所以嵌套标签和格式换行不会制造偶然差异。`rendered_texts` 对每一项独立应用同一规则，不排序也不去重。空定位器产生 `[]`，`["Shipping", "Shipping"]` 与 `["Shipping"]` 仍然不同。ACL 与 Web 都把向量限制为最多 256 项。`visible_count = 0` 和 `rendered_texts = []` 都是定位器实际求值后的正向证据，不是“ref 找不到”的捷径。两种集合断言都接受语义或 CSS 定位器，并拒绝观察 ref 与 visual point。
 
 CSS 数量遵循视觉渲染。单独的 `aria-hidden` 仍有像素，因此计数；hidden、display-none、visibility-hidden、完全透明和零几何元素不计数。语义数量遵循可访问交互平面，会排除可访问性隐藏祖先，并穿透开放 Shadow DOM。两者都不声称完成截图级遮挡判断或 viewport 相交判断。
 
-检入数据集对 600/600 个确定性案例完成精确分类，接受 200/200 个持续一致的文案/数量窗口，并把 200/200 个瞬态窗口拒绝为 `test.assert.unstable`。真实 Chromium CLI 回归证明 7 个通过观察、7 个错误类别、两个 100 ms 窗口和准确 runtime 清理。
+修订 9 数据集精确分类 600/600 个标量文案与数量案例。修订 10 新增 600/600 个有序向量案例，覆盖匹配、错序、重复项或内容错误、空集合匹配、空集合与非空预期不符，以及非法 selector。组合稳定性数据集接受 300/300 个持续一致的标量文案、向量和数量窗口，并拒绝 300/300 个瞬态窗口。真实 Chromium CLI 回归证明 12 个通过观察、12 个错误类别、三个通过和三个被拒绝的 100 ms 窗口，以及准确 runtime 清理。
 
 ## 证明界面已经没有可见匹配
 
@@ -179,7 +192,7 @@ expect "checkout-dialog-closed" {
 }
 ```
 
-`hidden` 是 Runner 围绕现有正向可见性断言执行的步骤策略，不会增加 Action 变体。当前协议已推进到修订 9，是因为上面的类型化 expectation。Runner 向 surface 驱动发送正向探测，再确定性地分类结果。
+`hidden` 是 Runner 围绕现有正向可见性断言执行的步骤策略，不会增加 Action 变体。当前协议已推进到修订 10，是因为上面的类型化 expectation。Runner 向 surface 驱动发送正向探测，再确定性地分类结果。
 
 | 正向探测结果                      | `hidden` 断言结果                                                 |
 | --------------------------------- | ----------------------------------------------------------------- |
@@ -211,7 +224,7 @@ wait "checkout-dialog-closed" {
 }
 ```
 
-ACL 编译器仍保存 `Action::Wait(WaitCondition::Visible(target))`，只增加 Runner 负责的 `WaitMode::Hidden`。在当前 Action 协议修订 9 下，它仍然复用早先的可见性 Action 变体。Runner 先执行一次立即的正向可见性断言；目标仍可见时，每 50 ms 重复一次。
+ACL 编译器仍保存 `Action::Wait(WaitCondition::Visible(target))`，只增加 Runner 负责的 `WaitMode::Hidden`。在当前 Action 协议修订 10 下，它仍然复用早先的可见性 Action 变体。Runner 先执行一次立即的正向可见性断言；目标仍可见时，每 50 ms 重复一次。
 
 | 正向探测结果                      | 隐藏等待结果                                                            |
 | --------------------------------- | ----------------------------------------------------------------------- |

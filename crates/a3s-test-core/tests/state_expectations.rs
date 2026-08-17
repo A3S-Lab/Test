@@ -164,7 +164,7 @@ suite "invalid-state" {{
 
 #[test]
 fn state_expectations_remain_wire_compatible_at_revision_nine() {
-    assert_eq!(ACTION_PROTOCOL_REVISION, 9);
+    assert_eq!(ACTION_PROTOCOL_REVISION, 10);
     let action = Action::Assert {
         expectation: Expectation::State {
             target: Target::Ref {

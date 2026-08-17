@@ -96,6 +96,7 @@ fn run_success(browser: &Path, fixture: &WebFixture, workspace: &Path) {
     assert_eq!(report["scenarios"][0]["status"], "passed");
     assert!(report["scenarios"][0]["cleanup_error"].is_null());
     assert_passed_stability(&report, 0, "total-copy", 100, 25);
+    assert_passed_stability(&report, 0, "line-items", 100, 25);
     assert_passed_stability(&report, 0, "visible-catalog-rows", 100, 25);
 
     let scenario = &report["scenarios"][0];
@@ -104,8 +105,24 @@ fn run_success(browser: &Path, fixture: &WebFixture, workspace: &Path) {
         "Total $42.00"
     );
     assert_eq!(
+        step(scenario, "line-items")["output"]["data"]["assertion"]["last"]["actual"],
+        serde_json::json!(["Keyboard × 1", "Mouse × 2", "Shipping", "Shipping"])
+    );
+    assert_eq!(
+        step(scenario, "no-line-items")["output"]["data"]["actual"],
+        serde_json::json!([])
+    );
+    assert_eq!(
         step(scenario, "visible-catalog-rows")["output"]["data"]["assertion"]["last"]["actual"],
         4
+    );
+    assert_eq!(
+        step(scenario, "css-catalog-copy")["output"]["data"]["actual"],
+        serde_json::json!(["Alpha", "Beta", "Gamma", "Decorative visual row"])
+    );
+    assert_eq!(
+        step(scenario, "semantic-hidden-copy")["output"]["data"]["actual"],
+        serde_json::json!([])
     );
     assert_eq!(
         step(scenario, "hidden-css-rows")["output"]["data"]["actual"],
@@ -122,6 +139,10 @@ fn run_success(browser: &Path, fixture: &WebFixture, workspace: &Path) {
     assert_eq!(
         step(scenario, "shadow-button-count")["output"]["data"]["actual"],
         1
+    );
+    assert_eq!(
+        step(scenario, "shadow-lines")["output"]["data"]["actual"],
+        serde_json::json!(["Shadow A", "Shadow B"])
     );
     assert_eq!(
         step(scenario, "no-visible-errors")["output"]["data"]["actual"],
@@ -153,7 +174,7 @@ fn run_failures(browser: &Path, fixture: &WebFixture, workspace: &Path) {
     let scenarios = report["scenarios"]
         .as_array()
         .expect("rendered assertion failure scenarios");
-    assert_eq!(scenarios.len(), 7);
+    assert_eq!(scenarios.len(), 12);
     for (scenario_id, step_id, error_code) in [
         (
             "rendered-mismatch",
@@ -176,6 +197,26 @@ fn run_failures(browser: &Path, fixture: &WebFixture, workspace: &Path) {
             "test.assert.visible_count",
         ),
         (
+            "sequence-reordered",
+            "wrong-line-order",
+            "test.assert.rendered_texts",
+        ),
+        (
+            "sequence-duplicate-mismatch",
+            "missing-shipping-duplicate",
+            "test.assert.rendered_texts",
+        ),
+        (
+            "sequence-empty-mismatch",
+            "missing-lines-expected",
+            "test.assert.rendered_texts",
+        ),
+        (
+            "sequence-invalid-selector",
+            "invalid-sequence-target",
+            "test.driver.web.target_invalid",
+        ),
+        (
             "invalid-selector",
             "invalid-count-target",
             "test.driver.web.target_invalid",
@@ -188,6 +229,11 @@ fn run_failures(browser: &Path, fixture: &WebFixture, workspace: &Path) {
         (
             "transient-count",
             "stable-transient-count",
+            "test.assert.unstable",
+        ),
+        (
+            "transient-sequence",
+            "stable-transient-sequence",
             "test.assert.unstable",
         ),
     ] {
@@ -253,7 +299,7 @@ fn rendered_success_suite(origin: &str) -> String {
     version = 1
 
     scenario "rendered-state" {{
-        name = "Verify rendered copy and visible locator cardinality"
+        name = "Verify rendered copy, ordered collections, and visible locator cardinality"
         surface = "web"
         timeout_ms = 60000
 
@@ -266,11 +312,29 @@ fn rendered_success_suite(origin: &str) -> String {
             stable_for_ms = 100
             sample_interval_ms = 25
         }}
+        expect "line-items" {{
+            target = css("[data-line-item]")
+            rendered_texts = ["Keyboard × 1", "Mouse × 2", "Shipping", "Shipping"]
+            stable_for_ms = 100
+            sample_interval_ms = 25
+        }}
+        expect "no-line-items" {{
+            target = css("[data-missing-line-item]")
+            rendered_texts = []
+        }}
         expect "visible-catalog-rows" {{
             target = css("[data-row]")
             visible_count = 4
             stable_for_ms = 100
             sample_interval_ms = 25
+        }}
+        expect "css-catalog-copy" {{
+            target = css("[data-row]")
+            rendered_texts = ["Alpha", "Beta", "Gamma", "Decorative visual row"]
+        }}
+        expect "semantic-hidden-copy" {{
+            target = testid("decorative-row")
+            rendered_texts = []
         }}
         expect "hidden-css-rows" {{
             target = css("[data-row]:not([data-row=alpha]):not([data-row=beta]):not([data-row=gamma]):not([data-row=decorative])")
@@ -287,6 +351,10 @@ fn rendered_success_suite(origin: &str) -> String {
         expect "shadow-button-count" {{
             target = role("button", "Shadow checkout")
             visible_count = 1
+        }}
+        expect "shadow-lines" {{
+            target = testid("shadow-line-item")
+            rendered_texts = ["Shadow A", "Shadow B"]
         }}
         expect "no-visible-errors" {{
             target = role("alert", "Checkout error")
@@ -331,6 +399,43 @@ fn rendered_failure_suite(origin: &str) -> String {
         expect "wrong-row-count" {{ target = css("[data-row]") visible_count = 3 }}
     }}
 
+    scenario "sequence-reordered" {{
+        surface = "web"
+        timeout_ms = 30000
+        navigate "open" {{ url = "{origin}/rendered.html" }}
+        expect "wrong-line-order" {{
+            target = css("[data-line-item]")
+            rendered_texts = ["Mouse × 2", "Keyboard × 1", "Shipping", "Shipping"]
+        }}
+    }}
+
+    scenario "sequence-duplicate-mismatch" {{
+        surface = "web"
+        timeout_ms = 30000
+        navigate "open" {{ url = "{origin}/rendered.html" }}
+        expect "missing-shipping-duplicate" {{
+            target = css("[data-line-item]")
+            rendered_texts = ["Keyboard × 1", "Mouse × 2", "Shipping"]
+        }}
+    }}
+
+    scenario "sequence-empty-mismatch" {{
+        surface = "web"
+        timeout_ms = 30000
+        navigate "open" {{ url = "{origin}/rendered.html" }}
+        expect "missing-lines-expected" {{
+            target = css("[data-missing-line-item]")
+            rendered_texts = ["Expected"]
+        }}
+    }}
+
+    scenario "sequence-invalid-selector" {{
+        surface = "web"
+        timeout_ms = 30000
+        navigate "open" {{ url = "{origin}/rendered.html" }}
+        expect "invalid-sequence-target" {{ target = css(":not(") rendered_texts = [] }}
+    }}
+
     scenario "invalid-selector" {{
         surface = "web"
         timeout_ms = 30000
@@ -357,6 +462,18 @@ fn rendered_failure_suite(origin: &str) -> String {
         expect "stable-transient-count" {{
             target = css("[data-transient-row]")
             visible_count = 2
+            stable_for_ms = 100
+            sample_interval_ms = 25
+        }}
+    }}
+
+    scenario "transient-sequence" {{
+        surface = "web"
+        timeout_ms = 30000
+        navigate "open" {{ url = "{origin}/rendered.html" }}
+        expect "stable-transient-sequence" {{
+            target = css("[data-transient-line-item]")
+            rendered_texts = ["Queued A", "Queued B"]
             stable_for_ms = 100
             sample_interval_ms = 25
         }}

@@ -697,12 +697,13 @@ impl GuiSession {
                 "URL assertions are not available on GUI surfaces",
             )),
             Expectation::RenderedText { .. }
+            | Expectation::RenderedTexts { .. }
             | Expectation::VisibleCount { .. }
             | Expectation::State { .. }
             | Expectation::SelectedValues { .. } => {
                 Err(DriverError::new(
                     "test.driver.gui.assertion_unsupported",
-                    "the current CUA semantic protocol does not expose rendered text, locator cardinality, boolean state, or multi-selection state",
+                    "the current CUA semantic protocol does not expose rendered text collections, locator cardinality, boolean state, or multi-selection state",
                 ))
             }
         }

@@ -11,6 +11,9 @@
 - [x] Action protocol revision 9 target-bound rendered-text and visible-set
       cardinality assertions with exact observation ownership, zero-count
       evidence, and honest per-surface capability failures
+- [x] Action protocol revision 10 bounded ordered rendered-text collection
+      assertions with exact order/duplicate evidence, observable empty sets,
+      and honest per-surface capability failures
 - [x] Surface driver and session contracts
 - [x] Cancellation-safe sequential runner
 - [x] Bounded sampled assertion stability with static duration/sample limits,
@@ -670,3 +673,26 @@ The completion work intentionally preserves these product boundaries:
       transparent elements, CSS/accessibility visibility separation, open
       Shadow DOM, two 100 ms windows, exact cleanup, and no leaked private
       runtime directory; keep the same regression in macOS and Windows CI
+- [x] Add stable-locator `rendered_texts` under action protocol revision 10,
+      preserving locator order and duplicates while normalizing each item
+      independently
+- [x] Treat an empty visible match set as the observed vector `[]`, reject
+      refs and visual points at ACL admission, and retain invalid selectors as
+      driver errors
+- [x] Enforce `MAX_RENDERED_TEXT_ITEMS = 256` at ACL admission, typed Web
+      expectation dispatch, page-probe result production, and untrusted result
+      decoding
+- [x] Reuse CSS visual and semantic accessibility visibility planes, including
+      deterministic open-Shadow-DOM traversal for semantic collections
+- [x] Preserve Page Context target binding and provenance redaction, reuse the
+      expectation in Agent Host verification, and fail closed on GUI and TUI
+- [x] Prove 600/600 ordered-sequence Web classifications across matches,
+      reordered mismatches, duplicate/content mismatches, empty matches,
+      empty-versus-expected mismatches, and invalid selectors
+- [x] Prove 300/300 stable scalar-text/sequence/count windows are accepted and
+      300/300 transients are rejected as `test.assert.unstable`
+- [x] Prove 12 positive observations and 12 negative classifications in
+      standalone Chromium, including duplicate and order evidence, empty
+      sequences, open Shadow DOM, three accepted and three rejected 100 ms
+      windows, exact cleanup, and no leaked private runtime directory; keep
+      the same regression in macOS and Windows CI

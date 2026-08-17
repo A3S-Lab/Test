@@ -58,6 +58,10 @@ impl DriverSession for TransientSession {
                 json!({ "expected": value, "actual": value }),
                 "test.assert.rendered_text",
             ),
+            Expectation::RenderedTexts { values, .. } => (
+                json!({ "expected": values, "actual": values }),
+                "test.assert.rendered_texts",
+            ),
             Expectation::VisibleCount { count, .. } => (
                 json!({ "expected": count, "actual": count }),
                 "test.assert.visible_count",
@@ -233,7 +237,7 @@ async fn stable_control_state_assertions_accept_100_of_100_consistent_states() {
 }
 
 #[tokio::test]
-async fn stable_rendered_assertions_reject_200_of_200_text_and_count_transients() {
+async fn stable_rendered_assertions_reject_300_of_300_scalar_sequence_and_count_transients() {
     let executions = Arc::new(AtomicUsize::new(0));
     let runner = scripted_runner(Arc::clone(&executions), false);
     let stability = AssertionStability {
@@ -246,12 +250,20 @@ async fn stable_rendered_assertions_reject_200_of_200_text_and_count_transients(
         .await;
 
     assert_eq!(result.status, RunStatus::Failed);
-    assert_eq!(result.scenarios.len(), DATASET_SIZE * 2);
+    assert_eq!(result.scenarios.len(), DATASET_SIZE * 3);
     assert_eq!(
         result
             .scenarios
             .iter()
             .filter(|scenario| scenario.id.starts_with("rendered-text-"))
+            .count(),
+        DATASET_SIZE
+    );
+    assert_eq!(
+        result
+            .scenarios
+            .iter()
+            .filter(|scenario| scenario.id.starts_with("rendered-texts-"))
             .count(),
         DATASET_SIZE
     );
@@ -283,11 +295,11 @@ async fn stable_rendered_assertions_reject_200_of_200_text_and_count_transients(
         assert_eq!(data["stability"]["outcome"], "unstable");
         assert_eq!(data["stability"]["samples"], 2);
     }
-    assert_eq!(executions.load(Ordering::SeqCst), DATASET_SIZE * 4);
+    assert_eq!(executions.load(Ordering::SeqCst), DATASET_SIZE * 6);
 }
 
 #[tokio::test]
-async fn stable_rendered_assertions_accept_200_of_200_consistent_text_and_counts() {
+async fn stable_rendered_assertions_accept_300_of_300_consistent_scalar_sequences_and_counts() {
     let executions = Arc::new(AtomicUsize::new(0));
     let runner = scripted_runner(Arc::clone(&executions), true);
     let stability = AssertionStability {
@@ -306,7 +318,7 @@ async fn stable_rendered_assertions_accept_200_of_200_consistent_text_and_counts
             .iter()
             .filter(|scenario| scenario.status == RunStatus::Passed)
             .count(),
-        DATASET_SIZE * 2
+        DATASET_SIZE * 3
     );
     let mut measured_executions = 0_usize;
     for scenario in &result.scenarios {
@@ -329,7 +341,7 @@ async fn stable_rendered_assertions_accept_200_of_200_consistent_text_and_counts
         measured_executions += usize::try_from(samples).expect("bounded samples");
     }
     assert_eq!(executions.load(Ordering::SeqCst), measured_executions);
-    assert!((DATASET_SIZE * 4..=DATASET_SIZE * 10).contains(&measured_executions));
+    assert!((DATASET_SIZE * 6..=DATASET_SIZE * 15).contains(&measured_executions));
 }
 
 fn scripted_runner(executions: Arc<AtomicUsize>, remains_visible: bool) -> Runner {
@@ -448,10 +460,37 @@ fn rendered_suite(stability: AssertionStability) -> TestSuite {
             wait_mode: Default::default(),
         }],
     });
+    let rendered_texts = (0..DATASET_SIZE).map(|index| TestScenario {
+        id: format!("rendered-texts-{index}"),
+        name: format!("Rendered text sequence {index}"),
+        surface: Surface::Web,
+        timeout_ms: 1_000,
+        steps: vec![TestStep {
+            id: "assert-rendered-texts".to_string(),
+            action: Action::Assert {
+                expectation: Expectation::RenderedTexts {
+                    target: Target::Css {
+                        selector: format!("[data-line-item='{index}']"),
+                    },
+                    values: vec![
+                        format!("Item {index}"),
+                        "Shipping".to_string(),
+                        "Shipping".to_string(),
+                    ],
+                },
+            },
+            stability: Some(stability),
+            assertion_mode: Default::default(),
+            wait_mode: Default::default(),
+        }],
+    });
 
     TestSuite {
         name: "rendered-stability-dataset".to_string(),
         version: 1,
-        scenarios: rendered_text.chain(visible_count).collect(),
+        scenarios: rendered_text
+            .chain(visible_count)
+            .chain(rendered_texts)
+            .collect(),
     }
 }

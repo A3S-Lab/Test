@@ -5,7 +5,7 @@ use a3s_acl::{Block, Value};
 use crate::{
     AssertionMode, AssertionStability, ElementState, Expectation, LoadState, SpecError, Target,
     WaitCondition, WaitMode, DEFAULT_ASSERTION_SAMPLE_INTERVAL_MS, MAX_ASSERTION_STABILITY_MS,
-    MAX_ASSERTION_STABILITY_SAMPLES, MIN_ASSERTION_STABILITY_MS,
+    MAX_ASSERTION_STABILITY_SAMPLES, MAX_RENDERED_TEXT_ITEMS, MIN_ASSERTION_STABILITY_MS,
 };
 
 use super::{
@@ -94,6 +94,7 @@ pub(super) fn parse_expectation(
         "visible",
         "hidden",
         "rendered_text",
+        "rendered_texts",
         "visible_count",
         "value",
         "enabled",
@@ -115,13 +116,13 @@ pub(super) fn parse_expectation(
     let condition = configured[0];
     let uses_separate_target = matches!(
         condition,
-        "rendered_text" | "visible_count" | "value" | "selected_values"
+        "rendered_text" | "rendered_texts" | "visible_count" | "value" | "selected_values"
     );
     if block.attributes.contains_key("target") && !uses_separate_target {
         return Err(SpecError::new(
             "test.spec.attribute_unexpected",
             format!("{path}.target"),
-            "target is valid only with rendered_text, visible_count, value, or selected_values expectations",
+            "target is valid only with rendered_text, rendered_texts, visible_count, value, or selected_values expectations",
         ));
     }
 
@@ -156,6 +157,23 @@ pub(super) fn parse_expectation(
                 format!("{path}.rendered_text"),
             )?,
         },
+        "rendered_texts" => {
+            let target = required_target(block, "target", path)?;
+            if matches!(target, Target::Ref { .. } | Target::VisualPoint { .. }) {
+                return Err(SpecError::new(
+                    "test.spec.rendered_texts_target_unstable",
+                    format!("{path}.target"),
+                    "rendered_texts requires a stable semantic or CSS locator, not an observation-bound ref or visual point",
+                ));
+            }
+            Expectation::RenderedTexts {
+                target,
+                values: rendered_texts(
+                    &block.attributes[condition],
+                    &format!("{path}.rendered_texts"),
+                )?,
+            }
+        }
         "visible_count" => {
             let target = required_target(block, "target", path)?;
             if matches!(target, Target::Ref { .. } | Target::VisualPoint { .. }) {
@@ -200,6 +218,31 @@ pub(super) fn parse_expectation(
         _ => unreachable!("condition list and parser must remain aligned"),
     };
     Ok((positive, AssertionMode::Positive))
+}
+
+fn rendered_texts(value: &Value, path: &str) -> Result<Vec<String>, SpecError> {
+    let Value::List(values) = value else {
+        return Err(type_error(path, "rendered_texts must be a list of strings"));
+    };
+    if values.len() > MAX_RENDERED_TEXT_ITEMS {
+        return Err(SpecError::new(
+            "test.spec.rendered_texts_limit",
+            path,
+            format!("rendered_texts cannot contain more than {MAX_RENDERED_TEXT_ITEMS} items"),
+        ));
+    }
+    values
+        .iter()
+        .enumerate()
+        .map(|(index, value)| {
+            value.as_str().map(ToOwned::to_owned).ok_or_else(|| {
+                type_error(
+                    format!("{path}[{index}]"),
+                    "rendered_texts items must be strings",
+                )
+            })
+        })
+        .collect()
 }
 
 fn selected_values(value: &Value, path: &str) -> Result<Vec<String>, SpecError> {

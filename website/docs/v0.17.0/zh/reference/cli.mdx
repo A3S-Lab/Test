@@ -242,9 +242,9 @@ expect "status" {
 
 Web 读取实时 DOM 状态，原生 checkbox/radio 属性优先于 ARIA。GUI 只有在 CUA 确实返回 value 时支持精确值；布尔状态和多选状态会以 `test.driver.gui.assertion_unsupported` 拒绝。TUI 仍然只支持可见终端文本。Page Context ref 会在派发前解析；直接 standalone ref 还不能暴露原生 option 选择或多选数组。
 
-### 渲染文本与可见数量 ACL 断言
+### 渲染文本、有序序列与可见数量 ACL 断言
 
-Action 协议修订 9 把预期文案绑定到唯一目标，并观察稳定定位器产生的完整可见集合。
+Action 协议修订 9 把预期文案绑定到唯一目标，并观察稳定定位器产生的完整可见数量。修订 10 新增精确的有序渲染文本向量。
 
 ```acl
 expect "total-copy" {
@@ -257,6 +257,16 @@ expect "visible-rows" {
     visible_count = 3
 }
 
+expect "line-items" {
+    target = css("[data-line-item]")
+    rendered_texts = ["Keyboard × 1", "Mouse × 2", "Shipping", "Shipping"]
+}
+
+expect "no-line-items" {
+    target = css("[data-missing-line-item]")
+    rendered_texts = []
+}
+
 expect "no-errors" {
     target = role("alert", "Checkout error")
     visible_count = 0
@@ -267,14 +277,24 @@ expect "no-errors" {
 
 `visible_count` 接受语义或 CSS 定位器，并把完整可见匹配集合与非负整数比较。空集合是有证据的零。ACL 会以 `test.spec.visible_count_target_unstable` 拒绝 `ref()` 与 `visual_point()`，因为它们都不能表示可重复解析的集合。非法 CSS selector 仍是 `test.driver.web.target_invalid`；已观察数量不同才是 `test.assert.visible_count`。
 
+`rendered_texts` 接受稳定语义或 CSS 定位器，对每个可见匹配独立规范化，并在不排序、不去重的前提下比较完整向量。空匹配集合会被观察成 `[]`，顺序与重复字符串都有意义。ACL 会以 `test.spec.rendered_texts_target_unstable` 拒绝 ref 与 visual point。预期和实际向量在 ACL 与 Web 驱动两端都限制为最多 256 项。非法 selector 与超限仍是驱动错误；已观察向量不同时才是 `test.assert.rendered_texts`。
+
+| 错误码                                     | 边界                                 |
+| ------------------------------------------ | ------------------------------------ |
+| `test.spec.rendered_texts_target_unstable` | ACL 目标是 ref 或 visual point       |
+| `test.spec.rendered_texts_limit`           | ACL 预期向量超过 256 项              |
+| `test.driver.web.expectation_invalid`      | 类型化调用方绕过 ACL 传入超限预期    |
+| `test.driver.web.collection_limit`         | 页面或不可信驱动响应产生超过 256 项  |
+| `test.assert.rendered_texts`               | 有界观察向量的内容、重复项或顺序不同 |
+
 | 定位平面 | 匹配与可见性语义                                                                                                                                                                      |
 | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | CSS      | 只查询当前 document。目标必须有正几何与 client rect，且组合祖先不能 hidden、display-none、visibility-hidden/collapsed 或完全透明。单独的 `aria-hidden` 不会移除视觉像素，所以仍计数。 |
 | 语义     | role、text、test ID、label 与 placeholder 会穿透开放 Shadow DOM；除同样的渲染检查外，还排除可访问性隐藏祖先。                                                                         |
 
-两种平面都排除零几何元素，但都不声称目标处于 viewport 内或没有被其他像素遮挡。当前浏览器 ref 可以标识唯一 `rendered_text` 元素，却不能表示 `visible_count` 集合。GUI 与 TUI 对两种条件都明确关闭失败。
+两种平面都排除零几何元素，但都不声称目标处于 viewport 内或没有被其他像素遮挡。当前浏览器 ref 可以标识唯一 `rendered_text` 元素，却不能表示 `visible_count` 或 `rendered_texts` 集合。GUI 与 TUI 对三种条件都明确关闭失败。
 
-两种条件都支持 `stable_for_ms`。后续文案或数量不匹配变为 `test.assert.unstable`；驱动失败保留原错误码。检入证据覆盖 600/600 个确定性分类、200/200 个持续一致窗口、200/200 个瞬态窗口，以及真实 Chromium CLI 中 7/7 个正向观察、7/7 个负向分类、两个 100 ms 窗口和零私有 runtime 泄漏。
+三种条件都支持 `stable_for_ms`。后续标量文案、有序向量或数量不匹配变为 `test.assert.unstable`；驱动失败保留原错误码。修订 9 覆盖 600/600 个确定性标量文案与数量分类，修订 10 新增 600/600 个有序向量分类。组合稳定性证据覆盖 300/300 个持续一致窗口与 300/300 个瞬态窗口，以及真实 Chromium CLI 中 12 个正向观察、12 个负向分类、三个通过与三个被拒绝的 100 ms 窗口和零私有 runtime 泄漏。
 
 ### ACL 隐藏断言
 
@@ -286,7 +306,7 @@ expect "dialog-closed" {
 }
 ```
 
-ACL 编译器保存现有的 `Action::Assert(Expectation::Visible(target))`，并增加由 Runner 负责的隐藏模式。这个策略不会增加 Action 变体；当前协议已推进到修订 9，是因为上面的类型化 expectation。Runner 派发正向可见性探测，再按以下契约分类。
+ACL 编译器保存现有的 `Action::Assert(Expectation::Visible(target))`，并增加由 Runner 负责的隐藏模式。这个策略不会增加 Action 变体；当前协议已推进到修订 10，是因为上面的类型化 expectation。Runner 派发正向可见性探测，再按以下契约分类。
 
 | 探测结果                    | 步骤结果                                                          |
 | --------------------------- | ----------------------------------------------------------------- |
@@ -330,7 +350,7 @@ wait "dialog-closed" {
 }
 ```
 
-编译器保存现有的可见目标等待条件，并增加 `wait_mode = hidden`；在当前修订 9 下，它仍然复用早先的可见性 Action 变体。只要正向探测仍返回可见证据，Runner 就先立即执行一次只读可见性断言，再每 50 ms 探测一次。
+编译器保存现有的可见目标等待条件，并增加 `wait_mode = hidden`；在当前修订 10 下，它仍然复用早先的可见性 Action 变体。只要正向探测仍返回可见证据，Runner 就先立即执行一次只读可见性断言，再每 50 ms 探测一次。
 
 | 边界                     | 结果                                                                   |
 | ------------------------ | ---------------------------------------------------------------------- |

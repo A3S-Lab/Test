@@ -1,7 +1,9 @@
 use std::collections::BTreeSet;
 use std::ffi::OsString;
 
-use a3s_test_core::{DriverError, ElementState, Expectation, StepOutput, Target};
+use a3s_test_core::{
+    DriverError, ElementState, Expectation, StepOutput, Target, MAX_RENDERED_TEXT_ITEMS,
+};
 use serde_json::{json, Value};
 
 use crate::protocol::{
@@ -56,6 +58,9 @@ impl AgentBrowserSession {
             }
             Expectation::RenderedText { target, value } => {
                 self.assert_rendered_text(target, value).await
+            }
+            Expectation::RenderedTexts { target, values } => {
+                self.assert_rendered_texts(target, values).await
             }
             Expectation::VisibleCount { target, count } => {
                 self.assert_visible_count(target, *count).await
@@ -203,6 +208,47 @@ impl AgentBrowserSession {
         )
     }
 
+    async fn assert_rendered_texts(
+        &self,
+        target: &Target,
+        expected: &[String],
+    ) -> Result<StepOutput, DriverError> {
+        if expected.len() > MAX_RENDERED_TEXT_ITEMS {
+            return Err(DriverError::new(
+                "test.driver.web.expectation_invalid",
+                format!("rendered_texts cannot contain more than {MAX_RENDERED_TEXT_ITEMS} items"),
+            ));
+        }
+        if matches!(target, Target::Ref { .. }) {
+            return Err(DriverError::new(
+                "test.driver.web.target_unsupported",
+                "rendered_texts requires a stable CSS or semantic locator, not an observation-bound ref",
+            ));
+        }
+        let expected = expected
+            .iter()
+            .map(|value| normalize_rendered_text(value))
+            .collect::<Vec<_>>();
+        let value = self
+            .probe_target(target, AssertionProbe::RenderedTexts)
+            .await?;
+        let actual = rendered_text_values(&value)?;
+        if actual != expected {
+            return Err(DriverError::new(
+                "test.assert.rendered_texts",
+                format!("expected rendered texts {expected:?}, received {actual:?}"),
+            ));
+        }
+        Ok(
+            StepOutput::new("target rendered text sequence matched").with_data(json!({
+                "target": target,
+                "expected": expected,
+                "actual": actual,
+                "count": actual.len(),
+            })),
+        )
+    }
+
     async fn assert_selected_values(
         &self,
         target: &Target,
@@ -342,9 +388,41 @@ impl AgentBrowserSession {
                     .and_then(Value::as_str)
                     .unwrap_or("the browser rejected the assertion target"),
             )),
+            Some("collection_limit") => Err(collection_limit(
+                result.get("count").and_then(Value::as_u64),
+            )),
             _ => Err(output_invalid("assertion probe envelope")),
         }
     }
+}
+
+fn rendered_text_values(value: &Value) -> Result<Vec<String>, DriverError> {
+    let values = value
+        .as_array()
+        .ok_or_else(|| output_invalid("rendered text array"))?;
+    if values.len() > MAX_RENDERED_TEXT_ITEMS {
+        return Err(collection_limit(u64::try_from(values.len()).ok()));
+    }
+    values
+        .iter()
+        .map(|value| {
+            value
+                .as_str()
+                .map(normalize_rendered_text)
+                .ok_or_else(|| output_invalid("rendered text array"))
+        })
+        .collect()
+}
+
+fn collection_limit(count: Option<u64>) -> DriverError {
+    let observed = count.map_or_else(
+        || "more than the supported limit".to_string(),
+        |count| format!("{count} items"),
+    );
+    DriverError::new(
+        "test.driver.web.collection_limit",
+        format!("rendered_texts observed {observed}; the maximum is {MAX_RENDERED_TEXT_ITEMS}"),
+    )
 }
 
 fn aria_boolean(value: Option<&str>) -> Result<Option<bool>, DriverError> {

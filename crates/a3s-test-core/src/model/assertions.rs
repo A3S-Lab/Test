@@ -37,6 +37,7 @@ pub const MIN_ASSERTION_STABILITY_MS: u64 = 10;
 pub const MAX_ASSERTION_STABILITY_MS: u64 = 60_000;
 pub const DEFAULT_ASSERTION_SAMPLE_INTERVAL_MS: u64 = 50;
 pub const MAX_ASSERTION_STABILITY_SAMPLES: u64 = 1_001;
+pub const MAX_RENDERED_TEXT_ITEMS: usize = 256;
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
@@ -86,6 +87,11 @@ pub enum Expectation {
     RenderedText {
         target: Target,
         value: String,
+    },
+    RenderedTexts {
+        target: Target,
+        #[schemars(length(max = 256))]
+        values: Vec<String>,
     },
     VisibleCount {
         target: Target,

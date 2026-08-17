@@ -149,6 +149,7 @@ treats an observation-bound ref failure as disappearance.
 - `visible = <target>`
 - `hidden = <stable target>`
 - `rendered_text = "..."` with a separate `target`
+- `rendered_texts = ["...", "..."]` with a separate `target`
 - `visible_count = <non-negative integer>` with a separate `target`
 
 ### Negative visibility
@@ -221,7 +222,7 @@ wait "dialog-closed" {
 This is `TestStep` wait policy, not a new `Action` or `WaitCondition` variant.
 Core stores `Action::Wait { condition: WaitCondition::Visible(target) }` plus
 `WaitMode::Hidden`; it reuses the visible condition introduced before the
-current action protocol revision 9 and does not change surface-driver command
+current action protocol revision 10 and does not change surface-driver command
 schemas. Runner admission requires `AssertionMode::Positive`,
 no assertion-stability policy, and a locator that is not `ref()` or
 `visual_point()`.
@@ -415,10 +416,11 @@ The runner repeats the same read-only typed assertion; an initial mismatch
 keeps its specific `test.assert.*` code, while a later mismatch becomes
 `test.assert.unstable` with first and last state evidence.
 
-### Rendered-text and visible-count expectations
+### Rendered-text, rendered-sequence, and visible-count expectations
 
 Action protocol revision 9 binds visible output to a specific element and
-admits exact locator-set cardinality:
+admits exact locator-set cardinality. Revision 10 adds exact ordered content
+for the complete visible locator set:
 
 ```acl
 expect "total-copy" {
@@ -429,6 +431,21 @@ expect "total-copy" {
 expect "visible-rows" {
     target = css("[data-row]")
     visible_count = 3
+}
+
+expect "line-items" {
+    target = css("[data-line-item]")
+    rendered_texts = [
+        "Keyboard × 1",
+        "Mouse × 2",
+        "Shipping",
+        "Shipping"
+    ]
+}
+
+expect "no-line-items" {
+    target = css("[data-missing-line-item]")
+    rendered_texts = []
 }
 
 expect "no-errors" {
@@ -445,6 +462,23 @@ text results. An exact match passes with target, expected, and actual evidence.
 An observed mismatch is `test.assert.rendered_text`; zero matches, multiple
 matches, an invalid locator, or malformed driver output retain surface-driver
 ownership.
+
+`rendered_texts` evaluates a stable semantic or CSS locator as a collection,
+reads and normalizes each visible element with the same rule as
+`rendered_text`, and compares the resulting vector exactly. Locator traversal
+order and duplicate items are preserved. An empty match set produces `[]` and
+can satisfy an empty expectation; it is not a missing-target driver failure.
+Only an observed vector difference is `test.assert.rendered_texts`.
+
+ACL rejects `ref()` and `visual_point()` with
+`test.spec.rendered_texts_target_unstable`. Both identify a single observation
+rather than a repeatable collection. ACL accepts at most
+`MAX_RENDERED_TEXT_ITEMS = 256` expected values. Programmatic callers that
+bypass ACL receive `test.driver.web.expectation_invalid` for a larger expected
+vector. The page probe returns `test.driver.web.collection_limit` before
+serializing text when more than 256 visible elements match, and Rust validates
+the returned vector against the same bound. This keeps both trusted and
+untrusted driver boundaries bounded.
 
 `visible_count` evaluates a stable locator as a set and compares its complete
 visible cardinality with a non-negative `u32`. Zero is a first-class observed
@@ -472,13 +506,16 @@ accessible interaction plane.
 `rendered_text` accepts a current browser `ref()` because the ref identifies
 one observed element and the native browser command returns its text. The
 current standalone protocol cannot enumerate a ref as a locator set, so
-`visible_count` never accepts refs. GUI and TUI return stable
-surface-specific unsupported errors for both revision-9 expectations rather
-than estimating them from pixels, labels, or terminal output.
+`visible_count` and `rendered_texts` never accept refs. A programmatic Page
+Context ref may be resolved to a stable semantic or CSS locator before Web
+dispatch. GUI and TUI return stable surface-specific unsupported errors for
+all three expectations rather than estimating them from pixels, labels, or
+terminal output.
 
-Both expectations compose with `stable_for_ms`. After the first match, the
+All three expectations compose with `stable_for_ms`. After the first match, the
 runner repeats the identical read-only action through the scenario deadline
-and cancellation boundary. A later text or count mismatch becomes
+and cancellation boundary. A later scalar text, ordered sequence, or count
+mismatch becomes
 `test.assert.unstable`; driver errors remain inconclusive driver errors.
 
 ## Browser context
@@ -1039,7 +1076,7 @@ code and path to repair manifests.
 ## Browser admission and runner bounds
 
 `a3s-test capabilities --json` probes the configured executable before any
-browser session launches. Action protocol revision 9 admits A3S Browser
+browser session launches. Action protocol revision 10 admits A3S Browser
 `>= 0.4.0, < 0.5.0` and standalone agent-browser `>= 0.26.0, < 0.27.0`.
 Unverified versions fail with `test.driver.web.version_unsupported`.
 

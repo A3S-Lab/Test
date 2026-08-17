@@ -4,7 +4,7 @@ use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-use a3s_test_core::{Action, Expectation, Target};
+use a3s_test_core::{Action, Expectation, Target, MAX_RENDERED_TEXT_ITEMS};
 use a3s_test_driver_web::{
     AgentBrowserConfig, AgentBrowserConnectionConfig, AgentBrowserDriver, BrowserCommand,
     BrowserNetworkPolicy, CommandError, CommandExecutor, CommandInvocation, CommandOutput,
@@ -156,7 +156,7 @@ async fn rendered_text_and_visible_count_classify_observation_outcomes_exactly()
 }
 
 #[tokio::test]
-async fn current_refs_support_rendered_text_but_not_locator_cardinality() {
+async fn current_refs_support_single_rendered_text_but_not_locator_collections() {
     let executor = Arc::new(QueueExecutor::new([output(
         r#"{"success":true,"data":{"value":"Ready"},"error":null}"#,
     )]));
@@ -169,6 +169,17 @@ async fn current_refs_support_rendered_text_but_not_locator_cardinality() {
         .execute_action("ref-copy", rendered_text(reference.clone(), "Ready"))
         .await
         .expect("current ref rendered text");
+    let sequence_unsupported = session
+        .execute_action(
+            "ref-copy-sequence",
+            rendered_texts(reference.clone(), ["Ready"]),
+        )
+        .await
+        .expect_err("a ref is not a repeatable locator collection");
+    assert_eq!(
+        sequence_unsupported.code(),
+        "test.driver.web.target_unsupported"
+    );
     let unsupported = session
         .execute_action("ref-count", visible_count(reference, 1))
         .await
@@ -177,6 +188,211 @@ async fn current_refs_support_rendered_text_but_not_locator_cardinality() {
     session.close_surface().await.expect("close");
 
     assert_eq!(executor.actions()[0], ["get", "text", "@e4"]);
+}
+
+#[tokio::test]
+async fn deterministic_ordered_rendered_text_dataset_classifies_600_of_600_cases() {
+    let expected = |index: usize| {
+        vec![
+            format!("item-{index}"),
+            "duplicate".to_string(),
+            "duplicate".to_string(),
+        ]
+    };
+    let mut outputs = Vec::with_capacity(DATASET_SIZE * 6);
+    for index in 0..DATASET_SIZE {
+        outputs.push(probe(json!({
+            "status": "ok",
+            "actual": [format!("  item-{index}\n"), "duplicate", " duplicate  "],
+            "count": 3
+        })));
+    }
+    for index in 0..DATASET_SIZE {
+        outputs.push(probe(json!({
+            "status": "ok",
+            "actual": ["duplicate", format!("item-{index}"), "duplicate"],
+            "count": 3
+        })));
+    }
+    for index in 0..DATASET_SIZE {
+        outputs.push(probe(json!({
+            "status": "ok",
+            "actual": [format!("item-{index}"), "duplicate"],
+            "count": 2
+        })));
+    }
+    outputs.extend((0..DATASET_SIZE).map(|_| {
+        probe(json!({
+            "status": "ok",
+            "actual": [],
+            "count": 0
+        }))
+    }));
+    outputs.extend((0..DATASET_SIZE).map(|_| {
+        probe(json!({
+            "status": "ok",
+            "actual": [],
+            "count": 0
+        }))
+    }));
+    outputs.extend((0..DATASET_SIZE).map(|_| {
+        probe(json!({
+            "status": "invalid_target",
+            "message": "invalid selector"
+        }))
+    }));
+    let executor = Arc::new(QueueExecutor::new(outputs));
+    let (_temp, mut session) = connected(executor.clone()).await;
+
+    for index in 0..DATASET_SIZE {
+        let output = session
+            .execute_action(
+                format!("sequence-match-{index}"),
+                rendered_texts(css(format!(".match-{index}")), expected(index)),
+            )
+            .await
+            .unwrap_or_else(|error| panic!("ordered sequence {index} failed: {error}"));
+        assert_eq!(output.data["actual"], json!(expected(index)));
+        assert_eq!(output.data["count"], 3);
+    }
+    for index in 0..DATASET_SIZE {
+        let error = session
+            .execute_action(
+                format!("sequence-reordered-{index}"),
+                rendered_texts(css(format!(".reordered-{index}")), expected(index)),
+            )
+            .await
+            .expect_err("reordered collection must fail");
+        assert_eq!(error.code(), "test.assert.rendered_texts");
+    }
+    for index in 0..DATASET_SIZE {
+        let error = session
+            .execute_action(
+                format!("sequence-duplicate-mismatch-{index}"),
+                rendered_texts(css(format!(".duplicate-{index}")), expected(index)),
+            )
+            .await
+            .expect_err("missing duplicate must fail");
+        assert_eq!(error.code(), "test.assert.rendered_texts");
+    }
+    for index in 0..DATASET_SIZE {
+        let output = session
+            .execute_action(
+                format!("sequence-empty-{index}"),
+                rendered_texts(css(format!(".empty-{index}")), Vec::<String>::new()),
+            )
+            .await
+            .unwrap_or_else(|error| panic!("empty sequence {index} failed: {error}"));
+        assert_eq!(output.data["actual"], json!([]));
+        assert_eq!(output.data["count"], 0);
+    }
+    for index in 0..DATASET_SIZE {
+        let error = session
+            .execute_action(
+                format!("sequence-empty-mismatch-{index}"),
+                rendered_texts(css(format!(".missing-{index}")), [format!("item-{index}")]),
+            )
+            .await
+            .expect_err("empty actual collection must be an observed mismatch");
+        assert_eq!(error.code(), "test.assert.rendered_texts");
+    }
+    for index in 0..DATASET_SIZE {
+        let error = session
+            .execute_action(
+                format!("sequence-invalid-{index}"),
+                rendered_texts(css(format!("[invalid-{index}")), Vec::<String>::new()),
+            )
+            .await
+            .expect_err("invalid sequence selector");
+        assert_eq!(error.code(), "test.driver.web.target_invalid");
+    }
+    session.close_surface().await.expect("close");
+
+    let actions = executor.actions();
+    assert_eq!(actions.len(), DATASET_SIZE * 6 + 1);
+    assert!(actions[..DATASET_SIZE * 6].iter().all(|action| {
+        action[0] == "eval"
+            && action[1].contains("rendered_texts")
+            && action[1].contains("A3S_MAX_RENDERED_TEXT_ITEMS = 256")
+    }));
+}
+
+#[tokio::test]
+async fn ordered_rendered_text_collections_enforce_the_bound_at_both_driver_edges() {
+    let maximum_actual = (0..MAX_RENDERED_TEXT_ITEMS)
+        .map(|index| format!("item-{index}"))
+        .collect::<Vec<_>>();
+    let oversized_actual = (0..=MAX_RENDERED_TEXT_ITEMS)
+        .map(|index| format!("item-{index}"))
+        .collect::<Vec<_>>();
+    let executor = Arc::new(QueueExecutor::new([
+        probe(json!({
+            "status": "ok",
+            "actual": maximum_actual,
+            "count": MAX_RENDERED_TEXT_ITEMS
+        })),
+        probe(json!({
+            "status": "collection_limit",
+            "count": MAX_RENDERED_TEXT_ITEMS + 1
+        })),
+        probe(json!({
+            "status": "ok",
+            "actual": oversized_actual,
+            "count": MAX_RENDERED_TEXT_ITEMS + 1
+        })),
+        probe(json!({
+            "status": "ok",
+            "actual": ["valid", 7],
+            "count": 2
+        })),
+    ]));
+    let (_temp, mut session) = connected(executor.clone()).await;
+    let target = css(".line-item".to_string());
+    let oversized_expected = (0..=MAX_RENDERED_TEXT_ITEMS)
+        .map(|index| format!("item-{index}"))
+        .collect::<Vec<_>>();
+
+    let invalid_expectation = session
+        .execute_action(
+            "oversized-expectation",
+            rendered_texts(target.clone(), oversized_expected),
+        )
+        .await
+        .expect_err("typed callers cannot bypass the expected collection bound");
+    assert_eq!(
+        invalid_expectation.code(),
+        "test.driver.web.expectation_invalid"
+    );
+
+    let maximum_expected = (0..MAX_RENDERED_TEXT_ITEMS)
+        .map(|index| format!("item-{index}"))
+        .collect::<Vec<_>>();
+    let maximum = session
+        .execute_action(
+            "maximum-collection",
+            rendered_texts(target.clone(), maximum_expected),
+        )
+        .await
+        .expect("the inclusive driver limit is admitted");
+    assert_eq!(maximum.data["count"], MAX_RENDERED_TEXT_ITEMS);
+
+    for step in ["browser-limit", "untrusted-output-limit"] {
+        let error = session
+            .execute_action(step, rendered_texts(target.clone(), Vec::<String>::new()))
+            .await
+            .expect_err("observed collections cannot exceed the driver bound");
+        assert_eq!(error.code(), "test.driver.web.collection_limit");
+    }
+    let malformed = session
+        .execute_action(
+            "malformed-item",
+            rendered_texts(target, ["valid", "invalid"]),
+        )
+        .await
+        .expect_err("every untrusted collection item must be a string");
+    assert_eq!(malformed.code(), "test.driver.web.output_invalid");
+    session.close_surface().await.expect("close");
+    assert_eq!(executor.actions().len(), 5);
 }
 
 #[tokio::test]
@@ -288,6 +504,15 @@ fn rendered_text(target: Target, value: impl Into<String>) -> Action {
         expectation: Expectation::RenderedText {
             target,
             value: value.into(),
+        },
+    }
+}
+
+fn rendered_texts(target: Target, values: impl IntoIterator<Item = impl Into<String>>) -> Action {
+    Action::Assert {
+        expectation: Expectation::RenderedTexts {
+            target,
+            values: values.into_iter().map(Into::into).collect(),
         },
     }
 }

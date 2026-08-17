@@ -4,6 +4,21 @@
 
 ### Added
 
+- Added action protocol revision 10 with bounded `rendered_texts` expectations
+  for the complete ordered visible text sequence produced by a stable semantic
+  or CSS locator. The comparison preserves order and duplicates, normalizes
+  each item independently, treats an empty match set as an observed empty
+  sequence, and caps expected and observed collections at 256 items. ACL
+  rejects refs and visual points, Web captures the collection in one page
+  evaluation, invalid selectors remain driver failures, and only an observed
+  sequence difference becomes `test.assert.rendered_texts`. Page Context,
+  provenance redaction, Agent Host verification, assertion stability, and
+  explicit GUI/TUI capability failures use the same typed expectation.
+  Evidence covers 600/600 deterministic sequence classifications, 300/300
+  consistent and 300/300 transient scalar-text/sequence/count stability
+  windows, and a standalone Chromium CLI suite with 12 positive observations,
+  12 negative classifications, three accepted and three rejected 100 ms
+  windows, open Shadow DOM, exact cleanup, and no private runtime leak.
 - Added action protocol revision 9 with target-bound `rendered_text` and
   stable-locator `visible_count` expectations. Rendered text collapses
   whitespace and requires exactly one visible target; visible count observes

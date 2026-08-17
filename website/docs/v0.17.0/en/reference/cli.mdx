@@ -242,9 +242,9 @@ Value and selected-value outputs likewise contain `target`, `expected`, and `act
 
 Web reads live DOM state and gives native checkbox/radio properties priority over ARIA. GUI supports exact values only when CUA returned one, then rejects boolean and multi-selection state as `test.driver.gui.assertion_unsupported`. TUI supports visible terminal text only. A Page Context ref is resolved before dispatch; direct standalone refs cannot expose native option selection or multi-select arrays.
 
-### Rendered-text and visible-count ACL expectations
+### Rendered-text, ordered-sequence, and visible-count ACL expectations
 
-Action protocol revision 9 binds expected copy to one target and observes the complete visible set produced by a stable locator.
+Action protocol revision 9 binds expected copy to one target and observes the complete visible count produced by a stable locator. Revision 10 adds the exact ordered rendered-text vector.
 
 ```acl
 expect "total-copy" {
@@ -257,6 +257,16 @@ expect "visible-rows" {
     visible_count = 3
 }
 
+expect "line-items" {
+    target = css("[data-line-item]")
+    rendered_texts = ["Keyboard × 1", "Mouse × 2", "Shipping", "Shipping"]
+}
+
+expect "no-line-items" {
+    target = css("[data-missing-line-item]")
+    rendered_texts = []
+}
+
 expect "no-errors" {
     target = role("alert", "Checkout error")
     visible_count = 0
@@ -267,14 +277,24 @@ expect "no-errors" {
 
 `visible_count` accepts a semantic or CSS locator and compares its complete visible cardinality as a non-negative integer. An empty match set is observed evidence for zero. ACL rejects `ref()` and `visual_point()` with `test.spec.visible_count_target_unstable`; neither describes a repeatable set. An invalid CSS selector remains `test.driver.web.target_invalid`, while an observed count mismatch is `test.assert.visible_count`.
 
+`rendered_texts` accepts a stable semantic or CSS locator, normalizes every visible match independently, and compares the complete vector without sorting or deduplication. An empty match set is observed as `[]`; order and repeated strings remain significant. ACL rejects refs and visual points with `test.spec.rendered_texts_target_unstable`. Expected and observed vectors are capped at 256 items at both ACL and Web driver boundaries. Invalid selectors and limit violations remain driver errors; an observed vector mismatch is `test.assert.rendered_texts`.
+
+| Code                                       | Boundary                                                              |
+| ------------------------------------------ | --------------------------------------------------------------------- |
+| `test.spec.rendered_texts_target_unstable` | ACL target is a ref or visual point                                   |
+| `test.spec.rendered_texts_limit`           | ACL expected vector contains more than 256 items                      |
+| `test.driver.web.expectation_invalid`      | A typed caller bypassed ACL with an oversized expectation             |
+| `test.driver.web.collection_limit`         | The page or an untrusted driver response produced more than 256 items |
+| `test.assert.rendered_texts`               | A bounded observed vector differs in content, duplicates, or order    |
+
 | Locator plane | Match and visibility semantics                                                                                                                                                                                                      |
 | ------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | CSS           | Current document only. Positive rendered geometry counts unless a composed ancestor is hidden, display-none, visibility-hidden/collapsed, or fully transparent. `aria-hidden` alone does not remove visual pixels and still counts. |
 | Semantic      | Role, text, test ID, label, and placeholder targets traverse open Shadow DOM and apply the same rendered checks plus accessibility-hidden ancestry.                                                                                 |
 
-Both planes exclude zero-geometry elements. They do not claim viewport intersection or pixel-level occlusion. A current browser ref may identify the single `rendered_text` element, but cannot represent a `visible_count` collection. GUI and TUI fail closed for both conditions.
+Both planes exclude zero-geometry elements. They do not claim viewport intersection or pixel-level occlusion. A current browser ref may identify the single `rendered_text` element, but cannot represent a `visible_count` or `rendered_texts` collection. GUI and TUI fail closed for all three conditions.
 
-Both conditions accept `stable_for_ms`. A later text or count mismatch becomes `test.assert.unstable`; a driver failure keeps its original code. The checked-in evidence covers 600/600 deterministic classifications, 200/200 consistent and 200/200 transient windows, plus a real Chromium CLI suite with 7/7 positive observations, 7/7 negative classifications, two 100 ms windows, and no private runtime leak.
+All three conditions accept `stable_for_ms`. A later scalar-text, ordered-vector, or count mismatch becomes `test.assert.unstable`; a driver failure keeps its original code. Revision 9 covers 600/600 deterministic scalar-text/count classifications. Revision 10 adds 600/600 ordered-vector classifications. Combined stability evidence covers 300/300 consistent and 300/300 transient windows, plus a real Chromium CLI suite with 12 positive observations, 12 negative classifications, three accepted and three rejected 100 ms windows, and no private runtime leak.
 
 ### Hidden ACL expectations
 
@@ -286,7 +306,7 @@ expect "dialog-closed" {
 }
 ```
 
-The ACL compiler stores the existing `Action::Assert(Expectation::Visible(target))` plus a runner-owned hidden mode. This policy adds no action variant; the current protocol is revision 9 because of the typed expectations above. The runner dispatches a positive visibility probe and uses this contract.
+The ACL compiler stores the existing `Action::Assert(Expectation::Visible(target))` plus a runner-owned hidden mode. This policy adds no action variant; the current protocol is revision 10 because of the typed expectations above. The runner dispatches a positive visibility probe and uses this contract.
 
 | Probe result                       | Step result                                                                                  |
 | ---------------------------------- | -------------------------------------------------------------------------------------------- |
@@ -330,7 +350,7 @@ wait "dialog-closed" {
 }
 ```
 
-The compiler stores the existing visible-target wait condition plus `wait_mode = hidden`; under current revision 9 it still reuses the earlier visible-action variant. Runner sends immediate read-only positive visibility assertions and polls every 50 ms only while visible evidence continues.
+The compiler stores the existing visible-target wait condition plus `wait_mode = hidden`; under current revision 10 it still reuses the earlier visible-action variant. Runner sends immediate read-only positive visibility assertions and polls every 50 ms only while visible evidence continues.
 
 | Boundary                             | Result                                                                                 |
 | ------------------------------------ | -------------------------------------------------------------------------------------- |

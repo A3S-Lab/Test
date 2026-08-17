@@ -751,6 +751,10 @@ async fn gui_value_assertions_use_cua_values_without_inventing_boolean_state() {
             target: value_target.clone(),
             value: "draft@example.test".to_string(),
         },
+        Expectation::RenderedTexts {
+            target: value_target.clone(),
+            values: vec!["draft@example.test".to_string()],
+        },
         Expectation::VisibleCount {
             target: value_target.clone(),
             count: 1,

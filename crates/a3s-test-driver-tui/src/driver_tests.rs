@@ -104,6 +104,10 @@ async fn target_bound_rendered_assertions_fail_closed_on_terminal_surfaces() {
             target: target.clone(),
             value: "Ready".to_string(),
         },
+        Expectation::RenderedTexts {
+            target: target.clone(),
+            values: vec!["Ready".to_string()],
+        },
         Expectation::VisibleCount { target, count: 1 },
     ] {
         let error = session

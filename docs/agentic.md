@@ -104,7 +104,7 @@ profile and every later turn reconnects with it; legacy session metadata
 without the field defaults to `disabled`. The same option is available to
 deterministic `run`, direct `agent run`, and Web MCP hosts.
 
-Action protocol revision 9 is the current cross-surface schema. Revision 2
+Action protocol revision 10 is the current cross-surface schema. Revision 2
 introduced the browser interactions needed to inspect document-style
 applications: click, hover, focus, double-click, context-click,
 fill, incremental type, check/uncheck, multi-value select, drag, key press,
@@ -131,6 +131,12 @@ Rendered text retains zero/one/many target resolution, while an empty stable
 locator set is an observed count of zero. GUI and TUI fail closed because their
 current protocols do not expose equivalent collection or rendered-text
 evidence.
+Revision 10 adds `rendered_texts`, an ordered, duplicate-preserving sequence
+of independently normalized rendered strings from a stable locator. Empty
+sets are observable, while ACL rejects refs and visual points and both ACL and
+Web enforce a 256-item limit. Web captures the bounded sequence in one page
+evaluation. GUI and TUI fail closed because neither exposes equivalent
+ordered locator-set evidence.
 
 Semantic role, text, test-ID, label, and placeholder targets are used whenever
 the underlying browser command supports the requested subaction. Focus,
@@ -159,7 +165,7 @@ tools:
 | `test_act` | Execute exactly one typed action |
 | `test_finish` | Record a result and close the exact owned surface |
 | `test_abort` | Abort and close the exact owned surface |
-| `test_schema` | Return action protocol revision 9 and its interactive JSON Schema |
+| `test_schema` | Return action protocol revision 10 and its interactive JSON Schema |
 
 The server serializes turns within each session, bounds active sessions and
 request size, advertises only registered surfaces, and closes independent

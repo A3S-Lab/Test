@@ -38,7 +38,7 @@ a3s-test agent click <ref> --session <name> --observation <id> --json
 a3s-test agent finish --session <name> --status passed --summary <text> --json
 ```
 
-`agent act --action-json` exposes the complete action schema. In v0.17.0, action protocol revision 9 includes the revision-7 selection-scoped `insert_text` action, revision-8 live control-state expectations, and revision-9 target-bound rendered-output expectations. `insert_text` still acts only inside an editing context established by an earlier action and carries no target or locator authority of its own.
+`agent act --action-json` exposes the complete action schema. In v0.17.0, action protocol revision 10 includes the revision-7 selection-scoped `insert_text` action, revision-8 live control-state expectations, revision-9 target-bound rendered-output expectations, and revision-10 ordered rendered-text collections. `insert_text` still acts only inside an editing context established by an earlier action and carries no target or locator authority of its own.
 
 ## ACL suites
 
@@ -133,9 +133,9 @@ Web semantic targets traverse open Shadow DOM and recognize native multi-select 
 
 The checked-in evidence covers 400/400 deterministic Web classifications, 100/100 stable state windows, 100/100 transient-state rejections, and a standalone Chromium flow with 15/15 positive checks plus 4/4 negative error classifications and no private runtime leak.
 
-## Prove copy on the right component and the right number of repeated items
+## Prove copy, repeated-item count, and exact rendered order
 
-Page-wide text can pass because the same words appear in the wrong region. A one-element visibility assertion can pass while a list silently drops or duplicates rows. Revision 9 observes the missing facts directly.
+Page-wide text can pass because the same words appear in the wrong region. A one-element visibility assertion can pass while a list silently drops, duplicates, or reorders rows. Revisions 9 and 10 observe those facts directly.
 
 ```acl
 expect "total-copy" {
@@ -150,6 +150,18 @@ expect "three-visible-lines" {
     visible_count = 3
 }
 
+expect "ordered-lines" {
+    target = css("[data-order-line]")
+    rendered_texts = ["Keyboard × 1", "Mouse × 2", "Shipping", "Shipping"]
+    stable_for_ms = 300
+    sample_interval_ms = 25
+}
+
+expect "no-lines" {
+    target = css("[data-missing-order-line]")
+    rendered_texts = []
+}
+
 expect "no-visible-errors" {
     target = role("alert", "Checkout error")
     visible_count = 0
@@ -158,16 +170,17 @@ expect "no-visible-errors" {
 
 These assertions deliberately use different identity rules.
 
-| Question                                             | Required evidence                                           | Failure ownership                                                                               |
-| ---------------------------------------------------- | ----------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
-| What copy did this component render?                 | Exactly one visible target and its normalized rendered text | Zero/multiple targets are driver errors; different observed copy is `test.assert.rendered_text` |
-| How many visible elements does this locator produce? | The complete visible set, including an empty set            | Invalid locator is a driver error; a different observed number is `test.assert.visible_count`   |
+| Question                                             | Required evidence                                           | Failure ownership                                                                                   |
+| ---------------------------------------------------- | ----------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| What copy did this component render?                 | Exactly one visible target and its normalized rendered text | Zero/multiple targets are driver errors; different observed copy is `test.assert.rendered_text`     |
+| How many visible elements does this locator produce? | The complete visible set, including an empty set            | Invalid locator is a driver error; a different observed number is `test.assert.visible_count`       |
+| Which visible strings rendered, and in what order?   | The complete normalized text vector, preserving duplicates  | Invalid/oversized collections are driver errors; a different vector is `test.assert.rendered_texts` |
 
-Text normalization trims both ends and collapses whitespace runs, so nested markup and formatting line breaks do not create accidental mismatches. `visible_count = 0` is positive evidence from an evaluated locator, not a missing-reference shortcut. For that reason ACL accepts semantic or CSS locators but rejects observation refs and visual points for counting.
+Text normalization trims both ends and collapses whitespace runs, so nested markup and formatting line breaks do not create accidental mismatches. `rendered_texts` applies that rule independently to every item without sorting or deduplication. Empty locators produce `[]`; `["Shipping", "Shipping"]` remains distinct from `["Shipping"]`. ACL and Web cap vectors at 256 items. `visible_count = 0` and `rendered_texts = []` are positive evidence from an evaluated locator, not missing-reference shortcuts. ACL accepts semantic or CSS locators but rejects observation refs and visual points for both collection forms.
 
 CSS counting follows rendered pixels: `aria-hidden` by itself still counts, while hidden, display-none, visibility-hidden, fully transparent, and zero-geometry elements do not. Semantic counting follows the accessible interaction plane, excludes accessibility-hidden ancestry, and traverses open Shadow DOM. Neither form claims screenshot-level occlusion or viewport intersection.
 
-The checked-in datasets classify 600/600 deterministic cases, accept 200/200 consistent text/count windows, and reject 200/200 transients. The standalone Chromium CLI regression proves seven passing observations and seven error classes, including two 100 ms windows and exact runtime cleanup.
+The revision-9 datasets classify 600/600 scalar-text/count cases. Revision 10 adds 600/600 ordered-vector cases covering matches, reorders, duplicate/content mismatches, empty matches, empty-versus-expected mismatches, and invalid selectors. Combined stability datasets accept 300/300 consistent scalar-text/vector/count windows and reject 300/300 transients. The standalone Chromium CLI regression proves 12 passing observations, 12 error classes, three accepted and three rejected 100 ms windows, and exact runtime cleanup.
 
 ## Prove that UI has no visible match
 
@@ -179,7 +192,7 @@ expect "checkout-dialog-closed" {
 }
 ```
 
-`hidden` is runner policy around the existing positive visibility assertion. It does not add an action variant; the current protocol is revision 9 because of the typed expectations above. The runner sends a positive probe to the surface driver and classifies its result deterministically.
+`hidden` is runner policy around the existing positive visibility assertion. It does not add an action variant; the current protocol is revision 10 because of the typed expectations above. The runner sends a positive probe to the surface driver and classifies its result deterministically.
 
 | Positive probe result                  | Hidden assertion result                                                                |
 | -------------------------------------- | -------------------------------------------------------------------------------------- |
@@ -211,7 +224,7 @@ wait "checkout-dialog-closed" {
 }
 ```
 
-The ACL compiler keeps `Action::Wait(WaitCondition::Visible(target))` and adds runner-owned `WaitMode::Hidden`. This still reuses the earlier visible-action variant under current action protocol revision 9. Runner executes an immediate positive visibility assertion, then repeats it every 50 ms while the target remains visible.
+The ACL compiler keeps `Action::Wait(WaitCondition::Visible(target))` and adds runner-owned `WaitMode::Hidden`. This still reuses the earlier visible-action variant under current action protocol revision 10. Runner executes an immediate positive visibility assertion, then repeats it every 50 ms while the target remains visible.
 
 | Positive probe result                  | Hidden wait result                                                                               |
 | -------------------------------------- | ------------------------------------------------------------------------------------------------ |

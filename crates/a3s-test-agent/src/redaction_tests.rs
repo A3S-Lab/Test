@@ -120,6 +120,18 @@ fn redacts_assertion_targets_text_values_and_selected_values() {
             },
         },
         Action::Assert {
+            expectation: Expectation::RenderedTexts {
+                target: Target::Css {
+                    selector: "[data-row=state-secret]".to_string(),
+                },
+                values: vec![
+                    "public".to_string(),
+                    "First state-secret".to_string(),
+                    "state-secret".to_string(),
+                ],
+            },
+        },
+        Action::Assert {
             expectation: Expectation::State {
                 target: Target::Css {
                     selector: "[data-state=state-secret]".to_string(),

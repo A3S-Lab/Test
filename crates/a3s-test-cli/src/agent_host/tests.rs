@@ -305,6 +305,7 @@ agent_run "profile" {{
     expect "display-name" {{ target = css("#display-name") value = "Ada" }}
     expect "terms" {{ checked = css("#terms") }}
     expect "summary" {{ target = css("#summary") rendered_text = "Profile Ada" }}
+    expect "roles" {{ target = css("[data-role]") rendered_texts = ["Owner", "Reviewer", "Reviewer"] }}
     expect "no-errors" {{ target = css("[role=alert]") visible_count = 0 }}
   }}
 }}
@@ -318,6 +319,7 @@ agent_run "profile" {{
         json!({ "status": "ok", "count": 1, "actual": "Ada" }),
         json!({ "status": "ok", "count": 1, "actual": true }),
         json!({ "status": "ok", "count": 1, "actual": "Profile Ada" }),
+        json!({ "status": "ok", "count": 3, "actual": ["Owner", "Reviewer", "Reviewer"] }),
         json!({ "status": "ok", "count": 0, "actual": 0 }),
     ]));
 
@@ -340,8 +342,12 @@ agent_run "profile" {{
         report["verification"][2]["output"]["data"]["actual"],
         "Profile Ada"
     );
-    assert_eq!(report["verification"][3]["output"]["data"]["actual"], 0);
-    assert_eq!(executor.assertion_probe_count(), 4);
+    assert_eq!(
+        report["verification"][3]["output"]["data"]["actual"],
+        json!(["Owner", "Reviewer", "Reviewer"])
+    );
+    assert_eq!(report["verification"][4]["output"]["data"]["actual"], 0);
+    assert_eq!(executor.assertion_probe_count(), 5);
     assert_eq!(executor.actions(), ["open", "snapshot", "close"]);
     assert_eq!(provider.finish().await.len(), 1);
 }

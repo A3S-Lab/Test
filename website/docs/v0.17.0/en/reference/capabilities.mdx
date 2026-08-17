@@ -88,7 +88,7 @@ The persistent-session loop is `start -> observe -> act -> observe -> finish`. A
 | `terminal_resize`                  | Columns and rows                                       | Resizes the owned PTY or ConPTY and updates terminal semantics                          |
 | `terminal_recording`               | Relative artifact path                                 | Retains a bounded terminal recording outside arbitrary workspace paths                  |
 
-The action protocol revision is 9. Generate the complete schema with `a3s-test agent schema`. Unknown fields, missing required fields, invalid enums, and actions unsupported by the selected surface are rejected before execution.
+The action protocol revision is 10. Generate the complete schema with `a3s-test agent schema`. Unknown fields, missing required fields, invalid enums, and actions unsupported by the selected surface are rejected before execution.
 
 ### Live control-state assertions
 
@@ -103,13 +103,14 @@ Web assertions read live DOM properties. Native checkbox and radio `checked` val
 
 ### Rendered-output assertions
 
-| Capability                  | ACL form                                               | Observed evidence                                                   | Failure boundary                                                                                                              |
-| --------------------------- | ------------------------------------------------------ | ------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| Target-bound rendered copy  | `target` plus `rendered_text`                          | Exactly one visible target, normalized `expected` and `actual` text | Missing or ambiguous targets stay driver errors; different observed copy is `test.assert.rendered_text`                       |
-| Visible locator cardinality | stable `target` plus non-negative `visible_count`      | Complete visible match-set size, including zero                     | Refs/visual points fail admission, invalid selectors stay driver errors, and a different count is `test.assert.visible_count` |
-| Stable rendered output      | Either form plus `stable_for_ms` and optional interval | First/last text or count, sample count, and elapsed window          | A later observed mismatch is `test.assert.unstable`; later driver failure keeps driver ownership                              |
+| Capability                  | ACL form                                                  | Observed evidence                                                             | Failure boundary                                                                                                                        |
+| --------------------------- | --------------------------------------------------------- | ----------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| Target-bound rendered copy  | `target` plus `rendered_text`                             | Exactly one visible target, normalized `expected` and `actual` text           | Missing or ambiguous targets stay driver errors; different observed copy is `test.assert.rendered_text`                                 |
+| Visible locator cardinality | stable `target` plus non-negative `visible_count`         | Complete visible match-set size, including zero                               | Refs/visual points fail admission, invalid selectors stay driver errors, and a different count is `test.assert.visible_count`           |
+| Ordered rendered collection | stable `target` plus `rendered_texts`                     | Complete normalized text vector, preserving order, duplicates, and empty sets | Refs/visual points fail admission; invalid/oversized collections stay driver errors; a different vector is `test.assert.rendered_texts` |
+| Stable rendered output      | Any form above plus `stable_for_ms` and optional interval | First/last scalar text, vector, or count plus the bounded window              | A later observed mismatch is `test.assert.unstable`; later driver failure keeps driver ownership                                        |
 
-CSS counting uses visual rendered geometry and does not treat `aria-hidden` alone as invisible. Semantic locators additionally exclude accessibility-hidden ancestry and traverse open Shadow DOM. Both exclude hidden, display-none, visibility-hidden, fully transparent, and zero-geometry targets. GUI and TUI fail closed for both revision-9 forms.
+CSS collection probes use visual rendered geometry and do not treat `aria-hidden` alone as invisible. Semantic locators additionally exclude accessibility-hidden ancestry and traverse open Shadow DOM. Both exclude hidden, display-none, visibility-hidden, fully transparent, and zero-geometry targets. `rendered_texts` is bounded to 256 expected and observed items. GUI and TUI fail closed for all revision-9/revision-10 forms.
 
 ## Page perception and Test Kit
 

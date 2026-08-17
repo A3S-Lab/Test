@@ -412,6 +412,7 @@ fn parse_step(block: &Block, scenario_path: &str) -> Result<TestStep, SpecError>
                     "hidden",
                     "target",
                     "rendered_text",
+                    "rendered_texts",
                     "visible_count",
                     "value",
                     "enabled",

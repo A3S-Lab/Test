@@ -429,6 +429,7 @@ impl TuiSession {
             Expectation::Url(_)
             | Expectation::Visible(_)
             | Expectation::RenderedText { .. }
+            | Expectation::RenderedTexts { .. }
             | Expectation::VisibleCount { .. }
             | Expectation::State { .. }
             | Expectation::Value { .. }

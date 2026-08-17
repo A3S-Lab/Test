@@ -188,6 +188,11 @@ expect "total-copy" {
     rendered_text = "Total $42.00"
 }
 
+expect "line-items" {
+    target = css("[data-line-item]")
+    rendered_texts = ["Keyboard × 1", "Mouse × 2", "Shipping"]
+}
+
 expect "visible-rows" {
     target = css("[data-row]")
     visible_count = 3
@@ -201,7 +206,8 @@ screenshot "final" {
 A wait accepts exactly one of `load`, `text`, `regex`, `url`, `visible`, or
 `hidden`. An expectation accepts exactly one of `text`, `url`, `visible`,
 `hidden`, `value`, `enabled`, `disabled`, `checked`, `unchecked`, `selected`,
-`unselected`, `selected_values`, `rendered_text`, or `visible_count`.
+`unselected`, `selected_values`, `rendered_text`, `rendered_texts`, or
+`visible_count`.
 `expect hidden` immediately proves that a
 stable semantic or CSS locator has no visible match, including an absent
 element. A visible match fails as `test.assert.hidden`; a later visible sample
@@ -214,7 +220,7 @@ counter-evidence plus timing metrics. Both negative forms reject `ref()` and
 `visual_point()` because an unresolved observation-bound target is not proof
 of hidden product state. Driver, stale-target, and ambiguity errors remain
 errors. This is runner policy and adds no action variant; rendered-output
-expectations advance the current action protocol to revision 9.
+expectations advance the current action protocol to revision 10.
 
 Focus, double-click, context-click, type, uncheck, select, drag, and
 target-scoped wheel require `ref()` or `css()` with the current browser
@@ -273,7 +279,7 @@ that resolves to one.
 ## Rendered-output expectations
 
 Revision 9 binds copy to one rendered target and counts a stable visible
-locator set:
+locator set. Revision 10 compares the complete ordered rendered-text sequence:
 
 ```acl
 expect "total-copy" {
@@ -286,13 +292,23 @@ expect "three-rows" {
     visible_count = 3
 }
 
+expect "line-items" {
+    target = css("[data-line-item]")
+    rendered_texts = ["Keyboard × 1", "Mouse × 2", "Shipping", "Shipping"]
+}
+
+expect "no-line-items" {
+    target = css("[data-missing-line-item]")
+    rendered_texts = []
+}
+
 expect "no-errors" {
     target = role("alert", "Checkout error")
     visible_count = 0
 }
 ```
 
-Both conditions require `target`. `rendered_text` requires exactly one visible
+All three conditions require `target`. `rendered_text` requires exactly one visible
 match, trims leading/trailing whitespace, and collapses whitespace runs before
 an exact comparison. Missing and ambiguous targets are driver errors; only
 observed copy differences return `test.assert.rendered_text`. A current Web
@@ -304,6 +320,15 @@ Use a semantic or CSS locator. ACL rejects `ref()` and `visual_point()` because
 they identify one observation rather than a repeatable collection. Invalid
 selectors and malformed driver output remain driver errors.
 
+`rendered_texts` observes every visible match in stable locator traversal
+order, normalizes each item with the `rendered_text` whitespace rule, and
+compares the exact vector. Order and duplicate strings are preserved. An
+empty match set is the observed vector `[]`. ACL rejects `ref()` and
+`visual_point()` and limits expected vectors to 256 items. The Web driver
+enforces the same bound for programmatic expectations and observed results.
+Invalid selectors and limit violations remain driver errors; only an observed
+vector difference is `test.assert.rendered_texts`.
+
 For CSS, visibility means positive rendered geometry with no hidden,
 display-none, visibility-hidden, zero-opacity, or zero-geometry composed
 ancestor. `aria-hidden` alone does not remove visual pixels and therefore does
@@ -311,9 +336,10 @@ not change a CSS count. Semantic locators additionally exclude
 accessibility-hidden ancestry and traverse open Shadow DOM. Neither plane
 proves viewport intersection or pixel occlusion.
 
-Both conditions accept assertion stability. A later text/count mismatch is
+All three conditions accept assertion stability. A later scalar-text,
+ordered-sequence, or count mismatch is
 `test.assert.unstable`; a later driver error keeps its driver code. GUI and TUI
-currently reject both conditions as unsupported.
+currently reject all three conditions as unsupported.
 
 ## Assertion stability
 

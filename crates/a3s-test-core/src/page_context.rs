@@ -262,6 +262,7 @@ fn expectation_target(expectation: &Expectation) -> Option<&Target> {
     match expectation {
         Expectation::Visible(target)
         | Expectation::RenderedText { target, .. }
+        | Expectation::RenderedTexts { target, .. }
         | Expectation::VisibleCount { target, .. }
         | Expectation::State { target, .. }
         | Expectation::Value { target, .. }
@@ -274,6 +275,7 @@ fn expectation_target_mut(expectation: &mut Expectation) -> Option<&mut Target> 
     match expectation {
         Expectation::Visible(target)
         | Expectation::RenderedText { target, .. }
+        | Expectation::RenderedTexts { target, .. }
         | Expectation::VisibleCount { target, .. }
         | Expectation::State { target, .. }
         | Expectation::Value { target, .. }

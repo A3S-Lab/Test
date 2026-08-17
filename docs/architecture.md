@@ -774,7 +774,7 @@ post-run private-runtime leak check.
 
 ### Rendered output and locator-set observation
 
-Revision 9 adds two complementary `Expectation` variants. They answer
+Revisions 9 and 10 add three complementary `Expectation` variants. They answer
 questions that page-wide text and single-element visibility cannot answer:
 
 ```text
@@ -787,13 +787,19 @@ VisibleCount(locator, expected)
   resolve the complete visible match set
   -> observe its cardinality, including zero
   -> compare expected and observed count
+
+RenderedTexts(locator, expected[])
+  resolve the complete visible match set, bounded to 256 items
+  -> read and independently normalize text in traversal order
+  -> preserve duplicates and compare the exact expected vector
 ```
 
 The different target-resolution rules are intentional. Rendered text needs an
 element identity; zero matches and multiple matches are driver errors because
-neither yields authoritative text. Cardinality needs a collection identity;
-an empty set is authoritative numeric evidence, while a ref or visual point
-cannot describe a collection and is rejected before dispatch.
+neither yields authoritative text. Cardinality and ordered content need a
+collection identity; an empty set is authoritative evidence for both zero and
+`[]`, while a ref or visual point cannot describe a collection and is rejected
+before dispatch.
 
 The Web probe performs matching, composed-ancestor visibility checks, and
 value capture inside one page evaluation for semantic and CSS locators. CSS
@@ -804,19 +810,30 @@ exclude hidden, display-none, visibility-hidden, zero-opacity, and
 zero-geometry elements. This boundary is narrower than screenshot perception:
 it does not infer occlusion or intent.
 
-Driver errors own invalid selectors, malformed probe envelopes, and
-single-target resolution failures. Product assertions own only observed text
-or count differences. Runner stability then repeats the exact immutable
-assertion; later product mismatches become `test.assert.unstable`, while later
-driver failures remain driver failures. GUI and TUI explicitly reject both
-variants because their current protocols do not provide equivalent evidence.
+The ordered-text probe checks the 256-item limit before serializing any text,
+then captures every item inside the same page evaluation. Rust validates the
+expected and returned vectors against the same bound and normalizes every item
+again before exact comparison. This keeps the browser response bounded and
+does not trust a protocol peer to honor the JavaScript-side check.
 
-Revision-9 coverage contains 600 deterministic Web classifications, split
-into six 100-case classes; 200 consistent and 200 transient text/count
-stability scenarios; four typed assertions in Agent Host deterministic
-verification; and a standalone Chromium CLI fixture with seven passing
-observations, seven error classifications, two 100 ms windows, open Shadow
-DOM, and a post-run private-runtime leak check.
+Driver errors own invalid selectors, collection-limit violations, malformed
+probe envelopes, and single-target resolution failures. Product assertions
+own only observed scalar text, ordered text-vector, or count differences.
+Runner stability then repeats the exact immutable assertion; later product
+mismatches become `test.assert.unstable`, while later driver failures remain
+driver failures. GUI and TUI explicitly reject all three variants because
+their current protocols do not provide equivalent evidence.
+
+Revision-9 coverage contains 600 deterministic scalar-text/count Web
+classifications. Revision 10 adds 600 ordered-vector classifications split
+into six 100-case classes: ordered matches, reorder mismatches,
+content/duplicate mismatches, empty-set matches, empty-versus-expected
+mismatches, and invalid selectors. Combined stability coverage accepts 300
+consistent scalar-text/vector/count windows and rejects 300 transients. Agent
+Host verifies five typed assertions. The standalone Chromium fixture proves
+12 passing observations, 12 error classifications, three accepted and three
+rejected 100 ms windows, open Shadow DOM, exact duplicate/order evidence, and
+a post-run private-runtime leak check.
 
 ## Lifecycle and interrupts
 

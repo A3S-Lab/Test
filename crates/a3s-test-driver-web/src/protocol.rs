@@ -3,7 +3,9 @@ use std::ffi::OsString;
 use std::hash::{DefaultHasher, Hash, Hasher};
 use std::path::Path;
 
-use a3s_test_core::{DriverError, ElementState, LoadState, Target, WaitCondition};
+use a3s_test_core::{
+    DriverError, ElementState, LoadState, Target, WaitCondition, MAX_RENDERED_TEXT_ITEMS,
+};
 use serde_json::Value;
 
 use crate::{AgentBrowserConfig, CommandInvocation};
@@ -303,6 +305,7 @@ const SEMANTIC_SHADOW_TARGET_QUERY: &str = r#"
 pub(crate) enum AssertionProbe {
     State(ElementState),
     RenderedText,
+    RenderedTexts,
     VisibleCount,
     Value,
     SelectedValues,
@@ -316,7 +319,9 @@ pub(crate) fn assertion_probe_args(
         Target::Css { .. }
             if matches!(
                 probe,
-                AssertionProbe::RenderedText | AssertionProbe::VisibleCount
+                AssertionProbe::RenderedText
+                    | AssertionProbe::RenderedTexts
+                    | AssertionProbe::VisibleCount
             ) =>
         {
             r#"
@@ -382,6 +387,7 @@ pub(crate) fn assertion_probe_args(
         AssertionProbe::State(ElementState::Checked) => "checked",
         AssertionProbe::State(ElementState::Selected) => "selected",
         AssertionProbe::RenderedText => "rendered_text",
+        AssertionProbe::RenderedTexts => "rendered_texts",
         AssertionProbe::VisibleCount => "visible_count",
         AssertionProbe::Value => "value",
         AssertionProbe::SelectedValues => "selected_values",
@@ -390,7 +396,18 @@ pub(crate) fn assertion_probe_args(
         r#"(() => {{
   const target = {target};
   const A3S_ASSERTION_PROBE = "{probe}";
+  const A3S_MAX_RENDERED_TEXT_ITEMS = {MAX_RENDERED_TEXT_ITEMS};
 {query}
+  if (A3S_ASSERTION_PROBE === "rendered_texts") {{
+    if (matchedElements.length > A3S_MAX_RENDERED_TEXT_ITEMS) {{
+      return {{ status: "collection_limit", count: matchedElements.length }};
+    }}
+    const actual = matchedElements.map((element) => {{
+      const rendered = element instanceof HTMLElement ? element.innerText : element.textContent;
+      return String(rendered ?? "").replace(/\s+/g, " ").trim();
+    }});
+    return {{ status: "ok", count: matchedElements.length, actual }};
+  }}
   if (A3S_ASSERTION_PROBE === "visible_count") {{
     return {{ status: "ok", count: matchedElements.length, actual: matchedElements.length }};
   }}
