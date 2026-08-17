@@ -160,6 +160,20 @@ for (const version of versions) {
   }
 
   for (const locale of ['zh', 'en']) {
+    const quickStartGuide = await readFile(
+      path.join(docsRoot, version, locale, 'guide', 'index.mdx'),
+      'utf8',
+    );
+    if (
+      version === defaultVersion &&
+      (!quickStartGuide.includes(`--version ${installVersion}`) ||
+        !quickStartGuide.includes(`-Version ${installVersion}`))
+    ) {
+      failures.push(
+        `${version} ${locale} quick start does not pin published install version ${installVersion}.`,
+      );
+    }
+
     const installationGuide = await readFile(
       path.join(docsRoot, version, locale, 'guide', 'installation.mdx'),
       'utf8',
@@ -183,6 +197,19 @@ for (const version of versions) {
     if (!testKitGuide.includes(versionedPackageUrl)) {
       failures.push(
         `${version} ${locale} Test Kit guide does not pin ${versionedPackageUrl}.`,
+      );
+    }
+    if (
+      version === defaultVersion &&
+      [quickStartGuide, testKitGuide].some(
+        (contents) =>
+          !contents.includes('`@eN`') ||
+          !contents.includes('`@cN`') ||
+          !contents.includes('`@uN`'),
+      )
+    ) {
+      failures.push(
+        `${version} ${locale} current guides do not explain all public observation refs.`,
       );
     }
   }

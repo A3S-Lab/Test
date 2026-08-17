@@ -274,16 +274,16 @@ export function HomeLayout() {
         <div className="test-actions">
           <a
             className="test-button test-button-primary"
-            href={route('/guide/testkit.html')}
+            href={route('/guide/')}
           >
             {copy.quickStart}
             <ArrowRight aria-hidden="true" size={16} weight="bold" />
           </a>
           <a
             className="test-button test-button-secondary"
-            href={route('/concepts/architecture.html')}
+            href={route('/guide/testkit.html')}
           >
-            {copy.architecture}
+            {copy.testkitGuide}
           </a>
         </div>
       </section>

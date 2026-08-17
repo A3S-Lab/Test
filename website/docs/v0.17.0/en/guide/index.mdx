@@ -27,13 +27,14 @@ The example assumes that your product runs at `http://127.0.0.1:3000/checkout` a
 macOS or Linux
 
 ```bash
-curl -fsSL https://github.com/A3S-Lab/Test/releases/latest/download/install.sh | sh
+curl -fsSL https://github.com/A3S-Lab/Test/releases/latest/download/install.sh |
+  sh -s -- --version v0.16.2
 ```
 
 Windows PowerShell
 
 ```powershell
-& ([scriptblock]::Create((irm 'https://github.com/A3S-Lab/Test/releases/latest/download/install.ps1')))
+& ([scriptblock]::Create((irm 'https://github.com/A3S-Lab/Test/releases/latest/download/install.ps1'))) -Version v0.16.2
 ```
 
 The installer downloads the platform CLI, verifies its SHA-256, and installs the matching Skill for detected coding agents. See [Installation](./installation.mdx) to pin a version, agent, or destination.
@@ -65,7 +66,15 @@ observation_id: 1
 @e1 [button] Continue
 ```
 
-When the page embeds Test Kit, the same observation may also contain `@cN` refs and Page Context with component ownership, preferred locators, and multi-space geometry. Both `@eN` and `@cN` are valid only in the observation that produced them.
+One observation may contain three kinds of refs with different authority:
+
+| Ref   | Source                            | Action target                                                  |
+| ----- | --------------------------------- | -------------------------------------------------------------- |
+| `@eN` | Browser accessibility semantics   | Yes, but only inside the current observation                   |
+| `@cN` | Test Kit Page Context             | Yes, for a uniquely actionable node in the current observation |
+| `@uN` | Supplemental Test Kit UI evidence | No, it only connects style, layout, state, and motion evidence |
+
+`@uN` is a read-only evidence ref. Never put it in a `click`, `fill`, `drag`, or ACL action; A3S Test rejects it during admission or before driver dispatch. Page changes also expire `@eN` and `@cN`, so observe again before continuing.
 
 ## 3. Execute one bounded action
 

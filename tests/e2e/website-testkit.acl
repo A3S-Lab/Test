@@ -49,7 +49,7 @@ suite "website-testkit-experience" {
         }
 
         expect "source-contract-boundary" {
-            text = "PRD 和设计稿描述期望，不能替代浏览器可访问树"
+            text = "PRD 和设计稿产生的是期望候选，不是浏览器可访问树"
         }
 
         expect "local-only-disclosure" {

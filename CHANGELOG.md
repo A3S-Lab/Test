@@ -32,9 +32,11 @@
 
 - Reframed the bilingual homepage around fresh rendered-page observations,
   typed actions, exploration-to-ACL regression, human-authorized repair, and
-  reviewed PRD/design expectations. The current quick start now routes readers
-  by task, explains observation-scoped browser and Test Kit references, and
-  keeps the live specimen's page-local storage boundary explicit.
+  reviewed PRD/design expectations while presenting Test Kit as an optional
+  context enhancement. The current quick start now routes readers by task,
+  pins staged documentation to the published installer, distinguishes
+  actionable browser and Page Context refs from read-only UI evidence refs,
+  and keeps the live specimen's page-local storage boundary explicit.
 - Tightened the desktop Test Kit dock, tool tray, finding editor, settings,
   and batch workspace while retaining 44-pixel targets on mobile and coarse
   pointers, including 320-pixel-wide viewports.

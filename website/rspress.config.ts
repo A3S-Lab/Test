@@ -13,7 +13,7 @@ export default defineConfig({
   siteOrigin,
   title: 'A3S Test',
   description:
-    'A3S Test gives coding agents rendered page context, typed actions, repeatable ACL regressions, and fresh evidence for human-authorized repair.',
+    'A3S Test gives coding agents fresh page observations, typed actions, inspectable evidence, and repeatable ACL regressions.',
   lang: 'zh',
   icon: '/a3s-logo.png',
   logo: '/a3s-logo.png',
@@ -36,14 +36,14 @@ export default defineConfig({
       label: '简体中文',
       title: 'A3S Test',
       description:
-        'A3S Test 让编码 Agent 读取渲染后的页面上下文，通过类型化动作探索界面，把跑通的流程固化为 ACL，并用新证据验收人工授权的修复。',
+        'A3S Test 让编码 Agent 依据最新页面观察执行类型化动作，记录可复查证据，并把稳定路径固化为 ACL 回归。',
     },
     {
       lang: 'en',
       label: 'English',
       title: 'A3S Test',
       description:
-        'A3S Test gives coding agents rendered page context, typed actions, repeatable ACL regressions, and fresh evidence for human-authorized repair.',
+        'A3S Test gives coding agents fresh page observations, typed actions, inspectable evidence, and repeatable ACL regressions.',
     },
   ],
   head: [

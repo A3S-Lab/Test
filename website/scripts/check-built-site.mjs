@@ -138,24 +138,26 @@ if (!englishHtml.includes('<html lang="en">')) {
 }
 if (
   !rootHtml.includes('让 Agent 看清页面') ||
-  !rootHtml.includes('把跑通的路径变成回归') ||
-  !rootHtml.includes('一次完整测试，五个可检查步骤')
+  !rootHtml.includes('让每一步都能复现和验收') ||
+  !rootHtml.includes('从观察到验收，每一步都有证据')
 ) {
   failures.push('default homepage lacks Chinese product copy');
 }
 if (
-  !englishHtml.includes('Read rendered pages.') ||
-  !englishHtml.includes('Preserve proven paths.') ||
-  !englishHtml.includes('One complete test in five checkable steps')
+  !englishHtml.includes('Read the current page.') ||
+  !englishHtml.includes('Prove every action.') ||
+  !englishHtml.includes(
+    'Every step from observation to acceptance leaves evidence',
+  )
 ) {
   failures.push('English homepage lacks English product copy');
 }
 if (
-  !rootHtml.includes('PRD 和设计稿描述期望，不能替代浏览器可访问树') ||
+  !rootHtml.includes('PRD 和设计稿产生的是期望候选，不是浏览器可访问树') ||
   !englishHtml.includes(
-    'PRDs and designs describe expectations; they do not replace the browser accessibility tree',
+    'PRDs and designs produce expectation candidates, not a browser accessibility tree',
   ) ||
-  !rootMarkdown.includes('PRD 和设计稿描述期望，不能替代浏览器可访问树')
+  !rootMarkdown.includes('PRD 和设计稿产生的是期望候选，不是浏览器可访问树')
 ) {
   failures.push('homepage lacks the source-to-contract authority boundary');
 }
@@ -170,11 +172,13 @@ if (
   !quickStartHtml.includes('先选对入口') ||
   !quickStartHtml.includes('让页面提供组件、定位器和坐标') ||
   !quickStartHtml.includes('<code>@cN</code>') ||
+  !quickStartHtml.includes('<code>@uN</code>') ||
   !englishQuickStartHtml.includes('Choose the right entry point') ||
   !englishQuickStartHtml.includes(
     'Expose components, locators, and geometry',
   ) ||
-  !englishQuickStartHtml.includes('<code>@cN</code>')
+  !englishQuickStartHtml.includes('<code>@cN</code>') ||
+  !englishQuickStartHtml.includes('<code>@uN</code>')
 ) {
   failures.push('quick start lacks its task routes or observation-scoped refs');
 }
@@ -238,8 +242,9 @@ if (!rootHtml.includes(`${base}social-card.png`)) {
 }
 const pngSignature = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
 if (
-  !socialCardSvg.includes('Read rendered pages.') ||
-  !socialCardSvg.includes('Preserve proven paths.') ||
+  !socialCardSvg.includes('Read the current page.') ||
+  !socialCardSvg.includes('Prove every action.') ||
+  !socialCardSvg.includes('@c12 · button') ||
   !socialCardSvg.includes('href="a3s-logo.png"') ||
   socialCardPng.length < 24 ||
   !socialCardPng.subarray(0, pngSignature.length).equals(pngSignature) ||

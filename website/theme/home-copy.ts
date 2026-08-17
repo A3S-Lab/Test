@@ -143,6 +143,7 @@ type LocalizedCopy = {
   ctaTitle: string;
   ctaBody: string;
   quickStart: string;
+  testkitGuide: string;
   architecture: string;
   footer: string;
   experience: ExperienceCopy;
@@ -150,14 +151,14 @@ type LocalizedCopy = {
 
 export const homeCopy: Record<Locale, LocalizedCopy> = {
   zh: {
-    heroTitle: ['让 Agent 看清页面', '把跑通的路径变成回归'],
+    heroTitle: ['让 Agent 看清页面', '让每一步都能复现和验收'],
     heroBody:
-      '嵌入 Test Kit 后，A3S Test 能在页面渲染完成后读取可访问语义、组件归属、稳定定位器和真实坐标。Agent 依据最新观察执行类型化动作；你也可以点选单个或一批问题，授权修复，再用新页面证据验收。',
-    startExperience: '体验 Test Kit 点选',
+      'A3S Test 为编码 Agent 保留浏览器会话，让每个动作都绑定最新页面观察，并把结果写入可复查证据。接入 Test Kit 后，还能读取组件归属、稳定定位器、真实坐标与 UI 证据，并把人工点选的单个或批量问题明确送入修复。',
+    startExperience: '在本页标记一个问题',
     readDocs: '运行第一个测试',
-    installTitle: '安装 A3S Test，开始第一次运行',
+    installTitle: '一条命令，安装 CLI 与 Agent Skill',
     installBody:
-      '选择系统，复制一条命令，同时安装版本匹配的 CLI 与 Agent Skill。',
+      '选择 macOS、Linux 或 Windows，复制命令后即可安装相同版本的 CLI 与 Agent Skill。',
     installTabs: '选择安装平台',
     installPackage: 'CLI + Agent Skill',
     installNote: '安装器校验发布归档的 SHA-256，并保持 CLI 与 Skill 版本一致。',
@@ -166,11 +167,11 @@ export const homeCopy: Record<Locale, LocalizedCopy> = {
     copy: '复制命令',
     copied: '命令已复制',
     copyError: '复制失败，请手动选择命令',
-    proofTitle: '对照界面期望与浏览器事实',
+    proofTitle: '把产品期望与真实页面逐项核对',
     proofBody:
-      'PRD 提供产品要求，设计稿提供结构与视觉期望，Test Kit 记录当前浏览器事实。人工确认前两类来源后，它们成为 Surface Contract；A3S Test 再按当前页面修订逐项比对并保留差异证据。',
-    contractPanelLabel: '从期望来源到真实页面',
-    contractExpectedLabel: '期望来源',
+      'PRD 说明产品应该完成什么，设计稿说明界面应该如何呈现，Test Kit 记录浏览器实际渲染了什么。人工审阅前两类候选后，A3S Test 把它们发布为 Surface Contract，再与当前页面修订逐项核对并保存差异证据。',
+    contractPanelLabel: '产品期望与当前页面的核对路径',
+    contractExpectedLabel: '产品期望',
     contractObservedLabel: '当前事实',
     contractPrdTitle: '应该完成什么',
     contractPrdBody: '用户结果、文案、业务约束与尚待决定的事项。',
@@ -178,26 +179,26 @@ export const homeCopy: Record<Locale, LocalizedCopy> = {
     contractDesignBody: '区域层级、相互关系、尺寸、位置与视觉约束。',
     contractPageTitle: '现在实际呈现什么',
     contractPageBody: '本次修订的语义、状态、组件、定位器与几何。',
-    contractReviewTitle: '确认期望来源',
-    contractReviewBody: '选择可采纳的候选，处理冲突与未决事项。',
-    contractCompareTitle: '核对当前修订',
+    contractReviewTitle: '人工确认候选',
+    contractReviewBody: '选择可采纳的要求，处理冲突与未决事项。',
+    contractCompareTitle: '核对真实页面',
     contractCompareBody: '逐项检查已确认期望与真实页面。',
-    contractReportTitle: '得到可复查差异',
+    contractReportTitle: '保留可复查差异',
     contractReportBody: '记录来源、决定、页面修订与证据。',
     contractDisclaimer:
-      'PRD 和设计稿描述期望，不能替代浏览器可访问树。只有经人工审阅的候选才能进入 Surface Contract，页面事实仍由当前浏览器修订提供。',
-    contractGuide: '了解 Surface Contract',
-    capabilitiesTitle: '一次完整测试，五个可检查步骤',
+      'PRD 和设计稿产生的是期望候选，不是浏览器可访问树。只有经人工审阅的候选才能进入 Surface Contract，页面事实仍由当前浏览器修订提供。',
+    contractGuide: '了解界面契约如何生成',
+    capabilitiesTitle: '从观察到验收，每一步都有证据',
     capabilitiesBody:
-      '每一步都有明确输入和权限。Agent 只能依据最新观察行动，修复必须人工发送，结果必须由新页面证据确认。',
+      'A3S Test 不靠固定等待猜测页面状态，也不让旧引用跨越页面变化。一次完整测试从最新观察开始，以新页面证据结束。',
     capabilities: [
       {
-        title: '观察最新页面',
-        body: '读取 DOM、可访问语义、交互状态、布局、组件归属和页面修订。',
+        title: '观察当前页面',
+        body: '读取 DOM、可访问语义、交互状态、布局与组件归属，并生成新的观察编号。',
         code: '01 · observe',
       },
       {
-        title: '定位可操作目标',
+        title: '锁定可操作目标',
         body: '优先使用角色、名称和稳定定位器，并保留组件来源与多坐标空间几何。',
         code: '02 · locate',
       },
@@ -207,20 +208,20 @@ export const homeCopy: Record<Locale, LocalizedCopy> = {
         code: '03 · act',
       },
       {
-        title: '人工确认修复范围',
+        title: '由人确认修复范围',
         body: '点选单个或一批问题，补充期望结果，明确发送后才授予修复权限。',
         code: '04 · authorize',
       },
       {
-        title: '用新证据验收',
+        title: '用新页面证明结果',
         body: '重新观察页面，运行断言并保存报告；跑通的路径可以固化为 ACL。',
         code: '05 · prove',
       },
     ],
-    workflowTitle: '先探索，再固化已经跑通的步骤',
+    workflowTitle: '未知路径先探索，稳定路径再回归',
     workflowBody:
       'Agent 会话适合一边观察一边决策；ACL 套件适合重复运行明确动作和断言。两者共用动作、驱动、证据与清理规则。',
-    workflowAgent: '用 Agent 会话探索未知',
+    workflowAgent: '用 Agent 会话探索未知路径',
     workflowAgentBody:
       '每次只依据最新观察执行一个动作，适合复现问题、试走流程和理解陌生页面。',
     workflowAcl: '用 ACL 重复验证已知',
@@ -231,10 +232,10 @@ export const homeCopy: Record<Locale, LocalizedCopy> = {
     workflowObserve: '最新观察',
     workflowDecide: '类型化动作',
     workflowAct: '重新观察',
-    workflowProve: '本地证据',
-    boundaryTitle: '事实、建议、授权与修改彼此分开',
+    workflowProve: '断言与证据',
+    boundaryTitle: '模型可以建议，修改必须明确授权',
     boundaryBody:
-      '浏览器只提供事实，模型只提出候选，人决定哪些问题可以发送，拥有工作区的编码 Agent 才能修改源码。最终结果仍由本地断言和新页面证据决定。',
+      '浏览器提供事实，模型提出候选，人决定哪些问题可以发送，拥有工作区的编码 Agent 才能修改源码。修改后仍必须用本地断言和新页面证据验收。',
     boundaryFacts: '浏览器事实',
     boundaryFactsBody: '当前 DOM、可访问语义、状态、几何、组件与断言结果。',
     boundaryAdvice: '模型建议',
@@ -244,7 +245,7 @@ export const homeCopy: Record<Locale, LocalizedCopy> = {
     boundaryRepair: '修改与验收',
     boundaryRepairBody:
       '编码 Agent 在授权范围内修改，A3S Test 用新浏览器验证，再交回人工验收。',
-    surfacesTitle: '同一套测试语义，适配 Web、GUI 与 TUI',
+    surfacesTitle: '同一套动作与证据契约，适配 Web、GUI 与 TUI',
     surfacesBody:
       '动作、策略、证据和结果共用一套 Core 契约；每类界面由专用驱动负责感知、执行和精确清理。',
     surfaceWeb: 'Web',
@@ -255,10 +256,11 @@ export const homeCopy: Record<Locale, LocalizedCopy> = {
       'macOS 使用锁定的 CUA 契约，并在真实 arm64 主机验证感知、权限和清理。Windows 与 Linux 后端仍需单独审核。',
     surfaceTui: 'TUI',
     surfaceTuiBody: '通过自有 PTY / ConPTY 进程树和有界终端语义运行 ACL 套件。',
-    ctaTitle: '从一个真实页面开始',
+    ctaTitle: '从观察一个真实页面开始',
     ctaBody:
-      '先在开发环境挂载 Test Kit，让 A3S Test 读到页面上下文。随后跑通一个动作、保存证据，再把稳定流程写成 ACL。',
-    quickStart: '接入 Test Kit',
+      '安装 CLI，启动一个带可观察成功条件的会话，再执行第一次观察。需要组件、坐标或人工点选时，再在开发环境接入 Test Kit；跑通后将稳定路径写成 ACL。',
+    quickStart: '运行第一个测试',
+    testkitGuide: '接入 Test Kit',
     architecture: '查看架构',
     footer: '看清当前页面，只做获准动作，保留可复查证据。',
     experience: {
@@ -338,14 +340,14 @@ export const homeCopy: Record<Locale, LocalizedCopy> = {
     },
   },
   en: {
-    heroTitle: ['Read rendered pages.', 'Preserve proven paths.'],
+    heroTitle: ['Read the current page.', 'Prove every action.'],
     heroBody:
-      'With Test Kit embedded, A3S Test can read accessible semantics, component ownership, stable locators, and real geometry after the page renders. Agents act through typed, observation-bound commands; reviewers can mark one issue or a batch, authorize repair, and verify the result against fresh page evidence.',
-    startExperience: 'Try Test Kit marking',
+      'A3S Test keeps a browser session alive for a coding agent, binds every action to a fresh observation, and writes the outcome to inspectable evidence. Add Test Kit for component ownership, stable locators, real geometry, and UI evidence, or to send one marked issue or a batch into repair.',
+    startExperience: 'Mark an issue on this page',
     readDocs: 'Run your first test',
-    installTitle: 'Install A3S Test and run your first check',
+    installTitle: 'Install the CLI and Agent Skill with one command',
     installBody:
-      'Choose your system and copy one command to install matching CLI and Agent Skill versions.',
+      'Choose macOS, Linux, or Windows and copy one command to install matching CLI and Agent Skill versions.',
     installTabs: 'Choose an installation platform',
     installPackage: 'CLI + Agent Skill',
     installNote:
@@ -355,11 +357,11 @@ export const homeCopy: Record<Locale, LocalizedCopy> = {
     copy: 'Copy command',
     copied: 'Command copied',
     copyError: 'Copy failed. Select the command manually.',
-    proofTitle: 'Compare expectations with the rendered page',
+    proofTitle: 'Reconcile product expectations with the rendered page',
     proofBody:
-      'A PRD supplies product requirements, a design supplies structural and visual expectations, and Test Kit records current browser facts. Human-reviewed sources become a Surface Contract that A3S Test reconciles against the current page revision with difference evidence attached.',
-    contractPanelLabel: 'From expected sources to the rendered page',
-    contractExpectedLabel: 'Expected source',
+      'A PRD says what the product should accomplish, a design says how the interface should appear, and Test Kit records what the browser actually rendered. After human review, A3S Test publishes the first two as a Surface Contract, checks it against the current page revision, and retains evidence for every difference.',
+    contractPanelLabel: 'How product expectations meet the current page',
+    contractExpectedLabel: 'Product expectation',
     contractObservedLabel: 'Current fact',
     contractPrdTitle: 'What should the product do?',
     contractPrdBody:
@@ -370,29 +372,30 @@ export const homeCopy: Record<Locale, LocalizedCopy> = {
     contractPageTitle: 'What did this revision render?',
     contractPageBody:
       'Semantics, state, components, locators, and geometry from this page revision.',
-    contractReviewTitle: 'Confirm expected sources',
+    contractReviewTitle: 'Review the candidates',
     contractReviewBody:
-      'Select admissible candidates and resolve conflicts or open decisions.',
-    contractCompareTitle: 'Check the current revision',
+      'Select admissible requirements and resolve conflicts or open decisions.',
+    contractCompareTitle: 'Check the rendered page',
     contractCompareBody:
       'Compare every approved expectation with the rendered page.',
-    contractReportTitle: 'Produce reviewable differences',
+    contractReportTitle: 'Retain reviewable differences',
     contractReportBody:
       'Record sources, decisions, page revision, and evidence.',
     contractDisclaimer:
-      'PRDs and designs describe expectations; they do not replace the browser accessibility tree. Only human-reviewed candidates enter a Surface Contract, while the current browser revision remains the source of rendered facts.',
-    contractGuide: 'Understand Surface Contracts',
-    capabilitiesTitle: 'One complete test in five checkable steps',
+      'PRDs and designs produce expectation candidates, not a browser accessibility tree. Only human-reviewed candidates enter a Surface Contract, while the current browser revision remains the source of rendered facts.',
+    contractGuide: 'See how interface contracts are built',
+    capabilitiesTitle:
+      'Every step from observation to acceptance leaves evidence',
     capabilitiesBody:
-      'Each step has an explicit input and authority. Agents act only from fresh observations, repair requires human submission, and fresh page evidence decides the result.',
+      'A3S Test does not guess page state with fixed delays or carry stale refs across page changes. A complete test starts from a fresh observation and ends with fresh page evidence.',
     capabilities: [
       {
         title: 'Observe the current page',
-        body: 'Read DOM, accessible semantics, interaction state, layout, component ownership, and page revision.',
+        body: 'Read DOM, accessible semantics, interaction state, layout, and component ownership, then issue a fresh observation ID.',
         code: '01 · observe',
       },
       {
-        title: 'Locate an actionable target',
+        title: 'Resolve an actionable target',
         body: 'Prefer role, name, and stable locators while retaining component source and multi-space geometry.',
         code: '02 · locate',
       },
@@ -402,17 +405,17 @@ export const homeCopy: Record<Locale, LocalizedCopy> = {
         code: '03 · act',
       },
       {
-        title: 'Authorize the repair scope',
+        title: 'Have a person authorize repair',
         body: 'Mark one issue or a batch, describe the expected result, and grant repair authority only by sending it.',
         code: '04 · authorize',
       },
       {
-        title: 'Verify with fresh evidence',
+        title: 'Prove the result on a fresh page',
         body: 'Observe again, run assertions, and retain the report. Proven paths can then become ACL regressions.',
         code: '05 · prove',
       },
     ],
-    workflowTitle: 'Explore first. Preserve what works.',
+    workflowTitle: 'Explore unknown paths. Regress stable ones.',
     workflowBody:
       'Agent sessions support observation-led decisions. ACL suites repeat explicit actions and assertions. Both use the same actions, drivers, evidence, and cleanup rules.',
     workflowAgent: 'Explore unknown paths with an agent session',
@@ -426,10 +429,10 @@ export const homeCopy: Record<Locale, LocalizedCopy> = {
     workflowObserve: 'Fresh observation',
     workflowDecide: 'Typed action',
     workflowAct: 'Observe again',
-    workflowProve: 'Local evidence',
-    boundaryTitle: 'Separate facts, advice, authority, and edits',
+    workflowProve: 'Assertions and evidence',
+    boundaryTitle: 'Models may advise. Source changes require authorization.',
     boundaryBody:
-      'The browser supplies facts, models propose candidates, people decide what may be sent, and only a workspace-owning coding agent edits source. Local assertions and fresh page evidence still decide the result.',
+      'The browser supplies facts, models propose candidates, people decide what may be sent, and only a workspace-owning coding agent edits source. Local assertions and fresh page evidence must still accept the change.',
     boundaryFacts: 'Browser facts',
     boundaryFactsBody:
       'Current DOM, accessible semantics, state, geometry, components, and assertion results.',
@@ -442,7 +445,7 @@ export const homeCopy: Record<Locale, LocalizedCopy> = {
     boundaryRepair: 'Edits and acceptance',
     boundaryRepairBody:
       'The coding agent edits within scope, A3S Test verifies in a fresh browser, and the reviewer accepts or reopens the result.',
-    surfacesTitle: 'One test contract across Web, GUI, and TUI',
+    surfacesTitle: 'One action and evidence contract across Web, GUI, and TUI',
     surfacesBody:
       'Actions, policy, evidence, and results share one Core contract. A dedicated driver owns perception, execution, and exact cleanup for each surface.',
     surfaceWeb: 'Web',
@@ -454,10 +457,11 @@ export const homeCopy: Record<Locale, LocalizedCopy> = {
     surfaceTui: 'TUI',
     surfaceTuiBody:
       'ACL suites through owned PTY / ConPTY process trees and bounded terminal semantics.',
-    ctaTitle: 'Start with one real page',
+    ctaTitle: 'Start with one real page observation',
     ctaBody:
-      'Mount Test Kit in development so A3S Test can read the page context. Prove one action, retain the evidence, and encode the stable flow as ACL.',
-    quickStart: 'Integrate Test Kit',
+      'Install the CLI, start a session with an observable success condition, and take the first observation. Add Test Kit when you need components, geometry, or human marking, then preserve the stable path as ACL.',
+    quickStart: 'Run your first test',
+    testkitGuide: 'Add Test Kit',
     architecture: 'Review architecture',
     footer:
       'Read the current page. Take approved actions. Retain reviewable evidence.',

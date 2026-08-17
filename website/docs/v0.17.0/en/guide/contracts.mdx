@@ -11,7 +11,11 @@ v0.17.0 is staged on main but not published. Installation examples remain pinned
 
 A3S Test uses a deployment-injected provider to interpret PRD spans and design regions as precisely sourced candidate structure. A person must review every candidate, resolve conflicts, and close open decisions before publishing a Surface Contract. At runtime, A3S Test reconciles that contract with the browser accessibility tree and Test Kit Page Context, retaining provenance, current page revision, and evidence for every difference.
 
-## Keep three data classes separate
+:::info Why generate a Surface Contract instead of a “design accessibility tree”?
+An accessibility tree is a browser fact computed from real DOM, native control semantics, and current state. PRDs and designs describe expectations but cannot prove that a page implements those semantics. A Surface Contract preserves expectations, provenance, and uncertainty for comparison with browser facts instead of presenting model inference as page observation.
+:::
+
+## Separate expectations from facts
 
 | Data         | What it can prove                                                           | What it cannot prove                                       |
 | ------------ | --------------------------------------------------------------------------- | ---------------------------------------------------------- |

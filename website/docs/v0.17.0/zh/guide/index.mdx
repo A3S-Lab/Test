@@ -27,13 +27,14 @@ v0.17.0 已在 main 上准备完成，但尚未正式发布。安装示例仍固
 macOS 或 Linux
 
 ```bash
-curl -fsSL https://github.com/A3S-Lab/Test/releases/latest/download/install.sh | sh
+curl -fsSL https://github.com/A3S-Lab/Test/releases/latest/download/install.sh |
+  sh -s -- --version v0.16.2
 ```
 
 Windows PowerShell
 
 ```powershell
-& ([scriptblock]::Create((irm 'https://github.com/A3S-Lab/Test/releases/latest/download/install.ps1')))
+& ([scriptblock]::Create((irm 'https://github.com/A3S-Lab/Test/releases/latest/download/install.ps1'))) -Version v0.16.2
 ```
 
 安装器会下载当前平台的 CLI，校验 SHA-256，并为检测到的编码 Agent 安装同版本 Skill。需要固定版本、Agent 或目标目录时，请查看[安装指南](./installation.mdx)。
@@ -65,7 +66,15 @@ observation_id: 1
 @e1 [button] Continue
 ```
 
-页面嵌入 Test Kit 后，同一次观察还可以包含 `@cN` 引用与 Page Context，其中包括组件归属、首选定位器和多坐标空间几何。`@eN` 与 `@cN` 都只在生成它们的观察中有效。
+同一次观察可能出现三种引用。它们的权限不同。
+
+| 引用  | 来自哪里                   | 能否作为动作目标                             |
+| ----- | -------------------------- | -------------------------------------------- |
+| `@eN` | 浏览器可访问语义           | 可以，但只在当前观察中有效                   |
+| `@cN` | Test Kit Page Context      | 可以，但只代表可唯一操作且属于当前观察的节点 |
+| `@uN` | Test Kit UI 理解的补充证据 | 不可以，只用于关联样式、布局、状态和动效证据 |
+
+`@uN` 是只读证据引用。不要把它写进 `click`、`fill`、`drag` 或 ACL 动作；A3S Test 会在准入或驱动执行前拒绝它。页面变化后，`@eN` 与 `@cN` 也会失效，继续操作前必须重新观察。
 
 ## 3. 执行一个受限动作
 

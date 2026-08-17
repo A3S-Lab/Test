@@ -11,6 +11,10 @@ v0.17.0 is staged on main but not published. Installation examples remain pinned
 
 Add `@a3s-lab/testkit` in development and its Context Runtime makes bounded, revisioned Page Context available after the page renders. That context includes current DOM, accessible semantics, component ownership, stable locators, real geometry, and browser-computed UI evidence. The optional Review Overlay lets a person mark one problem or a batch and explicitly send it to the coding agent that owns the workspace. CI can run the headless Context Runtime without the overlay, and the SDK does not write test attributes onto product elements.
 
+:::info Test Kit is an enhancement, not a prerequisite
+A3S Test can still use browser accessibility semantics for typed actions, assertions, and evidence without Test Kit. Add Test Kit when you need component ownership, bounded source hints, multi-space geometry, rendered UI evidence, or human marking.
+:::
+
 ## Install
 
 Every GitHub Release publishes the matching package:
@@ -51,6 +55,15 @@ export function App() {
 
 The framework-neutral entry exports `installTestKit`, `getPageContextBridge`, and protocol types. The React entry adds the provider, component boundary, and optional Shadow DOM overlay. `enabled` must explicitly be `true`; otherwise the runtime stays closed and rejects work.
 
+## Choose context or review mode
+
+| Goal                           | Components to mount                                                                                           |
+| ------------------------------ | ------------------------------------------------------------------------------------------------------------- |
+| Local or CI automation         | `A3STestKit`, plus `A3STestBoundary` where useful; no visible interface is required                           |
+| Human marking and batch repair | Add `A3SReviewOverlay` to the Context Runtime and configure an explicit submission handler or repair endpoint |
+
+Opening the Review Overlay, viewing advice, or saving a local draft never grants source-editing authority. Only a finding the reviewer explicitly sends enters the session-owned repair flow.
+
 ## Review language and project copy
 
 `A3SReviewOverlay` supports `locale="auto" | "en" | "zh-CN"`. The default,
@@ -87,6 +100,16 @@ Each snapshot carries a monotonic revision and binds these facts together:
 - Observed design tokens, overflow/clipping-aware layout relationships, repeated structures, real interaction-state differences, and timeline-aware motion facts.
 
 MutationObserver, ResizeObserver, scrolling, viewport, and navigation signals advance the revision. An unchanged page is not polled. Targets from an older revision expire so an agent cannot act on coordinates or DOM refs from before a hot reload.
+
+## Distinguish actionable refs from read-only evidence
+
+| Ref   | Meaning                                             | Authority                                                                |
+| ----- | --------------------------------------------------- | ------------------------------------------------------------------------ |
+| `@eN` | Accessible semantic node in the browser observation | Actionable only in the observation that produced it                      |
+| `@cN` | Uniquely actionable node in current Page Context    | Actionable and bound to component and geometry facts in that observation |
+| `@uN` | Evidence node in UI understanding                   | Read-only and only connects style, layout, state, and motion facts       |
+
+Public observations never expose Test Kit's private node IDs. A uniquely actionable UI node reuses `@cN`; other evidence nodes project to `@uN`. Any `@uN` action is rejected during ACL admission or before driver dispatch. If projection cannot preserve both graph integrity and the encoded byte budget, A3S Test omits the optional UI evidence.
 
 ## Rendered UI understanding
 
