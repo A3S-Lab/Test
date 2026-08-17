@@ -55,6 +55,101 @@ export function App() {
 
 框架无关入口导出 `installTestKit`、`getPageContextBridge` 和协议类型。React 入口增加 provider、组件边界与可选的 Shadow DOM overlay。`enabled` 必须明确为 `true`，否则运行时关闭并拒绝工作。
 
+## 框架无关接入
+
+非 React 页面可以直接安装 runtime，并显式注册一个或多个组件边界。
+
+```ts
+import { getPageContextBridge, installTestKit } from '@a3s-lab/testkit';
+
+const checkout = document.querySelector('#checkout');
+if (!checkout) throw new Error('Checkout root is missing');
+
+const runtime = installTestKit({
+  enabled: import.meta.env.DEV,
+  page: { id: 'checkout' },
+  ready: () => document.readyState !== 'loading',
+  facts: () => ({ currency: 'CNY' }),
+  redact: ['[data-payment-field]'],
+});
+
+const unregister = runtime.registerBoundary({
+  id: 'checkout-form',
+  name: 'Checkout form',
+  elements: () => [checkout],
+  source: { file: 'src/checkout.ts' },
+});
+
+export function disposeTestContext() {
+  unregister();
+  runtime.dispose();
+}
+
+console.log(getPageContextBridge()?.probe());
+```
+
+同一页面只保留一个 active runtime。再次调用 `installTestKit` 会先释放旧 runtime。SPA 切换应用根、微前端卸载或测试夹具结束时，应调用 `dispose()`，避免观察器和 bridge 残留。
+
+## Next.js 客户端边界
+
+`A3STestKit` 使用浏览器 effect，因此要从 Client Component 挂载。服务端渲染可以继续输出业务页面，Test Kit 只在 hydration 后安装 bridge。
+
+```tsx
+'use client';
+
+import { A3SReviewOverlay, A3STestKit } from '@a3s-lab/testkit/react';
+
+export function TestContext({ children }: { children: React.ReactNode }) {
+  const enabled = process.env.NODE_ENV !== 'production';
+
+  return (
+    <A3STestKit enabled={enabled} page={{ id: 'app' }}>
+      {children}
+      <A3SReviewOverlay enabled={enabled} locale="zh-CN" />
+    </A3STestKit>
+  );
+}
+```
+
+如果 CI 的浏览器测试需要 Page Context，可以让 `A3STestKit` 保持启用并省略 `A3SReviewOverlay`。不要依赖 tree shaking 猜测生产状态，`enabled` 应由明确环境条件决定。
+
+## 验证接入结果
+
+先检查 probe，再读取最小快照。
+
+```ts
+import { getPageContextBridge } from '@a3s-lab/testkit';
+
+const bridge = getPageContextBridge();
+if (!bridge) throw new Error('Test Kit bridge is unavailable');
+
+const probe = bridge.probe();
+const snapshot = bridge.snapshot({
+  detail: 'summary',
+  scope: { kind: 'page' },
+  limits: { nodes: 100, uiNodes: 50 },
+});
+
+console.log({
+  protocol: probe.protocol,
+  revision: snapshot.revision,
+  ready: snapshot.page.ready,
+  components: snapshot.components.map((component) => component.id),
+  truncated: snapshot.truncated,
+});
+```
+
+一次健康接入至少满足以下条件。
+
+- `probe.protocol` 等于 `a3s.test.page-context/1`。
+- `snapshot.page.id` 与接入配置一致。
+- 页面完成当前渲染后 `snapshot.page.ready` 为 `true`。
+- 声明过的组件边界出现在 `components`。
+- 目标节点有语义定位器或几何，敏感区域没有暴露原文。
+- `truncated` 为 `true` 时，调用方会缩小 scope 或使用 `nextCursor`。
+
+bridge 缺失、ready 长期为 false 或 UI 记录被省略时，查看[故障排查](./troubleshooting.mdx)，不要在业务页面里加入任意轮询。
+
 ## 选择上下文或评审模式
 
 | 目标               | 需要挂载的组件                                                                 |
@@ -63,6 +158,30 @@ export function App() {
 | 人工点选与批量修复 | 在 Context Runtime 之外增加 `A3SReviewOverlay`，并配置明确的提交处理或修复端点 |
 
 Review Overlay 不会因为打开、查看建议或保存本地草稿而获得源码修改权限。只有评审者明确发送的问题才进入拥有会话的修复流程。
+
+## Provider 配置速查
+
+| 属性                    | 默认值或要求          | 作用                                           |
+| ----------------------- | --------------------- | ---------------------------------------------- |
+| `enabled`               | 必须显式传入          | 只有严格等于 `true` 才安装浏览器 bridge        |
+| `page.id`               | 必填                  | 标识当前页面上下文                             |
+| `ready`                 | `document.readyState` | 说明页面是否完成当前可观察渲染                 |
+| `facts`                 | `{}`                  | 返回经过 JSON 和字节限制的项目事实             |
+| `redact`                | `[]`                  | 隐藏匹配选择器下的文本和表单内容               |
+| `maxNodes`              | 500                   | Page Context 节点上限，硬上限 5,000            |
+| `maxStringBytes`        | 4 KiB                 | 单字符串上限，硬上限 16 KiB                    |
+| `maxEncodedBytes`       | 1 MiB                 | Page Context 编码上限，硬上限 8 MiB            |
+| `uiUnderstanding`       | `true`                | 是否生成可选 UI 理解记录                       |
+| `maxUiNodes`            | 200                   | UI 采样节点上限，硬上限 1,000                  |
+| `maxUiStateSamples`     | 200                   | 状态候选上限，硬上限 1,000                     |
+| `maxUiDurationMs`       | 32                    | 单次 UI 采集时间，硬上限 100 ms                |
+| `maxUiEncodedBytes`     | 256 KiB               | UI 编码上限，硬上限 1 MiB                      |
+| `repairStorage`         | `session`             | 选择 `memory`、当前标签页 `session` 或 `local` |
+| `repairEndpoint`        | 未配置                | 可选同源 repair adapter                        |
+| `maxQualityReports`     | 5                     | 确定性质量报告保留数，范围 1 到 20             |
+| `maxDesignAuditReports` | 5                     | 建议性设计报告保留数，范围 1 到 20             |
+
+安装级选项只设上限。单次 `snapshot()` 可以降低节点、字符串、编码、UI 节点、状态、时间和 UI 编码预算，不能提高。
 
 ## 中文界面与项目文案
 
@@ -153,3 +272,10 @@ Test Kit 不接收工作区、Shell、MCP 或源码编辑凭据。DOM 上下文�
 确定性 Surface Contract 差异可以阻断套件，但投影到 overlay 只作为评审候选。设计审计结果始终是建议。只有人工保存或发送后，候选才进入现有单项或批量修复流程。
 
 生产构建通常关闭 Test Kit。CI 如需页面上下文，可以保留 `A3STestKit` 并省略 `A3SReviewOverlay`。Next.js 中应从客户端组件挂载，并以 `process.env.NODE_ENV !== "production"` 明确控制。
+
+## 继续深入
+
+- [Page Context 字段与生命周期](../concepts/page-context.mdx)逐项解释快照、scope、坐标、修订、预算和排错。
+- [人工评审与自动修复](./repairs.mdx)覆盖单项与批量发送、同源端点、状态机、编码 Agent 交接和验收。
+- [权限与安全模型](../concepts/authority-and-safety.mdx)说明浏览器事实、模型建议、人工授权、源码修改和验证证据如何隔离。
+- [能力参考](../reference/capabilities.mdx)按入口、输出、证据和失败边界列出完整能力。

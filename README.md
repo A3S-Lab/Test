@@ -373,6 +373,8 @@ an English locale and immutable historical snapshots:
 
 - [简体中文](https://a3s-lab.github.io/Test/)
 - [English](https://a3s-lab.github.io/Test/en/)
+- [Capability reference](https://a3s-lab.github.io/Test/en/reference/capabilities.html)
+- [Troubleshooting](https://a3s-lab.github.io/Test/en/guide/troubleshooting.html)
 - [v0.16.2 snapshot](https://a3s-lab.github.io/Test/v0.16.2/)
 - [v0.15.0 snapshot](https://a3s-lab.github.io/Test/v0.15.0/)
 

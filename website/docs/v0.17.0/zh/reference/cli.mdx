@@ -13,7 +13,7 @@ v0.17.0 已在 main 上准备完成，但尚未正式发布。安装示例仍固
 
 ## 发现能力
 
-这些命令不会根据文档猜测本机能力，而是输出已安装协议和调度边界：
+这些命令直接输出已安装协议和调度边界，不根据文档猜测本机能力。
 
 ```bash
 a3s-test capabilities --json
@@ -47,6 +47,138 @@ Provider schema 描述请求、响应、来源和权限字段，不代表仓库�
 
 `agent open` 是 `agent start` 的别名，`agent snapshot` 是 `agent observe` 的别名。
 
+### 创建会话时的关键选项
+
+```bash
+a3s-test agent start http://127.0.0.1:3000/checkout \
+  --session checkout \
+  --goal "Complete checkout" \
+  --success "The confirmation heading is visible" \
+  --allow-origin http://127.0.0.1:3001 \
+  --browser-driver standalone \
+  --json
+```
+
+| 选项                     | 默认值或要求 | 作用                                                |
+| ------------------------ | ------------ | --------------------------------------------------- |
+| `--session`              | 必填         | 工作区内稳定且唯一的会话标识                        |
+| `--goal`                 | 必填         | 编码 Agent 要完成的具体目标                         |
+| `--success`              | 至少一个     | 可以重复声明的可观察成功条件                        |
+| `--allow-origin`         | 初始 origin  | 增加可导航和可观察的精确 origin                     |
+| `--allow-domain`         | 无           | 增加浏览器网络 hostname，不扩大动作 origin          |
+| `--browser-driver`       | `a3s`        | 选择 `a3s` 或兼容 `standalone` adapter              |
+| `--browser-executable`   | 自动发现     | 为选定 adapter 指定可执行文件                       |
+| `--command-timeout-ms`   | 25,000       | 每条浏览器命令的 deadline                           |
+| `--idle-timeout-ms`      | 300,000      | Agent 两轮之间允许的浏览器 daemon 空闲时间          |
+| `--browser-microphone`   | `disabled`   | 可显式选择 deterministic synthetic microphone       |
+| `--headed`               | 关闭         | 显示浏览器窗口，只用于明确的本地调试                |
+| `--auto-resolve-repairs` | 关闭         | 验证全部通过后自动从 `review_ready` 进入 `resolved` |
+
+自动解决是 session 级选择。验证失败、缺少新 ready 修订或证据不完整时不会自动进入 `resolved`。
+
+### 紧凑动作命令
+
+紧凑命令适合常见的一步操作。
+
+```bash
+a3s-test agent click @e3 \
+  --session checkout \
+  --observation 7 \
+  --json
+
+a3s-test agent fill @e4 "tester@example.test" \
+  --session checkout \
+  --observation 8 \
+  --json
+
+a3s-test agent press Enter --session checkout --json
+a3s-test agent viewport 390 844 --session checkout --json
+a3s-test agent screenshot screenshots/confirmation.png \
+  --session checkout \
+  --json
+```
+
+可用紧凑命令包括 `click`、`hover`、`focus`、`double-click`、`context-click`、`fill`、`type`、`insert-text`、`check`、`uncheck`、`select`、`drag`、`press`、`wheel`、`viewport` 和 `screenshot`。动作需要 ref 时，必须同时传入生成该 ref 的最新 observation ID。
+
+### 完整 Action JSON
+
+标签页、frame、dialog、网络、等待、断言和高级证据使用 `agent act`。
+
+```bash
+a3s-test agent act \
+  --session checkout \
+  --action-json '{"type":"wait","condition":{"type":"text","value":"Order confirmed"}}' \
+  --json
+```
+
+先用 `a3s-test agent schema` 获取修订 7 的完整 JSON Schema。当前动作类型如下。
+
+| 类别       | `type` 值                                                                                                        |
+| ---------- | ---------------------------------------------------------------------------------------------------------------- |
+| 页面状态   | `navigate`、`snapshot`、`viewport`、`tab`、`frame`、`dialog`                                                     |
+| 指针与表单 | `click`、`hover`、`focus`、`double_click`、`context_click`、`fill`、`type`、`check`、`uncheck`、`select`、`drag` |
+| 键盘与终端 | `insert_text`、`press`、`wheel`、`terminal_paste`、`terminal_resize`、`terminal_recording`                       |
+| 同步       | `wait`、`assert`                                                                                                 |
+| 文件与网络 | `upload`、`download`、`network_route`、`network_unroute`                                                         |
+| 证据       | `screenshot`、`har`、`trace`、`video`、`accessibility`、`console`、`page_errors`                                 |
+
+`insert_text` 复用已建立的编辑上下文，不接收新目标。`terminal_*` 只在 TUI surface 合法。未知字段和当前 surface 不支持的动作会在派发前拒绝。
+
+### Test Kit inspection
+
+```bash
+a3s-test agent inspect \
+  --session checkout \
+  --component checkout-form \
+  --detail forensic \
+  --limit 100 \
+  --json
+```
+
+`--detail` 接受 `summary`、`scoped`、`diff` 与 `forensic`。范围可以是 page、一个当前私有 node、component，或 `viewport,x,y,width,height` 与 `document,x,y,width,height` 形式的 region。响应带 `cursor` 时，下一次 inspection 必须保持相同 session、scope 与页面修订。
+
+### Repair Ledger 命令
+
+| 阶段       | 命令                           | 关键参数和结果                                                     |
+| ---------- | ------------------------------ | ------------------------------------------------------------------ |
+| 提取       | `repair-watch`                 | `--limit` 默认 20，`--timeout-ms` 默认 30,000，批次窗口默认 250 ms |
+| 领取       | `repair-claim`                 | finding ID、幂等 request ID、attempt ID 与默认五分钟 lease         |
+| 开始编辑   | `repair-progress`              | attempt ID 必须匹配，状态进入 `repairing`                          |
+| 请求澄清   | `repair-reply`                 | 保存消息并进入 `needs_input`                                       |
+| 完成编辑   | `repair-complete`              | 进入 A3S Test 拥有的 `verifying`，不声明 resolved                  |
+| 运行验证   | `repair-verify`                | success criteria、changed files、checks JSON 与可选 ACL candidate  |
+| 失败或取消 | `repair-fail`、`repair-cancel` | 追加终止事件并保留 attempt 历史                                    |
+
+每次状态变化都需要新的幂等 request ID。claim 返回的 attempt ID 要沿用到 progress、reply、complete 和 fail。`repair-verify` 必须针对更新后的 ready 页面修订。
+
+### 会话终态与文件
+
+```bash
+a3s-test agent finish \
+  --session checkout \
+  --status passed \
+  --summary "Checkout completed and confirmation was observed" \
+  --json
+```
+
+持久会话默认保存在当前工作区的 `.a3s-test/agent-sessions/<session>/`。`events.jsonl` 是追加式事件记录，`report.json` 是终态结果，`artifacts/` 只允许相对证据路径。`finish` 用于已经得到 passed 或 failed 结论的会话；无法安全继续时使用精确 `abort`。
+
+## 契约与 provider
+
+```bash
+a3s-test contract generate \
+  --config tests/contracts/checkout.generate.acl \
+  --output tests/contracts/checkout.draft.json
+
+a3s-test contract review \
+  --draft tests/contracts/checkout.draft.json \
+  --review tests/contracts/checkout.review.acl \
+  --output tests/contracts/checkout.acl \
+  --audit tests/contracts/checkout.reviewed.json
+```
+
+`contract generate` 只写 candidate draft。`contract review` 重新校验来源、评审动作和冲突后才发布规范 ACL。视觉定位与设计审查分别通过 `agent ground` 和 `agent audit` 调用部署方 provider，返回建议而不执行页面动作。
+
 ## ACL 与分布式运行
 
 ```bash
@@ -57,6 +189,22 @@ a3s-test distributed run <distributed.acl> --json
 ```
 
 远程 worker 使用独立的 `a3s.test.remote-worker/3` 执行协议和 `a3s.test.remote-artifacts/1` artifact 协议。请求不能选择 executable、应用、后端、凭据或网络策略，这些必须由部署启动参数固定。
+
+`check` 只做准入，不启动界面。`run` 在准入后执行 suite，并把产品失败、测试规范错误、基础设施错误和清理错误分开写入机器结果。`distributed plan` 先匹配 worker 能力，`distributed run` 才发送鉴权 shard。
+
+## JSON 与错误契约
+
+自动化调用应统一传入 `--json`，读取稳定错误码、状态和结构化字段，避免解析面向人的帮助文本。常见错误范围如下。
+
+| 范围             | 归属                             |
+| ---------------- | -------------------------------- |
+| `test.spec.*`    | ACL、配置、target 或路径准入     |
+| `test.driver.*`  | surface adapter、协议和生命周期  |
+| `test.assert.*`  | 产品实际状态与期望不符           |
+| `test.run.*`     | deadline、取消、调度和清理       |
+| `test.session.*` | 持久会话、Repair Ledger 和 lease |
+
+完整处理方法见[故障排查](../guide/troubleshooting.mdx)。全部功能与权限边界见[能力参考](./capabilities.mdx)。
 
 ## 退出码
 

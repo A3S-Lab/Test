@@ -28,6 +28,14 @@ import '@rspress/core/dist/theme/components/NavHamburger/index.css';
 import { createPortal } from 'react-dom';
 import { useEffect, useRef } from 'react';
 
+const CURRENT_ONLY_ROUTES = new Set([
+  'concepts/authority-and-safety',
+  'concepts/page-context',
+  'guide/repairs',
+  'guide/troubleshooting',
+  'reference/capabilities',
+]);
+
 function labelSocialLinks(root: ParentNode, language: string) {
   root
     .querySelectorAll<HTMLAnchorElement>(
@@ -54,6 +62,19 @@ function versionHref(
 
   if (currentVersion !== defaultVersion && parts[0] === currentVersion) {
     parts.shift();
+  }
+  const locale = parts[0] === 'en' ? parts[0] : '';
+  const contentParts = locale ? parts.slice(1) : parts;
+  const contentRoute = contentParts
+    .join('/')
+    .replace(/\.html$/, '')
+    .replace(/\/index$/, '');
+  if (
+    currentVersion === defaultVersion &&
+    targetVersion !== defaultVersion &&
+    CURRENT_ONLY_ROUTES.has(contentRoute)
+  ) {
+    return `/${[targetVersion, locale].filter(Boolean).join('/')}/`;
   }
   if (targetVersion !== defaultVersion) {
     parts.unshift(targetVersion);

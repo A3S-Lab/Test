@@ -55,6 +55,101 @@ export function App() {
 
 The framework-neutral entry exports `installTestKit`, `getPageContextBridge`, and protocol types. The React entry adds the provider, component boundary, and optional Shadow DOM overlay. `enabled` must explicitly be `true`; otherwise the runtime stays closed and rejects work.
 
+## Framework-neutral integration
+
+A non-React page can install the runtime directly and register one or more component boundaries.
+
+```ts
+import { getPageContextBridge, installTestKit } from '@a3s-lab/testkit';
+
+const checkout = document.querySelector('#checkout');
+if (!checkout) throw new Error('Checkout root is missing');
+
+const runtime = installTestKit({
+  enabled: import.meta.env.DEV,
+  page: { id: 'checkout' },
+  ready: () => document.readyState !== 'loading',
+  facts: () => ({ currency: 'CNY' }),
+  redact: ['[data-payment-field]'],
+});
+
+const unregister = runtime.registerBoundary({
+  id: 'checkout-form',
+  name: 'Checkout form',
+  elements: () => [checkout],
+  source: { file: 'src/checkout.ts' },
+});
+
+export function disposeTestContext() {
+  unregister();
+  runtime.dispose();
+}
+
+console.log(getPageContextBridge()?.probe());
+```
+
+Keep one active runtime per page. Calling `installTestKit` again disposes the previous runtime first. Call `dispose()` when an SPA replaces its application root, a micro-frontend unmounts, or a test fixture ends, so observers and the bridge do not remain attached.
+
+## Next.js client boundary
+
+`A3STestKit` uses browser effects and must mount from a Client Component. Server rendering can still produce the product page; Test Kit installs its bridge only after hydration.
+
+```tsx
+'use client';
+
+import { A3SReviewOverlay, A3STestKit } from '@a3s-lab/testkit/react';
+
+export function TestContext({ children }: { children: React.ReactNode }) {
+  const enabled = process.env.NODE_ENV !== 'production';
+
+  return (
+    <A3STestKit enabled={enabled} page={{ id: 'app' }}>
+      {children}
+      <A3SReviewOverlay enabled={enabled} locale="en" />
+    </A3STestKit>
+  );
+}
+```
+
+If browser tests in CI require Page Context, keep `A3STestKit` enabled and omit `A3SReviewOverlay`. Do not rely on tree shaking to infer production state; set `enabled` from an explicit environment condition.
+
+## Verify the integration
+
+Check the probe, then read the smallest snapshot.
+
+```ts
+import { getPageContextBridge } from '@a3s-lab/testkit';
+
+const bridge = getPageContextBridge();
+if (!bridge) throw new Error('Test Kit bridge is unavailable');
+
+const probe = bridge.probe();
+const snapshot = bridge.snapshot({
+  detail: 'summary',
+  scope: { kind: 'page' },
+  limits: { nodes: 100, uiNodes: 50 },
+});
+
+console.log({
+  protocol: probe.protocol,
+  revision: snapshot.revision,
+  ready: snapshot.page.ready,
+  components: snapshot.components.map((component) => component.id),
+  truncated: snapshot.truncated,
+});
+```
+
+A healthy integration meets at least these conditions.
+
+- `probe.protocol` equals `a3s.test.page-context/1`.
+- `snapshot.page.id` matches the integration config.
+- `snapshot.page.ready` becomes `true` after the current render completes.
+- Declared boundaries appear in `components`.
+- The target has semantic locators or geometry, and redacted regions expose no original sensitive text.
+- When `truncated` is `true`, the caller narrows scope or follows `nextCursor`.
+
+If the bridge is absent, ready stays false, or the UI record is omitted, use [Troubleshooting](./troubleshooting.mdx) instead of adding arbitrary polling to the product page.
+
 ## Choose context or review mode
 
 | Goal                           | Components to mount                                                                                           |
@@ -63,6 +158,30 @@ The framework-neutral entry exports `installTestKit`, `getPageContextBridge`, an
 | Human marking and batch repair | Add `A3SReviewOverlay` to the Context Runtime and configure an explicit submission handler or repair endpoint |
 
 Opening the Review Overlay, viewing advice, or saving a local draft never grants source-editing authority. Only a finding the reviewer explicitly sends enters the session-owned repair flow.
+
+## Provider configuration reference
+
+| Prop                    | Default or requirement | Purpose                                                      |
+| ----------------------- | ---------------------- | ------------------------------------------------------------ |
+| `enabled`               | Explicitly required    | Installs the browser bridge only when strictly `true`        |
+| `page.id`               | Required               | Identifies the current page context                          |
+| `ready`                 | `document.readyState`  | Reports whether the page has completed its observable render |
+| `facts`                 | `{}`                   | Returns project facts under JSON and byte bounds             |
+| `redact`                | `[]`                   | Hides text and form content under matching selectors         |
+| `maxNodes`              | 500                    | Page Context node ceiling, with a 5,000 hard limit           |
+| `maxStringBytes`        | 4 KiB                  | Per-string ceiling, with a 16 KiB hard limit                 |
+| `maxEncodedBytes`       | 1 MiB                  | Encoded Page Context ceiling, with an 8 MiB hard limit       |
+| `uiUnderstanding`       | `true`                 | Enables the optional UI-understanding record                 |
+| `maxUiNodes`            | 200                    | UI sampled-node ceiling, with a 1,000 hard limit             |
+| `maxUiStateSamples`     | 200                    | State-candidate ceiling, with a 1,000 hard limit             |
+| `maxUiDurationMs`       | 32                     | Per-capture UI time, with a 100 ms hard limit                |
+| `maxUiEncodedBytes`     | 256 KiB                | Encoded UI ceiling, with a 1 MiB hard limit                  |
+| `repairStorage`         | `session`              | Select `memory`, current-tab `session`, or `local`           |
+| `repairEndpoint`        | Unset                  | Optional same-origin repair adapter                          |
+| `maxQualityReports`     | 5                      | Deterministic quality reports retained, clamped from 1 to 20 |
+| `maxDesignAuditReports` | 5                      | Advisory design reports retained, clamped from 1 to 20       |
+
+Installation options set ceilings. An individual `snapshot()` may lower node, string, encoding, UI-node, state, duration, and UI-encoding budgets but cannot raise them.
 
 ## Review language and project copy
 
@@ -169,3 +288,10 @@ Test Kit receives no workspace, shell, MCP, or source-editing credentials. DOM c
 Deterministic Surface Contract differences may block a suite, but their overlay projection remains a review candidate. Design-audit output is always advisory. A candidate reaches the existing single or batch repair flow only after a person saves or sends it.
 
 Production builds normally disable Test Kit. CI may keep `A3STestKit` enabled while omitting `A3SReviewOverlay`. In Next.js, mount both from a client component and gate them explicitly with `process.env.NODE_ENV !== "production"`.
+
+## Continue in depth
+
+- [Page Context fields and lifecycle](../concepts/page-context.mdx) covers snapshots, scopes, coordinates, revisions, budgets, and troubleshooting field by field.
+- [Human review and automated repair](./repairs.mdx) covers single and batch submission, the same-origin adapter, state machine, coding-agent handoff, and acceptance.
+- [Authority and safety model](../concepts/authority-and-safety.mdx) separates browser facts, model advice, human authorization, source mutation, and verification evidence.
+- [Capability reference](../reference/capabilities.mdx) lists every entry point, output, evidence rule, and failure boundary.

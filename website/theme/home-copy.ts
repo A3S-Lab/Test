@@ -1,153 +1,10 @@
-export type Locale = 'zh' | 'en';
+import type { ExperienceCopy, Locale, LocalizedCopy } from './home-copy-types';
 
-export type ExperienceCopy = {
-  stageAria: string;
-  boundaryName: string;
-  sample: string;
-  shop: string;
-  checkoutTitle: string;
-  checkoutProgress: [string, string, string, string];
-  customerTitle: string;
-  customerName: string;
-  customerAddress: string;
-  productsTitle: string;
-  productName: string;
-  productVariant: string;
-  quantity: string;
-  subtotal: string;
-  totalDue: string;
-  summaryTitle: string;
-  productTotal: string;
-  delivery: string;
-  deliveryValue: string;
-  discount: string;
-  discountValue: string;
-  payable: string;
-  paymentTitle: string;
-  paymentMethod: string;
-  submit: string;
-  submitted: string;
-  contextTitle: string;
-  refresh: string;
-  connecting: string;
-  contextUnavailable: string;
-  notAvailable: string;
-  selected: string;
-  revision: string;
-  role: string;
-  name: string;
-  geometry: string;
-  locator: string;
-  source: string;
-  reviewTitle: string;
-  reviewBody: string;
-  openReview: string;
-  reviewStarted: string;
-  live: string;
-  localOnly: string;
-  evidenceTitle: string;
-  evidenceWaiting: string;
-  evidenceReady: string;
-  receiptId: string;
-  receiptStatus: string;
-  receiptFindings: string;
-  receiptMemory: string;
-  receiptIdle: string;
-  findingUnit: string;
-  findingsUnit: string;
-  noFinding: string;
-  renderedStatus: string;
-  contextStatus: string;
-  evidenceStatus: string;
-  motionSteps: [string, string, string, string, string];
-  scanSummary: string;
-  targetMarker: string;
-  motionFinding: string;
-  motionRequest: string;
-  motionPacket: string;
-  motionContext: string;
-  motionContextValue: string;
-  motionAdd: string;
-  motionSend: string;
-  motionReady: string;
-  motionPause: string;
-  motionResume: string;
-};
-
-type LocalizedCopy = {
-  heroTitle: [string, string];
-  heroBody: string;
-  startExperience: string;
-  readDocs: string;
-  installTitle: string;
-  installBody: string;
-  installTabs: string;
-  installPackage: string;
-  installNote: string;
-  installCandidateNote: string;
-  copy: string;
-  copied: string;
-  copyError: string;
-  proofTitle: string;
-  proofBody: string;
-  contractPanelLabel: string;
-  contractExpectedLabel: string;
-  contractObservedLabel: string;
-  contractPrdTitle: string;
-  contractPrdBody: string;
-  contractDesignTitle: string;
-  contractDesignBody: string;
-  contractPageTitle: string;
-  contractPageBody: string;
-  contractReviewTitle: string;
-  contractReviewBody: string;
-  contractCompareTitle: string;
-  contractCompareBody: string;
-  contractReportTitle: string;
-  contractReportBody: string;
-  contractDisclaimer: string;
-  contractGuide: string;
-  capabilitiesTitle: string;
-  capabilitiesBody: string;
-  capabilities: Array<{ title: string; body: string; code: string }>;
-  workflowTitle: string;
-  workflowBody: string;
-  workflowAgent: string;
-  workflowAgentBody: string;
-  workflowAcl: string;
-  workflowAclBody: string;
-  workflowAgentLink: string;
-  workflowAclLink: string;
-  workflowObserve: string;
-  workflowDecide: string;
-  workflowAct: string;
-  workflowProve: string;
-  boundaryTitle: string;
-  boundaryBody: string;
-  boundaryFacts: string;
-  boundaryFactsBody: string;
-  boundaryAdvice: string;
-  boundaryAdviceBody: string;
-  boundaryHuman: string;
-  boundaryHumanBody: string;
-  boundaryRepair: string;
-  boundaryRepairBody: string;
-  surfacesTitle: string;
-  surfacesBody: string;
-  surfaceWeb: string;
-  surfaceWebBody: string;
-  surfaceGui: string;
-  surfaceGuiBody: string;
-  surfaceTui: string;
-  surfaceTuiBody: string;
-  ctaTitle: string;
-  ctaBody: string;
-  quickStart: string;
-  testkitGuide: string;
-  architecture: string;
-  footer: string;
-  experience: ExperienceCopy;
-};
+export type {
+  CapabilityGroupId,
+  ExperienceCopy,
+  Locale,
+} from './home-copy-types';
 
 export const homeCopy: Record<Locale, LocalizedCopy> = {
   zh: {
@@ -216,6 +73,269 @@ export const homeCopy: Record<Locale, LocalizedCopy> = {
         title: '断言结果并保存证据',
         body: '检查成功条件并保存报告；通过验证的路径可以固化为 ACL。',
         code: '05 · prove',
+      },
+    ],
+    capabilityLedgerTitle: '功能清单细到输入、证据和失效规则',
+    capabilityLedgerBody:
+      '展开任一组即可核对采集信号、公开引用、权限边界和验证方式。这里列的是当前实现契约，不把可选模型或待审核平台写成既有能力。',
+    capabilityReference: '查看 38 项能力的入口、输出、证据和失败边界',
+    capabilityItemCount: '项可核验能力',
+    capabilityGroups: [
+      {
+        id: 'context',
+        code: 'PAGE CONTEXT',
+        title: '页面感知',
+        summary:
+          '从浏览器已渲染结果中提取语义、组件、定位器、几何、布局和动效证据。',
+        href: '/concepts/page-context.html',
+        linkLabel: '查看 Page Context 字段、预算与失效规则',
+        items: [
+          {
+            signal: 'DOM · AX · FORM',
+            title: '语义结构与表单状态',
+            body: '遍历 Light DOM 与开放 Shadow DOM，保留角色、可访问名称、原生交互状态和经过脱敏的表单状态。',
+          },
+          {
+            signal: 'BOUNDARY · SOURCE',
+            title: '组件归属与源码提示',
+            body: '显式边界可补充组件 ID、名称、多根盒子、ready、受控 facts 与文件行列提示；没有边界时自动 DOM 上下文仍可工作。',
+          },
+          {
+            signal: 'ROLE → CSS',
+            title: '稳定定位器候选链',
+            body: '按角色与名称、label、test ID、placeholder、文本和 CSS 的顺序保留候选，屏幕坐标只作为最后手段。',
+          },
+          {
+            signal: 'VIEWPORT · DOCUMENT · NORMALIZED',
+            title: '三套坐标与可见性',
+            body: '记录视口、文档和 visual viewport 标准化几何，同时保留可见比例、遮挡、定位方式、变换和最近滚动容器。',
+          },
+          {
+            signal: 'FLEX · GRID · BOX',
+            title: '布局图与视觉系统',
+            body: '读取样式令牌、Flex、Grid、普通流、层叠关系、精确 client 与 scroll 尺寸、逐轴裁剪和物理盒模型边值。',
+          },
+          {
+            signal: 'STATE · TIMELINE',
+            title: '真实状态差分与动效',
+            body: '只记录页面自然出现的 hover、focus、checked 等差分，并描述 transition、CSS 与 Web Animations、时间轴、范围和 reduced motion。',
+          },
+          {
+            signal: 'REVISION · BUDGET',
+            title: '修订、范围与预算',
+            body: 'DOM、尺寸、路由、视口和滚动变化推进修订；支持页面、节点、组件与区域范围，以及 summary、scoped、diff、forensic 明细和有界分页。',
+          },
+        ],
+      },
+      {
+        id: 'safety',
+        code: 'ACTION SAFETY',
+        title: '动作与安全',
+        summary:
+          '每个动作都要通过最新观察、类型 Schema、能力策略、来源和运行时所有权检查。',
+        href: '/concepts/authority-and-safety.html',
+        linkLabel: '查看权限、安全和失败关闭规则',
+        items: [
+          {
+            signal: '@eN · @cN · @uN',
+            title: '观察绑定引用',
+            body: '@eN 与 @cN 只在生成它们的最新观察中可操作。@uN 永远只读，用于连接样式、布局、状态和动效证据。',
+          },
+          {
+            signal: 'SCHEMA · POLICY',
+            title: '类型化动作准入',
+            body: '点击、填写、拖动、等待和证据动作先校验字段、会话能力、目标类型与策略，再交给界面驱动执行。',
+          },
+          {
+            signal: 'ORIGIN · NETWORK',
+            title: '来源与网络边界',
+            body: 'URL 动作和观察使用精确 origin 门禁，网络访问使用单独的允许范围；页面跳离已授权来源后不会继续签发新引用。',
+          },
+          {
+            signal: 'REDACT · UNTRUSTED',
+            title: '脱敏与不可信上下文',
+            body: '密码、Cookie、存储、请求头和密钥不会进入 Page Context。页面文本、facts 和修复说明始终作为不可信证据处理。',
+          },
+          {
+            signal: 'PROCESS · ARTIFACT',
+            title: '精确进程与证据所有权',
+            body: '每次运行只清理自己创建的浏览器或进程树，证据路径受限在本次会话目录，不按进程名关闭开发者已有会话。',
+          },
+        ],
+      },
+      {
+        id: 'repair',
+        code: 'HUMAN REVIEW',
+        title: '人工评审与修复',
+        summary:
+          '评审者先标记和组织问题，再明确发送；拥有工作区的编码 Agent 才能进入修复与验证。',
+        href: '/guide/repairs.html',
+        linkLabel: '查看单项、批量、队列与验收流程',
+        items: [
+          {
+            signal: 'ELEMENT · TEXT · MULTI · REGION · DRAW',
+            title: '五种页面标记',
+            body: '支持元素、选中文本、有序多选、矩形区域和自由手绘，并把目标绑定到发送时的最新页面修订。',
+          },
+          {
+            signal: 'PLACEMENT · REARRANGE',
+            title: '类型化布局意图',
+            body: 'Layout Mode 记录新增组件区域或现有区块目标位置，不移动节点、不写内联样式，也不把 overlay 变成页面编辑器。',
+          },
+          {
+            signal: 'MEMORY · SESSION · LOCAL',
+            title: '草稿与本地存储',
+            body: '草稿可留在内存、当前标签页或本地浏览器。打开编辑器、查看建议和保存草稿都不会授予源码修改权限。',
+          },
+          {
+            signal: 'SINGLE · BATCH · CONFLICT',
+            title: '单项、批量与显式冲突',
+            body: '单项发送和批量发送共享稳定顺序。互斥需求使用 conflicts_with 关系声明，系统不会从自然语言猜测冲突。',
+          },
+          {
+            signal: 'BRIDGE · SAME ORIGIN',
+            title: '显式发送通道',
+            body: '问题可由浏览器会话从 bridge 队列提取，也可 POST 到可选同源端点。端点只转发有界记录，不接收工作区或 Agent 凭据。',
+          },
+          {
+            signal: 'QUEUE → REVIEW',
+            title: '追加式修复状态',
+            body: 'queued、claimed、repairing、verifying 和 review_ready 等变化带序号、操作者与 attempt ID，非法跳转不会改写状态。',
+          },
+          {
+            signal: 'BEFORE · AFTER',
+            title: '新页面验证与人工验收',
+            body: '验证要求更新后的 ready 修订，重新定位目标并比较断言、截图、console 和 page errors。默认由人接受、拒绝或重新打开结果。',
+          },
+        ],
+      },
+      {
+        id: 'execution',
+        code: 'SURFACE EXECUTION',
+        title: '界面执行',
+        summary:
+          '把导航、指针、表单、键盘、浏览器上下文、同步和文件操作表达成类型化动作。',
+        href: '/reference/capabilities.html#界面执行',
+        linkLabel: '查看动作入口、目标要求和失败行为',
+        items: [
+          {
+            signal: 'NAVIGATE · SNAPSHOT · VIEWPORT',
+            title: '导航、观察与视口',
+            body: '导航受精确 origin 约束；snapshot 生成新观察；viewport 用明确宽高与缩放重建响应式条件，并使旧引用失效。',
+          },
+          {
+            signal: 'CLICK · FILL · SELECT · DRAG',
+            title: '指针与表单动作',
+            body: '支持点击、悬停、聚焦、双击、右键、填写、追加输入、勾选、选择与拖动，目标必须匹配动作需要的角色和状态。',
+          },
+          {
+            signal: 'PRESS · INSERT_TEXT · WHEEL',
+            title: '键盘、编辑上下文与滚轮',
+            body: '按键与修饰键滚轮使用类型化参数；insert_text 只复用已经建立的焦点或选择范围，不获得新的目标权限。',
+          },
+          {
+            signal: 'TAB · FRAME · DIALOG',
+            title: '标签页、Frame 与对话框',
+            body: '切换浏览器上下文后必须重新观察。对话框接受与拒绝显式建模，跨域 Frame 仍受浏览器与来源策略限制。',
+          },
+          {
+            signal: 'WAIT · ASSERT',
+            title: '有界等待与本地断言',
+            body: '按 load、文本、URL 或可见性等待和断言，全部受场景或命令 deadline 约束，不用无限 sleep 推测页面已经完成。',
+          },
+          {
+            signal: 'UPLOAD · DOWNLOAD · ROUTE',
+            title: '文件与网络控制',
+            body: '上传、下载和网络路由都经过清单、路径与域名准入；下载和网络证据只能写入本次运行拥有的目录。',
+          },
+          {
+            signal: 'WEB · GUI · TUI',
+            title: '跨界面动作契约',
+            body: 'Core 复用动作、策略、结果和清理语义，各驱动独立实现感知与执行。Web、macOS CUA 和 TUI 的验证范围分别披露。',
+          },
+        ],
+      },
+      {
+        id: 'contracts',
+        code: 'EXPECTATIONS & MODELS',
+        title: '期望、契约与模型建议',
+        summary:
+          '把 PRD、设计稿和可选模型输出保留为带来源候选，经人工审阅后再与真实页面核对。',
+        href: '/guide/contracts.html',
+        linkLabel: '查看候选生成、人工审阅和页面对账',
+        items: [
+          {
+            signal: 'PRD · BYTE RANGE · DIGEST',
+            title: 'PRD 候选生成',
+            body: '把用户结果、文案和业务约束绑定到原文件摘要与精确字节范围，超出来源、预算或置信边界的候选会被拒绝。',
+          },
+          {
+            signal: 'DESIGN · REGION · HIERARCHY',
+            title: '设计稿候选生成',
+            body: '把区域、层级、几何和视觉关系绑定到图像摘要与像素区域，不伪造浏览器角色、名称或交互状态。',
+          },
+          {
+            signal: 'DRAFT · REVIEW · ACL',
+            title: '人工审阅与发布',
+            body: '生成结果保持 candidate-only。评审文件逐项批准、拒绝或解决冲突，来源重新校验后才输出规范 Surface Contract。',
+          },
+          {
+            signal: 'VERIFY_CONTRACT · PROVENANCE',
+            title: '契约与页面确定性对账',
+            body: '按 test ID、组件、角色与名称匹配期望和当前页面。阻断差异影响套件，建议差异只进入带来源报告。',
+          },
+          {
+            signal: 'GROUND · PNG SHA-256',
+            title: '可选视觉定位',
+            body: '显式请求或确定性定位失败时，可调用部署方 provider 返回点或矩形候选；截图摘要、观察和预算不匹配就关闭失败。',
+          },
+          {
+            signal: 'AUDIT · FORENSIC · ADVISORY',
+            title: '可选设计审查',
+            body: '截图与 forensic Page Context 共同绑定层级、布局、排版、色彩和响应式建议。报告不含 verdict、动作或修复授权。',
+          },
+        ],
+      },
+      {
+        id: 'evidence',
+        code: 'EVIDENCE & ACL',
+        title: '证据、回归与调度',
+        summary:
+          '把观察、动作、断言和工件保留为可审计记录，再把稳定路径放进本地、CI 或分布式运行。',
+        href: '/guide/workflows.html',
+        linkLabel: '查看 Agent 会话和 ACL 回归工作流',
+        items: [
+          {
+            signal: 'PNG · AX · CONSOLE · ERRORS',
+            title: '默认小证据集',
+            body: '按需保存截图、可访问树、console 和 page errors；HAR、trace 与视频只在确有诊断价值的时间窗口开启。',
+          },
+          {
+            signal: 'HAR · TRACE · VIDEO · DOWNLOAD',
+            title: '按需诊断工件',
+            body: 'HAR、Chrome trace、WebM 视频和受约束下载按明确窗口启停，避免把整段会话变成体积巨大且难审阅的证据包。',
+          },
+          {
+            signal: 'SESSION · EVENTS · REPORT',
+            title: '持久 Agent 会话',
+            body: '会话保留目标、观察、类型化动作、追加式事件、证据和终态报告，编码 Agent 每次依据最新页面决定一个动作。',
+          },
+          {
+            signal: 'CHECK · RUN · CI',
+            title: '确定性 ACL 套件',
+            body: '跑通的最小路径可写成 ACL，先静态准入，再在本地与 CI 重复动作、等待、断言和有界清理。',
+          },
+          {
+            signal: 'INVENTORY · SHARD · REMOTE',
+            title: '能力清单与分布式分片',
+            body: 'Worker 先报告平台、驱动、协议和容量，再接收已准入分片。远程请求不能选择可执行文件、凭据或宿主网络策略。',
+          },
+          {
+            signal: 'PRODUCT · SPEC · INFRA',
+            title: '可区分的失败结果',
+            body: '报告区分产品断言失败、测试规范错误、驱动或环境故障和清理失败，让下一步修改有明确归属。',
+          },
+        ],
       },
     ],
     workflowTitle: '用会话走通，用 ACL 回归',
@@ -413,6 +533,273 @@ export const homeCopy: Record<Locale, LocalizedCopy> = {
         title: 'Assert the result and retain evidence',
         body: 'Check the success condition and retain the report. A verified path can then become an ACL regression.',
         code: '05 · prove',
+      },
+    ],
+    capabilityLedgerTitle:
+      'Inspect capabilities down to signals, evidence, and expiry rules',
+    capabilityLedgerBody:
+      'Expand a group to inspect collection signals, public refs, authority boundaries, and verification. This ledger describes implemented contracts without presenting optional models or unverified platforms as built-in support.',
+    capabilityReference:
+      'Inspect all 38 entry points, outputs, evidence rules, and failure boundaries',
+    capabilityItemCount: 'verifiable capabilities',
+    capabilityGroups: [
+      {
+        id: 'context',
+        code: 'PAGE CONTEXT',
+        title: 'Page perception',
+        summary:
+          'Derive semantics, components, locators, geometry, layout, and motion evidence from the rendered browser state.',
+        href: '/concepts/page-context.html',
+        linkLabel: 'Inspect Page Context fields, budgets, and expiry',
+        items: [
+          {
+            signal: 'DOM · AX · FORM',
+            title: 'Semantic structure and form state',
+            body: 'Traverse light DOM and open Shadow DOM while preserving roles, accessible names, native interaction state, and redacted form state.',
+          },
+          {
+            signal: 'BOUNDARY · SOURCE',
+            title: 'Component ownership and source hints',
+            body: 'Explicit boundaries add component ID, name, multi-root boxes, readiness, controlled facts, and optional file locations. Automatic DOM context still works without them.',
+          },
+          {
+            signal: 'ROLE → CSS',
+            title: 'Stable locator candidates',
+            body: 'Retain role and name, label, test ID, placeholder, text, and CSS candidates in order. Screen coordinates remain a last resort.',
+          },
+          {
+            signal: 'VIEWPORT · DOCUMENT · NORMALIZED',
+            title: 'Three coordinate spaces and visibility',
+            body: 'Record viewport, document, and visual-viewport-normalized geometry with visible ratio, occlusion, positioning, transforms, and the nearest scroll container.',
+          },
+          {
+            signal: 'FLEX · GRID · BOX',
+            title: 'Layout graph and visual system',
+            body: 'Read style tokens, Flex, Grid, normal flow, stacking, exact client and scroll extents, per-axis clipping, and resolved physical box-model edges.',
+          },
+          {
+            signal: 'STATE · TIMELINE',
+            title: 'Observed state differences and motion',
+            body: 'Keep naturally occurring hover, focus, checked, and related differences plus transitions, CSS and Web Animations, timelines, ranges, and reduced motion.',
+          },
+          {
+            signal: 'REVISION · BUDGET',
+            title: 'Revisions, scopes, and budgets',
+            body: 'DOM, size, route, viewport, and scroll changes advance the revision. Page, node, component, and region scopes support summary, scoped, diff, forensic, and bounded pagination.',
+          },
+        ],
+      },
+      {
+        id: 'safety',
+        code: 'ACTION SAFETY',
+        title: 'Actions and safety',
+        summary:
+          'Admit every action through the latest observation, typed schema, capability policy, origin, and runtime ownership checks.',
+        href: '/concepts/authority-and-safety.html',
+        linkLabel: 'Review authority, safety, and fail-closed rules',
+        items: [
+          {
+            signal: '@eN · @cN · @uN',
+            title: 'Observation-bound refs',
+            body: '@eN and @cN are actionable only in the latest observation that created them. @uN is permanently read-only UI evidence.',
+          },
+          {
+            signal: 'SCHEMA · POLICY',
+            title: 'Typed action admission',
+            body: 'Clicks, fills, drags, waits, and evidence actions validate fields, session capability, target type, and policy before reaching a surface driver.',
+          },
+          {
+            signal: 'ORIGIN · NETWORK',
+            title: 'Origin and network boundaries',
+            body: 'URL actions and observations use exact-origin gates while network access has a separate allowlist. A page that leaves its admitted origin receives no new refs.',
+          },
+          {
+            signal: 'REDACT · UNTRUSTED',
+            title: 'Redaction and untrusted context',
+            body: 'Passwords, cookies, storage, request headers, and secrets never enter Page Context. Page text, facts, and repair instructions remain untrusted evidence.',
+          },
+          {
+            signal: 'PROCESS · ARTIFACT',
+            title: 'Exact process and artifact ownership',
+            body: 'Each run cleans up only the browser or process tree it created. Evidence stays inside its session root, and unrelated developer sessions are never killed by name.',
+          },
+        ],
+      },
+      {
+        id: 'repair',
+        code: 'HUMAN REVIEW',
+        title: 'Human review and repair',
+        summary:
+          'A reviewer marks and organizes findings before explicit submission. Only a workspace-owning coding agent can enter repair and verification.',
+        href: '/guide/repairs.html',
+        linkLabel: 'Inspect single, batch, queue, and acceptance flows',
+        items: [
+          {
+            signal: 'ELEMENT · TEXT · MULTI · REGION · DRAW',
+            title: 'Five page-marking modes',
+            body: 'Mark elements, selected text, ordered multi-selection, rectangles, or freehand regions, then bind the target to the fresh page revision at submission.',
+          },
+          {
+            signal: 'PLACEMENT · REARRANGE',
+            title: 'Typed layout intent',
+            body: 'Layout Mode records a new component region or a destination for an existing section without moving nodes, writing inline styles, or becoming a page builder.',
+          },
+          {
+            signal: 'MEMORY · SESSION · LOCAL',
+            title: 'Draft and browser storage',
+            body: 'Keep drafts in memory, the current tab, or local browser storage. Opening an editor, viewing advice, and saving a draft never authorize source edits.',
+          },
+          {
+            signal: 'SINGLE · BATCH · CONFLICT',
+            title: 'Single, batch, and explicit conflicts',
+            body: 'Single and batch submission preserve stable visible order. Incompatible requests use a typed conflicts_with relation rather than inferred language conflict.',
+          },
+          {
+            signal: 'BRIDGE · SAME ORIGIN',
+            title: 'Explicit submission channels',
+            body: 'A browser session can drain the bridge queue, or the page can POST to an optional same-origin adapter. That adapter receives bounded records and no workspace credentials.',
+          },
+          {
+            signal: 'QUEUE → REVIEW',
+            title: 'Append-only repair state',
+            body: 'Queued, claimed, repairing, verifying, and review-ready transitions carry sequence, actor, and attempt identity. Invalid transitions do not mutate state.',
+          },
+          {
+            signal: 'BEFORE · AFTER',
+            title: 'Fresh verification and human acceptance',
+            body: 'Verification requires a newer ready revision, re-resolves the target, and compares assertions, screenshots, console, and page errors. A person accepts, rejects, or reopens by default.',
+          },
+        ],
+      },
+      {
+        id: 'execution',
+        code: 'SURFACE EXECUTION',
+        title: 'Surface execution',
+        summary:
+          'Express navigation, pointer, form, keyboard, browser-context, synchronization, and file operations as typed actions.',
+        href: '/reference/capabilities.html#surface-execution',
+        linkLabel:
+          'Inspect action entry points, target requirements, and failures',
+        items: [
+          {
+            signal: 'NAVIGATE · SNAPSHOT · VIEWPORT',
+            title: 'Navigation, observation, and viewport',
+            body: 'Navigation is exact-origin scoped, snapshot creates a fresh observation, and viewport re-evaluates responsive conditions with explicit dimensions and scale while expiring old refs.',
+          },
+          {
+            signal: 'CLICK · FILL · SELECT · DRAG',
+            title: 'Pointer and form actions',
+            body: 'Click, hover, focus, double-click, context-click, fill, type, check, select, and drag require a target whose role and state fit the operation.',
+          },
+          {
+            signal: 'PRESS · INSERT_TEXT · WHEEL',
+            title: 'Keyboard, edit context, and wheel',
+            body: 'Keys and modified wheel gestures use typed parameters. insert_text reuses an established focus or selection and grants no new targeting authority.',
+          },
+          {
+            signal: 'TAB · FRAME · DIALOG',
+            title: 'Tabs, frames, and dialogs',
+            body: 'A browser-context switch requires a fresh observation. Dialog acceptance is explicit, while cross-origin frames remain constrained by browser and origin policy.',
+          },
+          {
+            signal: 'WAIT · ASSERT',
+            title: 'Bounded waits and local assertions',
+            body: 'Wait or assert on load, text, URL, or visibility under scenario and command deadlines instead of inferring readiness from an unbounded sleep.',
+          },
+          {
+            signal: 'UPLOAD · DOWNLOAD · ROUTE',
+            title: 'File and network controls',
+            body: 'Uploads, downloads, and network routes pass manifest, path, and domain admission. Downloads and network evidence stay within run-owned directories.',
+          },
+          {
+            signal: 'WEB · GUI · TUI',
+            title: 'Cross-surface action contract',
+            body: 'Core shares action, policy, result, and cleanup semantics while each driver owns perception and execution. Web, macOS CUA, and TUI verification scopes are disclosed separately.',
+          },
+        ],
+      },
+      {
+        id: 'contracts',
+        code: 'EXPECTATIONS & MODELS',
+        title: 'Expectations, contracts, and model advice',
+        summary:
+          'Keep PRD, design, and optional model output as source-bound candidates, then compare reviewed expectations with the rendered page.',
+        href: '/guide/contracts.html',
+        linkLabel:
+          'Inspect candidate generation, human review, and page comparison',
+        items: [
+          {
+            signal: 'PRD · BYTE RANGE · DIGEST',
+            title: 'PRD candidate generation',
+            body: 'Bind user outcomes, copy, and business constraints to a source digest and exact byte range. Reject candidates outside provenance, budget, or confidence bounds.',
+          },
+          {
+            signal: 'DESIGN · REGION · HIERARCHY',
+            title: 'Design candidate generation',
+            body: 'Bind regions, hierarchy, geometry, and visual relationships to an image digest and pixel region without inventing browser roles, names, or interaction state.',
+          },
+          {
+            signal: 'DRAFT · REVIEW · ACL',
+            title: 'Human review and publication',
+            body: 'Generated output remains candidate-only. A review approves, rejects, or resolves each conflict before source revalidation emits a canonical Surface Contract.',
+          },
+          {
+            signal: 'VERIFY_CONTRACT · PROVENANCE',
+            title: 'Deterministic contract comparison',
+            body: 'Match expectations to the current page by test ID, component, role, and name. Blocking differences affect the suite while advisory differences remain sourced reports.',
+          },
+          {
+            signal: 'GROUND · PNG SHA-256',
+            title: 'Optional visual grounding',
+            body: 'An explicit request or deterministic miss can invoke a deployment provider for point or box candidates. Screenshot, observation, or budget drift fails closed.',
+          },
+          {
+            signal: 'AUDIT · FORENSIC · ADVISORY',
+            title: 'Optional design review',
+            body: 'A screenshot plus forensic Page Context binds hierarchy, layout, typography, color, and responsive advice. The report contains no verdict, action, or repair authority.',
+          },
+        ],
+      },
+      {
+        id: 'evidence',
+        code: 'EVIDENCE & ACL',
+        title: 'Evidence, regression, and scheduling',
+        summary:
+          'Retain observations, actions, assertions, and artifacts as auditable records, then run stable paths locally, in CI, or across workers.',
+        href: '/guide/workflows.html',
+        linkLabel: 'Review agent-session and ACL regression workflows',
+        items: [
+          {
+            signal: 'PNG · AX · CONSOLE · ERRORS',
+            title: 'Small default evidence set',
+            body: 'Capture screenshots, accessibility, console, and page errors as needed. Enable HAR, trace, or video only around a diagnostic window that needs them.',
+          },
+          {
+            signal: 'HAR · TRACE · VIDEO · DOWNLOAD',
+            title: 'On-demand diagnostic artifacts',
+            body: 'HAR, Chrome trace, WebM video, and bounded downloads start and stop around an explicit window instead of turning the whole session into an oversized evidence bundle.',
+          },
+          {
+            signal: 'SESSION · EVENTS · REPORT',
+            title: 'Persistent agent sessions',
+            body: 'A session keeps goals, observations, typed actions, append-only events, evidence, and a terminal report while the coding agent chooses one action from each fresh page.',
+          },
+          {
+            signal: 'CHECK · RUN · CI',
+            title: 'Deterministic ACL suites',
+            body: 'Encode the smallest proven path as ACL, statically admit it, then repeat actions, waits, assertions, and bounded cleanup locally and in CI.',
+          },
+          {
+            signal: 'INVENTORY · SHARD · REMOTE',
+            title: 'Capability inventory and distributed shards',
+            body: 'A worker reports platform, driver, protocol, and capacity before receiving admitted shards. Remote requests cannot choose executables, credentials, or host network policy.',
+          },
+          {
+            signal: 'PRODUCT · SPEC · INFRA',
+            title: 'Distinguishable failure results',
+            body: 'Reports separate product assertion failures, test-specification errors, driver or environment failures, and cleanup errors so the next owner is clear.',
+          },
+        ],
       },
     ],
     workflowTitle: 'Explore in a session. Repeat with ACL.',

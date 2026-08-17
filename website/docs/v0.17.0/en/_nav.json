@@ -1,14 +1,25 @@
 [
   { "text": "Get started", "link": "/guide/", "activeMatch": "^/guide/" },
   {
+    "text": "Test Kit",
+    "items": [
+      { "text": "Integration guide", "link": "/guide/testkit" },
+      { "text": "Page Context", "link": "/concepts/page-context" },
+      { "text": "Human review and repair", "link": "/guide/repairs" }
+    ]
+  },
+  {
     "text": "Architecture",
     "link": "/concepts/architecture",
     "activeMatch": "^/concepts/"
   },
   {
-    "text": "CLI reference",
-    "link": "/reference/cli",
-    "activeMatch": "^/reference/"
+    "text": "Reference",
+    "items": [
+      { "text": "Capabilities", "link": "/reference/capabilities" },
+      { "text": "CLI commands", "link": "/reference/cli" },
+      { "text": "Troubleshooting", "link": "/guide/troubleshooting" }
+    ]
   },
   {
     "text": "Resources",

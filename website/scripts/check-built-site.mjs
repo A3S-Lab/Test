@@ -115,6 +115,46 @@ const contractsHtml = await readFile(
   path.join(outputRoot, 'guide', 'contracts.html'),
   'utf8',
 );
+const repairsHtml = await readFile(
+  path.join(outputRoot, 'guide', 'repairs.html'),
+  'utf8',
+);
+const englishRepairsHtml = await readFile(
+  path.join(outputRoot, 'en', 'guide', 'repairs.html'),
+  'utf8',
+);
+const pageContextHtml = await readFile(
+  path.join(outputRoot, 'concepts', 'page-context.html'),
+  'utf8',
+);
+const englishPageContextHtml = await readFile(
+  path.join(outputRoot, 'en', 'concepts', 'page-context.html'),
+  'utf8',
+);
+const authorityHtml = await readFile(
+  path.join(outputRoot, 'concepts', 'authority-and-safety.html'),
+  'utf8',
+);
+const englishAuthorityHtml = await readFile(
+  path.join(outputRoot, 'en', 'concepts', 'authority-and-safety.html'),
+  'utf8',
+);
+const capabilitiesHtml = await readFile(
+  path.join(outputRoot, 'reference', 'capabilities.html'),
+  'utf8',
+);
+const englishCapabilitiesHtml = await readFile(
+  path.join(outputRoot, 'en', 'reference', 'capabilities.html'),
+  'utf8',
+);
+const troubleshootingHtml = await readFile(
+  path.join(outputRoot, 'guide', 'troubleshooting.html'),
+  'utf8',
+);
+const englishTroubleshootingHtml = await readFile(
+  path.join(outputRoot, 'en', 'guide', 'troubleshooting.html'),
+  'utf8',
+);
 const quickStartHtml = await readFile(
   path.join(outputRoot, 'guide', 'index.html'),
   'utf8',
@@ -139,16 +179,36 @@ if (!englishHtml.includes('<html lang="en">')) {
 if (
   !rootHtml.includes('让 Agent 看清页面') ||
   !rootHtml.includes('让每次动作都有证据') ||
-  !rootHtml.includes('每个动作都从最新观察开始')
+  !rootHtml.includes('每个动作都从最新观察开始') ||
+  !rootHtml.includes('功能清单细到输入、证据和失效规则') ||
+  !rootHtml.includes('data-testid="capability-group-repair"') ||
+  !rootHtml.includes('data-testid="capability-group-execution"') ||
+  !rootHtml.includes('data-testid="capability-group-contracts"') ||
+  !rootHtml.includes('查看 38 项能力的入口、输出、证据和失败边界')
 ) {
   failures.push('default homepage lacks Chinese product copy');
 }
 if (
   !englishHtml.includes('Observe the page.') ||
   !englishHtml.includes('Prove every action.') ||
-  !englishHtml.includes('Every action starts from a fresh observation')
+  !englishHtml.includes('Every action starts from a fresh observation') ||
+  !englishHtml.includes(
+    'Inspect capabilities down to signals, evidence, and expiry rules',
+  ) ||
+  !englishHtml.includes(
+    'Inspect all 38 entry points, outputs, evidence rules, and failure boundaries',
+  )
 ) {
   failures.push('English homepage lacks English product copy');
+}
+if (
+  !rootMarkdown.includes('功能清单细到输入、证据和失效规则') ||
+  !rootMarkdown.includes('观察绑定引用') ||
+  !rootMarkdown.includes('新页面验证与人工验收') ||
+  !rootMarkdown.includes('标签页、Frame 与对话框') ||
+  !rootMarkdown.includes('PRD 候选生成')
+) {
+  failures.push('homepage Markdown lacks the detailed capability ledger');
 }
 if (
   !rootHtml.includes('PRD 和设计稿产生的是期望候选，不是浏览器可访问树') ||
@@ -280,7 +340,9 @@ if (!installationHtml.includes('data-lang="powershell"')) {
 }
 if (
   !testKitHtml.includes('data-lang="tsx"') ||
-  !testKitHtml.includes('var(--shiki-token-constant)')
+  !testKitHtml.includes('var(--shiki-token-constant)') ||
+  !testKitHtml.includes('框架无关接入') ||
+  !testKitHtml.includes('验证接入结果')
 ) {
   failures.push('Test Kit guide lacks highlighted TSX code');
 }
@@ -291,6 +353,70 @@ if (
   !contractsHtml.includes('var(--shiki-token-string-expression)')
 ) {
   failures.push('contract guide lacks highlighted ACL code');
+}
+if (
+  !pageContextHtml.includes('三类浏览器事实如何配合') ||
+  !pageContextHtml.includes('预算、截断与分页') ||
+  !pageContextHtml.includes('常见问题定位') ||
+  !englishPageContextHtml.includes(
+    'How three browser fact sources work together',
+  ) ||
+  !englishPageContextHtml.includes('Budgets, truncation, and pagination') ||
+  !englishPageContextHtml.includes('Troubleshooting')
+) {
+  failures.push('Page Context guides lack field-level bilingual detail');
+}
+if (
+  !repairsHtml.includes('草稿、保存和发送不是同一件事') ||
+  !repairsHtml.includes('修复状态机') ||
+  !repairsHtml.includes('A3S Test 如何验证修复') ||
+  !englishRepairsHtml.includes(
+    'Draft, save, and send are separate operations',
+  ) ||
+  !englishRepairsHtml.includes('Repair state machine') ||
+  !englishRepairsHtml.includes('How A3S Test verifies a repair')
+) {
+  failures.push('repair guides lack the bilingual queue and verification flow');
+}
+if (
+  !authorityHtml.includes('Origin 和网络是两道门') ||
+  !authorityHtml.includes('模型 provider 只有建议权限') ||
+  !authorityHtml.includes('部署检查') ||
+  !englishAuthorityHtml.includes('Origin and network are separate gates') ||
+  !englishAuthorityHtml.includes(
+    'Model providers have advisory authority only',
+  ) ||
+  !englishAuthorityHtml.includes('Deployment checklist')
+) {
+  failures.push('authority guides lack bilingual operational boundaries');
+}
+if (
+  !capabilitiesHtml.includes('核心会话') ||
+  !capabilitiesHtml.includes('界面执行') ||
+  !capabilitiesHtml.includes('<code>network_route</code>') ||
+  !capabilitiesHtml.includes('人工评审与修复') ||
+  !capabilitiesHtml.includes('证据、回归与调度') ||
+  !englishCapabilitiesHtml.includes('Core sessions') ||
+  !englishCapabilitiesHtml.includes('Surface execution') ||
+  !englishCapabilitiesHtml.includes('<code>network_route</code>') ||
+  !englishCapabilitiesHtml.includes('Human review and repair') ||
+  !englishCapabilitiesHtml.includes('Evidence, regression, and scheduling')
+) {
+  failures.push(
+    'capability reference lacks bilingual entry and boundary detail',
+  );
+}
+if (
+  !troubleshootingHtml.includes('根据错误范围选择负责人') ||
+  !troubleshootingHtml.includes('<code>test.driver.web.*</code>') ||
+  !troubleshootingHtml.includes('Page Context 被截断') ||
+  !troubleshootingHtml.includes('提交最小诊断包') ||
+  !englishTroubleshootingHtml.includes('Assign ownership by error scope') ||
+  !englishTroubleshootingHtml.includes('<code>test.driver.web.*</code>') ||
+  !englishTroubleshootingHtml.includes('Page Context is truncated') ||
+  !englishTroubleshootingHtml.includes('Share a minimal diagnostic bundle')
+) {
+  failures.push('troubleshooting guides lack bilingual evidence-led diagnosis');
 }
 
 for (const version of versions.filter((entry) => entry !== defaultVersion)) {

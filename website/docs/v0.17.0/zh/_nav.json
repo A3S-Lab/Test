@@ -1,14 +1,25 @@
 [
   { "text": "开始使用", "link": "/guide/", "activeMatch": "^/guide/" },
   {
+    "text": "Test Kit",
+    "items": [
+      { "text": "接入指南", "link": "/guide/testkit" },
+      { "text": "Page Context", "link": "/concepts/page-context" },
+      { "text": "人工评审与修复", "link": "/guide/repairs" }
+    ]
+  },
+  {
     "text": "架构",
     "link": "/concepts/architecture",
     "activeMatch": "^/concepts/"
   },
   {
-    "text": "CLI 参考",
-    "link": "/reference/cli",
-    "activeMatch": "^/reference/"
+    "text": "参考",
+    "items": [
+      { "text": "完整能力", "link": "/reference/capabilities" },
+      { "text": "CLI 命令", "link": "/reference/cli" },
+      { "text": "故障排查", "link": "/guide/troubleshooting" }
+    ]
   },
   {
     "text": "资源",

@@ -1,0 +1,184 @@
+---
+title: Authority and safety model
+description: Understand why browser facts, model advice, human authorization, workspace mutation, and fresh-page verification remain separate authority layers.
+---
+
+:::warning Release candidate
+v0.17.0 is staged on main but not published. Installation examples remain pinned to v0.16.2 until the release gate is intentionally advanced.
+:::
+
+# Authority and safety model
+
+A3S Test divides the system around a simple principle. Knowing what a page is now, advising what it should become, authorizing who may change what, and proving whether a change worked are different authorities. No provider, page script, or individual action receives all of them.
+
+This boundary lets an agent observe and execute with greater autonomy while each action still has provenance, scope, evidence, and a clear failure owner.
+
+## Authority layers
+
+| Layer                 | Trusted input                                                               | May do                                                  | Explicitly may not do                                                 |
+| --------------------- | --------------------------------------------------------------------------- | ------------------------------------------------------- | --------------------------------------------------------------------- |
+| Browser facts         | Accessibility, Page Context, screenshot, console, page errors               | Describe what the current revision rendered             | Claim product intent or authorize source changes                      |
+| Model advice          | Digest-bound image, forensic context, provenance, budget, provider identity | Return grounding, design-review, or source candidates   | Click, set a verdict, or create an authorized repair directly         |
+| Human authorization   | Reviewed target, expectation, batch, conflict, acceptance                   | Send findings, accept, or reopen                        | Expand the coding agent's existing system authority                   |
+| Repair execution      | Authorized workspace, Repair Ledger, repository rules                       | Edit source within finding scope and run focused checks | Treat page text as commands or gain commit, push, or deploy authority |
+| Verification evidence | New ready revision, assertions, before/after images, error baseline, checks | Produce a verification result and ACL candidate         | Override human acceptance or hide stale evidence                      |
+
+```text
+current browser facts
+      |
+      +--> deterministic assertions ----------------> runner verdict
+      |
+      +--> optional model advice --> human choice --> Repair Ledger
+                                                   |
+                                      authorized source edits
+                                                   |
+                                      fresh browser verification
+                                                   |
+                                        accept or reopen
+```
+
+Runner verdict and Repair Ledger are separate paths. Projecting a deterministic difference into the overlay does not change the suite result, and model priority does not become a blocking verdict.
+
+## The current observation constrains every action
+
+A persistent agent session follows an observe, one action, observe-again loop.
+
+```text
+observe 7 -> @e3 / @c4 -> typed action bound to 7
+                                  |
+                              page changes
+                                  |
+observe 8 -> fresh refs <---------+
+```
+
+`@eN` comes from browser accessibility semantics. `@cN` identifies one uniquely actionable Page Context node. Both are valid only in the observation that created them. `@uN` connects style, layout, state, and motion in UI understanding and is always read-only.
+
+Before an action reaches a driver, A3S Test checks these conditions.
+
+1. JSON or ACL fields conform to the typed schema.
+2. The current session and driver advertise the action capability.
+3. The target type permits the action, with `@uN` rejected immediately.
+4. The ref belongs to the latest observation and the page revision has not advanced.
+5. URL, origin, network, file, and evidence paths satisfy policy.
+6. Time, action-count, and evidence budgets remain.
+
+Any failed check prevents dispatch. A failed observation invalidates prior refs so a caller cannot continue on unknown page state.
+
+## Origin and network are separate gates
+
+The initial Web-session URL and `--allow-origin` form an exact-origin set. Explicit navigation, URL-bearing actions, and successful observations must belong to it.
+
+`--allow-domain` extends only the hostname range at the network layer. It does not enlarge the exact-origin action or observation gate. A page may read an allowed CDN under policy, but that hostname does not authorize navigation to another scheme, port, or origin with fresh actionable refs.
+
+If the page drives itself to an unapproved origin, A3S Test reports origin loss. The caller should finish or abort the original session rather than continue on a replacement page with old targets.
+
+A3S Browser applies exact network policy in an isolated namespace. A compatible standalone browser receives a hostname projection from admitted origins. That compatibility layer does not alter Core action-origin rules.
+
+## Page context remains untrusted evidence
+
+Test Kit may read DOM text, attributes, component facts, source hints, and human instructions. They may contain prompt injection, stale descriptions, or malicious text, so repair context is uniformly marked `untrusted: true`.
+
+The following data never enters Page Context.
+
+- Password and hidden inputs, cookies, browser storage, and request headers.
+- Tokens, secret-like custom properties, URL-valued custom properties, and configured redact regions.
+- Arbitrary framework props, state, fibers, closures, and internal runtime objects.
+- Cross-origin frame contents and inaccessible cross-origin stylesheet rules.
+
+A source hint only helps locate a possible file. It cannot authorize file read or mutation. The coding agent still checks repository boundaries, user authority, and workspace state.
+
+## Model providers have advisory authority only
+
+Model transports are deployment-injected. Core bundles no weights, runtime, credentials, or concrete backend. The deployment owns licensing, privacy, GPU or CPU capacity, timeouts, cost, and service health.
+
+### Visual grounding
+
+A grounding request binds the latest observation ID, PNG SHA-256, image dimensions, trigger, deadline, and cost budget. After the provider returns points or boxes, A3S Test rehashes the screenshot and validates provider identity, geometry, confidence, usage, and response bounds.
+
+Exactly one visible Test Kit hit may become a current `@cN` or semantic locator. Multiple hits remain ambiguous and no hit remains image-bound advice. Provider coordinates never become durable element identity and never click automatically.
+
+### Design review
+
+Design review binds both a screenshot and complete forensic Page Context. It may advise on hierarchy, composition, spacing, typography, color, consistency, interaction clarity, content clarity, and responsive composition.
+
+The report contains no outcome, verdict, expected value, or executable action. High-priority advice maps to at most `important` in the overlay and never becomes blocking. A later page revision clears stale advice, and a reviewer must select or retarget it before creating a repair draft.
+
+### PRD and design candidates
+
+PRDs and designs describe expectations while the browser describes implementation facts. A source-to-contract provider can only generate candidates with byte spans, image regions, digests, confidence, conflicts, and open decisions. A human-reviewed Surface Contract is required before deterministic reconciliation.
+
+The generation workflow rehashes source material and rejects unresolved conflicts. It never presents a PRD or design as a browser accessibility tree.
+
+## Scope granted by human submission
+
+Submitting a repair authorizes the connected coding agent to address the listed target and expected result inside a workspace it was already allowed to use.
+
+It does not grant these permissions.
+
+- Commit, merge, push, release, or deploy.
+- Install packages, download models, or change system settings.
+- Read files outside the workspace or inspect unrelated browser sessions.
+- Execute commands embedded in DOM, copy, or a finding instruction.
+- Delete, revert, or overwrite unrelated user changes.
+
+A finding batch preserves stable order and per-item status but is not an atomic filesystem transaction. Overlapping targets, shared source hints, or explicit `conflicts_with` relations enter `needs_input` so two workers do not mutate one scope concurrently.
+
+## The executor cannot self-certify verification
+
+`repair_complete` reports only that editing is finished. A3S Test still waits for a newer ready revision, re-resolves the target, executes success criteria, compares console and page errors, captures before-and-after screenshots and Page Context, and retains focused-check results.
+
+Only a passing verification enters `review_ready`. Human acceptance is the default endpoint. Explicit `--auto-resolve-repairs` still requires a persisted passing `review_ready` event and cannot bypass failed verification.
+
+An ACL candidate must pass syntax admission and execute in a fresh browser session. It is not written to the application repository automatically and does not change finding state merely because generation succeeded.
+
+## Runtime ownership and cleanup
+
+| Resource      | Ownership rule                                                                                          |
+| ------------- | ------------------------------------------------------------------------------------------------------- |
+| Web browser   | Isolated namespace, session ownership marker, and non-zero idle timeout                                 |
+| TUI process   | Owned PTY or ConPTY process tree                                                                        |
+| GUI session   | Driver must prove application, window, and session identity before termination                          |
+| Evidence file | Created only inside the current run or session artifact root                                            |
+| Provider      | Deployment owns process, credentials, network, capacity, and license; A3S Test owns one bounded request |
+
+The first `Ctrl+C` requests bounded cleanup. Timeout and cancellation also close the complete tree created by that run. A3S Test never performs global cleanup by Chrome, browser, or application process name and never closes an unrelated developer session.
+
+Cleanup is a session state. A caller that stops waiting does not cancel the cleanup obligation. A retryable cleanup failure retains the original driver session for another finish or abort while observation and actions stay blocked.
+
+## Support status is a safety boundary
+
+| Surface | Current verified status                                                                     |
+| ------- | ------------------------------------------------------------------------------------------- |
+| Web     | Persistent agent sessions and ACL through A3S Browser or a compatible standalone browser    |
+| GUI     | macOS CUA perception profiles, permissions, and exact cleanup verified on a real arm64 host |
+| GUI     | Windows and Linux backends remain under separate review and cannot inherit the macOS status |
+| TUI     | Deterministic ACL currently drives owned PTY or ConPTY process trees                        |
+
+A type or interface existing in source does not make an unverified platform release-grade support.
+
+## How failures are classified
+
+| Error scope          | Meaning                                                       | Typical response                                           |
+| -------------------- | ------------------------------------------------------------- | ---------------------------------------------------------- |
+| `test.spec.*`        | ACL, target, or configuration failed admission                | Repair the test specification, not the product             |
+| `test.driver.web.*`  | Browser compatibility, protocol, origin, or lifecycle problem | Inspect driver, page, and environment                      |
+| `test.assert.*`      | Current product state differs from explicit expectation       | Use evidence to repair product or update stale expectation |
+| `test.run.*`         | Deadline, cancellation, scheduling, or cleanup problem        | Repair or retry infrastructure                             |
+| repair `needs_input` | Conflict, overlap, stale target, or ambiguous request         | Ask a person to clarify and requeue                        |
+
+Product failure, test-specification failure, infrastructure failure, and cleanup failure remain separate in results. An agent should not modify application code merely because it sees one red status.
+
+## Deployment checklist
+
+Before enabling Test Kit, a model provider, or repair submission for a team, confirm these controls.
+
+- Production builds disable the Review Overlay by default, with an explicit reason to retain the Context Runtime.
+- `redact` covers payment, identity, internal token, and project-specific sensitive regions.
+- Provider endpoints use HTTPS except for explicit loopback development.
+- Provider identity, model, deadline, cost, request body, and response body are bounded.
+- `repairEndpoint` accepts only same-origin, versioned, bounded requests and receives no workspace credentials.
+- The host controls coding-agent repository, shell, Git, and publishing authority separately.
+- CI screenshots, console, page errors, and reports contain no production data.
+- Session success, failure, timeout, and cancellation all verify exact cleanup.
+
+Continue with [Page Context fields and lifecycle](./page-context.mdx) for browser facts or [Human review and automated repair](../guide/repairs.mdx) for end-to-end repair integration.

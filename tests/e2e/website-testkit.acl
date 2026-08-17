@@ -52,6 +52,46 @@ suite "website-testkit-experience" {
             text = "PRD 和设计稿产生的是期望候选，不是浏览器可访问树"
         }
 
+        expect "detailed-capability-ledger" {
+            text = "功能清单细到输入、证据和失效规则"
+        }
+
+        click "open-repair-capabilities" {
+            target = testid("capability-group-repair")
+        }
+
+        wait "repair-capabilities-expanded" {
+            visible = css(".test-capability-group.is-open [data-testid='capability-panel-repair']")
+        }
+
+        expect "fresh-repair-verification" {
+            text = "新页面验证与人工验收"
+        }
+
+        click "open-execution-capabilities" {
+            target = testid("capability-group-execution")
+        }
+
+        wait "execution-capabilities-expanded" {
+            visible = css(".test-capability-group.is-open [data-testid='capability-panel-execution']")
+        }
+
+        expect "browser-context-actions" {
+            text = "标签页、Frame 与对话框"
+        }
+
+        click "open-contract-capabilities" {
+            target = testid("capability-group-contracts")
+        }
+
+        wait "contract-capabilities-expanded" {
+            visible = css(".test-capability-group.is-open [data-testid='capability-panel-contracts']")
+        }
+
+        expect "prd-candidate-generation" {
+            text = "PRD 候选生成"
+        }
+
         expect "local-only-disclosure" {
             text = "此演示只把问题保存在当前标签页"
         }

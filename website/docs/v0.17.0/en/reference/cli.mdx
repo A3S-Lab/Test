@@ -47,6 +47,138 @@ Provider schemas describe request, response, provenance, and authority fields. T
 
 `agent open` aliases `agent start`, and `agent snapshot` aliases `agent observe`.
 
+### Session-start options
+
+```bash
+a3s-test agent start http://127.0.0.1:3000/checkout \
+  --session checkout \
+  --goal "Complete checkout" \
+  --success "The confirmation heading is visible" \
+  --allow-origin http://127.0.0.1:3001 \
+  --browser-driver standalone \
+  --json
+```
+
+| Option                   | Default or requirement | Purpose                                                                                |
+| ------------------------ | ---------------------- | -------------------------------------------------------------------------------------- |
+| `--session`              | Required               | Stable unique identifier inside the workspace                                          |
+| `--goal`                 | Required               | Concrete outcome for the coding agent                                                  |
+| `--success`              | At least one           | Repeatable observable success condition                                                |
+| `--allow-origin`         | Initial origin         | Adds an exact origin that may be navigated and observed                                |
+| `--allow-domain`         | None                   | Adds a network hostname without expanding action origins                               |
+| `--browser-driver`       | `a3s`                  | Selects the `a3s` or a compatible `standalone` adapter                                 |
+| `--browser-executable`   | Discovered             | Selects the executable for the chosen adapter                                          |
+| `--command-timeout-ms`   | 25,000                 | Deadline for each browser command                                                      |
+| `--idle-timeout-ms`      | 300,000                | Browser-daemon idle time allowed between agent turns                                   |
+| `--browser-microphone`   | `disabled`             | Can select a deterministic synthetic microphone                                        |
+| `--headed`               | Off                    | Shows the browser only for explicit local debugging                                    |
+| `--auto-resolve-repairs` | Off                    | Moves a repair from review-ready to resolved only after every verification gate passes |
+
+Automatic resolution is session-scoped. A verification failure, missing fresh ready revision, or incomplete evidence can never produce `resolved`.
+
+### Compact action commands
+
+Compact commands cover common one-step operations.
+
+```bash
+a3s-test agent click @e3 \
+  --session checkout \
+  --observation 7 \
+  --json
+
+a3s-test agent fill @e4 "tester@example.test" \
+  --session checkout \
+  --observation 8 \
+  --json
+
+a3s-test agent press Enter --session checkout --json
+a3s-test agent viewport 390 844 --session checkout --json
+a3s-test agent screenshot screenshots/confirmation.png \
+  --session checkout \
+  --json
+```
+
+Compact commands include `click`, `hover`, `focus`, `double-click`, `context-click`, `fill`, `type`, `insert-text`, `check`, `uncheck`, `select`, `drag`, `press`, `wheel`, `viewport`, and `screenshot`. When an action uses a ref, pass the latest observation ID that created it.
+
+### Complete Action JSON
+
+Tabs, frames, dialogs, network controls, waits, assertions, and advanced evidence use `agent act`.
+
+```bash
+a3s-test agent act \
+  --session checkout \
+  --action-json '{"type":"wait","condition":{"type":"text","value":"Order confirmed"}}' \
+  --json
+```
+
+Generate the complete revision-7 JSON Schema with `a3s-test agent schema`. Current action types are grouped below.
+
+| Category              | `type` values                                                                                                    |
+| --------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| Page state            | `navigate`, `snapshot`, `viewport`, `tab`, `frame`, `dialog`                                                     |
+| Pointer and form      | `click`, `hover`, `focus`, `double_click`, `context_click`, `fill`, `type`, `check`, `uncheck`, `select`, `drag` |
+| Keyboard and terminal | `insert_text`, `press`, `wheel`, `terminal_paste`, `terminal_resize`, `terminal_recording`                       |
+| Synchronization       | `wait`, `assert`                                                                                                 |
+| File and network      | `upload`, `download`, `network_route`, `network_unroute`                                                         |
+| Evidence              | `screenshot`, `har`, `trace`, `video`, `accessibility`, `console`, `page_errors`                                 |
+
+`insert_text` reuses an established editing context and accepts no target. `terminal_*` is legal only on a TUI surface. Unknown fields and actions unsupported by the selected surface are rejected before dispatch.
+
+### Test Kit inspection
+
+```bash
+a3s-test agent inspect \
+  --session checkout \
+  --component checkout-form \
+  --detail forensic \
+  --limit 100 \
+  --json
+```
+
+`--detail` accepts `summary`, `scoped`, `diff`, and `forensic`. Scope can be the page, a current private node, a component, or a region written as `viewport,x,y,width,height` or `document,x,y,width,height`. When the response returns a cursor, the next inspection must retain the same session, scope, and page revision.
+
+### Repair Ledger commands
+
+| Stage            | Command                        | Key arguments and result                                                           |
+| ---------------- | ------------------------------ | ---------------------------------------------------------------------------------- |
+| Pickup           | `repair-watch`                 | `--limit` defaults to 20, `--timeout-ms` to 30,000, and the batch window to 250 ms |
+| Claim            | `repair-claim`                 | Finding ID, idempotent request ID, attempt ID, and five-minute default lease       |
+| Start editing    | `repair-progress`              | Attempt ID must match, then state enters `repairing`                               |
+| Ask for input    | `repair-reply`                 | Retains the message and enters `needs_input`                                       |
+| Finish editing   | `repair-complete`              | Enters A3S Test-owned `verifying` without declaring resolved                       |
+| Run verification | `repair-verify`                | Success criteria, changed files, checks JSON, and optional ACL candidate           |
+| Fail or cancel   | `repair-fail`, `repair-cancel` | Appends a terminal event while retaining attempt history                           |
+
+Every transition needs a new idempotent request ID. Reuse the attempt ID returned by claim for progress, reply, complete, and fail. `repair-verify` must target a newer ready page revision.
+
+### Terminal session state and files
+
+```bash
+a3s-test agent finish \
+  --session checkout \
+  --status passed \
+  --summary "Checkout completed and confirmation was observed" \
+  --json
+```
+
+Persistent sessions live under `.a3s-test/agent-sessions/<session>/` in the current workspace. `events.jsonl` is append-only, `report.json` is the terminal result, and `artifacts/` accepts only relative evidence paths. Use `finish` for a session with an evidence-backed passed or failed result. Use the exact `abort` when the test cannot continue safely.
+
+## Contracts and providers
+
+```bash
+a3s-test contract generate \
+  --config tests/contracts/checkout.generate.acl \
+  --output tests/contracts/checkout.draft.json
+
+a3s-test contract review \
+  --draft tests/contracts/checkout.draft.json \
+  --review tests/contracts/checkout.review.acl \
+  --output tests/contracts/checkout.acl \
+  --audit tests/contracts/checkout.reviewed.json
+```
+
+`contract generate` writes a candidate draft only. `contract review` revalidates sources, review actions, and conflicts before publishing canonical ACL. Visual grounding and design review call deployment providers through `agent ground` and `agent audit`; both return advice without acting on the page.
+
 ## ACL and distributed runs
 
 ```bash
@@ -57,6 +189,22 @@ a3s-test distributed run <distributed.acl> --json
 ```
 
 Remote workers use separate `a3s.test.remote-worker/3` execution and `a3s.test.remote-artifacts/1` artifact protocols. A request cannot select executables, applications, backends, credentials, or network policy. Deployment startup fixes those authorities.
+
+`check` performs admission without starting a surface. `run` executes after admission and separates product failures, specification errors, infrastructure errors, and cleanup errors in its machine result. `distributed plan` matches worker capabilities before `distributed run` dispatches authenticated shards.
+
+## JSON and error contracts
+
+Automation should pass `--json` and read stable error codes, state, and structured fields instead of parsing human help text.
+
+| Scope            | Owner                                           |
+| ---------------- | ----------------------------------------------- |
+| `test.spec.*`    | ACL, configuration, target, or path admission   |
+| `test.driver.*`  | Surface adapter, protocol, and lifecycle        |
+| `test.assert.*`  | Product state differs from an expectation       |
+| `test.run.*`     | Deadline, cancellation, scheduling, and cleanup |
+| `test.session.*` | Persistent sessions, Repair Ledger, and leases  |
+
+See [Troubleshooting](../guide/troubleshooting.mdx) for response steps. See the [capability reference](./capabilities.mdx) for complete functionality and authority boundaries.
 
 ## Exit codes
 

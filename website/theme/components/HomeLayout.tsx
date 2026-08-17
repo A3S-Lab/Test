@@ -1,11 +1,20 @@
 import { useLang, useSite, useVersion, withBase } from '@rspress/core/runtime';
-import { ArrowRight, ArrowUpRight } from '@phosphor-icons/react';
+import { ArrowRight, ArrowUpRight, CaretDown } from '@phosphor-icons/react';
 import { useState } from 'react';
 import { ContractPanel } from './ContractPanel';
 import { InstallSwitcher, installCommandFor } from './InstallSwitcher';
 import { TestKitExperience } from './TestKitExperience';
-import { homeCopy, type Locale } from '../home-copy';
+import { homeCopy, type CapabilityGroupId, type Locale } from '../home-copy';
 import { publishedVersion } from '../../versions.mjs';
+
+const archivedCapabilityHrefs: Record<CapabilityGroupId, string> = {
+  context: '/guide/testkit.html',
+  safety: '/concepts/architecture.html',
+  repair: '/guide/testkit.html',
+  execution: '/reference/cli.html',
+  contracts: '/guide/contracts.html',
+  evidence: '/guide/workflows.html',
+};
 
 function MarkdownHome({
   installVersion,
@@ -59,6 +68,23 @@ function MarkdownHome({
           <code>{item.code}</code>
         </section>
       ))}
+      <h2>{copy.capabilityLedgerTitle}</h2>
+      <p>{copy.capabilityLedgerBody}</p>
+      <p>{copy.capabilityReference}</p>
+      {copy.capabilityGroups.map((group) => (
+        <section key={group.id}>
+          <h3>{group.title}</h3>
+          <p>{group.summary}</p>
+          <ul>
+            {group.items.map((item) => (
+              <li key={item.title}>
+                <code>{item.signal}</code> <strong>{item.title}</strong>{' '}
+                {item.body}
+              </li>
+            ))}
+          </ul>
+        </section>
+      ))}
       <h2>{copy.workflowTitle}</h2>
       <p>{copy.workflowBody}</p>
       <h2>{copy.boundaryTitle}</h2>
@@ -74,6 +100,9 @@ export function HomeLayout() {
   const locale: Locale = language === 'zh' ? 'zh' : 'en';
   const copy = homeCopy[locale];
   const [reviewStarted, setReviewStarted] = useState(false);
+  const [openCapabilityGroups, setOpenCapabilityGroups] = useState(
+    () => new Set(['context']),
+  );
   const version = useVersion();
   const { site } = useSite();
   const defaultVersion = site.multiVersion.default;
@@ -187,6 +216,100 @@ export function HomeLayout() {
               <p>{item.body}</p>
             </article>
           ))}
+        </div>
+        <div className="test-capability-ledger">
+          <div className="test-capability-ledger-intro">
+            <h3>{copy.capabilityLedgerTitle}</h3>
+            <div className="test-capability-ledger-intro-copy">
+              <p>{copy.capabilityLedgerBody}</p>
+              <a
+                href={route(
+                  version === defaultVersion
+                    ? '/reference/capabilities.html'
+                    : '/reference/cli.html',
+                )}
+              >
+                {copy.capabilityReference}{' '}
+                <ArrowRight aria-hidden="true" size={15} weight="bold" />
+              </a>
+            </div>
+          </div>
+          <div className="test-capability-groups">
+            {copy.capabilityGroups.map((group) => {
+              const isOpen = openCapabilityGroups.has(group.id);
+              const triggerId = `test-capability-trigger-${group.id}`;
+              const panelId = `test-capability-panel-${group.id}`;
+              return (
+                <section
+                  className={`test-capability-group${isOpen ? ' is-open' : ''}`}
+                  key={group.id}
+                >
+                  <h4>
+                    <button
+                      aria-controls={panelId}
+                      aria-expanded={isOpen}
+                      data-testid={`capability-group-${group.id}`}
+                      id={triggerId}
+                      onClick={() =>
+                        setOpenCapabilityGroups((current) => {
+                          const next = new Set(current);
+                          if (next.has(group.id)) next.delete(group.id);
+                          else next.add(group.id);
+                          return next;
+                        })
+                      }
+                      type="button"
+                    >
+                      <code>{group.code}</code>
+                      <span className="test-capability-group-title">
+                        <strong>{group.title}</strong>
+                        <small>{group.summary}</small>
+                      </span>
+                      <span className="test-capability-group-count">
+                        {group.items.length} {copy.capabilityItemCount}
+                      </span>
+                      <CaretDown
+                        aria-hidden="true"
+                        className="test-capability-group-caret"
+                        size={18}
+                        weight="bold"
+                      />
+                    </button>
+                  </h4>
+                  <div
+                    aria-labelledby={triggerId}
+                    className="test-capability-group-body"
+                    data-testid={`capability-panel-${group.id}`}
+                    hidden={!isOpen}
+                    id={panelId}
+                    role="region"
+                  >
+                    <dl>
+                      {group.items.map((item) => (
+                        <div key={item.title}>
+                          <dt>
+                            <strong>{item.title}</strong>
+                            <code>{item.signal}</code>
+                          </dt>
+                          <dd>{item.body}</dd>
+                        </div>
+                      ))}
+                    </dl>
+                    <a
+                      href={route(
+                        version === defaultVersion
+                          ? group.href
+                          : archivedCapabilityHrefs[group.id],
+                      )}
+                    >
+                      {group.linkLabel}{' '}
+                      <ArrowRight aria-hidden="true" size={15} weight="bold" />
+                    </a>
+                  </div>
+                </section>
+              );
+            })}
+          </div>
         </div>
       </section>
 

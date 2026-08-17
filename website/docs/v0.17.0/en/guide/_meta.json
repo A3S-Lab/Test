@@ -1,1 +1,9 @@
-["index", "installation", "workflows", "testkit", "contracts"]
+[
+  "index",
+  "installation",
+  "workflows",
+  "testkit",
+  "repairs",
+  "contracts",
+  "troubleshooting"
+]

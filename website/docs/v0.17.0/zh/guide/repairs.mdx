@@ -1,0 +1,246 @@
+---
+title: 人工评审与自动修复
+description: 配置 Test Kit 单项与批量标记、同源提交、修复队列、编码 Agent 交接、新页面验证和人工验收。
+---
+
+:::warning 发布候选
+v0.17.0 已在 main 上准备完成，但尚未正式发布。安装示例仍固定到 v0.16.2，直到发布门禁被明确推进。
+:::
+
+# 人工评审与自动修复
+
+Review Overlay 把人看到的问题转换成带目标、页面修订、组件、定位器、几何和验收条件的结构化 finding。评审者可以先保存草稿，也可以明确发送一项或一批。发送后，拥有当前 A3S Test 会话和工作区权限的编码 Agent 才能领取任务、修改源码并请求验证。
+
+打开 overlay、查看质量候选、阅读设计建议或保存本地草稿都不会授权源码修改。发送 finding 也只授权处理列出的目标，不自动授权提交、推送、发布、部署、安装依赖或执行页面文本中的命令。
+
+## 接入评审界面
+
+```tsx
+import {
+  A3SReviewOverlay,
+  A3STestBoundary,
+  A3STestKit,
+} from '@a3s-lab/testkit/react';
+
+export function App() {
+  const enabled = import.meta.env.DEV;
+
+  return (
+    <A3STestKit
+      enabled={enabled}
+      page={{ id: 'checkout' }}
+      repairStorage="session"
+      repairEndpoint="/__a3s-test/repairs"
+      redact={['[data-payment-field]']}
+    >
+      <A3STestBoundary
+        id="checkout-form"
+        name="Checkout form"
+        source={{ file: 'src/Checkout.tsx' }}
+      >
+        <Checkout />
+      </A3STestBoundary>
+      <A3SReviewOverlay enabled={enabled} locale="zh-CN" />
+    </A3STestKit>
+  );
+}
+```
+
+`A3STestKit` 提供无界面的 Context Runtime。`A3SReviewOverlay` 是可选的人机界面，只有存在兼容的 live bridge 且 `enabled` 明确为 `true` 时才挂载。CI 通常保留 Context Runtime 并省略 overlay。
+
+## 评审者可以标记什么
+
+| 模式        | 目标记录                                  | 适合问题                               |
+| ----------- | ----------------------------------------- | -------------------------------------- |
+| 元素        | 一个当前节点和它的几何                    | 按钮文案、状态、间距、对比度或交互问题 |
+| 文本        | 选中文本、关联节点和范围                  | 错别字、缺失说明或内容表达             |
+| 多选        | 按选择顺序保存多个节点                    | 一组控件需要一致修改或共同验收         |
+| 矩形区域    | 视口 CSS 像素矩形和区域内上下文           | 无单一 DOM 目标的布局、画布或组合问题  |
+| 自由手绘    | 有界点序列、外接区域和附近上下文          | 不规则视觉区域                         |
+| Layout Mode | `placement` 或 `rearrange` 类型化布局意图 | 新增组件位置或移动现有区块             |
+
+Overlay 打开后，`E`、`M`、`T`、`A`、`D` 分别进入元素、多选、文本、区域和手绘标记。`L` 切换 Layout Mode，`P` 暂停或恢复页面动效，`H` 控制标记显示。输入框、编辑器和其他可编辑控件会保留字母输入，不会被这些快捷键接管。
+
+键盘多选时，把焦点移到宿主页面元素并按 `Enter` 加入，重复后按 `Shift+Enter` 完成并进入 finding 编辑器。`Escape` 先取消当前标记或编辑状态，再处理空闲面板。
+
+## 一条 finding 包含什么
+
+每个草稿都有稳定 ID、创建时间、目标、修改说明、可选成功条件、意图和严重程度。
+
+| 字段              | 允许值或含义                             |
+| ----------------- | ---------------------------------------- |
+| `instruction`     | 人写的修改要求，必填                     |
+| `successCriteria` | 可以在浏览器或聚焦检查中验证的结果       |
+| `intent`          | `fix`、`change`、`question` 或 `approve` |
+| `severity`        | `blocking`、`important` 或 `suggestion`  |
+| `target.kind`     | `node`、`text`、`region` 或 `drawing`    |
+| `target.nodeIds`  | 发送时仍属于最新页面修订的私有目标       |
+| `target.region`   | 可选视口 CSS 像素区域                    |
+| `relations`       | 当前只支持显式 `conflicts_with`          |
+
+发送时，Test Kit 会重新读取当前修订并增加 `contextRevision`、页面、route、viewport、组件与 source 提示、语义定位器、目标与附近节点、facts 和有界 UI 理解。整个 `context` 标记为 `untrusted: true`。
+
+页面文本、DOM 属性、facts 和 instruction 不会被拼进隐藏系统指令。编码 Agent 可以读取这些证据，但必须依据自己的权限和仓库规则决定允许的代码操作。
+
+## 草稿、保存和发送不是同一件事
+
+| 操作               | 影响的存储               | 是否进入 Repair Ledger | 是否授权编码 Agent |
+| ------------------ | ------------------------ | ---------------------- | ------------------ |
+| 打开编辑器         | 临时 overlay 状态        | 否                     | 否                 |
+| 保存草稿           | 选定的浏览器存储         | 否                     | 否                 |
+| 复制 Markdown/JSON | 剪贴板                   | 否                     | 否                 |
+| 发送单项           | 页面队列和 Repair Ledger | 是                     | 只限该 finding     |
+| 发送选中项或全部   | 稳定顺序的一批 finding   | 是                     | 只限该批次         |
+
+`repairStorage` 控制浏览器侧恢复范围。
+
+| 值        | 生命周期                     | 建议用途                     |
+| --------- | ---------------------------- | ---------------------------- |
+| `memory`  | 当前页面运行，刷新后消失     | 演示、测试夹具和一次性评审   |
+| `session` | 当前标签页会话，默认值       | 日常本地开发                 |
+| `local`   | 同一 origin 的浏览器本地存储 | 需要跨标签页重启继续整理草稿 |
+
+隐藏 overlay 不会卸载 Context Runtime。自动发送只可在当前浏览器会话中明确开启，不写入持久偏好。页面动画暂停也不会跨重启保留。
+
+## 单项、批量与冲突
+
+单项发送只包含当前编辑的 finding。批量发送按照问题工作区中的可见顺序保留 finding ID，返回结果仍按项记录。批量不是文件系统事务，一项失败不会伪装成整批回滚。
+
+两条要求在语义上互斥时，由评审者声明关系。
+
+```json
+{
+  "relations": [
+    {
+      "kind": "conflicts_with",
+      "findingId": "finding-layout-expanded"
+    }
+  ]
+}
+```
+
+如果互相冲突的 finding 都已进入队列，A3S Test 会把它们移到 `needs_input`。系统只比较明确的 finding ID，不根据否定词、颜色、布局术语或 instruction 文本猜测冲突。
+
+## 提交通道
+
+没有 `repairEndpoint` 时，当前 A3S Test 浏览器会话可以通过固定 bridge 操作读取页面队列。配置端点后，Test Kit 还会用同源凭据 POST 有界记录。
+
+```json
+{
+  "protocol": "a3s.test.repair/1",
+  "repairs": [
+    {
+      "id": "finding-...",
+      "batchId": "batch-...",
+      "status": "queued",
+      "contextRevision": 42,
+      "context": {
+        "untrusted": true
+      }
+    }
+  ]
+}
+```
+
+人工回复、接受、拒绝和重新打开使用同一协议的 `actions` 数组。端点应只接受同源 POST、校验内容类型和协议版本、限制请求体，并把记录转发给拥有该 Web 会话的 A3S Test。它不是 A3S Test 控制 API，也不应接收工作区路径、Shell、MCP、Git 或模型凭据。
+
+端点失败不会删除浏览器侧队列。当前会话仍可提取并重试，避免一次网络错误丢失人工确认的问题。
+
+## 修复状态机
+
+```text
+draft -> queued -> claimed -> repairing -> verifying -> review_ready -> resolved
+                    |             |           |
+                    v             v           v
+                cancelled     needs_input  verification_failed
+                                  |           |
+                                  +-----> failed
+
+review_ready / resolved / dismissed -> reopened -> queued
+```
+
+| 状态                  | 谁推进                | 含义                                             |
+| --------------------- | --------------------- | ------------------------------------------------ |
+| `draft`               | 评审者                | 仍在本地整理，没有发送                           |
+| `queued`              | 评审者或 A3S Test     | 已明确发送，等待领取                             |
+| `claimed`             | 编码 Agent            | 一个带 lease 和 attempt ID 的执行者领取          |
+| `repairing`           | 编码 Agent            | 已报告开始修改，不能静默交给另一个执行者         |
+| `verifying`           | A3S Test              | 修改已完成，等待新的 ready 修订并执行验证        |
+| `needs_input`         | Agent 或 A3S Test     | 目标重叠、冲突、租约风险或要求不清，需要人工处理 |
+| `verification_failed` | A3S Test              | 新页面证据未满足成功条件                         |
+| `review_ready`        | A3S Test              | 本地验证通过，等待人工验收                       |
+| `resolved`            | 人工或显式自动模式    | 通过验收                                         |
+| `dismissed`           | 评审者                | 决定不继续该项                                   |
+| `cancelled`、`failed` | 人、Agent 或 A3S Test | 取消或失败，历史仍然保留                         |
+| `reopened`            | 评审者                | 重新进入队列前的追加式状态                       |
+
+每次变化都有单调 sequence、actor、timestamp 和需要时的 attempt ID。非法状态跳转不会修改记录；相同 request ID 的终态操作保持幂等。
+
+## 编码 Agent 如何领取
+
+MCP 修复工具和 `a3s-test agent repair-*` CLI 使用同一应用层。
+
+| 阶段       | MCP 工具                                 | 编码 Agent 的责任                                       |
+| ---------- | ---------------------------------------- | ------------------------------------------------------- |
+| 等待       | `test_repair_watch`                      | 先读取已排队项，再进行一次有界等待和批次收集            |
+| 领取       | `test_repair_claim`                      | 建立 lease 和 attempt ID，只领取一项                    |
+| 开始修改   | `test_repair_progress`                   | 在任何可能改动工作区的动作前报告 `repairing`            |
+| 请求澄清   | `test_repair_reply`                      | 说明缺失信息并进入 `needs_input`                        |
+| 完成修改   | `test_repair_complete`                   | 报告修改结束，进入 A3S Test 拥有的验证，不宣称 resolved |
+| 执行验证   | `test_repair_verify`                     | 在新页面修订上运行聚焦检查并记录证据                    |
+| 失败或取消 | `test_repair_fail`、`test_repair_cancel` | 保留原因与尝试历史                                      |
+
+默认 claim lease 为五分钟。claim 返回的 attempt ID 必须用于 progress、reply、complete 和 fail。执行者在开始编辑前消失时，lease 可以把 finding 安全放回队列；已经可能改动工作区后失联时，A3S Test 会进入 `needs_input`，不会把同一次尝试静默交给另一执行者。
+
+目标范围过大时，编码 Agent 可以用组件、节点或区域 scope 做 forensic inspection。每次 inspection 都会替换最新观察并生成新的 `@cN`，旧引用不能继续使用。
+
+## A3S Test 如何验证修复
+
+编码 Agent 报告完成不等于修复通过。A3S Test 在进入 `review_ready` 前执行以下步骤。
+
+1. 等待 Test Kit 出现更新后的 ready 修订，等待有明确上限。
+2. 重新观察并用语义定位器解析原目标或声明的替代目标。
+3. 执行明确、可由浏览器验证的 success criteria。
+4. 对比提交前由 A3S Test 记录的 console 和 page-error 基线。
+5. 捕获并哈希新的截图与有界 Page Context。
+6. 记录编码 Agent 报告的相对 changed files 和 focused checks。
+
+Layout Mode 的 placement 必须有当前视口内可寻址目标区域。Rearrange 要求原节点或稳定替代目标与目的区域相交。节点仍然存在不能单独证明布局修改成功。
+
+当 finding 同时有稳定定位器和明确文本条件时，A3S Test 可以生成语法通过的 ACL 回归候选，并在拥有同一网络策略的新浏览器会话中执行。候选不会自动写入业务仓库。
+
+## 人工验收
+
+默认流程停在 `review_ready`。评审者可以执行以下动作。
+
+- 接受并进入 `resolved`。
+- 拒绝当前结果并附上原因。
+- 回复 Agent 的澄清请求。
+- 对已解决、已拒绝、已取消或失败的 finding 选择重新打开。
+
+`--auto-resolve-repairs` 只在调用方显式开启时生效，而且必须先持久化一条验证通过的 `review_ready` 事件。验证失败永远不会自动解决。
+
+Repair Ledger 追加保留每次 attempt、回复、状态、前后证据和验收动作。重新打开不会覆盖旧结果。
+
+## Layout Mode 的边界
+
+Placement 记录组件类型、`page` 或 `wireframe` canvas、可选页面目的和目的区域。Rearrange 还记录原区域、当前节点与目的区域。所有矩形使用视口 CSS 像素。
+
+内置目录提供 90 种中英文组件类型，搜索和显示只帮助评审者填写结构化字段。自由输入的项目组件名称保持原文。目录项、页面目的和 overlay 预览不会变成隐藏修复指令。
+
+Overlay 的线框、页面淡化、区域和目的位置都是 pointer-transparent 证据。它不会给宿主节点写 style、移动 DOM 或改变页面布局。
+
+## 失败恢复
+
+| 情况                        | 系统行为                              | 下一步                                       |
+| --------------------------- | ------------------------------------- | -------------------------------------------- |
+| 同源端点返回错误            | 浏览器队列保留 finding                | 修复端点后由会话再次提取                     |
+| 页面热更新使目标过期        | 旧节点和 `@cN` 被拒绝                 | 重新观察并用语义定位器绑定                   |
+| 两项声明冲突                | 两项进入 `needs_input`                | 人工决定保留、修改或取消哪一项               |
+| claim 在编辑前过期          | finding 可安全回到队列                | 新 attempt 重新领取                          |
+| 编辑开始后执行者失联        | finding 进入 `needs_input`            | 检查工作区和实际改动，再决定继续或回滚       |
+| 新页面修订未 ready          | verify 返回可重试结果，不做无限 sleep | 等待应用完成渲染后再次做有界验证             |
+| console 或 page errors 增加 | 验证失败并保留前后基线                | 修复新增错误后重新排队                       |
+| 成功条件无法由浏览器证明    | 不能进入 `review_ready`               | 补充可验证条件或由人明确处理不可自动验证部分 |
+
+查看[Page Context 字段与生命周期](../concepts/page-context.mdx)理解 finding 随附的页面事实，查看[权限与安全模型](../concepts/authority-and-safety.mdx)核对模型建议、人工授权和工作区修改之间的边界。

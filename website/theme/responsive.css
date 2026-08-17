@@ -145,6 +145,25 @@
     border-top: 1px solid var(--test-line);
   }
 
+  .test-capability-ledger-intro {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  .test-capability-group h4 > button {
+    grid-template-columns: 120px minmax(0, 1fr) auto 20px;
+    gap: 16px;
+  }
+
+  .test-capability-group-title {
+    grid-template-columns: 140px minmax(0, 1fr);
+    gap: 18px;
+  }
+
+  .test-capability-group-body {
+    padding-left: 30px;
+  }
+
   .test-capability-2,
   .test-capability-4 {
     border-left: 0;
@@ -452,6 +471,64 @@
 
   .test-capability-1 h3 {
     font-size: 32px;
+  }
+
+  .test-capability-ledger-intro {
+    padding: 24px 20px;
+  }
+
+  .test-capability-ledger-intro h3 {
+    font-size: 22px;
+  }
+
+  .test-capability-group h4 > button {
+    min-height: 122px;
+    padding: 18px 20px;
+    align-items: start;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 10px 14px;
+  }
+
+  .test-capability-group h4 > button > code {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  .test-capability-group-count {
+    grid-column: 2;
+    grid-row: 1;
+  }
+
+  .test-capability-group-title {
+    display: block;
+    grid-column: 1;
+    grid-row: 2;
+  }
+
+  .test-capability-group-title strong,
+  .test-capability-group-title small {
+    display: block;
+  }
+
+  .test-capability-group-title small {
+    margin-top: 7px;
+  }
+
+  .test-capability-group-caret {
+    grid-column: 2;
+    grid-row: 2;
+    align-self: center;
+  }
+
+  .test-capability-group-body {
+    padding: 0 20px 24px;
+  }
+
+  .test-capability-group-body dl > div {
+    min-height: 0;
+    padding: 18px 0;
+    grid-template-columns: 1fr;
+    gap: 10px;
   }
 
   .test-workflow-track {
