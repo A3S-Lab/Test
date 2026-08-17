@@ -76,6 +76,7 @@ a3s-test worker inventory
 | ---------------------------------- | ----------------------------------------- | --------------------------------------------------------- |
 | `wait`                             | load、文本、URL 或可见性条件              | 有明确 deadline，超时返回结构化失败                       |
 | `assert`                           | 文本、URL、可见性或其他已准入 expectation | 由本地证据决定通过或失败，provider 不能覆盖结果           |
+| 隐藏 `assert`                      | 稳定的语义或 CSS 目标                     | 没有可见匹配时通过；可见反例返回 `test.assert.hidden`     |
 | 稳定 `assert`                      | expectation、`stable_for_ms` 与可选间隔   | 只重复只读断言；后续采样为假时返回 `test.assert.unstable` |
 | `network_route`、`network_unroute` | 已准入 pattern 与静态 route               | 只能在网络策略内添加或移除规则                            |
 | `har`、`trace`、`video`            | start 或 stop 与受约束相对路径            | 只记录显式窗口，停止后产出会话所有的工件                  |
@@ -143,6 +144,7 @@ a3s-test worker inventory
 | --------------- | ----------------------------- | -------------------------------------------------------------------- |
 | ACL 静态准入    | `a3s-test check`              | 在 surface 启动前拒绝未知块、非法目标、越界路径和歧义条件            |
 | 确定性运行      | `a3s-test run`                | 动作、等待、断言、工件、终态报告和有界清理                           |
+| 负向可见性      | ACL `expect` 的 `hidden`      | 隐藏或不存在证据、可见反例，并保留驱动错误的责任归属                 |
 | 采样稳定性      | ACL `expect` 稳定字段         | 首末断言数据、有界样本数、实际观察窗口和稳定的瞬态失败错误码         |
 | 失败归类        | JSON result 与稳定 error code | 分开 `test.spec.*`、`test.driver.*`、`test.assert.*` 与 `test.run.*` |
 | Worker 能力清单 | `worker inventory`            | 平台、surface、驱动、协议、容量和健康信息                            |

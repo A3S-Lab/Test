@@ -157,6 +157,12 @@ expect "dialog-visible" {
     visible = css("[role=dialog]")
 }
 
+expect "dialog-closed" {
+    hidden = role("dialog", "Checkout")
+    stable_for_ms = 300
+    sample_interval_ms = 25
+}
+
 screenshot "final" {
     path = "screenshots/final.png"
 }
@@ -164,7 +170,12 @@ screenshot "final" {
 
 A wait accepts exactly one of `load`, `text`, `url`, or `visible`. Visible
 waits require a direct `ref()` or `css()` target. An expectation accepts
-exactly one of `text`, `url`, or `visible`.
+exactly one of `text`, `url`, `visible`, or `hidden`. `hidden` means that a
+stable semantic or CSS locator has no visible match, including an absent
+element. It rejects `ref()` and `visual_point()` because an unresolved
+observation-bound target is not proof of hidden product state. A visible match
+fails as `test.assert.hidden`; a later visible sample in a stability window
+fails as `test.assert.unstable`. Driver and stale-target errors remain errors.
 
 Focus, double-click, context-click, type, uncheck, select, drag, and
 target-scoped wheel require `ref()` or `css()` with the current browser
@@ -181,6 +192,12 @@ requires the same read-only assertion to remain true across a bounded window:
 ```acl
 expect "settled-total" {
     visible = testid("order-total")
+    stable_for_ms = 300
+    sample_interval_ms = 25
+}
+
+expect "dialog-stays-closed" {
+    hidden = role("dialog", "Checkout")
     stable_for_ms = 300
     sample_interval_ms = 25
 }

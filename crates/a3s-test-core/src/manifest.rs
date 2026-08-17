@@ -4,10 +4,11 @@ use a3s_acl::{Block, Value};
 use url::Url;
 
 use crate::{
-    Action, AssertionStability, CaptureOperation, DialogOperation, Expectation, FrameTarget,
-    LoadState, ModifierKey, NetworkRoute, SpecError, Surface, TabOperation, Target, TestScenario,
-    TestStep, TestSuite, VideoOperation, WaitCondition, DEFAULT_ASSERTION_SAMPLE_INTERVAL_MS,
-    MAX_ASSERTION_STABILITY_MS, MAX_ASSERTION_STABILITY_SAMPLES, MIN_ASSERTION_STABILITY_MS,
+    Action, AssertionMode, AssertionStability, CaptureOperation, DialogOperation, Expectation,
+    FrameTarget, LoadState, ModifierKey, NetworkRoute, SpecError, Surface, TabOperation, Target,
+    TestScenario, TestStep, TestSuite, VideoOperation, WaitCondition,
+    DEFAULT_ASSERTION_SAMPLE_INTERVAL_MS, MAX_ASSERTION_STABILITY_MS,
+    MAX_ASSERTION_STABILITY_SAMPLES, MIN_ASSERTION_STABILITY_MS,
 };
 
 const DEFAULT_SCENARIO_TIMEOUT_MS: u64 = 60_000;
@@ -243,6 +244,7 @@ fn parse_step(block: &Block, scenario_path: &str) -> Result<TestStep, SpecError>
     }
 
     let mut stability = None;
+    let mut assertion_mode = AssertionMode::Positive;
     let action = match block.name.as_str() {
         "navigate" => {
             ensure_attributes(block, &["url"], &path)?;
@@ -396,15 +398,16 @@ fn parse_step(block: &Block, scenario_path: &str) -> Result<TestStep, SpecError>
                     "text",
                     "url",
                     "visible",
+                    "hidden",
                     "stable_for_ms",
                     "sample_interval_ms",
                 ],
                 &path,
             )?;
             stability = parse_assertion_stability(block, &path)?;
-            Action::Assert {
-                expectation: parse_expectation(block, &path)?,
-            }
+            let (expectation, parsed_mode) = parse_expectation(block, &path)?;
+            assertion_mode = parsed_mode;
+            Action::Assert { expectation }
         }
         "screenshot" => {
             ensure_attributes(block, &["path"], &path)?;
@@ -517,6 +520,7 @@ fn parse_step(block: &Block, scenario_path: &str) -> Result<TestStep, SpecError>
         id,
         action,
         stability,
+        assertion_mode,
     })
 }
 
@@ -712,8 +716,8 @@ fn parse_wait(block: &Block, path: &str) -> Result<WaitCondition, SpecError> {
     )?))
 }
 
-fn parse_expectation(block: &Block, path: &str) -> Result<Expectation, SpecError> {
-    let count = ["text", "url", "visible"]
+fn parse_expectation(block: &Block, path: &str) -> Result<(Expectation, AssertionMode), SpecError> {
+    let count = ["text", "url", "visible", "hidden"]
         .iter()
         .filter(|name| block.attributes.contains_key(**name))
         .count();
@@ -722,25 +726,36 @@ fn parse_expectation(block: &Block, path: &str) -> Result<Expectation, SpecError
     }
 
     if let Some(value) = block.attributes.get("text") {
-        return Ok(Expectation::TextVisible(value_string(
-            value,
-            format!("{path}.text"),
-        )?));
+        return Ok((
+            Expectation::TextVisible(value_string(value, format!("{path}.text"))?),
+            AssertionMode::Positive,
+        ));
     }
     if let Some(value) = block.attributes.get("url") {
-        return Ok(Expectation::Url(value_string(
-            value,
-            format!("{path}.url"),
-        )?));
+        return Ok((
+            Expectation::Url(value_string(value, format!("{path}.url"))?),
+            AssertionMode::Positive,
+        ));
+    }
+    if let Some(value) = block.attributes.get("hidden") {
+        let target = parse_target(value, &format!("{path}.hidden"))?;
+        if matches!(target, Target::Ref { .. } | Target::VisualPoint { .. }) {
+            return Err(SpecError::new(
+                "test.spec.hidden_target_unstable",
+                format!("{path}.hidden"),
+                "hidden assertions require a stable semantic or CSS locator, not an observation-bound ref or visual point",
+            ));
+        }
+        return Ok((Expectation::Visible(target), AssertionMode::Hidden));
     }
     let value = block
         .attributes
         .get("visible")
         .expect("condition count guarantees a visible target");
-    Ok(Expectation::Visible(parse_target(
-        value,
-        &format!("{path}.visible"),
-    )?))
+    Ok((
+        Expectation::Visible(parse_target(value, &format!("{path}.visible"))?),
+        AssertionMode::Positive,
+    ))
 }
 
 fn parse_assertion_stability(

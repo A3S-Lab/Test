@@ -81,6 +81,38 @@ a3s-test run tests/e2e/smoke.acl --json
 
 Unknown blocks or attributes, duplicate identifiers, ambiguous conditions, invalid locators, and unsafe artifact paths fail before launch. Assertion failures, timeouts, and ambiguously dispatched actions are never replayed automatically.
 
+## Prove that UI has no visible match
+
+Use `hidden` when closing, dismissing, removing, or visually hiding a target is the product requirement. The assertion passes when the stable locator has no matching element or when every match has no rendered visible box.
+
+```acl
+expect "checkout-dialog-closed" {
+    hidden = role("dialog", "Checkout")
+}
+```
+
+`hidden` is runner policy around the existing positive visibility assertion. It does not add an action variant or change browser protocol revision 7. The runner sends a positive probe to the surface driver and classifies its result deterministically.
+
+| Positive probe result                  | Hidden assertion result                                                                |
+| -------------------------------------- | -------------------------------------------------------------------------------------- |
+| Visible target evidence                | Fail as `test.assert.hidden`; retain the visible driver data as counter-evidence       |
+| `test.assert.visible` mismatch         | Pass with `expected = hidden`, `visible = false`, the target, and the probe error      |
+| Driver, stale, ambiguous, or I/O error | Keep the original error; an infrastructure or target failure cannot prove hidden state |
+
+Use role, label, test ID, placeholder, text, CSS, or another stable locator supported by the selected surface. ACL admission rejects `ref()` and `visual_point()` as `test.spec.hidden_target_unstable`: both belong to an observation, so an unresolved value may be stale rather than hidden. A programmatic suite that bypasses admission fails before dispatch as `test.run.assertion_mode_invalid`.
+
+`hidden` observes immediately; it does not wait for a transition to finish. Reach a deterministic ready state first when needed. To prove the target remains hidden through hydration or rollback, combine it with bounded sampling:
+
+```acl
+expect "checkout-dialog-stays-closed" {
+    hidden = role("dialog", "Checkout")
+    stable_for_ms = 300
+    sample_interval_ms = 25
+}
+```
+
+If the initial hidden probe passes and a later probe finds a visible target, the result is `test.assert.unstable`. The stability payload retains `visible = false` in `assertion.first` and the visible counterexample in `assertion.last`.
+
 ## Prove that transient UI has settled
 
 A one-shot expectation answers “is this true at this observation?” That is sufficient for static content, but it can accept one frame of a loading flash, hydration replacement, optimistic update, or animation. When the product requirement is “this remains true while the interface settles,” declare that time requirement on the expectation:

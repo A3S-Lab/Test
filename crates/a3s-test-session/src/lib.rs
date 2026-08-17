@@ -303,6 +303,7 @@ impl AgentSessionManager {
             id: format!("agent-turn-{}", managed.next_turn),
             action,
             stability: None,
+            assertion_mode: Default::default(),
         };
         managed.next_turn = managed.next_turn.saturating_add(1);
         let output = managed

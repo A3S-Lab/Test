@@ -233,6 +233,7 @@ async fn execute_with_executor(
             url: config.initial_url.as_str().to_string(),
         },
         stability: None,
+        assertion_mode: Default::default(),
     };
     let initial_error = tokio::select! {
         biased;

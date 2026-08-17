@@ -141,6 +141,7 @@ The session remains inspectable after the browser closes:
 | Typed actions | Unknown variants and fields fail before reaching a driver. |
 | Scoped policy | Navigation, network, artifacts, and dispatch stay inside admitted boundaries. |
 | Inspectable evidence | Events, screenshots, reports, and provenance remain machine-readable. |
+| Negative visibility | A visible counterexample cannot be mistaken for a closed or removed UI. |
 | Sampled stability | One passing render cannot hide a later flicker or optimistic rollback. |
 | Owned cleanup | A run closes only the process tree, browser namespace, sockets, and files it created. |
 | Separate authority | Browser facts, model advice, human authorization, and workspace mutation cannot impersonate one another. |
@@ -204,6 +205,25 @@ always samples once at the window boundary. A later false sample fails with
 sample count, requested interval, and observed duration. The window is 10 to
 60,000 ms, the interval defaults to 50 ms (or the shorter window), and one
 expectation may plan at most 1,001 samples.
+
+Use `hidden` when the requirement is that a stable locator has no visible
+match. It passes for an element that is absent or rendered without a visible
+box, and fails with `test.assert.hidden` when a visible match exists:
+
+```acl
+expect "dialog-closed" {
+    hidden = role("dialog", "Checkout")
+    stable_for_ms = 300
+    sample_interval_ms = 25
+}
+```
+
+The runner evaluates `hidden` through the existing positive visibility action,
+so the driver protocol remains revision 7. A later visible sample fails a
+stable hidden assertion as `test.assert.unstable`. Use a semantic or CSS
+locator; observation-bound `ref()` and `visual_point()` targets are rejected
+because a missing ephemeral reference is not proof that the product element
+is hidden.
 
 Sampling is a time-resolution tradeoff. It catches state changes observed at a
 sample point, but it cannot prove what happened between two points. Use a

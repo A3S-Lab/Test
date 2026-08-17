@@ -404,6 +404,7 @@ fn suite() -> TestSuite {
                     state: "ready".to_string(),
                 },
                 stability: None,
+                assertion_mode: Default::default(),
             }],
         }],
     }

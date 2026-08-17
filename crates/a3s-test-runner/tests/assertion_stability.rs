@@ -192,6 +192,7 @@ fn transient_suite(stability: Option<AssertionStability>) -> TestSuite {
                         }),
                     },
                     stability,
+                    assertion_mode: Default::default(),
                 }],
             })
             .collect(),

@@ -1,7 +1,7 @@
 use a3s_test_core::{
-    Action, AssertionStability, CaptureOperation, DialogOperation, Expectation, FrameTarget,
-    LoadState, ModifierKey, NetworkRoute, Surface, TabOperation, Target, TestSuite, VideoOperation,
-    WaitCondition,
+    Action, AssertionMode, AssertionStability, CaptureOperation, DialogOperation, Expectation,
+    FrameTarget, LoadState, ModifierKey, NetworkRoute, Surface, TabOperation, Target, TestSuite,
+    VideoOperation, WaitCondition,
 };
 
 const VALID_SUITE: &str = r#"
@@ -127,6 +127,89 @@ suite "stable-assertion" {
             sample_interval_ms: 25,
         })
     );
+}
+
+#[test]
+fn parses_hidden_as_a_runner_owned_assertion_mode_without_changing_the_action_contract() {
+    let suite = TestSuite::from_acl(
+        r##"
+suite "negative-visibility" {
+    scenario "checkout" {
+        surface = "web"
+        expect "dialog-closed" {
+            hidden = role("dialog", "Checkout")
+            stable_for_ms = 300
+            sample_interval_ms = 25
+        }
+    }
+}
+"##,
+    )
+    .expect("hidden assertion");
+
+    let step = &suite.scenarios[0].steps[0];
+    assert_eq!(
+        step.action,
+        Action::Assert {
+            expectation: Expectation::Visible(Target::Role {
+                role: "dialog".to_string(),
+                name: "Checkout".to_string(),
+            }),
+        }
+    );
+    assert_eq!(step.assertion_mode, AssertionMode::Hidden);
+    assert_eq!(
+        step.stability,
+        Some(AssertionStability {
+            stable_for_ms: 300,
+            sample_interval_ms: 25,
+        })
+    );
+
+    let encoded = serde_json::to_value(step).expect("serialize hidden assertion step");
+    assert_eq!(encoded["assertion_mode"], "hidden");
+    assert_eq!(encoded["action"]["type"], "assert");
+    assert_eq!(encoded["action"]["expectation"]["type"], "visible");
+}
+
+#[test]
+fn positive_assertion_mode_is_omitted_from_serialized_steps() {
+    let suite = TestSuite::from_acl(VALID_SUITE).expect("valid suite");
+    let step = &suite.scenarios[0].steps[4];
+
+    assert_eq!(step.assertion_mode, AssertionMode::Positive);
+    let encoded = serde_json::to_value(step).expect("serialize positive assertion step");
+    assert!(encoded.get("assertion_mode").is_none());
+}
+
+#[test]
+fn rejects_ambiguous_or_observation_bound_hidden_assertions() {
+    for (attributes, code) in [
+        (
+            "hidden = css(\"#dialog\")\n            visible = css(\"#dialog\")",
+            "test.spec.condition_ambiguous",
+        ),
+        ("hidden = ref(\"@e4\")", "test.spec.hidden_target_unstable"),
+        (
+            "hidden = visual_point(\"screen.png\", 20, 30)",
+            "test.spec.hidden_target_unstable",
+        ),
+    ] {
+        let source = format!(
+            r#"
+suite "invalid-hidden" {{
+    scenario "checkout" {{
+        surface = "web"
+        expect "dialog-closed" {{
+            {attributes}
+        }}
+    }}
+}}
+"#,
+        );
+        let error = TestSuite::from_acl(&source).expect_err("invalid hidden assertion must fail");
+        assert_eq!(error.code(), code);
+    }
 }
 
 #[test]

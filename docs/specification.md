@@ -143,6 +143,67 @@ command began. `networkidle` uses the browser runtime's bounded idle detector.
 - `text = "..."`
 - `url = "..."`
 - `visible = <target>`
+- `hidden = <stable target>`
+
+### Negative visibility
+
+`hidden` proves that a locator has no visible match at the observation point.
+It deliberately combines two product states that satisfy the same UI
+requirement: no element matches the locator, or matching elements exist but
+none has a rendered visible box.
+
+```acl
+expect "dialog-closed" {
+    hidden = role("dialog", "Checkout")
+}
+```
+
+This is a `TestStep` assertion mode, not a new `Action` or `Expectation`
+variant. Core stores the same `Action::Assert` with
+`Expectation::Visible(target)`. Before driver dispatch, the runner creates a
+positive probe and applies this truth table:
+
+| Positive visibility probe | `hidden` result |
+| --- | --- |
+| Returns visible evidence | Fail with `test.assert.hidden` and retain that counter-evidence |
+| Returns `test.assert.visible` | Pass with `visible = false` and retain the probe error |
+| Returns `test.driver.*` or another error | Preserve the original error; the result is inconclusive |
+
+ACL admission accepts semantic and CSS locators. It rejects `ref()` and
+`visual_point()` as `test.spec.hidden_target_unstable`: both identify an
+observation, so failure to resolve them can mean stale evidence rather than a
+hidden product element. Programmatic suites that bypass admission fail closed
+as `test.run.assertion_mode_invalid` before driver dispatch.
+
+Web supports its admitted semantic and CSS visibility targets. GUI supports
+the semantic targets admitted by its adapter. TUI currently supports text
+assertions but not target visibility. A GUI semantic target that has no match
+is normalized to `test.assert.visible`; stale refs, ambiguous targets, invalid
+targets, and CUA failures remain `test.driver.gui.*` errors.
+
+A successful hidden assertion records:
+
+```json
+{
+  "expected": "hidden",
+  "visible": false,
+  "target": {
+    "type": "role",
+    "role": "dialog",
+    "name": "Checkout"
+  },
+  "probe_error": {
+    "code": "test.assert.visible",
+    "message": "target is not visible"
+  }
+}
+```
+
+`hidden` is an assertion, not a wait for disappearance. Its first probe is
+immediate. Add a typed readiness wait before it when the workflow must first
+reach a known state. Add `stable_for_ms` when the target must remain hidden;
+if it reappears at a later sample, the step fails with
+`test.assert.unstable`.
 
 ### Assertion stability
 
@@ -153,6 +214,12 @@ or another bounded settling period:
 ```acl
 expect "settled-total" {
     visible = testid("order-total")
+    stable_for_ms = 300
+    sample_interval_ms = 25
+}
+
+expect "dialog-stays-closed" {
+    hidden = role("dialog", "Checkout")
     stable_for_ms = 300
     sample_interval_ms = 25
 }

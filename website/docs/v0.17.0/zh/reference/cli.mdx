@@ -192,9 +192,55 @@ a3s-test distributed run <distributed.acl> --json
 
 `check` 只做准入，不启动界面。`run` 在准入后执行 suite，并把产品失败、测试规范错误、基础设施错误和清理错误分开写入机器结果。`distributed plan` 先匹配 worker 能力，`distributed run` 才发送鉴权 shard。
 
+### ACL 隐藏断言
+
+`hidden` 断言稳定目标定位器在当前观察中没有可见匹配。目标不存在，或匹配元素没有渲染出的可见边界，都满足条件。
+
+```acl
+expect "dialog-closed" {
+    hidden = role("dialog", "Checkout")
+}
+```
+
+ACL 编译器保存现有的 `Action::Assert(Expectation::Visible(target))`，并增加由 Runner 负责的隐藏模式。Action 协议修订 7 与所有 surface 驱动命令都不变。Runner 派发正向可见性探测，再按以下契约分类。
+
+| 探测结果                    | 步骤结果                                                          |
+| --------------------------- | ----------------------------------------------------------------- |
+| 返回可见输出                | `test.assert.hidden`，记录 `visible = true`，正向输出位于 `probe` |
+| 返回 `test.assert.visible`  | 通过，记录 `visible = false`，错误码与消息位于 `probe_error`      |
+| 其他 `test.driver.*` 或错误 | 保留原始错误，定位或基础设施失败不能证明界面隐藏                  |
+
+通过步骤会在 `output.data` 下给出以下稳定结构。
+
+```json
+{
+  "expected": "hidden",
+  "visible": false,
+  "target": {
+    "type": "role",
+    "role": "dialog",
+    "name": "Checkout"
+  },
+  "probe_error": {
+    "code": "test.assert.visible",
+    "message": "target is not visible"
+  }
+}
+```
+
+请使用所选 surface 支持的语义或 CSS 定位器。`ref()` 与 `visual_point()` 会在准入时失败，因为两者绑定某次观察，解析失败可能只是数据过期，不能证明界面隐藏。Web 支持其语义与 CSS 可见性目标。GUI 支持已准入的语义目标，并把过期或歧义匹配保留为驱动错误。TUI 当前不支持目标可见性断言。
+
+| 错误码                             | 含义                                        |
+| ---------------------------------- | ------------------------------------------- |
+| `test.spec.hidden_target_unstable` | ACL 使用了绑定观察的 ref 或 visual point    |
+| `test.assert.hidden`               | 正向探测发现可见目标                        |
+| `test.run.assertion_mode_invalid`  | 程序化 suite 把隐藏模式附在非法动作或目标上 |
+
+`hidden` 是立即断言，不负责等待目标消失。产品要求持续隐藏时，可组合 `stable_for_ms`。后续采样又发现目标可见时返回 `test.assert.unstable`，同时保留第一次隐藏观察和可见反例。
+
 ### ACL 稳定窗口断言
 
-`stable_for_ms` 为 ACL 的 `expect` 增加有界采样策略。文本、精确 URL 和目标可见性断言都能使用；前提是所选 surface 驱动支持该断言。它不会增加新的动作类型，也不会改变驱动契约。
+`stable_for_ms` 为 ACL 的 `expect` 增加有界采样策略。文本、精确 URL、目标可见性和目标隐藏断言都能使用；前提是所选 surface 驱动支持底层 expectation。它不会增加新的动作类型，也不会改变驱动契约。
 
 ```acl
 expect "settled-total" {

@@ -20,6 +20,14 @@
     <main>
       <h1>A3S Test transient assertion fixture</h1>
       <output data-testid="transient-state">Transient state is visible</output>
+      <output data-testid="hidden-static" hidden>Static hidden state</output>
+      <output data-testid="visible-static">Static visible state</output>
+      <output
+        data-testid="hidden-then-visible"
+        style="box-sizing: border-box; width: 0; height: 20px; padding: 0; overflow: hidden"
+      >
+        Hidden state that reappears
+      </output>
     </main>
 
     <script>
@@ -33,6 +41,21 @@
           firstVisibilitySample = false;
           queueMicrotask(() => {
             transient.hidden = true;
+          });
+        }
+        return rect;
+      };
+
+      const hiddenThenVisible = document.querySelector('[data-testid="hidden-then-visible"]');
+      const readHiddenRect = hiddenThenVisible.getBoundingClientRect.bind(hiddenThenVisible);
+      let firstHiddenSample = true;
+
+      hiddenThenVisible.getBoundingClientRect = () => {
+        const rect = readHiddenRect();
+        if (firstHiddenSample) {
+          firstHiddenSample = false;
+          queueMicrotask(() => {
+            hiddenThenVisible.style.width = "240px";
           });
         }
         return rect;

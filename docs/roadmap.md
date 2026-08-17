@@ -10,6 +10,9 @@
 - [x] Bounded sampled assertion stability with static duration/sample limits,
       final boundary sampling, stable transient-failure reporting, and
       cancellation-safe cleanup
+- [x] Runner-owned `hidden` target assertions with stable-locator admission,
+      visible counter-evidence, driver-error preservation, and sampled
+      reappearance detection without an action-protocol revision change
 - [x] Structured JSON report and stable exit codes
 - [x] A3S Browser and standalone agent-browser command layouts
 - [x] Private runtime, unique sessions, graceful close, PID-validated emergency

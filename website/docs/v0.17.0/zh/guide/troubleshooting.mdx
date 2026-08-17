@@ -93,6 +93,23 @@ a3s-test agent observe --session smoke --json
 
 不要添加无限轮询或任意长 sleep。页面始终不 ready 时，应修复宿主应用的 ready 信号或成功条件。
 
+## 隐藏断言失败或无法判定
+
+修改定位器前，先读取准确错误码。
+
+| 结果                               | 含义                                   | 下一步检查                                          |
+| ---------------------------------- | -------------------------------------- | --------------------------------------------------- |
+| 通过并记录 `visible = false`       | 本次观察没有可见匹配                   | 只有需要持续隐藏时才增加稳定窗口                    |
+| `test.assert.hidden`               | 正向探测发现可见匹配                   | `output.data.probe`、目标语义、CSS 与过渡状态       |
+| `test.assert.unstable`             | 目标第一次隐藏，后续采样又变为可见     | `assertion.first`、`assertion.last`、采样时序与回滚 |
+| `test.spec.hidden_target_unstable` | ACL 使用了 `ref()` 或 `visual_point()` | 改用语义或 CSS 稳定定位器                           |
+| `test.driver.*`                    | adapter 无法确定可见性                 | 目标支持、过期或歧义状态、驱动输出与日志            |
+| `test.run.assertion_mode_invalid`  | 程序化构造绕过了 ACL 准入不变量        | 只为 `Assert(Visible(稳定目标))` 构造隐藏模式       |
+
+`hidden` 表示“现在没有可见匹配”，不负责等待目标消失。产品过渡仍在执行时，应先建立类型化 ready 条件。只有产品要求在第一次隐藏探测通过后继续保持隐藏时，才使用 `stable_for_ms`。
+
+不要把语义定位器换成快照 ref。ref 缺失可能表示观察已经过期，因此不会被接受为产品元素已消失的证据。不要吞掉 `test.driver.*`。非法选择器、GUI 歧义匹配、浏览器输出异常或 surface 丢失都会让可见性处于未知状态。
+
 ## 稳定断言失败或超时
 
 先看步骤错误码，在明确责任边界之前不要先调大采样间隔。

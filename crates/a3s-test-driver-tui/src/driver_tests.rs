@@ -65,6 +65,7 @@ fn step(id: &str, action: Action) -> TestStep {
         id: id.to_string(),
         action,
         stability: None,
+        assertion_mode: Default::default(),
     }
 }
 

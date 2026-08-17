@@ -8,9 +8,9 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use a3s_test_core::{
-    bind_page_context_observation_refs, validate_action_page_context_refs, Action,
-    AssertionStability, ContractOutcome, DriverError, DriverSession, ScenarioContext, StepOutput,
-    Surface, SurfaceContract, SurfaceDriver, TestScenario, TestStep, TestSuite,
+    bind_page_context_observation_refs, validate_action_page_context_refs, Action, AssertionMode,
+    AssertionStability, ContractOutcome, DriverError, DriverSession, Expectation, ScenarioContext,
+    StepOutput, Surface, SurfaceContract, SurfaceDriver, Target, TestScenario, TestStep, TestSuite,
 };
 use futures::{stream, StreamExt};
 use serde::{Deserialize, Serialize};
@@ -631,6 +631,9 @@ impl Runner {
                 None,
             );
         }
+        if step.assertion_mode == AssertionMode::Hidden {
+            return Self::execute_hidden_assertion(session, step).await;
+        }
         let Action::VerifyContract {
             contract,
             variant,
@@ -639,9 +642,7 @@ impl Runner {
         else {
             return match session.execute(step).await {
                 Ok(mut output) => {
-                    if let Some(page_context) = output.page_context.as_mut() {
-                        let _ = bind_page_context_observation_refs(page_context);
-                    }
+                    bind_output_page_context(&mut output);
                     StepAttempt::passed(output)
                 }
                 Err(error) => StepAttempt::failed(error, None),
@@ -717,6 +718,70 @@ impl Runner {
         }
     }
 
+    async fn execute_hidden_assertion(
+        session: &mut dyn DriverSession,
+        step: &TestStep,
+    ) -> StepAttempt {
+        let Action::Assert {
+            expectation: Expectation::Visible(target),
+        } = &step.action
+        else {
+            return StepAttempt::failed(
+                DriverError::new(
+                    "test.run.assertion_mode_invalid",
+                    "hidden assertion mode requires a visible-target expectation",
+                ),
+                None,
+            );
+        };
+        if matches!(target, Target::Ref { .. } | Target::VisualPoint { .. }) {
+            return StepAttempt::failed(
+                DriverError::new(
+                    "test.run.assertion_mode_invalid",
+                    "hidden assertions require a stable semantic or CSS locator, not an observation-bound ref or visual point",
+                ),
+                None,
+            );
+        }
+
+        let mut probe = step.clone();
+        probe.assertion_mode = AssertionMode::Positive;
+        probe.stability = None;
+        match session.execute(&probe).await {
+            Ok(mut output) => {
+                bind_output_page_context(&mut output);
+                let probe_data = std::mem::take(&mut output.data);
+                output.summary = format!("{}; expected no visible target match", output.summary);
+                output.data = json!({
+                    "expected": "hidden",
+                    "visible": true,
+                    "target": target,
+                    "probe": probe_data,
+                });
+                StepAttempt::failed(
+                    DriverError::new(
+                        "test.assert.hidden",
+                        "expected the target to be hidden or absent, but a visible match was found",
+                    ),
+                    Some(output),
+                )
+            }
+            Err(error) if error.code() == "test.assert.visible" => {
+                let output = StepOutput::new("target has no visible match").with_data(json!({
+                    "expected": "hidden",
+                    "visible": false,
+                    "target": target,
+                    "probe_error": {
+                        "code": error.code(),
+                        "message": error.message(),
+                    },
+                }));
+                StepAttempt::passed(output)
+            }
+            Err(error) => StepAttempt::failed(error, None),
+        }
+    }
+
     async fn project_quality_report(
         &self,
         session: &mut dyn DriverSession,
@@ -732,6 +797,12 @@ impl Runner {
             () = cancellation.cancelled() => {}
             _ = tokio::time::timeout(budget, session.project_quality_report(report)) => {}
         }
+    }
+}
+
+fn bind_output_page_context(output: &mut StepOutput) {
+    if let Some(page_context) = output.page_context.as_mut() {
+        let _ = bind_page_context_observation_refs(page_context);
     }
 }
 

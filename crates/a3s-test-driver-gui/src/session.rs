@@ -654,7 +654,19 @@ impl GuiSession {
                     .with_data(json!({ "text": text, "visible": true })))
             }
             Expectation::Visible(target) => {
-                let address = self.semantics.resolve(target)?;
+                let address = match self.semantics.resolve(target) {
+                    Ok(address) => address,
+                    Err(error)
+                        if error.code() == "test.driver.gui.target_not_found"
+                            && !matches!(target, Target::Ref { .. }) =>
+                    {
+                        return Err(DriverError::new(
+                            "test.assert.visible",
+                            "expected GUI target is not visible",
+                        ));
+                    }
+                    Err(error) => return Err(error),
+                };
                 Ok(StepOutput::new("GUI target is visible").with_data(json!({
                     "target_ref": address.reference,
                     "visible": true,

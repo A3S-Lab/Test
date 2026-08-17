@@ -4,6 +4,16 @@
 
 ### Added
 
+- Added negative target-visibility assertions for ACL `expect` steps. The new
+  `hidden = <stable target>` condition passes when no visible match exists,
+  including absent and rendered-hidden elements, and returns
+  `test.assert.hidden` with visible counter-evidence otherwise. The runner
+  owns the inversion without changing action protocol revision 7, refuses
+  observation-bound refs and visual points, preserves driver failures, and
+  composes with bounded stability sampling to catch targets that reappear.
+  Deterministic 100-case datasets cover hidden, visible, consistently hidden,
+  reappearing, and driver-failure states; real Chromium fixtures cover hidden,
+  absent, visible, and microtask-driven reappearance.
 - Added bounded assertion-stability sampling for ACL `expect` steps. A suite
   can require `stable_for_ms` with an optional `sample_interval_ms`; admission
   caps duration and planned samples, the runner remains deadline- and

@@ -49,6 +49,7 @@ impl SurfaceDriver for McpWebDriver {
                 url: self.initial_url.clone(),
             },
             stability: None,
+            assertion_mode: Default::default(),
         };
         if let Err(error) = session.execute(&step).await {
             return match session.close().await {

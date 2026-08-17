@@ -192,9 +192,55 @@ Remote workers use separate `a3s.test.remote-worker/3` execution and `a3s.test.r
 
 `check` performs admission without starting a surface. `run` executes after admission and separates product failures, specification errors, infrastructure errors, and cleanup errors in its machine result. `distributed plan` matches worker capabilities before `distributed run` dispatches authenticated shards.
 
+### Hidden ACL expectations
+
+`hidden` asserts that a stable target locator has no visible match at the current observation. Both an absent target and a matching element without a rendered visible box satisfy the condition.
+
+```acl
+expect "dialog-closed" {
+    hidden = role("dialog", "Checkout")
+}
+```
+
+The ACL compiler stores the existing `Action::Assert(Expectation::Visible(target))` plus a runner-owned hidden mode. Action protocol revision 7 and every surface-driver command remain unchanged. The runner dispatches a positive visibility probe and uses this contract.
+
+| Probe result                       | Step result                                                                                  |
+| ---------------------------------- | -------------------------------------------------------------------------------------------- |
+| Visible output                     | `test.assert.hidden`, with `visible = true` and the positive output under `probe`            |
+| `test.assert.visible`              | Passed, with `visible = false` and code/message under `probe_error`                          |
+| Any `test.driver.*` or other error | Original error; failed target resolution or infrastructure is not evidence that UI is hidden |
+
+A passing step exposes the following stable shape under `output.data`.
+
+```json
+{
+  "expected": "hidden",
+  "visible": false,
+  "target": {
+    "type": "role",
+    "role": "dialog",
+    "name": "Checkout"
+  },
+  "probe_error": {
+    "code": "test.assert.visible",
+    "message": "target is not visible"
+  }
+}
+```
+
+Use a semantic or CSS locator supported by the selected surface. `ref()` and `visual_point()` fail admission because they identify observation-bound evidence; failure to resolve them could mean stale data rather than hidden UI. Web supports its semantic and CSS visibility targets. GUI supports its admitted semantic targets and keeps stale or ambiguous matches as driver errors. TUI does not currently support target visibility assertions.
+
+| Error code                         | Meaning                                                                  |
+| ---------------------------------- | ------------------------------------------------------------------------ |
+| `test.spec.hidden_target_unstable` | ACL used an observation-bound ref or visual point                        |
+| `test.assert.hidden`               | The positive probe found a visible target                                |
+| `test.run.assertion_mode_invalid`  | A programmatic suite attached hidden mode to an invalid action or target |
+
+`hidden` is an immediate assertion, not a disappearance wait. Combine it with `stable_for_ms` when the product must remain hidden. A later visible sample then returns `test.assert.unstable` and retains the first hidden observation plus the visible counterexample.
+
 ### Stable ACL expectations
 
-`stable_for_ms` adds a bounded sampling policy to an ACL `expect`. It works with text, exact URL, and visible-target expectations on every surface whose driver supports that expectation. It does not add a new action type or change a driver contract.
+`stable_for_ms` adds a bounded sampling policy to an ACL `expect`. It works with text, exact URL, visible-target, and hidden-target expectations on every surface whose driver supports the underlying expectation. It does not add a new action type or change a driver contract.
 
 ```acl
 expect "settled-total" {

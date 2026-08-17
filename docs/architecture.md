@@ -695,7 +695,7 @@ reference with the GitHub Release.
 ```text
 TestSuite
 └── TestScenario [surface, deadline]
-    └── TestStep
+    └── TestStep [assertion mode, optional stability policy]
         └── Action [typed locator / condition / assertion]
 
 SurfaceDriver
@@ -709,6 +709,14 @@ SurfaceDriver
 Every public driver object is `Send + Sync`. A session is `Send` and owned by
 one scenario execution. The runner never shares mutable session state across
 scenarios.
+
+Step policy remains outside the action protocol. Positive steps reach drivers
+unchanged. A `hidden` step is compiled to the existing visible-target
+assertion, then the runner dispatches a positive probe and deterministically
+inverts only `test.assert.visible`. Visible evidence becomes
+`test.assert.hidden`; driver, stale-reference, and ambiguity errors keep their
+original ownership. Stability sampling repeats that same runner-owned policy,
+so no surface capability revision is needed.
 
 ## Lifecycle and interrupts
 

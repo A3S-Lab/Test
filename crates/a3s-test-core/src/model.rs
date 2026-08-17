@@ -36,6 +36,23 @@ pub struct TestStep {
     pub action: Action,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub stability: Option<AssertionStability>,
+    #[serde(default, skip_serializing_if = "AssertionMode::is_positive")]
+    pub assertion_mode: AssertionMode,
+}
+
+#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum AssertionMode {
+    #[default]
+    Positive,
+    Hidden,
+}
+
+impl AssertionMode {
+    #[must_use]
+    pub fn is_positive(&self) -> bool {
+        *self == Self::Positive
+    }
 }
 
 pub const MIN_ASSERTION_STABILITY_MS: u64 = 10;

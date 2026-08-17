@@ -81,6 +81,38 @@ a3s-test run tests/e2e/smoke.acl --json
 
 未知块、未知属性、重复标识、歧义条件、非法定位器和越界证据路径都会在表面启动前被拒绝。断言失败、超时和已经派发但结果不明确的动作不会自动重放。
 
+## 证明界面已经没有可见匹配
+
+当产品要求是关闭、移除或隐藏某个目标时，使用 `hidden`。稳定定位器没有匹配元素，或所有匹配元素都没有渲染出的可见边界时，断言通过。
+
+```acl
+expect "checkout-dialog-closed" {
+    hidden = role("dialog", "Checkout")
+}
+```
+
+`hidden` 是 Runner 围绕现有正向可见性断言执行的步骤策略，不会增加 Action 变体，也不会改变浏览器协议修订 7。Runner 向 surface 驱动发送正向探测，再确定性地分类结果。
+
+| 正向探测结果                      | `hidden` 断言结果                                                 |
+| --------------------------------- | ----------------------------------------------------------------- |
+| 返回目标可见证据                  | 以 `test.assert.hidden` 失败，并保留驱动数据作为反证              |
+| 返回 `test.assert.visible` 不匹配 | 通过，记录 `expected = hidden`、`visible = false`、目标与探测错误 |
+| 驱动、过期、歧义或 I/O 错误       | 保留原始错误，基础设施或定位失败不能充当隐藏证据                  |
+
+应使用所选 surface 支持的 role、label、test ID、placeholder、text、CSS 或其他稳定定位器。ACL 准入会以 `test.spec.hidden_target_unstable` 拒绝 `ref()` 与 `visual_point()`。两者都属于某次观察，解析失败可能只是证据过期，不能证明产品目标已隐藏。绕过准入的程序化 suite 会在派发前以 `test.run.assertion_mode_invalid` 关闭失败。
+
+`hidden` 会立即观察，不会等待过渡自行结束。需要时应先到达确定性的 ready 状态。若要证明目标在水合或回滚期间持续隐藏，可组合有界采样。
+
+```acl
+expect "checkout-dialog-stays-closed" {
+    hidden = role("dialog", "Checkout")
+    stable_for_ms = 300
+    sample_interval_ms = 25
+}
+```
+
+第一次隐藏探测通过、后续探测又发现可见目标时，结果为 `test.assert.unstable`。稳定性数据会在 `assertion.first` 中保留 `visible = false`，并在 `assertion.last` 中保留可见反例。
+
 ## 证明瞬态界面已经稳定
 
 单点断言回答的是“这一刻是否成立”。静态内容通常够用，但它也可能刚好接受加载闪烁、水合替换、乐观更新或动画中的一帧。如果产品要求是“界面完成收敛后仍然成立”，就把时间条件显式写在断言上。

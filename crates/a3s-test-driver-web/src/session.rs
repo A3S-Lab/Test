@@ -309,6 +309,7 @@ impl AgentBrowserSession {
                 id: id.into(),
                 action,
                 stability: None,
+                assertion_mode: Default::default(),
             },
         )
         .await

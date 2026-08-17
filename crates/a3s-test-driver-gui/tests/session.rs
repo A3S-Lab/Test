@@ -4,7 +4,9 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 
-use a3s_test_core::{Action, ScenarioContext, Surface, SurfaceDriver, Target, TestStep};
+use a3s_test_core::{
+    Action, Expectation, ScenarioContext, Surface, SurfaceDriver, Target, TestStep,
+};
 use a3s_test_driver_gui::{
     ApplicationIdentity, AttachSpec, CuaCompatibility, CuaEndpoint, CuaTransport,
     CuaTransportError, CuaTransportFactory, GuiAppTarget, GuiCaptureScope, GuiDriver,
@@ -517,6 +519,7 @@ async fn semantic_actions_use_opaque_refs_and_owned_cleanup() {
                 },
             },
             stability: None,
+            assertion_mode: Default::default(),
         })
         .await
         .expect("semantic click");
@@ -531,6 +534,7 @@ async fn semantic_actions_use_opaque_refs_and_owned_cleanup() {
                 target: Target::Ref { value: first_ref },
             },
             stability: None,
+            assertion_mode: Default::default(),
         })
         .await
         .expect_err("expired reference must fail");
@@ -543,6 +547,7 @@ async fn semantic_actions_use_opaque_refs_and_owned_cleanup() {
                 path: "screens/window.png".to_string(),
             },
             stability: None,
+            assertion_mode: Default::default(),
         })
         .await
         .expect("window screenshot");
@@ -599,12 +604,74 @@ async fn ambiguous_semantic_target_fails_without_input() {
                 },
             },
             stability: None,
+            assertion_mode: Default::default(),
         })
         .await
         .expect_err("ambiguous target must fail");
     assert_eq!(error.code(), "test.driver.gui.target_ambiguous");
     assert!(transport.calls_for("click").await.is_empty());
+
+    let assertion_error = session
+        .execute(&TestStep {
+            id: "ambiguous-assertion".to_string(),
+            action: Action::Assert {
+                expectation: Expectation::Visible(Target::Label {
+                    value: "Save".to_string(),
+                }),
+            },
+            stability: None,
+            assertion_mode: Default::default(),
+        })
+        .await
+        .expect_err("ambiguous assertion target must remain a driver error");
+    assert_eq!(assertion_error.code(), "test.driver.gui.target_ambiguous");
     session.close().await.expect("close session");
+}
+
+#[tokio::test]
+async fn visible_assertions_classify_missing_targets_without_hiding_reference_errors() {
+    let temp = TempDir::new().expect("temp dir");
+    let transport = FakeTransport::new(FakeOptions::default());
+    let mut session = driver(launch_config(&temp), Arc::clone(&transport))
+        .open(&context(&temp))
+        .await
+        .expect("GUI session");
+
+    let missing = session
+        .execute(&TestStep {
+            id: "missing-target".to_string(),
+            action: Action::Assert {
+                expectation: Expectation::Visible(Target::AutomationId {
+                    value: "missing-button".to_string(),
+                }),
+            },
+            stability: None,
+            assertion_mode: Default::default(),
+        })
+        .await
+        .expect_err("missing semantic target must be an assertion mismatch");
+    assert_eq!(missing.code(), "test.assert.visible");
+
+    let observation = session.observe().await.expect("semantic observation");
+    let generation = observation.data["snapshot"]["generation"]
+        .as_u64()
+        .expect("snapshot generation");
+    let invalid_ref = session
+        .execute(&TestStep {
+            id: "missing-ref".to_string(),
+            action: Action::Assert {
+                expectation: Expectation::Visible(Target::Ref {
+                    value: format!("@g{generation}.999"),
+                }),
+            },
+            stability: None,
+            assertion_mode: Default::default(),
+        })
+        .await
+        .expect_err("stale observation ref must remain a driver error");
+    assert_eq!(invalid_ref.code(), "test.driver.gui.stale_reference");
+
+    session.close().await.expect("close GUI session");
 }
 
 #[tokio::test]
@@ -713,6 +780,7 @@ async fn window_vision_points_are_grounded_in_verified_image_evidence() {
                 },
             },
             stability: None,
+            assertion_mode: Default::default(),
         })
         .await
         .expect("grounded visual click");
@@ -752,6 +820,7 @@ async fn visual_actions_reject_old_or_modified_grounding_images() {
                 },
             },
             stability: None,
+            assertion_mode: Default::default(),
         })
         .await
         .expect_err("old image must fail");
@@ -776,6 +845,7 @@ async fn visual_actions_reject_old_or_modified_grounding_images() {
                 },
             },
             stability: None,
+            assertion_mode: Default::default(),
         })
         .await
         .expect_err("modified image must fail");
@@ -816,6 +886,7 @@ async fn visual_drag_requires_one_current_grounding_image() {
                 },
             },
             stability: None,
+            assertion_mode: Default::default(),
         })
         .await
         .expect("visual drag");

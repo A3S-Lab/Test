@@ -139,6 +139,7 @@ fn suite(timeout_ms: u64) -> TestSuite {
                 id: "step".to_string(),
                 action: Action::Snapshot { interactive: true },
                 stability: None,
+                assertion_mode: Default::default(),
             }],
         }],
     }
@@ -339,6 +340,7 @@ fn stable_assertion_suite(
             stable_for_ms,
             sample_interval_ms,
         }),
+        assertion_mode: Default::default(),
     };
     suite
 }
