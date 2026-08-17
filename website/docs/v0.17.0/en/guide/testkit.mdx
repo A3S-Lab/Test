@@ -1,6 +1,6 @@
 ---
 title: Add Web Test Kit
-description: Read semantics, components, geometry, and the rendered visual system, then submit one repair task or a batch from the page.
+description: Publish revisioned semantics, components, locators, geometry, and UI evidence after rendering, with optional human marking and batch repair review.
 ---
 
 :::warning Release candidate
@@ -9,7 +9,7 @@ v0.17.0 is staged on main but not published. Installation examples remain pinned
 
 # Add Web Test Kit
 
-Add `@a3s-lab/testkit` in development and A3S Test can read the current DOM, accessible semantics, component ownership, geometry, and browser-computed visual system after the page renders. A reviewer can point to one problem or select a batch, then send each repair task to the coding agent that owns the workspace. The SDK does not write test attributes onto product elements.
+Add `@a3s-lab/testkit` in development and its Context Runtime makes bounded, revisioned Page Context available after the page renders. That context includes current DOM, accessible semantics, component ownership, stable locators, real geometry, and browser-computed UI evidence. The optional Review Overlay lets a person mark one problem or a batch and explicitly send it to the coding agent that owns the workspace. CI can run the headless Context Runtime without the overlay, and the SDK does not write test attributes onto product elements.
 
 ## Install
 

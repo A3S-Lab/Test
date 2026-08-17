@@ -13,7 +13,7 @@ export default defineConfig({
   siteOrigin,
   title: 'A3S Test',
   description:
-    'A3S Test gives coding agents rendered page context, bounded actions, human-authorized repair, and fresh evidence for verification.',
+    'A3S Test gives coding agents rendered page context, typed actions, repeatable ACL regressions, and fresh evidence for human-authorized repair.',
   lang: 'zh',
   icon: '/a3s-logo.png',
   logo: '/a3s-logo.png',
@@ -36,14 +36,14 @@ export default defineConfig({
       label: '简体中文',
       title: 'A3S Test',
       description:
-        'A3S Test 让编码 Agent 读取渲染后的页面上下文，在人工授权范围内修复，并用新观察验收结果。',
+        'A3S Test 让编码 Agent 读取渲染后的页面上下文，通过类型化动作探索界面，把跑通的流程固化为 ACL，并用新证据验收人工授权的修复。',
     },
     {
       lang: 'en',
       label: 'English',
       title: 'A3S Test',
       description:
-        'A3S Test gives coding agents rendered page context, bounded actions, human-authorized repair, and fresh evidence for verification.',
+        'A3S Test gives coding agents rendered page context, typed actions, repeatable ACL regressions, and fresh evidence for human-authorized repair.',
     },
   ],
   head: [
@@ -64,7 +64,7 @@ export default defineConfig({
       {
         property: 'og:image:alt',
         content:
-          'A3S Test connects rendered page context, human-authorized repair, and fresh verification.',
+          'A3S Test connects fresh page observations, typed actions, human-authorized repair, and repeatable ACL regressions.',
       },
     ],
     ['meta', { name: 'twitter:card', content: 'summary_large_image' }],

@@ -1,35 +1,46 @@
 ---
-title: Quick start
-description: Complete one Web observation, action, and evidence capture, then preserve the stable path as an ACL regression.
+title: Run your first Web test
+description: Observe a current page in a persistent agent session, execute one bounded action, retain the evidence, and preserve the proven path as ACL.
 ---
 
 :::warning Release candidate
 v0.17.0 is staged on main but not published. Installation examples remain pinned to v0.16.2 until the release gate is intentionally advanced.
 :::
 
-# Quick start
+# Run your first Web test
 
-This guide takes you through one complete Web test. Start a local page, use an agent session to observe it and take one action, save the screenshot and report, then preserve the proven path as ACL. Both workflows use the same typed actions and evidence format.
+This guide starts with a local page that is already running. When you finish, you will have an inspectable session record containing the goal, every observation, the action that ran, a screenshot, and the terminal report. Once the path is stable, you can preserve it as an ACL regression suite.
 
-## Install
+## Choose the right entry point
 
-On macOS or Linux:
+| What you need to do                              | Start here                                              |
+| ------------------------------------------------ | ------------------------------------------------------- |
+| Explore an unfamiliar page or reproduce an issue | Continue here with a persistent agent session           |
+| Repeat a workflow you already understand         | [Exploration and regression workflows](./workflows.mdx) |
+| Expose components, locators, and geometry        | [Add Web Test Kit](./testkit.mdx)                       |
+| Compare a PRD or design with the rendered page   | [Generate a Surface Contract](./contracts.mdx)          |
+
+The example assumes that your product runs at `http://127.0.0.1:3000/checkout` and that the confirmation page exposes an observable heading. Replace the URL, goal, and success condition with facts from your project.
+
+## Install the CLI and Agent Skill
+
+macOS or Linux
 
 ```bash
 curl -fsSL https://github.com/A3S-Lab/Test/releases/latest/download/install.sh | sh
 ```
 
-On Windows PowerShell:
+Windows PowerShell
 
 ```powershell
 & ([scriptblock]::Create((irm 'https://github.com/A3S-Lab/Test/releases/latest/download/install.ps1')))
 ```
 
-The installer downloads the platform CLI, verifies its SHA-256, and installs the matching Skill for detected coding agents. See [Installation](./installation.mdx) to select an agent or destination.
+The installer downloads the platform CLI, verifies its SHA-256, and installs the matching Skill for detected coding agents. See [Installation](./installation.mdx) to pin a version, agent, or destination.
 
-## Start a persistent Web session
+## 1. Start a persistent session
 
-Run the local product, then declare the goal and an observable success condition:
+Run the local product, then declare the test goal and a success condition that the page can prove.
 
 ```bash
 a3s-test agent start http://127.0.0.1:3000/checkout \
@@ -39,20 +50,26 @@ a3s-test agent start http://127.0.0.1:3000/checkout \
   --json
 ```
 
-Observe the current interface:
+The session retains the browser, policy boundary, and append-only event log until you explicitly finish, abort, or reach its timeout.
+
+## 2. Read the fresh observation
 
 ```bash
 a3s-test agent observe --session checkout --interactive --json
 ```
 
-The response contains a new `observation_id` and actionable semantic refs:
+The response contains a new `observation_id` and semantic refs that are actionable in the current page state.
 
 ```text
 observation_id: 1
 @e1 [button] Continue
 ```
 
-Bind the action to that observation. Observe again after every state-changing action:
+When the page embeds Test Kit, the same observation may also contain `@cN` refs and Page Context with component ownership, preferred locators, and multi-space geometry. Both `@eN` and `@cN` are valid only in the observation that produced them.
+
+## 3. Execute one bounded action
+
+Bind the action to the observation you just received.
 
 ```bash
 a3s-test agent click @e1 \
@@ -61,7 +78,11 @@ a3s-test agent click @e1 \
   --json
 ```
 
-## Finish with evidence
+Before the driver executes, A3S Test checks the action schema, session capability, policy, and observation revision. A state change immediately expires old refs. Run `agent observe` again before choosing the next action.
+
+## 4. Retain evidence and finish
+
+After the target state appears, save a screenshot and write the terminal report.
 
 ```bash
 a3s-test agent screenshot screenshots/confirmation.png \
@@ -75,7 +96,7 @@ a3s-test agent finish \
   --json
 ```
 
-Each workspace retains an append-only record:
+Each workspace retains an append-only record.
 
 ```text
 .a3s-test/agent-sessions/checkout/
@@ -86,4 +107,8 @@ Each workspace retains an append-only record:
     └── screenshots/confirmation.png
 ```
 
-Continue with [Exploration and regression workflows](./workflows.mdx), or preserve the proven path as ACL.
+`events.jsonl` explains what happened at each step, `report.json` stores the terminal state and summary, and `artifacts/` contains only evidence owned by this session.
+
+## 5. Preserve the stable path as a regression
+
+Agent sessions are for discovering a path. Once the actions, waits, and success conditions are explicit, encode them as ACL. Use `a3s-test check` for static admission and `a3s-test run` to repeat the suite locally or in CI. Continue with [Exploration and regression workflows](./workflows.mdx) for the complete example.

@@ -1,15 +1,15 @@
 ---
-title: Explore a page and save the regression
-description: Use an agent session to prove an unknown path, then save its important actions and assertions as a repeatable ACL suite.
+title: From page exploration to stable regression
+description: Prove an unknown path from fresh observations, then preserve explicit actions, waits, and assertions as a repeatable ACL suite.
 ---
 
 :::warning Release candidate
 v0.17.0 is staged on main but not published. Installation examples remain pinned to v0.16.2 until the release gate is intentionally advanced.
 :::
 
-# Explore a page and save the regression
+# From page exploration to stable regression
 
-For an unfamiliar page, let the coding agent work from one fresh observation at a time. Once the path works, save its important actions and assertions as ACL for local development or CI. A3S Test reuses the same actions, drivers, evidence, and cleanup rules across both workflows.
+For an unfamiliar page, the coding agent starts from a fresh observation and chooses one action at a time. Once the path works and local evidence can prove its success condition, preserve the explicit actions, waits, and assertions as ACL for local development or CI. Both workflows use the same actions, drivers, evidence, and cleanup rules.
 
 | Workflow            | Planner                     | Best for                                            | Entry point                   |
 | ------------------- | --------------------------- | --------------------------------------------------- | ----------------------------- |

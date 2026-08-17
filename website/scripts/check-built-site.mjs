@@ -115,7 +115,20 @@ const contractsHtml = await readFile(
   path.join(outputRoot, 'guide', 'contracts.html'),
   'utf8',
 );
+const quickStartHtml = await readFile(
+  path.join(outputRoot, 'guide', 'index.html'),
+  'utf8',
+);
+const englishQuickStartHtml = await readFile(
+  path.join(outputRoot, 'en', 'guide', 'index.html'),
+  'utf8',
+);
 const rootMarkdown = await readFile(path.join(outputRoot, 'index.md'), 'utf8');
+const socialCardSvg = await readFile(
+  path.join(outputRoot, 'social-card.svg'),
+  'utf8',
+);
+const socialCardPng = await readFile(path.join(outputRoot, 'social-card.png'));
 
 if (!rootHtml.includes('<html lang="zh">')) {
   failures.push('default homepage does not declare Chinese');
@@ -124,34 +137,46 @@ if (!englishHtml.includes('<html lang="en">')) {
   failures.push('English homepage does not declare English');
 }
 if (
-  !rootHtml.includes('让 Agent 看懂页面') ||
-  !rootHtml.includes('让每次修复都有证据') ||
-  !rootHtml.includes('从点选问题到验证结果，五步闭环')
+  !rootHtml.includes('让 Agent 看清页面') ||
+  !rootHtml.includes('把跑通的路径变成回归') ||
+  !rootHtml.includes('一次完整测试，五个可检查步骤')
 ) {
   failures.push('default homepage lacks Chinese product copy');
 }
 if (
-  !englishHtml.includes('Give agents the rendered context.') ||
-  !englishHtml.includes('Prove every change.') ||
-  !englishHtml.includes('Five steps from marked issue to verified result')
+  !englishHtml.includes('Read rendered pages.') ||
+  !englishHtml.includes('Preserve proven paths.') ||
+  !englishHtml.includes('One complete test in five checkable steps')
 ) {
   failures.push('English homepage lacks English product copy');
 }
 if (
-  !rootHtml.includes('PRD 和设计稿只提供期望来源，不会冒充浏览器可访问树') ||
+  !rootHtml.includes('PRD 和设计稿描述期望，不能替代浏览器可访问树') ||
   !englishHtml.includes(
-    'PRDs and designs provide expected evidence; they never masquerade as a browser accessibility tree',
+    'PRDs and designs describe expectations; they do not replace the browser accessibility tree',
   ) ||
-  !rootMarkdown.includes('PRD 和设计稿只提供期望来源，不会冒充浏览器可访问树')
+  !rootMarkdown.includes('PRD 和设计稿描述期望，不能替代浏览器可访问树')
 ) {
   failures.push('homepage lacks the source-to-contract authority boundary');
 }
 if (
   !rootHtml.includes('data-testid="a3s-experience-submit"') ||
-  !rootHtml.includes('本地演示：问题只保存在当前页面') ||
-  !rootHtml.includes('不会发送给 Agent')
+  !rootHtml.includes('此演示只把问题保存在当前标签页') ||
+  !rootHtml.includes('不连接修复 Agent')
 ) {
   failures.push('homepage lacks the local interactive Test Kit surface');
+}
+if (
+  !quickStartHtml.includes('先选对入口') ||
+  !quickStartHtml.includes('让页面提供组件、定位器和坐标') ||
+  !quickStartHtml.includes('<code>@cN</code>') ||
+  !englishQuickStartHtml.includes('Choose the right entry point') ||
+  !englishQuickStartHtml.includes(
+    'Expose components, locators, and geometry',
+  ) ||
+  !englishQuickStartHtml.includes('<code>@cN</code>')
+) {
+  failures.push('quick start lacks its task routes or observation-scoped refs');
 }
 if (
   !javascript.includes('a3s.test.page-context/1') ||
@@ -210,6 +235,18 @@ if (
 }
 if (!rootHtml.includes(`${base}social-card.png`)) {
   failures.push('homepage lacks the raster Open Graph image');
+}
+const pngSignature = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
+if (
+  !socialCardSvg.includes('Read rendered pages.') ||
+  !socialCardSvg.includes('Preserve proven paths.') ||
+  !socialCardSvg.includes('href="a3s-logo.png"') ||
+  socialCardPng.length < 24 ||
+  !socialCardPng.subarray(0, pngSignature.length).equals(pngSignature) ||
+  socialCardPng.readUInt32BE(16) !== 1200 ||
+  socialCardPng.readUInt32BE(20) !== 630
+) {
+  failures.push('social card lacks current copy, logo, or 1200x630 PNG output');
 }
 
 const requiredLightCodeTheme = [

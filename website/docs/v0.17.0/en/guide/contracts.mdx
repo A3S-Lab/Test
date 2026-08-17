@@ -1,15 +1,15 @@
 ---
-title: Generate page contracts from PRDs and designs
-description: Generate cited candidate trees from PRDs and designs, review them, then compare the approved contract with the live page.
+title: Turn a PRD and design into a reviewable Surface Contract
+description: Generate precisely sourced candidate structure from PRD spans and design regions, review it, and reconcile it with the current browser page.
 ---
 
 :::warning Release candidate
 v0.17.0 is staged on main but not published. Installation examples remain pinned to v0.16.2 until the release gate is intentionally advanced.
 :::
 
-# Generate page contracts from PRDs and designs
+# Turn a PRD and design into a reviewable Surface Contract
 
-A3S Test can generate cited candidate trees from PRDs and designs, then publish the reviewed selection as a Surface Contract. At runtime, compare that contract with the browser accessibility tree and Test Kit page context to find gaps between product intent, design, and the current implementation.
+A3S Test uses a deployment-injected provider to interpret PRD spans and design regions as precisely sourced candidate structure. A person must review every candidate, resolve conflicts, and close open decisions before publishing a Surface Contract. At runtime, A3S Test reconciles that contract with the browser accessibility tree and Test Kit Page Context, retaining provenance, current page revision, and evidence for every difference.
 
 ## Keep three data classes separate
 

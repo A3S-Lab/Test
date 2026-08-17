@@ -1,12 +1,12 @@
 [
-  { "text": "Docs", "link": "/guide/", "activeMatch": "^/guide/" },
+  { "text": "Get started", "link": "/guide/", "activeMatch": "^/guide/" },
   {
     "text": "Architecture",
     "link": "/concepts/architecture",
     "activeMatch": "^/concepts/"
   },
   {
-    "text": "Reference",
+    "text": "CLI reference",
     "link": "/reference/cli",
     "activeMatch": "^/reference/"
   },

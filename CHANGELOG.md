@@ -30,11 +30,11 @@
 
 ### Changed
 
-- Refined the bilingual homepage around rendered page context, reviewed PRD
-  and design expectations, the five-step mark-to-verify lifecycle, and the
-  human repair-authorization boundary. The live Test Kit specimen now uses
-  localized review and receipt copy, states page-local persistence directly,
-  and routes its closing action to the integration guide.
+- Reframed the bilingual homepage around fresh rendered-page observations,
+  typed actions, exploration-to-ACL regression, human-authorized repair, and
+  reviewed PRD/design expectations. The current quick start now routes readers
+  by task, explains observation-scoped browser and Test Kit references, and
+  keeps the live specimen's page-local storage boundary explicit.
 - Tightened the desktop Test Kit dock, tool tray, finding editor, settings,
   and batch workspace while retaining 44-pixel targets on mobile and coarse
   pointers, including 320-pixel-wide viewports.

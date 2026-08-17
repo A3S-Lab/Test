@@ -17,7 +17,7 @@ suite "website-testkit-experience" {
         }
 
         wait "homepage-ready" {
-            text = "让 Agent 看懂页面"
+            text = "让 Agent 看清页面"
         }
 
         expect "published-install-version" {
@@ -49,11 +49,11 @@ suite "website-testkit-experience" {
         }
 
         expect "source-contract-boundary" {
-            text = "PRD 和设计稿只提供期望来源，不会冒充浏览器可访问树"
+            text = "PRD 和设计稿描述期望，不能替代浏览器可访问树"
         }
 
         expect "local-only-disclosure" {
-            text = "本地演示：问题只保存在当前页面"
+            text = "此演示只把问题保存在当前标签页"
         }
 
         expect "rendered-context" {
@@ -61,7 +61,7 @@ suite "website-testkit-experience" {
         }
 
         click "open-review" {
-            target = role("button", "打开点选工具")
+            target = role("button", "开始点选")
         }
 
         wait "overlay-mounted" {
@@ -224,7 +224,7 @@ suite "website-testkit-experience" {
         }
 
         wait "mobile-homepage-ready" {
-            text = "让 Agent 看懂页面"
+            text = "让 Agent 看清页面"
         }
 
         expect "mobile-rendered-context" {
@@ -232,7 +232,7 @@ suite "website-testkit-experience" {
         }
 
         click "mobile-open-review" {
-            target = role("button", "打开点选工具")
+            target = role("button", "开始点选")
         }
 
         wait "mobile-overlay-mounted" {
