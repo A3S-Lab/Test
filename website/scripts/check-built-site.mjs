@@ -138,17 +138,15 @@ if (!englishHtml.includes('<html lang="en">')) {
 }
 if (
   !rootHtml.includes('让 Agent 看清页面') ||
-  !rootHtml.includes('让每一步都能复现和验收') ||
-  !rootHtml.includes('从观察到验收，每一步都有证据')
+  !rootHtml.includes('让每次动作都有证据') ||
+  !rootHtml.includes('每个动作都从最新观察开始')
 ) {
   failures.push('default homepage lacks Chinese product copy');
 }
 if (
-  !englishHtml.includes('Read the current page.') ||
+  !englishHtml.includes('Observe the page.') ||
   !englishHtml.includes('Prove every action.') ||
-  !englishHtml.includes(
-    'Every step from observation to acceptance leaves evidence',
-  )
+  !englishHtml.includes('Every action starts from a fresh observation')
 ) {
   failures.push('English homepage lacks English product copy');
 }
@@ -242,7 +240,7 @@ if (!rootHtml.includes(`${base}social-card.png`)) {
 }
 const pngSignature = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
 if (
-  !socialCardSvg.includes('Read the current page.') ||
+  !socialCardSvg.includes('Observe the page.') ||
   !socialCardSvg.includes('Prove every action.') ||
   !socialCardSvg.includes('@c12 · button') ||
   !socialCardSvg.includes('href="a3s-logo.png"') ||

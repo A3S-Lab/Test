@@ -8,7 +8,7 @@
     <image href="a3s-logo.png" width="56" height="56"/>
     <text x="76" y="38" fill="#101827" font-family="ui-sans-serif,system-ui,-apple-system,'Segoe UI',sans-serif" font-size="31" font-weight="760">A3S Test</text>
   </g>
-  <text x="72" y="204" fill="#101827" font-family="ui-sans-serif,system-ui,-apple-system,'Segoe UI',sans-serif" font-size="62" font-weight="760" letter-spacing="-2">Read the current page.</text>
+  <text x="72" y="204" fill="#101827" font-family="ui-sans-serif,system-ui,-apple-system,'Segoe UI',sans-serif" font-size="62" font-weight="760" letter-spacing="-2">Observe the page.</text>
   <text x="72" y="274" fill="#101827" font-family="ui-sans-serif,system-ui,-apple-system,'Segoe UI',sans-serif" font-size="62" font-weight="760" letter-spacing="-2">Prove every action.</text>
   <text x="76" y="322" fill="#56657b" font-family="ui-sans-serif,system-ui,-apple-system,'Segoe UI',sans-serif" font-size="22">Fresh observations · typed actions · inspectable evidence</text>
   <g transform="translate(70 365)">

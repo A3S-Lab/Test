@@ -61,11 +61,11 @@ suite "website-testkit-experience" {
         }
 
         click "open-review" {
-            target = role("button", "开始点选")
+            target = role("button", "开始标记")
         }
 
         wait "overlay-mounted" {
-            text = "点选工具已打开"
+            text = "标记工具已打开"
         }
 
         snapshot "overlay-controls" {
@@ -232,11 +232,11 @@ suite "website-testkit-experience" {
         }
 
         click "mobile-open-review" {
-            target = role("button", "开始点选")
+            target = role("button", "开始标记")
         }
 
         wait "mobile-overlay-mounted" {
-            text = "点选工具已打开"
+            text = "标记工具已打开"
         }
 
         snapshot "mobile-overlay-controls" {
