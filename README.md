@@ -228,7 +228,8 @@ wait "dialog-closed" {
 ```
 
 The runner evaluates both forms through the existing positive visibility
-action, so the driver protocol remains revision 7. `expect hidden` probes once;
+action introduced before revision 8; neither negative form adds a new action
+variant. `expect hidden` probes once;
 `wait hidden` probes immediately and then every 50 ms until the first
 `test.assert.visible` mismatch proves that no visible match remains. A scenario
 deadline or cancellation interrupts the wait and still closes the owned
@@ -243,6 +244,57 @@ Sampling is a time-resolution tradeoff. It catches state changes observed at a
 sample point, but it cannot prove what happened between two points. Use a
 smaller interval for short flicker, allow the complete window in the scenario
 timeout, and keep semantic targets stable across renders.
+
+## Assert live control state
+
+Action protocol revision 8 can compare the state users actually interact with,
+instead of inferring success from text or element presence:
+
+```acl
+expect "display-name" {
+    target = label("Display name")
+    value = "Ada"
+}
+
+expect "submit" {
+    disabled = role("button", "Submit")
+}
+
+expect "terms" {
+    checked = label("Accept terms")
+}
+
+expect "review" {
+    selected = role("option", "Review")
+}
+
+expect "status" {
+    target = role("listbox", "Publication status")
+    selected_values = ["review", "published"]
+    stable_for_ms = 300
+    sample_interval_ms = 25
+}
+```
+
+The paired conditions are `enabled`/`disabled`, `checked`/`unchecked`, and
+`selected`/`unselected`. `selected_values` is a duplicate-free exact set:
+order is canonicalized, extra or missing values fail, and `[]` proves a real
+empty selection only when the target exists and exposes that state. Missing,
+ambiguous, invalid, or unsupported targets remain `test.driver.*`; only a
+successfully observed value that differs from the expectation becomes
+`test.assert.*`. This prevents an absent checkbox from falsely proving
+`unchecked` and an absent button from falsely proving `disabled`.
+
+| Surface | Exact value | Boolean state | Selected values |
+| --- | --- | --- | --- |
+| Web | Live DOM `value` | Native live properties, then admitted ARIA state for custom controls | Native multi-select exact set |
+| GUI | CUA semantic value when present | Unsupported until CUA exposes typed state | Unsupported |
+| TUI | Unsupported | Unsupported | Unsupported |
+
+The revision-8 regression set currently proves 400/400 deterministic Web
+classifications, 100/100 stable state windows, 100/100 transient-state
+rejections, and 15/15 positive plus 4/4 negative classifications in real
+Chromium without leaking a private runtime directory.
 
 [Compare the workflows](https://a3s-lab.github.io/Test/guide/workflows.html)
 

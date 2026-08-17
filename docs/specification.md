@@ -218,8 +218,9 @@ wait "dialog-closed" {
 
 This is `TestStep` wait policy, not a new `Action` or `WaitCondition` variant.
 Core stores `Action::Wait { condition: WaitCondition::Visible(target) }` plus
-`WaitMode::Hidden`; action protocol revision 7 and surface-driver command
-schemas remain unchanged. Runner admission requires `AssertionMode::Positive`,
+`WaitMode::Hidden`; it reuses the visible condition introduced before the
+current action protocol revision 8 and does not change surface-driver command
+schemas. Runner admission requires `AssertionMode::Positive`,
 no assertion-stability policy, and a locator that is not `ref()` or
 `visual_point()`.
 
@@ -341,6 +342,76 @@ transients matter, accepting the additional driver work.
 Stability attributes are legal only on `expect`. `sample_interval_ms` without
 `stable_for_ms`, an out-of-range window, an interval longer than the window,
 or a plan over 1,001 samples fails static admission before a surface opens.
+
+### Control-state expectations
+
+Action protocol revision 8 adds typed assertions for live control state. An
+`expect` block still chooses exactly one condition:
+
+```acl
+expect "display-name" {
+    target = label("Display name")
+    value = "Ada"
+}
+
+expect "submit" {
+    disabled = role("button", "Submit")
+}
+
+expect "terms" {
+    checked = label("Accept terms")
+}
+
+expect "review" {
+    selected = role("option", "Review")
+}
+
+expect "status" {
+    target = role("listbox", "Publication status")
+    selected_values = ["review", "published"]
+}
+```
+
+`value` and `selected_values` require a separate `target`. The paired state
+conditions carry their target directly: `enabled`/`disabled`,
+`checked`/`unchecked`, and `selected`/`unselected`. `selected_values` is a
+duplicate-free exact set. ACL admission sorts it canonically, rejects duplicate
+expected values, permits `[]`, and does not treat ordering as product state.
+Extra or missing observed values are mismatches.
+
+The result boundary is evidence-based:
+
+| Observation | Result ownership |
+| --- | --- |
+| Exactly one target exposes the requested state and it matches | Pass with `target`, `expected`, and `actual` evidence |
+| Exactly one target exposes the requested state and it differs | `test.assert.value`, `test.assert.enabled`, `test.assert.disabled`, `test.assert.checked`, `test.assert.unchecked`, `test.assert.selected`, `test.assert.unselected`, or `test.assert.selected_values` |
+| No target matches | Surface-specific `test.driver.*.target_not_found` |
+| More than one target matches | Surface-specific `test.driver.*.target_ambiguous` |
+| The locator is invalid or the matched element has no such state | Surface-specific driver error; never an assertion pass |
+| Driver output has the wrong type or duplicate selected values | Surface-specific output error |
+
+Therefore a missing checkbox cannot prove `unchecked`, a missing button cannot
+prove `disabled`, and a non-select element cannot prove
+`selected_values = []`.
+
+| Surface | `value` | Boolean state | `selected_values` |
+| --- | --- | --- | --- |
+| Web | Exact live DOM `value` | Native live properties take precedence; admitted ARIA state covers custom controls | Exact selected option values from a native `select` |
+| GUI | Exact CUA semantic value when present | `test.driver.gui.assertion_unsupported` | `test.driver.gui.assertion_unsupported` |
+| TUI | Unsupported | Unsupported | Unsupported |
+
+Web semantic targets traverse open Shadow DOM and preserve strict
+zero/one/many matching. Native checkbox and radio refs use the browser's live
+checked query before considering ARIA. Custom refs may use boolean
+`aria-checked` or `aria-selected`. The standalone ref protocol does not expose
+native option selection or multi-select arrays, so those ref forms fail
+honestly; a Page Context ref may still resolve to a stable semantic or CSS
+target before dispatch.
+
+Every control-state expectation may use the assertion-stability policy above.
+The runner repeats the same read-only typed assertion; an initial mismatch
+keeps its specific `test.assert.*` code, while a later mismatch becomes
+`test.assert.unstable` with first and last state evidence.
 
 ## Browser context
 
@@ -900,7 +971,7 @@ code and path to repair manifests.
 ## Browser admission and runner bounds
 
 `a3s-test capabilities --json` probes the configured executable before any
-browser session launches. Action protocol revision 7 admits A3S Browser
+browser session launches. Action protocol revision 8 admits A3S Browser
 `>= 0.4.0, < 0.5.0` and standalone agent-browser `>= 0.26.0, < 0.27.0`.
 Unverified versions fail with `test.driver.web.version_unsupported`.
 

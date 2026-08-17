@@ -329,6 +329,7 @@ impl SemanticElement {
         ElementAddress {
             reference: self.reference.clone(),
             token: self.token.clone(),
+            value: self.value.clone(),
         }
     }
 
@@ -361,6 +362,7 @@ impl SemanticElement {
 pub(crate) struct ElementAddress {
     pub reference: String,
     pub token: String,
+    pub value: Option<String>,
 }
 
 struct VisualSnapshot {

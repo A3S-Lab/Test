@@ -1,4 +1,4 @@
-use a3s_test_core::Action;
+use a3s_test_core::{Action, ElementState, Expectation, Target};
 use serde_json::json;
 
 use super::*;
@@ -96,4 +96,46 @@ fn strips_sensitive_components_from_nested_url_fields() {
         value["visible"],
         "https://example.test/page?not-a-typed-url-field=true"
     );
+}
+
+#[test]
+fn redacts_control_state_targets_values_and_selected_values() {
+    let redactor =
+        ProvenanceRedactor::from_exact_secrets(["state-secret"]).expect("valid redactor");
+    let mut actions = [
+        Action::Assert {
+            expectation: Expectation::State {
+                target: Target::Css {
+                    selector: "[data-state=state-secret]".to_string(),
+                },
+                state: ElementState::Checked,
+                expected: true,
+            },
+        },
+        Action::Assert {
+            expectation: Expectation::Value {
+                target: Target::Label {
+                    value: "state-secret field".to_string(),
+                },
+                value: "prefix-state-secret-suffix".to_string(),
+            },
+        },
+        Action::Assert {
+            expectation: Expectation::SelectedValues {
+                target: Target::TestId {
+                    value: "state-secret-select".to_string(),
+                },
+                values: vec!["public".to_string(), "state-secret".to_string()],
+            },
+        },
+    ];
+
+    for action in &mut actions {
+        redactor.redact_action(action);
+    }
+
+    let encoded = serde_json::to_string(&actions).expect("redacted actions");
+    assert!(!encoded.contains("state-secret"));
+    assert!(encoded.contains("public"));
+    assert!(encoded.contains(REDACTED_VALUE));
 }

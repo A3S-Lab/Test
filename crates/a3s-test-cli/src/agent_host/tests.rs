@@ -268,6 +268,76 @@ agent_run "checkout" {{
 }
 
 #[tokio::test]
+async fn deterministic_verification_uses_the_shared_typed_state_assertions() {
+    let temp = tempfile::tempdir().expect("tempdir");
+    let provider = ProviderFixture::start(vec![json!({
+        "status": "success",
+        "protocol": LLM_PROVIDER_PROTOCOL,
+        "response": {
+            "decision": { "type": "finish", "summary": "The form state is correct" },
+            "usage": { "input_tokens": 10, "output_tokens": 4, "cost_microusd": 8 },
+            "request_id": "finish-after-state"
+        }
+    })])
+    .await;
+    let config = temp.path().join("state-verification.acl");
+    std::fs::write(
+        &config,
+        format!(
+            r##"
+agent_run "profile" {{
+  url = "http://127.0.0.1/"
+  goal = "Verify the profile form"
+  success_criteria = ["The display name and terms state are correct"]
+  allow_actions = ["fill", "check"]
+  max_turns = 2
+  max_total_tokens = 1000
+  max_cost_microusd = 1000
+  timeout_ms = 10000
+
+  provider {{
+    name = "fixture"
+    model = "planner"
+    endpoint = "{}"
+  }}
+
+  verification {{
+    expect "display-name" {{ target = css("#display-name") value = "Ada" }}
+    expect "terms" {{ checked = css("#terms") }}
+  }}
+}}
+"##,
+            provider.endpoint
+        ),
+    )
+    .expect("state verification config");
+    let report_path = temp.path().join("reports/state-verification.json");
+    let executor = Arc::new(HostWebExecutor::with_state_probes([
+        json!({ "status": "ok", "count": 1, "actual": "Ada" }),
+        json!({ "status": "ok", "count": 1, "actual": true }),
+    ]));
+
+    let code = execute_with_executor(
+        args(&config, &report_path),
+        Some(executor.clone()),
+        Some(temp.path().to_path_buf()),
+    )
+    .await
+    .expect("agent host state verification");
+
+    assert_eq!(code, ExitCode::SUCCESS);
+    let report: serde_json::Value =
+        serde_json::from_slice(&tokio::fs::read(&report_path).await.expect("report"))
+            .expect("report JSON");
+    assert_eq!(report["result"]["status"], "succeeded");
+    assert_eq!(report["verification"][0]["output"]["data"]["actual"], "Ada");
+    assert_eq!(report["verification"][1]["output"]["data"]["actual"], true);
+    assert_eq!(executor.state_probe_count(), 2);
+    assert_eq!(executor.actions(), ["open", "snapshot", "close"]);
+    assert_eq!(provider.finish().await.len(), 1);
+}
+
+#[tokio::test]
 async fn deterministic_verification_overrides_a_model_finish() {
     let temp = tempfile::tempdir().expect("tempdir");
     let provider = ProviderFixture::start(vec![json!({
@@ -393,6 +463,7 @@ struct HostWebExecutor {
     confirmation: String,
     invocations: Mutex<Vec<CommandInvocation>>,
     visibility: Mutex<VecDeque<bool>>,
+    state_probes: Mutex<VecDeque<serde_json::Value>>,
 }
 
 impl HostWebExecutor {
@@ -401,6 +472,7 @@ impl HostWebExecutor {
             confirmation: confirmation.to_string(),
             invocations: Mutex::new(Vec::new()),
             visibility: Mutex::new(VecDeque::new()),
+            state_probes: Mutex::new(VecDeque::new()),
         }
     }
 
@@ -409,7 +481,30 @@ impl HostWebExecutor {
             confirmation: String::new(),
             invocations: Mutex::new(Vec::new()),
             visibility: Mutex::new(values.into_iter().collect()),
+            state_probes: Mutex::new(VecDeque::new()),
         }
+    }
+
+    fn with_state_probes(values: impl IntoIterator<Item = serde_json::Value>) -> Self {
+        Self {
+            confirmation: String::new(),
+            invocations: Mutex::new(Vec::new()),
+            visibility: Mutex::new(VecDeque::new()),
+            state_probes: Mutex::new(values.into_iter().collect()),
+        }
+    }
+
+    fn state_probe_count(&self) -> usize {
+        self.invocations
+            .lock()
+            .expect("invocations")
+            .iter()
+            .filter(|invocation| {
+                browser_action(&invocation.args)
+                    .get(1)
+                    .is_some_and(|script| script.to_string_lossy().contains("A3S_STATE_PROBE"))
+            })
+            .count()
     }
 
     fn actions(&self) -> Vec<String> {
@@ -435,11 +530,19 @@ impl CommandExecutor for HostWebExecutor {
         let stdout = if version {
             "agent-browser 0.26.0".to_string()
         } else if action.first().is_some_and(|value| value == "eval") {
-            json!({
-                "success": true,
-                "data": { "result": { "present": false } }
-            })
-            .to_string()
+            let state_probe = action
+                .get(1)
+                .is_some_and(|script| script.to_string_lossy().contains("A3S_STATE_PROBE"));
+            let result = if state_probe {
+                self.state_probes
+                    .lock()
+                    .expect("state probes")
+                    .pop_front()
+                    .expect("scripted state probe")
+            } else {
+                json!({ "present": false })
+            };
+            json!({ "success": true, "data": { "result": result } }).to_string()
         } else if action.first().is_some_and(|value| value == "snapshot") {
             json!({
                 "success": true,

@@ -5,6 +5,7 @@
 - [Suite and scenario](#suite-and-scenario)
 - [Targets](#targets)
 - [Core actions](#core-actions)
+- [Control-state expectations](#control-state-expectations)
 - [Assertion stability](#assertion-stability)
 - [Tabs, frames, and dialogs](#tabs-frames-and-dialogs)
 - [Files and network](#files-and-network)
@@ -167,17 +168,32 @@ expect "dialog-closed" {
     sample_interval_ms = 25
 }
 
+expect "display-name" {
+    target = label("Display name")
+    value = "Ada"
+}
+
+expect "terms" {
+    checked = label("Accept terms")
+}
+
+expect "status" {
+    target = role("listbox", "Publication status")
+    selected_values = ["review", "published"]
+}
+
 screenshot "final" {
     path = "screenshots/final.png"
 }
 ```
 
 A wait accepts exactly one of `load`, `text`, `regex`, `url`, `visible`, or
-`hidden`. An expectation accepts exactly one of `text`, `url`, `visible`, or
-`hidden`. `expect hidden` immediately proves that a stable semantic or CSS
-locator has no visible match, including an absent element. A visible match
-fails as `test.assert.hidden`; a later visible sample in a stability window
-fails as `test.assert.unstable`.
+`hidden`. An expectation accepts exactly one of `text`, `url`, `visible`,
+`hidden`, `value`, `enabled`, `disabled`, `checked`, `unchecked`, `selected`,
+`unselected`, or `selected_values`. `expect hidden` immediately proves that a
+stable semantic or CSS locator has no visible match, including an absent
+element. A visible match fails as `test.assert.hidden`; a later visible sample
+in a stability window fails as `test.assert.unstable`.
 
 `wait hidden` uses the same positive visibility probe, first immediately and
 then every 50 ms through the scenario deadline. It succeeds only on
@@ -185,7 +201,8 @@ then every 50 ms through the scenario deadline. It succeeds only on
 counter-evidence plus timing metrics. Both negative forms reject `ref()` and
 `visual_point()` because an unresolved observation-bound target is not proof
 of hidden product state. Driver, stale-target, and ambiguity errors remain
-errors. This is runner policy and does not change action protocol revision 7.
+errors. This is runner policy and adds no action variant; control-state
+expectations advance the current action protocol to revision 8.
 
 Focus, double-click, context-click, type, uncheck, select, drag, and
 target-scoped wheel require `ref()` or `css()` with the current browser
@@ -193,6 +210,53 @@ protocol. Click, hover, fill, and check accept all semantic targets. Select
 requires one or more values. Wheel requires a non-zero delta, accepts unique
 `alt`, `control`, `meta`, and `shift` modifiers, and is native when no target
 is supplied. Viewport dimensions and optional scale must be positive.
+
+## Control-state expectations
+
+Revision 8 compares observed control state directly:
+
+```acl
+expect "name" {
+    target = css("#display-name")
+    value = "Ada"
+}
+
+expect "submit-enabled" { enabled = role("button", "Submit") }
+expect "submit-disabled" { disabled = testid("submit") }
+expect "terms-checked" { checked = label("Terms") }
+expect "terms-unchecked" { unchecked = css("#terms") }
+expect "review-selected" { selected = role("option", "Review") }
+expect "draft-unselected" { unselected = css("#status option[value=draft]") }
+
+expect "status" {
+    target = role("listbox", "Publication status")
+    selected_values = ["review", "published"]
+}
+
+expect "empty-status" {
+    target = css("#empty-status")
+    selected_values = []
+}
+```
+
+`value` and `selected_values` require `target`. The other state condition
+contains its target. Expected selected values must be unique and compare as a
+sorted exact set, so extra and missing values fail while order does not matter.
+An empty list proves an observed empty selection, not an absent target.
+
+Web reads live native properties first and uses boolean ARIA state for custom
+controls where the native state is unavailable. Missing, ambiguous, invalid,
+unsupported, or malformed observations remain `test.driver.web.*`. Only an
+observed mismatch becomes `test.assert.value`, `.enabled`, `.disabled`,
+`.checked`, `.unchecked`, `.selected`, `.unselected`, or `.selected_values`.
+GUI supports exact value only when CUA supplies it and rejects boolean or
+multi-selection assertions as unsupported. TUI supports visible text only.
+
+All forms accept `stable_for_ms` and `sample_interval_ms`. A direct Web ref can
+read value, enabled, native checkbox/radio checked state, and admitted ARIA
+state. The standalone ref protocol does not expose native option selection or
+multi-select arrays; use a stable semantic/CSS target or a Page Context ref
+that resolves to one.
 
 ## Assertion stability
 

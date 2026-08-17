@@ -1,12 +1,16 @@
-use a3s_acl::Block;
+use std::collections::BTreeSet;
+
+use a3s_acl::{Block, Value};
 
 use crate::{
-    AssertionMode, AssertionStability, Expectation, LoadState, SpecError, Target, WaitCondition,
-    WaitMode, DEFAULT_ASSERTION_SAMPLE_INTERVAL_MS, MAX_ASSERTION_STABILITY_MS,
+    AssertionMode, AssertionStability, ElementState, Expectation, LoadState, SpecError, Target,
+    WaitCondition, WaitMode, DEFAULT_ASSERTION_SAMPLE_INTERVAL_MS, MAX_ASSERTION_STABILITY_MS,
     MAX_ASSERTION_STABILITY_SAMPLES, MIN_ASSERTION_STABILITY_MS,
 };
 
-use super::{optional_integer, parse_target, positive_integer, type_error, value_string};
+use super::{
+    optional_integer, parse_target, positive_integer, required_target, type_error, value_string,
+};
 
 pub(super) fn parse_wait(
     block: &Block,
@@ -83,45 +87,116 @@ pub(super) fn parse_expectation(
     block: &Block,
     path: &str,
 ) -> Result<(Expectation, AssertionMode), SpecError> {
-    let count = ["text", "url", "visible", "hidden"]
+    let conditions = [
+        "text",
+        "url",
+        "visible",
+        "hidden",
+        "value",
+        "enabled",
+        "disabled",
+        "checked",
+        "unchecked",
+        "selected",
+        "unselected",
+        "selected_values",
+    ];
+    let configured = conditions
         .iter()
         .filter(|name| block.attributes.contains_key(**name))
-        .count();
-    if count != 1 {
-        return Err(condition_count_error(path, count));
+        .copied()
+        .collect::<Vec<_>>();
+    if configured.len() != 1 {
+        return Err(condition_count_error(path, configured.len()));
+    }
+    let condition = configured[0];
+    let uses_separate_target = matches!(condition, "value" | "selected_values");
+    if block.attributes.contains_key("target") && !uses_separate_target {
+        return Err(SpecError::new(
+            "test.spec.attribute_unexpected",
+            format!("{path}.target"),
+            "target is valid only with value or selected_values expectations",
+        ));
     }
 
-    if let Some(value) = block.attributes.get("text") {
-        return Ok((
-            Expectation::TextVisible(value_string(value, format!("{path}.text"))?),
-            AssertionMode::Positive,
+    let positive = match condition {
+        "text" => Expectation::TextVisible(value_string(
+            &block.attributes[condition],
+            format!("{path}.text"),
+        )?),
+        "url" => Expectation::Url(value_string(
+            &block.attributes[condition],
+            format!("{path}.url"),
+        )?),
+        "visible" => Expectation::Visible(parse_target(
+            &block.attributes[condition],
+            &format!("{path}.visible"),
+        )?),
+        "hidden" => {
+            let target = parse_target(&block.attributes[condition], &format!("{path}.hidden"))?;
+            if matches!(target, Target::Ref { .. } | Target::VisualPoint { .. }) {
+                return Err(SpecError::new(
+                    "test.spec.hidden_target_unstable",
+                    format!("{path}.hidden"),
+                    "hidden assertions require a stable semantic or CSS locator, not an observation-bound ref or visual point",
+                ));
+            }
+            return Ok((Expectation::Visible(target), AssertionMode::Hidden));
+        }
+        "value" => Expectation::Value {
+            target: required_target(block, "target", path)?,
+            value: value_string(&block.attributes[condition], format!("{path}.value"))?,
+        },
+        "selected_values" => Expectation::SelectedValues {
+            target: required_target(block, "target", path)?,
+            values: selected_values(
+                &block.attributes[condition],
+                &format!("{path}.selected_values"),
+            )?,
+        },
+        "enabled" | "disabled" | "checked" | "unchecked" | "selected" | "unselected" => {
+            let (state, expected) = match condition {
+                "enabled" => (ElementState::Enabled, true),
+                "disabled" => (ElementState::Enabled, false),
+                "checked" => (ElementState::Checked, true),
+                "unchecked" => (ElementState::Checked, false),
+                "selected" => (ElementState::Selected, true),
+                "unselected" => (ElementState::Selected, false),
+                _ => unreachable!("bounded state condition"),
+            };
+            Expectation::State {
+                target: parse_target(&block.attributes[condition], &format!("{path}.{condition}"))?,
+                state,
+                expected,
+            }
+        }
+        _ => unreachable!("condition list and parser must remain aligned"),
+    };
+    Ok((positive, AssertionMode::Positive))
+}
+
+fn selected_values(value: &Value, path: &str) -> Result<Vec<String>, SpecError> {
+    let Value::List(values) = value else {
+        return Err(type_error(
+            path,
+            "selected_values must be a list of strings",
         ));
-    }
-    if let Some(value) = block.attributes.get("url") {
-        return Ok((
-            Expectation::Url(value_string(value, format!("{path}.url"))?),
-            AssertionMode::Positive,
-        ));
-    }
-    if let Some(value) = block.attributes.get("hidden") {
-        let target = parse_target(value, &format!("{path}.hidden"))?;
-        if matches!(target, Target::Ref { .. } | Target::VisualPoint { .. }) {
+    };
+    let mut selected = BTreeSet::new();
+    for (index, value) in values.iter().enumerate() {
+        let item_path = format!("{path}[{index}]");
+        let item = value
+            .as_str()
+            .ok_or_else(|| type_error(&item_path, "selected_values items must be strings"))?;
+        if !selected.insert(item.to_string()) {
             return Err(SpecError::new(
-                "test.spec.hidden_target_unstable",
-                format!("{path}.hidden"),
-                "hidden assertions require a stable semantic or CSS locator, not an observation-bound ref or visual point",
+                "test.spec.selected_value_duplicate",
+                item_path,
+                "selected_values cannot contain duplicates",
             ));
         }
-        return Ok((Expectation::Visible(target), AssertionMode::Hidden));
     }
-    let value = block
-        .attributes
-        .get("visible")
-        .expect("condition count guarantees a visible target");
-    Ok((
-        Expectation::Visible(parse_target(value, &format!("{path}.visible"))?),
-        AssertionMode::Positive,
-    ))
+    Ok(selected.into_iter().collect())
 }
 
 pub(super) fn parse_assertion_stability(

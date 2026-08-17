@@ -5,6 +5,9 @@
 - [x] Independent Rust workspace
 - [x] Bounded ACL suite admission
 - [x] Typed actions, targets, waits, and assertions
+- [x] Action protocol revision 8 control-state assertions for exact value,
+      enabled, checked, selected, and exact selected-value sets, with honest
+      per-surface capability failures
 - [x] Surface driver and session contracts
 - [x] Cancellation-safe sequential runner
 - [x] Bounded sampled assertion stability with static duration/sample limits,
@@ -602,3 +605,34 @@ The completion work intentionally preserves these product boundaries:
       component-reference integrity, repair-context propagation, unit tests,
       and a real Chromium driver regression without granting action, verdict,
       or repair authority
+
+## M21: Deterministic control-state depth
+
+- [x] Add ACL `value`, `enabled`/`disabled`, `checked`/`unchecked`,
+      `selected`/`unselected`, and duplicate-free exact-set `selected_values`
+      expectations under action protocol revision 8
+- [x] Separate strict target resolution, supported state observation, and
+      expected-value comparison so missing, ambiguous, invalid, or unsupported
+      targets can never satisfy a negative expectation
+- [x] Read live Web DOM properties, give native checkbox/radio state priority
+      over ARIA, admit boolean ARIA state for custom controls, and support
+      semantic `listbox` and `option` roles across open Shadow DOM
+- [x] Preserve current observation and Page Context ref binding, redact all
+      new targets and values, and reuse the same typed expectations in Agent
+      Host deterministic verification
+- [x] Support exact GUI values only when CUA supplied the value, and fail
+      closed for GUI boolean/multi-selection and every TUI control-state query
+- [x] Compose every new expectation with bounded assertion stability without
+      changing retry, deadline, cancellation, or cleanup ownership
+- [x] Prove 400/400 deterministic Web classifications: 100 exact values, 100
+      checked states, 100 selected-value sets, and 100 missing-target negative
+      cases
+- [x] Prove 100/100 stable state windows are accepted and 100/100 transient
+      state windows are rejected as `test.assert.unstable`
+- [x] Prove 15/15 positive live-state checks and 4/4 negative classifications
+      in standalone Chromium, including a 100 ms value-stability window and no
+      leaked private runtime directory, and keep the same regression in the
+      macOS and Windows real-browser CI matrix. The initial pre-role-hardening
+      run took 24.26 seconds on the development host; current semantic-role
+      runs took 56.92, 55.80, 23.21, and 26.72 seconds. These timings are
+      environment diagnostics, not a performance benchmark.

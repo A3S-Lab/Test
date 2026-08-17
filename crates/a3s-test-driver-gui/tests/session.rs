@@ -5,7 +5,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use a3s_test_core::{
-    Action, Expectation, ScenarioContext, Surface, SurfaceDriver, Target, TestStep,
+    Action, ElementState, Expectation, ScenarioContext, Surface, SurfaceDriver, Target, TestStep,
 };
 use a3s_test_driver_gui::{
     ApplicationIdentity, AttachSpec, CuaCompatibility, CuaEndpoint, CuaTransport,
@@ -677,6 +677,98 @@ async fn visible_assertions_classify_missing_targets_without_hiding_reference_er
         .await
         .expect_err("stale observation ref must remain a driver error");
     assert_eq!(invalid_ref.code(), "test.driver.gui.stale_reference");
+
+    session.close().await.expect("close GUI session");
+}
+
+#[tokio::test]
+async fn gui_value_assertions_use_cua_values_without_inventing_boolean_state() {
+    let temp = TempDir::new().expect("temp dir");
+    let transport = FakeTransport::new(FakeOptions::default());
+    let mut session = driver(launch_config(&temp), Arc::clone(&transport))
+        .open(&context(&temp))
+        .await
+        .expect("GUI session");
+
+    let value_target = Target::Label {
+        value: "Email".to_string(),
+    };
+    let output = session
+        .execute(&TestStep {
+            id: "email-value".to_string(),
+            action: Action::Assert {
+                expectation: Expectation::Value {
+                    target: value_target.clone(),
+                    value: "draft@example.test".to_string(),
+                },
+            },
+            stability: None,
+            assertion_mode: Default::default(),
+            wait_mode: Default::default(),
+        })
+        .await
+        .expect("matching GUI value");
+    assert_eq!(output.data["actual"], "draft@example.test");
+
+    let mismatch = session
+        .execute(&TestStep {
+            id: "wrong-email-value".to_string(),
+            action: Action::Assert {
+                expectation: Expectation::Value {
+                    target: value_target.clone(),
+                    value: "published@example.test".to_string(),
+                },
+            },
+            stability: None,
+            assertion_mode: Default::default(),
+            wait_mode: Default::default(),
+        })
+        .await
+        .expect_err("mismatching GUI value");
+    assert_eq!(mismatch.code(), "test.assert.value");
+
+    let missing = session
+        .execute(&TestStep {
+            id: "missing-value".to_string(),
+            action: Action::Assert {
+                expectation: Expectation::Value {
+                    target: Target::AutomationId {
+                        value: "missing-field".to_string(),
+                    },
+                    value: String::new(),
+                },
+            },
+            stability: None,
+            assertion_mode: Default::default(),
+            wait_mode: Default::default(),
+        })
+        .await
+        .expect_err("missing GUI target is not an empty value");
+    assert_eq!(missing.code(), "test.driver.gui.target_not_found");
+
+    for expectation in [
+        Expectation::State {
+            target: value_target.clone(),
+            state: ElementState::Enabled,
+            expected: true,
+        },
+        Expectation::SelectedValues {
+            target: value_target.clone(),
+            values: vec!["review".to_string()],
+        },
+    ] {
+        let unsupported = session
+            .execute(&TestStep {
+                id: "unsupported-state".to_string(),
+                action: Action::Assert { expectation },
+                stability: None,
+                assertion_mode: Default::default(),
+                wait_mode: Default::default(),
+            })
+            .await
+            .expect_err("CUA does not expose this state");
+        assert_eq!(unsupported.code(), "test.driver.gui.assertion_unsupported");
+    }
 
     session.close().await.expect("close GUI session");
 }

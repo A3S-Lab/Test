@@ -724,6 +724,54 @@ negative condition; stale, ambiguous, driver, and infrastructure errors remain
 failures. The scenario deadline, cancellation token, and static probe cap bound
 the loop, while terminal results retain the last positive counter-evidence.
 
+### Typed control-state observation
+
+Revision 8 adds new `Expectation` wire variants because control state is part
+of the cross-surface action contract, unlike hidden and stability policies that
+only orchestrate existing positive assertions. The pipeline keeps three
+questions separate:
+
+```text
+resolve exactly one target
+        |
+        v
+read an authoritative state supported by that surface
+        |
+        v
+compare the observed value with the typed expectation
+```
+
+Resolution failure cannot answer the state question. A missing or ambiguous
+target therefore remains `test.driver.*`, even for a negative expectation such
+as disabled, unchecked, unselected, an empty value, or an empty selected set.
+Likewise, an element that does not expose the requested property remains an
+unsupported driver result. Only a successfully observed value can become a
+`test.assert.*` product mismatch.
+
+The Web adapter evaluates CSS or semantic targets in the live document,
+including open Shadow DOM for semantic targets, and enforces zero/one/many
+matching before reading state. Native properties are authoritative for native
+controls: checkbox and radio `checked`, option `selected`, control `value`,
+and `select.selectedOptions`. Boolean ARIA state is used only where the native
+control state is unavailable; native disabled state and inherited
+`aria-disabled="true"` both contribute to enabled-state observation. Expected
+and actual selected values are duplicate-free, sorted exact sets.
+
+GUI reuses the CUA semantic value when one was actually observed. Its current
+protocol does not expose a typed boolean or multi-selection state, so the
+adapter returns `test.driver.gui.assertion_unsupported` instead of estimating
+from labels or pixels. TUI continues to admit visible terminal text only. This
+capability asymmetry is deliberate: a cross-surface schema may be broader than
+one adapter, but every adapter must fail closed when it lacks evidence.
+
+The same immutable action participates in Page Context ref resolution,
+provenance redaction, Agent Host deterministic verification, infrastructure
+retry rules, and runner-owned stability sampling. Deterministic coverage
+contains 400 Web driver classifications plus 100 stable and 100 transient
+state windows. The standalone Chromium fixture adds 15 positive state checks,
+four distinct negative classifications, a real 100 ms stability window, and a
+post-run private-runtime leak check.
+
 ## Lifecycle and interrupts
 
 ```text

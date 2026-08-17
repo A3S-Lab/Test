@@ -4,12 +4,26 @@
 
 ### Added
 
+- Added action protocol revision 8 with typed ACL control-state expectations:
+  exact `value`, `enabled`/`disabled`, `checked`/`unchecked`,
+  `selected`/`unselected`, and duplicate-free exact-set `selected_values`.
+  Web assertions read live DOM properties and admitted ARIA state, preserve
+  missing, ambiguous, invalid, and unsupported targets as `test.driver.web.*`,
+  and reserve `test.assert.*` for observed product mismatches. GUI supports
+  exact value when CUA supplies it and fails closed for boolean or
+  multi-selection state; TUI continues to support visible terminal text only.
+  The same expectations compose with bounded stability sampling, Page Context
+  refs, provenance redaction, and Agent Host deterministic verification.
+  Evidence covers 400/400 deterministic Web classifications, 100/100 stable
+  and 100/100 transient state windows, and a real Chromium workflow with
+  15/15 positive checks, 4/4 negative classifications, and no private runtime
+  directory leak.
 - Added bounded ACL `wait hidden` synchronization for stable targets. The
   runner reuses immediate positive visibility assertions at a fixed 50 ms
   interval, succeeds only on `test.assert.visible`, preserves every driver or
   target-resolution failure, retains first/last visible counter-evidence on
   terminal results, stops at the scenario deadline, cancellation, or a static
-  1,201-probe limit, and keeps action protocol revision 7. Four deterministic
+  1,201-probe limit, and reuses the revision-7 visible-action variant. Four deterministic
   100-case datasets cover initially hidden, delayed disappearance, persistent
   visibility, and driver-failure states; cancellation, probe-limit, agent-host
   verification, and real Chromium fixtures cover the remaining boundaries.
@@ -17,7 +31,7 @@
   `hidden = <stable target>` condition passes when no visible match exists,
   including absent and rendered-hidden elements, and returns
   `test.assert.hidden` with visible counter-evidence otherwise. The runner
-  owns the inversion without changing action protocol revision 7, refuses
+  owns the inversion without adding an action variant, refuses
   observation-bound refs and visual points, preserves driver failures, and
   composes with bounded stability sampling to catch targets that reappear.
   Deterministic 100-case datasets cover hidden, visible, consistently hidden,

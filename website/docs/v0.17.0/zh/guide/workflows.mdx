@@ -38,7 +38,7 @@ a3s-test agent click <ref> --session <name> --observation <id> --json
 a3s-test agent finish --session <name> --status passed --summary <text> --json
 ```
 
-`agent act --action-json` 暴露完整动作 Schema。v0.17.0 的动作协议修订为 7，并支持在先前已建立的编辑上下文中使用选择范围内的 `insert_text`。它不携带新的目标或定位权限。
+`agent act --action-json` 暴露完整动作 Schema。v0.17.0 的动作协议修订为 8，既保留修订 7 引入的选择范围 `insert_text`，也加入类型化的实时控件状态断言。`insert_text` 仍然只作用于先前已经建立的编辑上下文，不携带新的目标或定位权限。
 
 ## ACL 套件
 
@@ -81,6 +81,58 @@ a3s-test run tests/e2e/smoke.acl --json
 
 未知块、未知属性、重复标识、歧义条件、非法定位器和越界证据路径都会在表面启动前被拒绝。断言失败、超时和已经派发但结果不明确的动作不会自动重放。
 
+## 证明控件的实时状态
+
+仅凭元素存在和文字正确，并不能证明表单可用。按钮可能可见却不可用，复选框可能存在却没有勾选，多选框也可能展示了正确标签却保留了错误选项。修订 8 可以直接观察这些状态。
+
+```acl
+expect "display-name" {
+    target = label("Display name")
+    value = "Ada"
+}
+
+expect "submit" {
+    disabled = role("button", "Submit")
+}
+
+expect "terms" {
+    checked = label("Accept terms")
+}
+
+expect "review" {
+    selected = role("option", "Review")
+}
+
+expect "status" {
+    target = role("listbox", "Publication status")
+    selected_values = ["review", "published"]
+    stable_for_ms = 300
+    sample_interval_ms = 25
+}
+```
+
+完整的成对条件包括 `enabled`/`disabled`、`checked`/`unchecked` 和 `selected`/`unselected`。`value` 与 `selected_values` 另写一个 `target`。预期选项不能重复，并按规范化后的精确集合比较。顺序不影响结果，但多一个或少一个值都会失败。`selected_values = []` 只有在一个真实目标确实暴露了空选择时才成立。
+
+定位目标和比较状态是两个独立的证据步骤。
+
+| 驱动实际观察到的情况                 | 结果                                                                                    |
+| ------------------------------------ | --------------------------------------------------------------------------------------- |
+| 唯一目标、状态受支持、值一致         | 通过，并记录结构化 expected/actual 证据                                                 |
+| 唯一目标、状态受支持、值不同         | 返回对应的 `test.assert.*` 产品不匹配                                                   |
+| 没有目标                             | `test.driver.*.target_not_found`，绝不能充当 disabled、unchecked、unselected 或空值证据 |
+| 匹配多个目标                         | `test.driver.*.target_ambiguous`                                                        |
+| 目标非法、状态不受支持或输出结构错误 | 保留 surface 驱动原始错误                                                               |
+
+| Surface | 精确值                    | 布尔状态                                         | 已选值集合           |
+| ------- | ------------------------- | ------------------------------------------------ | -------------------- |
+| Web     | 实时 DOM `value`          | 原生实时属性优先，自定义控件再读取布尔 ARIA 状态 | 原生多选框的精确集合 |
+| GUI     | CUA 确实提供 value 时支持 | CUA 暴露类型化状态前不支持                       | 不支持               |
+| TUI     | 不支持                    | 不支持                                           | 不支持               |
+
+Web 语义目标会穿透开放的 Shadow DOM，并识别原生多选框的 `listbox` 与 `option` role。直接浏览器 ref 可以读取 value、enabled、原生 checkbox/radio 的 checked 状态及已准入的 ARIA 状态；standalone ref 协议还不能读取原生 option 选择或多选数组，这两类断言应使用稳定语义目标或 CSS。Page Context ref 如果能在派发前解析成这类目标，仍然可以使用。
+
+当前检入证据覆盖 400/400 个确定性 Web 分类、100/100 个稳定状态窗口、100/100 个瞬态状态拒绝，以及真实 standalone Chromium 中 15/15 个正向检查、4/4 个负向错误分类和零私有运行目录泄漏。
+
 ## 证明界面已经没有可见匹配
 
 当产品要求是关闭、移除或隐藏某个目标时，使用 `hidden`。稳定定位器没有匹配元素，或所有匹配元素都没有渲染出的可见边界时，断言通过。
@@ -91,7 +143,7 @@ expect "checkout-dialog-closed" {
 }
 ```
 
-`hidden` 是 Runner 围绕现有正向可见性断言执行的步骤策略，不会增加 Action 变体，也不会改变浏览器协议修订 7。Runner 向 surface 驱动发送正向探测，再确定性地分类结果。
+`hidden` 是 Runner 围绕现有正向可见性断言执行的步骤策略，不会增加 Action 变体。当前协议之所以推进到修订 8，是因为上面的控件状态 expectation。Runner 向 surface 驱动发送正向探测，再确定性地分类结果。
 
 | 正向探测结果                      | `hidden` 断言结果                                                 |
 | --------------------------------- | ----------------------------------------------------------------- |
@@ -123,7 +175,7 @@ wait "checkout-dialog-closed" {
 }
 ```
 
-ACL 编译器仍保存 `Action::Wait(WaitCondition::Visible(target))`，只增加 Runner 负责的 `WaitMode::Hidden`，因此 Action 协议修订 7 不变。Runner 先执行一次立即的正向可见性断言；目标仍可见时，每 50 ms 重复一次。
+ACL 编译器仍保存 `Action::Wait(WaitCondition::Visible(target))`，只增加 Runner 负责的 `WaitMode::Hidden`。在当前 Action 协议修订 8 下，它仍然复用早先的可见性 Action 变体。Runner 先执行一次立即的正向可见性断言；目标仍可见时，每 50 ms 重复一次。
 
 | 正向探测结果                      | 隐藏等待结果                                                            |
 | --------------------------------- | ----------------------------------------------------------------------- |

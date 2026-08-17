@@ -426,7 +426,11 @@ impl TuiSession {
                 Ok(StepOutput::new("terminal text is visible")
                     .with_data(json!({ "text": text, "visible": true })))
             }
-            Expectation::Url(_) | Expectation::Visible(_) => {
+            Expectation::Url(_)
+            | Expectation::Visible(_)
+            | Expectation::State { .. }
+            | Expectation::Value { .. }
+            | Expectation::SelectedValues { .. } => {
                 Err(unsupported("terminal assertions support visible text only"))
             }
         }

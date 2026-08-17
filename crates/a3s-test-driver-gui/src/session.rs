@@ -672,10 +672,36 @@ impl GuiSession {
                     "visible": true,
                 })))
             }
+            Expectation::Value { target, value } => {
+                let address = self.semantics.resolve(target)?;
+                let actual = address.value.ok_or_else(|| {
+                    DriverError::new(
+                        "test.driver.gui.assertion_unsupported",
+                        "the matched GUI element does not expose a value",
+                    )
+                })?;
+                if actual != *value {
+                    return Err(DriverError::new(
+                        "test.assert.value",
+                        format!("expected GUI value {value:?}, received {actual:?}"),
+                    ));
+                }
+                Ok(StepOutput::new("GUI target value matched").with_data(json!({
+                    "target_ref": address.reference,
+                    "expected": value,
+                    "actual": actual,
+                })))
+            }
             Expectation::Url(_) => Err(DriverError::new(
                 "test.driver.gui.assertion_unsupported",
                 "URL assertions are not available on GUI surfaces",
             )),
+            Expectation::State { .. } | Expectation::SelectedValues { .. } => {
+                Err(DriverError::new(
+                    "test.driver.gui.assertion_unsupported",
+                    "the current CUA semantic protocol does not expose boolean or multi-selection state",
+                ))
+            }
         }
     }
 

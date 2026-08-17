@@ -3,8 +3,8 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use a3s_test_core::{
-    Action, AssertionStability, DriverError, DriverSession, Expectation, ScenarioContext,
-    StepOutput, Surface, SurfaceDriver, Target, TestScenario, TestStep, TestSuite,
+    Action, AssertionStability, DriverError, DriverSession, ElementState, Expectation,
+    ScenarioContext, StepOutput, Surface, SurfaceDriver, Target, TestScenario, TestStep, TestSuite,
 };
 use a3s_test_runner::{RetryPolicy, RunStatus, Runner, RunnerOptions};
 use async_trait::async_trait;
@@ -47,16 +47,29 @@ impl SurfaceDriver for TransientDriver {
 impl DriverSession for TransientSession {
     async fn execute(&mut self, step: &TestStep) -> Result<StepOutput, DriverError> {
         assert!(matches!(step.action, Action::Assert { .. }));
+        let state_assertion = matches!(
+            step.action,
+            Action::Assert {
+                expectation: Expectation::State { .. }
+            }
+        );
         self.executions.fetch_add(1, Ordering::SeqCst);
         self.sample += 1;
         if self.sample == 1 || self.remains_visible {
-            return Ok(
-                StepOutput::new("scripted assertion matched").with_data(json!({ "visible": true }))
-            );
+            let data = if state_assertion {
+                json!({ "state": "checked", "expected": true, "actual": true })
+            } else {
+                json!({ "visible": true })
+            };
+            return Ok(StepOutput::new("scripted assertion matched").with_data(data));
         }
         Err(DriverError::new(
-            "test.assert.visible",
-            "scripted target disappeared after the first sample",
+            if state_assertion {
+                "test.assert.checked"
+            } else {
+                "test.assert.visible"
+            },
+            "scripted assertion became false after the first sample",
         ))
     }
 
@@ -155,6 +168,68 @@ async fn stable_assertions_accept_100_of_100_consistent_states_with_bounded_metr
     assert!((DATASET_SIZE * 2..=DATASET_SIZE * 5).contains(&measured_executions));
 }
 
+#[tokio::test]
+async fn stable_control_state_assertions_reject_100_of_100_transient_states() {
+    let executions = Arc::new(AtomicUsize::new(0));
+    let runner = scripted_runner(Arc::clone(&executions), false);
+    let stability = AssertionStability {
+        stable_for_ms: 20,
+        sample_interval_ms: 5,
+    };
+
+    let result = runner
+        .run(&state_suite(stability), CancellationToken::new())
+        .await;
+
+    assert_eq!(result.status, RunStatus::Failed);
+    for scenario in &result.scenarios {
+        let step = &scenario.steps[0];
+        assert_eq!(step.attempts, 2);
+        assert_eq!(
+            step.error.as_ref().map(|error| error.code.as_str()),
+            Some("test.assert.unstable")
+        );
+        let data = &step.output.as_ref().expect("state stability evidence").data;
+        assert_eq!(data["assertion"]["first"]["actual"], true);
+        assert_eq!(data["stability"]["samples"], 2);
+    }
+    assert_eq!(executions.load(Ordering::SeqCst), DATASET_SIZE * 2);
+}
+
+#[tokio::test]
+async fn stable_control_state_assertions_accept_100_of_100_consistent_states() {
+    let executions = Arc::new(AtomicUsize::new(0));
+    let runner = scripted_runner(Arc::clone(&executions), true);
+    let stability = AssertionStability {
+        stable_for_ms: 20,
+        sample_interval_ms: 5,
+    };
+
+    let result = runner
+        .run(&state_suite(stability), CancellationToken::new())
+        .await;
+
+    assert_eq!(result.status, RunStatus::Passed);
+    assert_eq!(
+        result
+            .scenarios
+            .iter()
+            .filter(|scenario| scenario.status == RunStatus::Passed)
+            .count(),
+        DATASET_SIZE
+    );
+    for scenario in &result.scenarios {
+        let data = &scenario.steps[0]
+            .output
+            .as_ref()
+            .expect("state stability evidence")
+            .data;
+        assert_eq!(data["assertion"]["first"]["actual"], true);
+        assert_eq!(data["assertion"]["last"]["actual"], true);
+        assert_eq!(data["stability"]["outcome"], "passed");
+    }
+}
+
 fn scripted_runner(executions: Arc<AtomicUsize>, remains_visible: bool) -> Runner {
     Runner::new(
         vec![Arc::new(TransientDriver {
@@ -192,6 +267,36 @@ fn transient_suite(stability: Option<AssertionStability>) -> TestSuite {
                         }),
                     },
                     stability,
+                    assertion_mode: Default::default(),
+                    wait_mode: Default::default(),
+                }],
+            })
+            .collect(),
+    }
+}
+
+fn state_suite(stability: AssertionStability) -> TestSuite {
+    TestSuite {
+        name: "state-stability-dataset".to_string(),
+        version: 1,
+        scenarios: (0..DATASET_SIZE)
+            .map(|index| TestScenario {
+                id: format!("state-{index}"),
+                name: format!("State {index}"),
+                surface: Surface::Web,
+                timeout_ms: 1_000,
+                steps: vec![TestStep {
+                    id: "assert-checked".to_string(),
+                    action: Action::Assert {
+                        expectation: Expectation::State {
+                            target: Target::Css {
+                                selector: "#terms".to_string(),
+                            },
+                            state: ElementState::Checked,
+                            expected: true,
+                        },
+                    },
+                    stability: Some(stability),
                     assertion_mode: Default::default(),
                     wait_mode: Default::default(),
                 }],

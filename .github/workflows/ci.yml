@@ -271,6 +271,10 @@ jobs:
             --locked -- --ignored --exact --nocapture
           bash .github/scripts/run-cargo-test.sh \
             cargo test -p a3s-test-cli --test web_e2e \
+            'support::control_state::real_agent_browser_verifies_and_classifies_control_state' \
+            --locked -- --ignored --exact --nocapture
+          bash .github/scripts/run-cargo-test.sh \
+            cargo test -p a3s-test-cli --test web_e2e \
             real_agent_browser_runs_the_hermetic_web_suite \
             --locked -- --ignored --exact --nocapture
           bash .github/scripts/run-cargo-test.sh \
@@ -298,6 +302,9 @@ jobs:
           $env:A3S_TEST_AGENT_BROWSER = $browser
           cargo test -p a3s-test-cli --test hidden_visibility_e2e `
             real_agent_browser_runs_hidden_visibility_suite `
+            --locked -- --ignored --exact --nocapture
+          cargo test -p a3s-test-cli --test web_e2e `
+            'support::control_state::real_agent_browser_verifies_and_classifies_control_state' `
             --locked -- --ignored --exact --nocapture
           cargo test -p a3s-test-cli --test web_e2e `
             real_agent_browser_runs_the_hermetic_web_suite `

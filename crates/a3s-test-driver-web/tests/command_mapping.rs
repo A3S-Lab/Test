@@ -10,7 +10,7 @@ use a3s_test_core::{
     DesignAuditAuthority, DesignAuditDimension, DesignAuditFinding, DesignAuditPriority,
     DesignAuditProvenance, DesignAuditProviderIdentity, DesignAuditReport, DesignAuditTarget,
     DesignAuditUsage, DialogOperation, FrameTarget, NetworkRoute, ScenarioContext, SurfaceDriver,
-    TabOperation, Target, TestStep, VideoOperation, WaitCondition,
+    TabOperation, Target, TestStep, VideoOperation, WaitCondition, ACTION_PROTOCOL_REVISION,
 };
 use a3s_test_driver_web::{
     AgentBrowserConfig, AgentBrowserConnectionConfig, AgentBrowserDriver, BrowserCommand,
@@ -1041,7 +1041,7 @@ async fn discovers_and_admits_the_typed_browser_protocol() {
     let capabilities = driver.capabilities().await.expect("capabilities");
     assert_eq!(capabilities.integration, BrowserIntegration::Standalone);
     assert_eq!(capabilities.version, "0.26.0");
-    assert_eq!(capabilities.protocol_revision, 7);
+    assert_eq!(capabilities.protocol_revision, ACTION_PROTOCOL_REVISION);
     assert_eq!(capabilities.page_context_protocol, None);
     assert!(capabilities.features.contains(&WebCapability::Tabs));
     assert!(capabilities.features.contains(&WebCapability::Har));

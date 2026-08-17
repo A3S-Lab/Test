@@ -3,7 +3,7 @@ use std::ffi::OsString;
 use std::hash::{DefaultHasher, Hash, Hasher};
 use std::path::Path;
 
-use a3s_test_core::{DriverError, LoadState, Target, WaitCondition};
+use a3s_test_core::{DriverError, ElementState, LoadState, Target, WaitCondition};
 use serde_json::Value;
 
 use crate::{AgentBrowserConfig, CommandInvocation};
@@ -222,6 +222,7 @@ pub(crate) fn semantic_target_action_args(
         &target,
         ";\n",
         SEMANTIC_SHADOW_TARGET_QUERY,
+        "  if (!element) return { handled: false, matched: false };\n",
         &operation,
         "})()",
     ]
@@ -269,7 +270,9 @@ const SEMANTIC_SHADOW_TARGET_QUERY: &str = r#"
       if (element.type === "search") return "searchbox";
       return "textbox";
     }
-    return ({ a:"link", button:"button", h1:"heading", h2:"heading", h3:"heading", h4:"heading", h5:"heading", h6:"heading", img:"img", nav:"navigation", main:"main", form:"form", table:"table", textarea:"textbox", select:"combobox" })[tag] || "";
+    if (tag === "a") return element.hasAttribute("href") ? "link" : "";
+    if (tag === "select") return element.multiple || element.size > 1 ? "listbox" : "combobox";
+    return ({ button:"button", h1:"heading", h2:"heading", h3:"heading", h4:"heading", h5:"heading", h6:"heading", img:"img", nav:"navigation", main:"main", form:"form", option:"option", table:"table", textarea:"textbox" })[tag] || "";
   };
   const matches = (element) => {
     if (target.type === "test_id") return element.getAttribute("data-testid") === target.value || element.getAttribute("data-test-id") === target.value;
@@ -287,9 +290,130 @@ const SEMANTIC_SHADOW_TARGET_QUERY: &str = r#"
     const rect = element.getBoundingClientRect();
     return element.getClientRects().length > 0 && rect.width > 0 && rect.height > 0;
   };
-  const element = elements.find((candidate) => matches(candidate) && visible(candidate));
-  if (!element) return { handled: false, matched: false };
+  const matchedElements = elements.filter((candidate) => matches(candidate) && visible(candidate));
+  const element = matchedElements[0];
 "#;
+
+#[derive(Clone, Copy, Debug)]
+pub(crate) enum AssertionProbe {
+    State(ElementState),
+    Value,
+    SelectedValues,
+}
+
+pub(crate) fn assertion_probe_args(
+    target: &Target,
+    probe: AssertionProbe,
+) -> Result<Vec<OsString>, DriverError> {
+    let query = match target {
+        Target::Css { .. } => {
+            r#"
+  let matchedElements;
+  try {
+    matchedElements = Array.from(document.querySelectorAll(target.selector));
+  } catch (error) {
+    return { status: "invalid_target", message: String(error) };
+  }
+  const element = matchedElements[0];
+"#
+        }
+        Target::Role { .. }
+        | Target::Text { .. }
+        | Target::TestId { .. }
+        | Target::Label { .. }
+        | Target::Placeholder { .. } => SEMANTIC_SHADOW_TARGET_QUERY,
+        Target::Ref { .. } => {
+            return Err(DriverError::new(
+                "test.driver.web.target_unsupported",
+                "current browser refs require native state queries",
+            ));
+        }
+        Target::AutomationId { .. } | Target::VisualPoint { .. } => {
+            return Err(DriverError::new(
+                "test.driver.web.target_unsupported",
+                "automation_id and visual_point targets are only available on GUI surfaces",
+            ));
+        }
+    };
+    let target = serde_json::to_string(target).map_err(|error| {
+        DriverError::new(
+            "test.driver.web.target_invalid",
+            format!("failed to encode assertion target: {error}"),
+        )
+    })?;
+    let probe = match probe {
+        AssertionProbe::State(ElementState::Enabled) => "enabled",
+        AssertionProbe::State(ElementState::Checked) => "checked",
+        AssertionProbe::State(ElementState::Selected) => "selected",
+        AssertionProbe::Value => "value",
+        AssertionProbe::SelectedValues => "selected_values",
+    };
+    let expression = format!(
+        r#"(() => {{
+  const target = {target};
+  const A3S_STATE_PROBE = "{probe}";
+{query}
+  if (matchedElements.length === 0) return {{ status: "not_found", count: 0 }};
+  if (matchedElements.length > 1) return {{ status: "ambiguous", count: matchedElements.length }};
+
+  const ariaBoolean = (name) => {{
+    const value = element.getAttribute(name);
+    if (value === "true") return true;
+    if (value === "false") return false;
+    return null;
+  }};
+  if (A3S_STATE_PROBE === "enabled") {{
+    let current = element;
+    let ariaDisabled = false;
+    while (current) {{
+      if (current.getAttribute?.("aria-disabled") === "true") {{
+        ariaDisabled = true;
+        break;
+      }}
+      const root = current.getRootNode?.();
+      current = current.parentElement || (root instanceof ShadowRoot ? root.host : null);
+    }}
+    const nativeDisabled = element.matches?.(":disabled") === true
+      || ("disabled" in element && element.disabled === true);
+    return {{ status: "ok", count: 1, actual: !(nativeDisabled || ariaDisabled) }};
+  }}
+  if (A3S_STATE_PROBE === "checked") {{
+    if (element instanceof HTMLInputElement && ["checkbox", "radio"].includes(element.type)) {{
+      return {{ status: "ok", count: 1, actual: element.checked }};
+    }}
+    const actual = ariaBoolean("aria-checked");
+    return actual === null
+      ? {{ status: "unsupported", count: 1 }}
+      : {{ status: "ok", count: 1, actual }};
+  }}
+  if (A3S_STATE_PROBE === "selected") {{
+    if (element instanceof HTMLOptionElement) {{
+      return {{ status: "ok", count: 1, actual: element.selected }};
+    }}
+    const actual = ariaBoolean("aria-selected");
+    return actual === null
+      ? {{ status: "unsupported", count: 1 }}
+      : {{ status: "ok", count: 1, actual }};
+  }}
+  if (A3S_STATE_PROBE === "value") {{
+    return "value" in element
+      ? {{ status: "ok", count: 1, actual: String(element.value ?? "") }}
+      : {{ status: "unsupported", count: 1 }};
+  }}
+  if (A3S_STATE_PROBE === "selected_values") {{
+    return element instanceof HTMLSelectElement
+      ? {{
+          status: "ok",
+          count: 1,
+          actual: Array.from(element.selectedOptions, (option) => option.value),
+        }}
+      : {{ status: "unsupported", count: 1 }};
+  }}
+  return {{ status: "unsupported", count: 1 }};
+}})()"#
+    );
+    Ok(vec!["eval".into(), expression.into()])
+}
 
 pub(crate) fn direct_selector(target: &Target) -> Result<&str, DriverError> {
     match target {
@@ -374,7 +498,9 @@ fn semantic_visibility_expression(target: &Target) -> Result<String, DriverError
       if (element.type === "search") return "searchbox";
       return "textbox";
     }}
-    return ({{ a:"link", button:"button", h1:"heading", h2:"heading", h3:"heading", h4:"heading", h5:"heading", h6:"heading", img:"img", nav:"navigation", main:"main", form:"form", table:"table", textarea:"textbox", select:"combobox" }})[tag] || "";
+    if (tag === "a") return element.hasAttribute("href") ? "link" : "";
+    if (tag === "select") return element.multiple || element.size > 1 ? "listbox" : "combobox";
+    return ({{ button:"button", h1:"heading", h2:"heading", h3:"heading", h4:"heading", h5:"heading", h6:"heading", img:"img", nav:"navigation", main:"main", form:"form", option:"option", table:"table", textarea:"textbox" }})[tag] || "";
   }};
   const matches = (element) => {{
     if (target.type === "test_id") return element.getAttribute("data-testid") === target.value || element.getAttribute("data-test-id") === target.value;
@@ -482,9 +608,15 @@ pub(crate) fn scalar_bool(value: &Value) -> Option<bool> {
     value
         .as_bool()
         .or_else(|| value.get("visible").and_then(Value::as_bool))
+        .or_else(|| value.get("enabled").and_then(Value::as_bool))
+        .or_else(|| value.get("checked").and_then(Value::as_bool))
+        .or_else(|| value.get("selected").and_then(Value::as_bool))
         .or_else(|| value.get("data").and_then(Value::as_bool))
         .or_else(|| value.pointer("/data/value").and_then(Value::as_bool))
         .or_else(|| value.pointer("/data/visible").and_then(Value::as_bool))
+        .or_else(|| value.pointer("/data/enabled").and_then(Value::as_bool))
+        .or_else(|| value.pointer("/data/checked").and_then(Value::as_bool))
+        .or_else(|| value.pointer("/data/selected").and_then(Value::as_bool))
 }
 
 pub(crate) fn bounded(value: &str, max_chars: usize) -> String {

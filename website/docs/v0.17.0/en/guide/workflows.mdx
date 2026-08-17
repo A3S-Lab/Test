@@ -38,7 +38,7 @@ a3s-test agent click <ref> --session <name> --observation <id> --json
 a3s-test agent finish --session <name> --status passed --summary <text> --json
 ```
 
-`agent act --action-json` exposes the complete action schema. In v0.17.0, action protocol revision 7 supports selection-scoped `insert_text` inside an editing context established by an earlier action. It carries no target or locator authority of its own.
+`agent act --action-json` exposes the complete action schema. In v0.17.0, action protocol revision 8 includes the revision-7 selection-scoped `insert_text` action plus typed live control-state expectations. `insert_text` still acts only inside an editing context established by an earlier action and carries no target or locator authority of its own.
 
 ## ACL suites
 
@@ -81,6 +81,58 @@ a3s-test run tests/e2e/smoke.acl --json
 
 Unknown blocks or attributes, duplicate identifiers, ambiguous conditions, invalid locators, and unsafe artifact paths fail before launch. Assertion failures, timeouts, and ambiguously dispatched actions are never replayed automatically.
 
+## Prove live control state
+
+Presence and text are insufficient evidence for forms. A button can be visible but disabled, a checkbox can exist but be unchecked, and a multi-select can contain the right labels while holding the wrong selection. Revision 8 observes those states directly:
+
+```acl
+expect "display-name" {
+    target = label("Display name")
+    value = "Ada"
+}
+
+expect "submit" {
+    disabled = role("button", "Submit")
+}
+
+expect "terms" {
+    checked = label("Accept terms")
+}
+
+expect "review" {
+    selected = role("option", "Review")
+}
+
+expect "status" {
+    target = role("listbox", "Publication status")
+    selected_values = ["review", "published"]
+    stable_for_ms = 300
+    sample_interval_ms = 25
+}
+```
+
+The complete paired conditions are `enabled`/`disabled`, `checked`/`unchecked`, and `selected`/`unselected`. `value` and `selected_values` use a separate `target`. Expected selected values must be unique and compare as a canonical exact set: order does not matter, but an extra or missing value fails. `selected_values = []` is valid only when one real target exposes an empty selection.
+
+Target resolution and state comparison are separate proof steps.
+
+| What the driver observes                               | Result                                                                                     |
+| ------------------------------------------------------ | ------------------------------------------------------------------------------------------ |
+| One target, supported state, matching value            | Pass with structured expected/actual evidence                                              |
+| One target, supported state, different value           | Specific `test.assert.*` product mismatch                                                  |
+| No target                                              | `test.driver.*.target_not_found`; never proof of disabled, unchecked, unselected, or empty |
+| Multiple targets                                       | `test.driver.*.target_ambiguous`                                                           |
+| Invalid target, unsupported state, or malformed output | Preserve the surface driver error                                                          |
+
+| Surface | Exact value            | Boolean state                                                        | Selected values               |
+| ------- | ---------------------- | -------------------------------------------------------------------- | ----------------------------- |
+| Web     | Live DOM `value`       | Native live properties first; boolean ARIA state for custom controls | Exact native multi-select set |
+| GUI     | CUA value when present | Unsupported until CUA exposes typed state                            | Unsupported                   |
+| TUI     | Unsupported            | Unsupported                                                          | Unsupported                   |
+
+Web semantic targets traverse open Shadow DOM and recognize native multi-select `listbox` and `option` roles. A direct browser ref can read value, enabled, native checkbox/radio checked state, and admitted ARIA state, but the standalone ref protocol cannot expose native option selection or multi-select arrays. Use a stable semantic or CSS target for those forms. A Page Context ref remains valid when A3S Test resolves it to such a target before dispatch.
+
+The checked-in evidence covers 400/400 deterministic Web classifications, 100/100 stable state windows, 100/100 transient-state rejections, and a standalone Chromium flow with 15/15 positive checks plus 4/4 negative error classifications and no private runtime leak.
+
 ## Prove that UI has no visible match
 
 Use `hidden` when closing, dismissing, removing, or visually hiding a target is the product requirement. The assertion passes when the stable locator has no matching element or when every match has no rendered visible box.
@@ -91,7 +143,7 @@ expect "checkout-dialog-closed" {
 }
 ```
 
-`hidden` is runner policy around the existing positive visibility assertion. It does not add an action variant or change browser protocol revision 7. The runner sends a positive probe to the surface driver and classifies its result deterministically.
+`hidden` is runner policy around the existing positive visibility assertion. It does not add an action variant; the current protocol is revision 8 because of the separate control-state expectations above. The runner sends a positive probe to the surface driver and classifies its result deterministically.
 
 | Positive probe result                  | Hidden assertion result                                                                |
 | -------------------------------------- | -------------------------------------------------------------------------------------- |
@@ -123,7 +175,7 @@ wait "checkout-dialog-closed" {
 }
 ```
 
-The ACL compiler keeps `Action::Wait(WaitCondition::Visible(target))` and adds runner-owned `WaitMode::Hidden`, so action protocol revision 7 is unchanged. Runner executes an immediate positive visibility assertion, then repeats it every 50 ms while the target remains visible.
+The ACL compiler keeps `Action::Wait(WaitCondition::Visible(target))` and adds runner-owned `WaitMode::Hidden`. This still reuses the earlier visible-action variant under current action protocol revision 8. Runner executes an immediate positive visibility assertion, then repeats it every 50 ms while the target remains visible.
 
 | Positive probe result                  | Hidden wait result                                                                               |
 | -------------------------------------- | ------------------------------------------------------------------------------------------------ |

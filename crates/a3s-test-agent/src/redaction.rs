@@ -242,6 +242,17 @@ impl ProvenanceRedactor {
             Expectation::TextVisible(text) => self.redact_text(text),
             Expectation::Url(url) => self.redact_url(url),
             Expectation::Visible(target) => self.redact_target(target),
+            Expectation::State { target, .. } => self.redact_target(target),
+            Expectation::Value { target, value } => {
+                self.redact_target(target);
+                self.redact_text(value);
+            }
+            Expectation::SelectedValues { target, values } => {
+                self.redact_target(target);
+                for value in values {
+                    self.redact_text(value);
+                }
+            }
         }
     }
 

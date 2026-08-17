@@ -27,8 +27,8 @@ pub use driver::{
 };
 pub use error::{DriverError, SpecError};
 pub use model::{
-    Action, AssertionMode, AssertionStability, CaptureOperation, DialogOperation, Evidence,
-    Expectation, FrameTarget, GroundingScreenshot, LoadState, ModifierKey, NetworkRoute,
+    Action, AssertionMode, AssertionStability, CaptureOperation, DialogOperation, ElementState,
+    Evidence, Expectation, FrameTarget, GroundingScreenshot, LoadState, ModifierKey, NetworkRoute,
     PageContextComponent, PageContextGeometry, PageContextLocator, PageContextNode,
     PageContextNodeState, PageContextObservation, PageContextPage, PageContextPoint,
     PageContextPosition, PageContextRect, PageContextSize, PageContextSnapshot, PageContextSource,

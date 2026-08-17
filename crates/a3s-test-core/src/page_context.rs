@@ -201,10 +201,12 @@ fn action_targets(action: &Action) -> impl Iterator<Item = &Target> {
         | Action::Download { target, .. }
         | Action::Wait {
             condition: WaitCondition::Visible(target),
-        }
-        | Action::Assert {
-            expectation: Expectation::Visible(target),
         } => targets.push(target),
+        Action::Assert { expectation } => {
+            if let Some(target) = expectation_target(expectation) {
+                targets.push(target);
+            }
+        }
         Action::Drag { source, target } => {
             targets.push(source);
             targets.push(target);
@@ -237,10 +239,12 @@ fn visit_action_targets(
         | Action::Download { target, .. }
         | Action::Wait {
             condition: WaitCondition::Visible(target),
-        }
-        | Action::Assert {
-            expectation: Expectation::Visible(target),
         } => visitor(target)?,
+        Action::Assert { expectation } => {
+            if let Some(target) = expectation_target_mut(expectation) {
+                visitor(target)?;
+            }
+        }
         Action::Drag { source, target } => {
             visitor(source)?;
             visitor(target)?;
@@ -252,6 +256,26 @@ fn visit_action_targets(
         _ => {}
     }
     Ok(())
+}
+
+fn expectation_target(expectation: &Expectation) -> Option<&Target> {
+    match expectation {
+        Expectation::Visible(target)
+        | Expectation::State { target, .. }
+        | Expectation::Value { target, .. }
+        | Expectation::SelectedValues { target, .. } => Some(target),
+        Expectation::TextVisible(_) | Expectation::Url(_) => None,
+    }
+}
+
+fn expectation_target_mut(expectation: &mut Expectation) -> Option<&mut Target> {
+    match expectation {
+        Expectation::Visible(target)
+        | Expectation::State { target, .. }
+        | Expectation::Value { target, .. }
+        | Expectation::SelectedValues { target, .. } => Some(target),
+        Expectation::TextVisible(_) | Expectation::Url(_) => None,
+    }
 }
 
 fn target_uses_observation(target: &Target) -> bool {

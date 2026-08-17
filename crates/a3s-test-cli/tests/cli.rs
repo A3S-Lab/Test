@@ -6,6 +6,8 @@ use std::process::Command;
 #[cfg(unix)]
 use std::sync::{Mutex, OnceLock};
 
+use a3s_test_core::ACTION_PROTOCOL_REVISION;
+
 fn binary() -> PathBuf {
     PathBuf::from(env!("CARGO_BIN_EXE_a3s-test"))
 }
@@ -517,7 +519,7 @@ fn agent_schema_exposes_values_for_semantic_targets() {
     assert!(output.status.success(), "{output:?}");
     let value: serde_json::Value = serde_json::from_slice(&output.stdout).expect("JSON output");
     assert_eq!(value["planner"], "external_coding_agent");
-    assert_eq!(value["protocol_revision"], 7);
+    assert_eq!(value["protocol_revision"], ACTION_PROTOCOL_REVISION);
     assert!(value["page_context_protocol"].is_null());
     assert_eq!(value["repair_resolution"]["default"], "human_review");
     assert_eq!(
@@ -650,7 +652,7 @@ fn capabilities_returns_the_admitted_web_protocol() {
     let value: serde_json::Value = serde_json::from_slice(&output.stdout).expect("JSON output");
     assert_eq!(value["integration"], "standalone");
     assert_eq!(value["version"], "0.26.0");
-    assert_eq!(value["protocol_revision"], 7);
+    assert_eq!(value["protocol_revision"], ACTION_PROTOCOL_REVISION);
     assert!(value["features"].as_array().is_some_and(|features| {
         features
             .iter()

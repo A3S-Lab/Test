@@ -192,6 +192,56 @@ Remote workers use separate `a3s.test.remote-worker/3` execution and `a3s.test.r
 
 `check` performs admission without starting a surface. `run` executes after admission and separates product failures, specification errors, infrastructure errors, and cleanup errors in its machine result. `distributed plan` matches worker capabilities before `distributed run` dispatches authenticated shards.
 
+### Control-state ACL expectations
+
+Action protocol revision 8 adds the following `expect` conditions:
+
+```acl
+expect "name" {
+    target = label("Display name")
+    value = "Ada"
+}
+
+expect "submit" { disabled = role("button", "Submit") }
+expect "terms" { checked = label("Accept terms") }
+expect "review" { selected = role("option", "Review") }
+
+expect "status" {
+    target = role("listbox", "Publication status")
+    selected_values = ["review", "published"]
+}
+```
+
+`value` and `selected_values` require a separate `target`. The boolean pairs are `enabled`/`disabled`, `checked`/`unchecked`, and `selected`/`unselected`. Expected selected values must be unique. Both sides are sorted and compared as an exact set; `[]` is admitted and means an observed empty selection.
+
+A passing boolean state step returns this shape under `output.data`:
+
+```json
+{
+  "target": { "type": "role", "role": "button", "name": "Submit" },
+  "state": "enabled",
+  "expected": false,
+  "actual": false
+}
+```
+
+Value and selected-value outputs likewise contain `target`, `expected`, and `actual`; selected arrays use canonical order. `stable_for_ms` repeats the same typed assertion and adds the normal `assertion` and `stability` evidence.
+
+| Code                                                                                     | Meaning                                                                   |
+| ---------------------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
+| `test.spec.condition_ambiguous`                                                          | More than one expectation condition was configured                        |
+| `test.spec.attribute_required`                                                           | `value` or `selected_values` omitted `target`                             |
+| `test.spec.selected_value_duplicate`                                                     | An expected selected value appeared more than once                        |
+| `test.driver.web.target_not_found`                                                       | No target matched; this never proves a negative state                     |
+| `test.driver.web.target_ambiguous`                                                       | More than one target matched                                              |
+| `test.driver.web.state_unsupported`                                                      | The target or standalone ref protocol does not expose the requested state |
+| `test.driver.web.output_invalid`                                                         | Browser output had the wrong type or a duplicate selected value           |
+| `test.assert.value`                                                                      | An observed exact value differed                                          |
+| `test.assert.enabled`, `.disabled`, `.checked`, `.unchecked`, `.selected`, `.unselected` | An observed boolean state differed                                        |
+| `test.assert.selected_values`                                                            | The observed exact selected set differed                                  |
+
+Web reads live DOM state and gives native checkbox/radio properties priority over ARIA. GUI supports exact values only when CUA returned one, then rejects boolean and multi-selection state as `test.driver.gui.assertion_unsupported`. TUI supports visible terminal text only. A Page Context ref is resolved before dispatch; direct standalone refs cannot expose native option selection or multi-select arrays.
+
 ### Hidden ACL expectations
 
 `hidden` asserts that a stable target locator has no visible match at the current observation. Both an absent target and a matching element without a rendered visible box satisfy the condition.
@@ -202,7 +252,7 @@ expect "dialog-closed" {
 }
 ```
 
-The ACL compiler stores the existing `Action::Assert(Expectation::Visible(target))` plus a runner-owned hidden mode. Action protocol revision 7 and every surface-driver command remain unchanged. The runner dispatches a positive visibility probe and uses this contract.
+The ACL compiler stores the existing `Action::Assert(Expectation::Visible(target))` plus a runner-owned hidden mode. This policy adds no action variant; the current protocol is revision 8 because of the control-state expectations above. The runner dispatches a positive visibility probe and uses this contract.
 
 | Probe result                       | Step result                                                                                  |
 | ---------------------------------- | -------------------------------------------------------------------------------------------- |
@@ -246,7 +296,7 @@ wait "dialog-closed" {
 }
 ```
 
-The compiler stores the existing visible-target wait condition plus `wait_mode = hidden`; action protocol revision 7 remains unchanged. Runner sends immediate read-only positive visibility assertions and polls every 50 ms only while visible evidence continues.
+The compiler stores the existing visible-target wait condition plus `wait_mode = hidden`; under current revision 8 it still reuses the earlier visible-action variant. Runner sends immediate read-only positive visibility assertions and polls every 50 ms only while visible evidence continues.
 
 | Boundary                             | Result                                                                                 |
 | ------------------------------------ | -------------------------------------------------------------------------------------- |

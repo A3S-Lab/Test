@@ -18,9 +18,16 @@
       }
 
       input,
-      button {
+      button,
+      select {
         font: inherit;
         padding: 8px 10px;
+      }
+
+      .checkbox-label {
+        align-items: center;
+        display: flex;
+        gap: 8px;
       }
     </style>
   </head>
@@ -31,7 +38,32 @@
       <form id="profile-form">
         <label for="display-name">Display name</label>
         <input id="display-name" name="display-name" autocomplete="off" />
+
+        <label class="checkbox-label" for="terms">
+          <input id="terms" name="terms" type="checkbox" />
+          Accept terms
+        </label>
+
+        <label for="status">Publication status</label>
+        <select id="status" name="status" multiple>
+          <option value="draft" selected>Draft</option>
+          <option value="review">Review</option>
+          <option value="published">Published</option>
+        </select>
+
+        <label for="empty-status">Empty selection</label>
+        <select id="empty-status" name="empty-status" multiple>
+          <option value="archived">Archived</option>
+        </select>
+
         <button id="submit" type="submit">Save profile</button>
+        <button id="disabled-action" type="button" disabled>
+          Unavailable action
+        </button>
+
+        <div id="unsupported-state">No checkable state</div>
+        <input class="ambiguous-state" type="checkbox" aria-label="Duplicate state one" />
+        <input class="ambiguous-state" type="checkbox" aria-label="Duplicate state two" />
       </form>
 
       <output id="submitted" aria-live="polite">submitted: pending</output>

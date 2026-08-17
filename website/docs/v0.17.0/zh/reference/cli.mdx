@@ -192,6 +192,56 @@ a3s-test distributed run <distributed.acl> --json
 
 `check` 只做准入，不启动界面。`run` 在准入后执行 suite，并把产品失败、测试规范错误、基础设施错误和清理错误分开写入机器结果。`distributed plan` 先匹配 worker 能力，`distributed run` 才发送鉴权 shard。
 
+### ACL 控件状态断言
+
+Action 协议修订 8 新增以下 `expect` 条件。
+
+```acl
+expect "name" {
+    target = label("Display name")
+    value = "Ada"
+}
+
+expect "submit" { disabled = role("button", "Submit") }
+expect "terms" { checked = label("Accept terms") }
+expect "review" { selected = role("option", "Review") }
+
+expect "status" {
+    target = role("listbox", "Publication status")
+    selected_values = ["review", "published"]
+}
+```
+
+`value` 与 `selected_values` 需要单独配置 `target`。布尔状态包括 `enabled`/`disabled`、`checked`/`unchecked` 和 `selected`/`unselected` 三组。预期选项不得重复；期望值与实际值都会排序后按精确集合比较。`[]` 可以通过准入，含义是观察到真实的空选择。
+
+布尔状态通过时会在 `output.data` 下返回以下结构。
+
+```json
+{
+  "target": { "type": "role", "role": "button", "name": "Submit" },
+  "state": "enabled",
+  "expected": false,
+  "actual": false
+}
+```
+
+值和已选值集合也会返回 `target`、`expected` 与 `actual`，其中选项数组使用规范顺序。配置 `stable_for_ms` 后，Runner 会重复同一个类型化断言，并增加常规的 `assertion` 与 `stability` 证据。
+
+| 错误码                                                                                   | 含义                                       |
+| ---------------------------------------------------------------------------------------- | ------------------------------------------ |
+| `test.spec.condition_ambiguous`                                                          | 同时配置了多个 expectation 条件            |
+| `test.spec.attribute_required`                                                           | `value` 或 `selected_values` 缺少 `target` |
+| `test.spec.selected_value_duplicate`                                                     | 预期选项出现重复值                         |
+| `test.driver.web.target_not_found`                                                       | 没有匹配目标，绝不能借此证明负向状态       |
+| `test.driver.web.target_ambiguous`                                                       | 匹配到多个目标                             |
+| `test.driver.web.state_unsupported`                                                      | 目标或 standalone ref 协议没有暴露所需状态 |
+| `test.driver.web.output_invalid`                                                         | 浏览器输出类型错误，或实际选项包含重复值   |
+| `test.assert.value`                                                                      | 观察到的精确值不同                         |
+| `test.assert.enabled`、`.disabled`、`.checked`、`.unchecked`、`.selected`、`.unselected` | 观察到的布尔状态不同                       |
+| `test.assert.selected_values`                                                            | 观察到的精确选项集合不同                   |
+
+Web 读取实时 DOM 状态，原生 checkbox/radio 属性优先于 ARIA。GUI 只有在 CUA 确实返回 value 时支持精确值；布尔状态和多选状态会以 `test.driver.gui.assertion_unsupported` 拒绝。TUI 仍然只支持可见终端文本。Page Context ref 会在派发前解析；直接 standalone ref 还不能暴露原生 option 选择或多选数组。
+
 ### ACL 隐藏断言
 
 `hidden` 断言稳定目标定位器在当前观察中没有可见匹配。目标不存在，或匹配元素没有渲染出的可见边界，都满足条件。
@@ -202,7 +252,7 @@ expect "dialog-closed" {
 }
 ```
 
-ACL 编译器保存现有的 `Action::Assert(Expectation::Visible(target))`，并增加由 Runner 负责的隐藏模式。Action 协议修订 7 与所有 surface 驱动命令都不变。Runner 派发正向可见性探测，再按以下契约分类。
+ACL 编译器保存现有的 `Action::Assert(Expectation::Visible(target))`，并增加由 Runner 负责的隐藏模式。这个策略不会增加 Action 变体；当前协议推进到修订 8，是因为上面的控件状态 expectation。Runner 派发正向可见性探测，再按以下契约分类。
 
 | 探测结果                    | 步骤结果                                                          |
 | --------------------------- | ----------------------------------------------------------------- |
@@ -246,7 +296,7 @@ wait "dialog-closed" {
 }
 ```
 
-编译器保存现有的可见目标等待条件，并增加 `wait_mode = hidden`；Action 协议修订 7 不变。只要正向探测仍返回可见证据，Runner 就先立即执行一次只读可见性断言，再每 50 ms 探测一次。
+编译器保存现有的可见目标等待条件，并增加 `wait_mode = hidden`；在当前修订 8 下，它仍然复用早先的可见性 Action 变体。只要正向探测仍返回可见证据，Runner 就先立即执行一次只读可见性断言，再每 50 ms 探测一次。
 
 | 边界                     | 结果                                                                   |
 | ------------------------ | ---------------------------------------------------------------------- |
