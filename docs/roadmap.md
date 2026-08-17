@@ -589,6 +589,7 @@ The completion work intentionally preserves these product boundaries:
 - [x] Project private UI node identities to actionable `@cN` or read-only
       `@uN` observation refs, rejecting `@uN` actions and omitting evidence
       that cannot remain valid within its admitted encoded-size budget
-- [x] Add strict Rust admission, including layout-graph and component-reference
-      integrity, repair-context propagation, unit tests, and a real Chromium
-      driver regression without granting action, verdict, or repair authority
+- [x] Add strict Rust admission, including closed and acyclic layout-graph and
+      component-reference integrity, repair-context propagation, unit tests,
+      and a real Chromium driver regression without granting action, verdict,
+      or repair authority

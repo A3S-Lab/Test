@@ -417,6 +417,29 @@ fn rejects_inconsistent_ui_graph_and_reference_sets() {
 }
 
 #[test]
+fn rejects_incomplete_or_cyclic_layout_containment() {
+    let mut value = snapshot_value();
+    append_layout_node(&mut value, "n2");
+    value["ui"]["layout"]["nodes"][0]["parentNodeId"] = json!("n2");
+    assert_ui_validation_fails(value, "parent without a containment edge");
+
+    let mut value = snapshot_value();
+    append_layout_node(&mut value, "n2");
+    value["ui"]["layout"]["nodes"][0]["parentNodeId"] = json!("n2");
+    value["ui"]["layout"]["nodes"][1]["parentNodeId"] = json!("n1");
+    value["ui"]["layout"]["edges"] = json!([{
+        "fromNodeId": "n2",
+        "toNodeId": "n1",
+        "relation": "contains"
+    }, {
+        "fromNodeId": "n1",
+        "toNodeId": "n2",
+        "relation": "contains"
+    }]);
+    assert_ui_validation_fails(value, "cyclic containment");
+}
+
+#[test]
 fn rejects_inconsistent_animation_timeline_evidence() {
     let mut value = snapshot_value();
     value["ui"]["motion"]["animations"][0]["timelines"] = json!([]);

@@ -306,9 +306,9 @@ containing Page Context record. The Web driver rejects an unsupported
 protocol, stale binding, invalid identifier or geometry, malformed box-model
 evidence, inconsistent overflow/clipping derivation, malformed timeline
 evidence, duplicate layout identity or relationship, missing parent or edge
-endpoint, contradictory containment, repeated evidence reference, invalid
-component membership, unknown field, non-observational confidence,
-inconsistent truncation, excess JSON depth, or any
+endpoint, contradictory, incomplete, or cyclic containment, repeated evidence
+reference, invalid component membership, unknown field, non-observational
+confidence, inconsistent truncation, excess JSON depth, or any
 collection/string/encoded-size budget violation.
 
 Installation defaults are 200 sampled UI nodes, 200 state candidates, 32 ms,

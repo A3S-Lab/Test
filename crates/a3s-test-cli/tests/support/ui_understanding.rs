@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::path::Path;
 use std::process::Command;
 
@@ -106,6 +106,35 @@ fn verify_closed_layout_graph(snapshot: &serde_json::Value, ui: &serde_json::Val
             node_ids.contains(source) && node_ids.contains(target),
             "UI layout edge escapes the sampled graph: {edge}"
         );
+    }
+    let containment = ui["layout"]["edges"]
+        .as_array()
+        .expect("UI layout edges")
+        .iter()
+        .filter(|edge| edge["relation"] == "contains")
+        .map(|edge| {
+            (
+                edge["toNodeId"].as_str().expect("containment target"),
+                edge["fromNodeId"].as_str().expect("containment source"),
+            )
+        })
+        .collect::<HashMap<_, _>>();
+    for node in nodes {
+        let node_id = node["nodeId"].as_str().expect("layout node ref");
+        assert_eq!(
+            node["parentNodeId"].as_str(),
+            containment.get(node_id).copied(),
+            "UI layout parent and containment edge disagree: {node}"
+        );
+        let mut path = HashSet::new();
+        let mut current = Some(node_id);
+        while let Some(current_id) = current {
+            assert!(
+                path.insert(current_id),
+                "UI layout containment contains a cycle from {node_id}: {ui}"
+            );
+            current = containment.get(current_id).copied();
+        }
     }
 
     let action_ref = snapshot["nodes"]

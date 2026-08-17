@@ -1,7 +1,8 @@
 use std::collections::{HashMap, HashSet};
 
 use super::{
-    has_duplicates, UiLayoutEdgeRelation, UiUnderstandingSnapshot, UiUnderstandingValidationError,
+    has_duplicates, UiLayoutEdgeRelation, UiLayoutNode, UiUnderstandingSnapshot,
+    UiUnderstandingValidationError,
 };
 
 pub(super) fn validate(
@@ -71,6 +72,7 @@ fn validate_layout_graph(
 
     let mut edges = HashSet::with_capacity(snapshot.layout.edges.len());
     let mut owners = HashSet::with_capacity(snapshot.layout.edges.len());
+    let mut containment = HashMap::with_capacity(snapshot.layout.nodes.len());
     for edge in &snapshot.layout.edges {
         let relation = edge.relation as u8;
         let edge_key = (
@@ -95,8 +97,47 @@ fn validate_layout_graph(
                 "UI understanding layout edges are inconsistent",
             ));
         }
+        if edge.relation == UiLayoutEdgeRelation::Contains {
+            containment.insert(edge.to_node_id.as_str(), edge.from_node_id.as_str());
+        }
+    }
+    if nodes.values().any(|node| {
+        node.parent_node_id.as_deref() != containment.get(node.node_id.as_str()).copied()
+    }) {
+        return Err(UiUnderstandingValidationError::new(
+            "UI understanding layout containment is incomplete",
+        ));
+    }
+    if has_parent_cycle(&nodes) {
+        return Err(UiUnderstandingValidationError::new(
+            "UI understanding layout containment contains a cycle",
+        ));
     }
     Ok(())
+}
+
+fn has_parent_cycle(nodes: &HashMap<&str, &UiLayoutNode>) -> bool {
+    let mut complete = HashSet::with_capacity(nodes.len());
+    for start in nodes.keys().copied() {
+        if complete.contains(start) {
+            continue;
+        }
+        let mut path = HashSet::new();
+        let mut current = Some(start);
+        while let Some(node_id) = current {
+            if complete.contains(node_id) {
+                break;
+            }
+            if !path.insert(node_id) {
+                return true;
+            }
+            current = nodes
+                .get(node_id)
+                .and_then(|node| node.parent_node_id.as_deref());
+        }
+        complete.extend(path);
+    }
+    false
 }
 
 fn validate_component_references(

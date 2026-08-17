@@ -341,6 +341,11 @@ describe("rendered UI understanding", () => {
     expect(
       layout.nodes.find((node) => node.nodeId === actionId)?.parentNodeId,
     ).toBe(rootId);
+    expect(layout.edges).toContainEqual({
+      fromNodeId: rootId,
+      toNodeId: actionId,
+      relation: "contains",
+    });
     expect(layout.edges).not.toEqual(
       expect.arrayContaining([
         expect.objectContaining({ fromNodeId: unboxedParentId }),
