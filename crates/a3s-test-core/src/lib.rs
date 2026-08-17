@@ -27,8 +27,8 @@ pub use driver::{
 };
 pub use error::{DriverError, SpecError};
 pub use model::{
-    Action, CaptureOperation, DialogOperation, Evidence, Expectation, FrameTarget,
-    GroundingScreenshot, LoadState, ModifierKey, NetworkRoute, PageContextComponent,
+    Action, AssertionStability, CaptureOperation, DialogOperation, Evidence, Expectation,
+    FrameTarget, GroundingScreenshot, LoadState, ModifierKey, NetworkRoute, PageContextComponent,
     PageContextGeometry, PageContextLocator, PageContextNode, PageContextNodeState,
     PageContextObservation, PageContextPage, PageContextPoint, PageContextPosition,
     PageContextRect, PageContextSize, PageContextSnapshot, PageContextSource, PageContextTheme,
@@ -39,7 +39,9 @@ pub use model::{
     RepairRelation, RepairSeverity, RepairStatus, RepairStatusEvent, RepairTarget,
     RepairTargetKind, RepairThreadMessage, RepairVerification, StepOutput, Surface,
     SurfaceObservation, TabOperation, Target, TestScenario, TestStep, TestSuite, VideoOperation,
-    WaitCondition, ACTION_PROTOCOL_REVISION, PAGE_CONTEXT_PROTOCOL, REPAIR_PROTOCOL,
+    WaitCondition, ACTION_PROTOCOL_REVISION, DEFAULT_ASSERTION_SAMPLE_INTERVAL_MS,
+    MAX_ASSERTION_STABILITY_MS, MAX_ASSERTION_STABILITY_SAMPLES, MIN_ASSERTION_STABILITY_MS,
+    PAGE_CONTEXT_PROTOCOL, REPAIR_PROTOCOL,
 };
 pub use page_context::{
     action_uses_observation_target, action_uses_page_context_ref,

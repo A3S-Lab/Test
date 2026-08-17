@@ -192,6 +192,52 @@ a3s-test distributed run <distributed.acl> --json
 
 `check` 只做准入，不启动界面。`run` 在准入后执行 suite，并把产品失败、测试规范错误、基础设施错误和清理错误分开写入机器结果。`distributed plan` 先匹配 worker 能力，`distributed run` 才发送鉴权 shard。
 
+### ACL 稳定窗口断言
+
+`stable_for_ms` 为 ACL 的 `expect` 增加有界采样策略。文本、精确 URL 和目标可见性断言都能使用；前提是所选 surface 驱动支持该断言。它不会增加新的动作类型，也不会改变驱动契约。
+
+```acl
+expect "settled-total" {
+    visible = testid("order-total")
+    stable_for_ms = 300
+    sample_interval_ms = 25
+}
+```
+
+| 字段                 | 是否必需   | 准入范围                   | 默认值                    |
+| -------------------- | ---------- | -------------------------- | ------------------------- |
+| `stable_for_ms`      | 启用时必需 | 10 至 60,000 ms 的整数     | 不启用稳定采样            |
+| `sample_interval_ms` | 否         | 正整数，且不得大于稳定窗口 | 50 ms；窗口更短时等于窗口 |
+
+计划工作量按 `ceil(stable_for_ms / sample_interval_ms) + 1` 计算，包含第一次观察。超过 1,001 个计划样本会在准入时被拒绝。Runner 只在第一次采样通过后启动计时，并在请求窗口的末端一定执行一次采样。
+
+稳定步骤保留常规步骤字段，并在 `output.data` 下增加以下数据。
+
+| JSON 路径                      | 含义                                                             |
+| ------------------------------ | ---------------------------------------------------------------- |
+| `assertion.first`              | 第一次成功采样的驱动数据                                         |
+| `assertion.last`               | 最后一次或失败采样的驱动数据；驱动只返回错误时可以是 `null`      |
+| `stability.outcome`            | `passed`、`unstable` 或 `inconclusive`                           |
+| `stability.required_ms`        | 请求的稳定窗口                                                   |
+| `stability.sample_interval_ms` | 准入后的采样间隔                                                 |
+| `stability.samples`            | 已完成的观察点数量，包含第一次采样                               |
+| `stability.observed_ms`        | 第一次成功采样后的实际耗时；受调度和驱动耗时影响，可以大于请求值 |
+| 步骤 `attempts`                | 全部驱动调用次数；启用基础设施重试时可以大于 `samples`           |
+
+第一次采样为假时保留原始断言错误码。后续采样为假时使用 `test.assert.unstable`。超时和取消仍是终止性的 `test.run.*` 结果；采样没有完成时可以不带 stability payload。
+
+| 错误码                                       | 含义                                                 |
+| -------------------------------------------- | ---------------------------------------------------- |
+| `test.spec.type` 或 `test.spec.number_range` | 时长或间隔不是正整数                                 |
+| `test.spec.stability_duration_required`      | 只配置了间隔，没有配置窗口                           |
+| `test.spec.stability_range`                  | 窗口不在 10 至 60,000 ms 内                          |
+| `test.spec.stability_interval`               | 间隔大于窗口                                         |
+| `test.spec.stability_sample_limit`           | 计划样本超过 1,001                                   |
+| `test.assert.unstable`                       | 第一次采样通过，但之后的采样为假                     |
+| `test.run.stability_action_invalid`          | 程序化 suite 把稳定策略附在非断言动作上              |
+| `test.run.stability_invalid`                 | 程序化 suite 绕过了准入边界                          |
+| `test.run.stability_output_invalid`          | 程序化驱动为采样断言返回了不应出现的 advisory report |
+
 ## JSON 与错误契约
 
 自动化调用应统一传入 `--json`，读取稳定错误码、状态和结构化字段，避免解析面向人的帮助文本。常见错误范围如下。

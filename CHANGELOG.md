@@ -4,6 +4,13 @@
 
 ### Added
 
+- Added bounded assertion-stability sampling for ACL `expect` steps. A suite
+  can require `stable_for_ms` with an optional `sample_interval_ms`; admission
+  caps duration and planned samples, the runner remains deadline- and
+  cancellation-safe, later false samples fail as `test.assert.unstable`, and
+  JSON results retain first/last assertion data plus sampling metrics. A
+  deterministic 100-case dataset and real Chromium pass/fail fixtures cover
+  transient rejection, persistent acceptance, reporting, and cleanup.
 - Added the nested `a3s.test.ui-understanding/1` Page Context evidence
   protocol. Test Kit now derives bounded observed design tokens, typography,
   Flex/Grid/flow and stacking relationships, exact client/scroll extents,

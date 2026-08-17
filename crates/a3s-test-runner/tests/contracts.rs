@@ -403,6 +403,7 @@ fn suite() -> TestSuite {
                     variant: "desktop".to_string(),
                     state: "ready".to_string(),
                 },
+                stability: None,
             }],
         }],
     }

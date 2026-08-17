@@ -516,6 +516,7 @@ async fn semantic_actions_use_opaque_refs_and_owned_cleanup() {
                     value: "save-button".to_string(),
                 },
             },
+            stability: None,
         })
         .await
         .expect("semantic click");
@@ -529,6 +530,7 @@ async fn semantic_actions_use_opaque_refs_and_owned_cleanup() {
             action: Action::Click {
                 target: Target::Ref { value: first_ref },
             },
+            stability: None,
         })
         .await
         .expect_err("expired reference must fail");
@@ -540,6 +542,7 @@ async fn semantic_actions_use_opaque_refs_and_owned_cleanup() {
             action: Action::Screenshot {
                 path: "screens/window.png".to_string(),
             },
+            stability: None,
         })
         .await
         .expect("window screenshot");
@@ -595,6 +598,7 @@ async fn ambiguous_semantic_target_fails_without_input() {
                     value: "Save".to_string(),
                 },
             },
+            stability: None,
         })
         .await
         .expect_err("ambiguous target must fail");
@@ -708,6 +712,7 @@ async fn window_vision_points_are_grounded_in_verified_image_evidence() {
                     y: 240,
                 },
             },
+            stability: None,
         })
         .await
         .expect("grounded visual click");
@@ -746,6 +751,7 @@ async fn visual_actions_reject_old_or_modified_grounding_images() {
                     y: 10,
                 },
             },
+            stability: None,
         })
         .await
         .expect_err("old image must fail");
@@ -769,6 +775,7 @@ async fn visual_actions_reject_old_or_modified_grounding_images() {
                     y: 10,
                 },
             },
+            stability: None,
         })
         .await
         .expect_err("modified image must fail");
@@ -808,6 +815,7 @@ async fn visual_drag_requires_one_current_grounding_image() {
                     y: 220,
                 },
             },
+            stability: None,
         })
         .await
         .expect("visual drag");

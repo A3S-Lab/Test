@@ -302,6 +302,7 @@ impl AgentSessionManager {
         let step = TestStep {
             id: format!("agent-turn-{}", managed.next_turn),
             action,
+            stability: None,
         };
         managed.next_turn = managed.next_turn.saturating_add(1);
         let output = managed

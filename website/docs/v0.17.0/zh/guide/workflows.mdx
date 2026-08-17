@@ -81,6 +81,57 @@ a3s-test run tests/e2e/smoke.acl --json
 
 未知块、未知属性、重复标识、歧义条件、非法定位器和越界证据路径都会在表面启动前被拒绝。断言失败、超时和已经派发但结果不明确的动作不会自动重放。
 
+## 证明瞬态界面已经稳定
+
+单点断言回答的是“这一刻是否成立”。静态内容通常够用，但它也可能刚好接受加载闪烁、水合替换、乐观更新或动画中的一帧。如果产品要求是“界面完成收敛后仍然成立”，就把时间条件显式写在断言上。
+
+```acl
+wait "checkout-ready" {
+    visible = css("[data-checkout-ready]")
+}
+
+expect "settled-total" {
+    visible = testid("order-total")
+    stable_for_ms = 300
+    sample_interval_ms = 25
+}
+```
+
+三种同步工具回答不同问题。
+
+| 工具          | 回答的问题                   | 何时结束                                |
+| ------------- | ---------------------------- | --------------------------------------- |
+| `wait`        | 条件何时第一次成立           | 第一次匹配，或场景 deadline             |
+| 普通 `expect` | 条件现在是否成立             | 一次观察通过或失败                      |
+| 稳定 `expect` | 条件在有界窗口内是否持续成立 | 窗口末端采样、后续失败、取消或 deadline |
+
+第一次断言通过后，Runner 才启动 300 ms 窗口，每 25 ms 重复同一个只读断言，并在窗口边界一定补一次采样。第 2 个及之后的任一采样为假，步骤就以 `test.assert.unstable` 失败。通过时会保留下列机器证据。
+
+```json
+{
+  "attempts": 13,
+  "output": {
+    "data": {
+      "assertion": {
+        "first": { "visible": true },
+        "last": { "visible": true }
+      },
+      "stability": {
+        "outcome": "passed",
+        "required_ms": 300,
+        "sample_interval_ms": 25,
+        "samples": 13,
+        "observed_ms": 301
+      }
+    }
+  }
+}
+```
+
+第一次采样就失败时，原始 `test.assert.*` 错误会被保留，因为稳定窗口尚未开始。后续采样为假时使用 `test.assert.unstable`。驱动或基础设施错误保留自身错误码，并使本次稳定性验证不可判定。场景取消和 deadline 都能中断间隔等待或驱动调用，自有界面的清理仍会执行。
+
+采样提供的是有限时间证据。只有状态变化覆盖某个采样点时才会被发现，因此它不能证明两个采样点之间绝对连续。更短的间隔能提高时间分辨率，也会增加浏览器调用。只为真正影响产品的闪烁使用更短间隔，并让 `timeout_ms` 覆盖前置步骤、完整稳定窗口、命令耗时和获准的基础设施重试。
+
 ## 本地验证仍决定结果
 
 部署方可以通过 `a3s-test agent run` 注入受 Schema 限制的 HTTP LLM provider，但 provider 只能提出一个类型化动作或请求结束。它不能决定 verdict、伪造观察或授权修复。成功仍要求至少一个本地 `expect` 通过，并且精确拥有的界面会话完成清理。

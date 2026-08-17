@@ -1,6 +1,7 @@
 use a3s_test_core::{
-    Action, CaptureOperation, DialogOperation, Expectation, FrameTarget, LoadState, ModifierKey,
-    NetworkRoute, Surface, TabOperation, Target, TestSuite, VideoOperation, WaitCondition,
+    Action, AssertionStability, CaptureOperation, DialogOperation, Expectation, FrameTarget,
+    LoadState, ModifierKey, NetworkRoute, Surface, TabOperation, Target, TestSuite, VideoOperation,
+    WaitCondition,
 };
 
 const VALID_SUITE: &str = r#"
@@ -90,6 +91,132 @@ fn parses_ordered_typed_web_scenario() {
             expectation: Expectation::TextVisible("Quarterly plan".to_string())
         }
     );
+}
+
+#[test]
+fn parses_sampled_assertion_stability_without_changing_the_action_contract() {
+    let suite = TestSuite::from_acl(
+        r##"
+suite "stable-assertion" {
+    scenario "checkout" {
+        surface = "web"
+        expect "settled-total" {
+            visible = css("#total")
+            stable_for_ms = 300
+            sample_interval_ms = 25
+        }
+    }
+}
+"##,
+    )
+    .expect("stable assertion");
+
+    let step = &suite.scenarios[0].steps[0];
+    assert_eq!(
+        step.action,
+        Action::Assert {
+            expectation: Expectation::Visible(Target::Css {
+                selector: "#total".to_string(),
+            }),
+        }
+    );
+    assert_eq!(
+        step.stability,
+        Some(AssertionStability {
+            stable_for_ms: 300,
+            sample_interval_ms: 25,
+        })
+    );
+}
+
+#[test]
+fn defaults_assertion_sampling_to_50_ms_without_exceeding_the_window() {
+    for (stable_for_ms, expected_interval_ms) in [(300, 50), (25, 25)] {
+        let suite = TestSuite::from_acl(&format!(
+            r##"
+suite "stable-assertion" {{
+    scenario "checkout" {{
+        surface = "web"
+        expect "settled-total" {{
+            visible = css("#total")
+            stable_for_ms = {stable_for_ms}
+        }}
+    }}
+}}
+"##,
+        ))
+        .expect("stable assertion with a default sample interval");
+
+        assert_eq!(
+            suite.scenarios[0].steps[0].stability,
+            Some(AssertionStability {
+                stable_for_ms,
+                sample_interval_ms: expected_interval_ms,
+            })
+        );
+    }
+}
+
+#[test]
+fn admits_the_largest_bounded_assertion_sampling_plan() {
+    let suite = TestSuite::from_acl(
+        r##"
+suite "stable-assertion" {
+    scenario "checkout" {
+        surface = "web"
+        expect "settled-total" {
+            visible = css("#total")
+            stable_for_ms = 60000
+            sample_interval_ms = 60
+        }
+    }
+}
+"##,
+    )
+    .expect("largest bounded stability plan");
+
+    let stability = suite.scenarios[0].steps[0]
+        .stability
+        .expect("assertion stability");
+    assert_eq!(stability.planned_samples(), 1_001);
+    assert!(stability.is_valid());
+}
+
+#[test]
+fn rejects_unbounded_or_ambiguous_assertion_stability() {
+    for (attributes, code) in [
+        (
+            "visible = css(\"#total\")\n            sample_interval_ms = 25",
+            "test.spec.stability_duration_required",
+        ),
+        (
+            "visible = css(\"#total\")\n            stable_for_ms = 9",
+            "test.spec.stability_range",
+        ),
+        (
+            "visible = css(\"#total\")\n            stable_for_ms = 100\n            sample_interval_ms = 101",
+            "test.spec.stability_interval",
+        ),
+        (
+            "visible = css(\"#total\")\n            stable_for_ms = 60000\n            sample_interval_ms = 1",
+            "test.spec.stability_sample_limit",
+        ),
+    ] {
+        let source = format!(
+            r#"
+suite "invalid-stability" {{
+    scenario "checkout" {{
+        surface = "web"
+        expect "settled-total" {{
+            {attributes}
+        }}
+    }}
+}}
+"#,
+        );
+        let error = TestSuite::from_acl(&source).expect_err("invalid stability must fail");
+        assert_eq!(error.code(), code);
+    }
 }
 
 #[test]

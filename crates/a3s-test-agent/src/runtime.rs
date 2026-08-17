@@ -378,6 +378,7 @@ impl AgentLoop {
                     let step = TestStep {
                         id: format!("agent-turn-{turn}"),
                         action: action.clone(),
+                        stability: None,
                     };
                     match await_stage(&cancellation, deadline, session.execute(&step)).await {
                         Stage::Completed(Ok(output)) => {

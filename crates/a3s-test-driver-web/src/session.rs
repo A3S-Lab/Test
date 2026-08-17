@@ -308,6 +308,7 @@ impl AgentBrowserSession {
             &TestStep {
                 id: id.into(),
                 action,
+                stability: None,
             },
         )
         .await

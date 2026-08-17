@@ -8,12 +8,13 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use a3s_test_core::{
-    bind_page_context_observation_refs, validate_action_page_context_refs, Action, ContractOutcome,
-    DriverError, DriverSession, ScenarioContext, StepOutput, Surface, SurfaceContract,
-    SurfaceDriver, TestScenario, TestStep, TestSuite,
+    bind_page_context_observation_refs, validate_action_page_context_refs, Action,
+    AssertionStability, ContractOutcome, DriverError, DriverSession, ScenarioContext, StepOutput,
+    Surface, SurfaceContract, SurfaceDriver, TestScenario, TestStep, TestSuite,
 };
 use futures::{stream, StreamExt};
 use serde::{Deserialize, Serialize};
+use serde_json::{json, Value};
 use tokio_util::sync::CancellationToken;
 
 static NEXT_RUN_ID: AtomicU64 = AtomicU64::new(1);
@@ -380,6 +381,82 @@ impl Runner {
         deadline: Instant,
         cancellation: CancellationToken,
     ) -> (StepExecution, u32) {
+        let Some(stability) = step.stability else {
+            return self
+                .execute_with_retries(session, step, deadline, cancellation)
+                .await;
+        };
+        if !matches!(step.action, Action::Assert { .. }) {
+            return (
+                StepExecution::Completed(Box::new(StepAttempt::failed(
+                    DriverError::new(
+                        "test.run.stability_action_invalid",
+                        "assertion stability is valid only for expect steps",
+                    ),
+                    None,
+                ))),
+                0,
+            );
+        }
+        if !stability.is_valid() {
+            return (
+                StepExecution::Completed(Box::new(StepAttempt::failed(
+                    DriverError::new(
+                        "test.run.stability_invalid",
+                        "assertion stability is outside the admitted duration, interval, or sample bounds",
+                    ),
+                    None,
+                ))),
+                0,
+            );
+        }
+
+        let (initial, attempts) = self
+            .execute_with_retries(session, step, deadline, cancellation.clone())
+            .await;
+        let StepExecution::Completed(initial) = initial else {
+            return (initial, attempts);
+        };
+        match *initial {
+            StepAttempt {
+                verdict: StepVerdict::Passed(output),
+                quality_report: None,
+            } => {
+                self.sample_assertion_stability(
+                    session,
+                    step,
+                    stability,
+                    deadline,
+                    cancellation,
+                    output,
+                    attempts,
+                )
+                .await
+            }
+            StepAttempt {
+                verdict: StepVerdict::Passed(output),
+                quality_report: Some(_),
+            } => (
+                StepExecution::Completed(Box::new(StepAttempt::failed(
+                    DriverError::new(
+                        "test.run.stability_output_invalid",
+                        "assertion stability received an unexpected advisory report",
+                    ),
+                    Some(output),
+                ))),
+                attempts,
+            ),
+            attempt => (StepExecution::Completed(Box::new(attempt)), attempts),
+        }
+    }
+
+    async fn execute_with_retries(
+        &self,
+        session: &mut dyn DriverSession,
+        step: &TestStep,
+        deadline: Instant,
+        cancellation: CancellationToken,
+    ) -> (StepExecution, u32) {
         let mut attempts = 0_u32;
         loop {
             attempts = attempts.saturating_add(1);
@@ -406,6 +483,143 @@ impl Runner {
                 RetryWait::Continue => {}
                 RetryWait::Cancelled => return (StepExecution::Cancelled, attempts),
                 RetryWait::TimedOut => return (StepExecution::TimedOut, attempts),
+            }
+        }
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    async fn sample_assertion_stability(
+        &self,
+        session: &mut dyn DriverSession,
+        step: &TestStep,
+        stability: AssertionStability,
+        deadline: Instant,
+        cancellation: CancellationToken,
+        first_output: StepOutput,
+        mut attempts: u32,
+    ) -> (StepExecution, u32) {
+        let started = Instant::now();
+        let required = Duration::from_millis(stability.stable_for_ms);
+        let interval = Duration::from_millis(stability.sample_interval_ms);
+        let mut samples = 1_u64;
+        let first_assertion = first_output.data;
+
+        loop {
+            let remaining = required.saturating_sub(started.elapsed());
+            let wait = interval.min(remaining);
+            match wait_for_retry(deadline, &cancellation, wait).await {
+                RetryWait::Continue => {}
+                RetryWait::Cancelled => return (StepExecution::Cancelled, attempts),
+                RetryWait::TimedOut => return (StepExecution::TimedOut, attempts),
+            }
+
+            let (execution, sample_attempts) = self
+                .execute_with_retries(session, step, deadline, cancellation.clone())
+                .await;
+            attempts = attempts.saturating_add(sample_attempts);
+            let StepExecution::Completed(attempt) = execution else {
+                return (execution, attempts);
+            };
+            samples = samples.saturating_add(1);
+            let observed_ms = millis(started.elapsed());
+
+            match *attempt {
+                StepAttempt {
+                    verdict: StepVerdict::Passed(output),
+                    quality_report: None,
+                } => {
+                    if started.elapsed() >= required {
+                        return (
+                            StepExecution::Completed(Box::new(StepAttempt::passed(
+                                with_stability_data(
+                                    output,
+                                    &first_assertion,
+                                    stability,
+                                    samples,
+                                    observed_ms,
+                                    "passed",
+                                ),
+                            ))),
+                            attempts,
+                        );
+                    }
+                }
+                StepAttempt {
+                    verdict: StepVerdict::Passed(output),
+                    quality_report: Some(_),
+                } => {
+                    return (
+                        StepExecution::Completed(Box::new(StepAttempt::failed(
+                            DriverError::new(
+                                "test.run.stability_output_invalid",
+                                "assertion stability received an unexpected advisory report",
+                            ),
+                            Some(with_stability_data(
+                                output,
+                                &first_assertion,
+                                stability,
+                                samples,
+                                observed_ms,
+                                "inconclusive",
+                            )),
+                        ))),
+                        attempts,
+                    );
+                }
+                StepAttempt {
+                    verdict: StepVerdict::Failed { error, output },
+                    quality_report: None,
+                } if error.code().starts_with("test.assert.") => {
+                    let code = error.code().to_string();
+                    let message = error.message().to_string();
+                    let output = output.unwrap_or_else(|| {
+                        StepOutput::new("assertion became false during stability sampling")
+                    });
+                    return (
+                        StepExecution::Completed(Box::new(StepAttempt::failed(
+                            DriverError::new(
+                                "test.assert.unstable",
+                                format!(
+                                    "assertion became false on stability sample {samples} after {observed_ms} ms ({code}: {message})"
+                                ),
+                            ),
+                            Some(with_stability_data(
+                                output,
+                                &first_assertion,
+                                stability,
+                                samples,
+                                observed_ms,
+                                "unstable",
+                            )),
+                        ))),
+                        attempts,
+                    );
+                }
+                StepAttempt {
+                    verdict: StepVerdict::Failed { error, output },
+                    quality_report,
+                } => {
+                    let output = output.unwrap_or_else(|| {
+                        StepOutput::new("assertion stability could not be verified")
+                    });
+                    return (
+                        StepExecution::Completed(Box::new(StepAttempt {
+                            verdict: StepVerdict::Failed {
+                                error,
+                                output: Some(with_stability_data(
+                                    output,
+                                    &first_assertion,
+                                    stability,
+                                    samples,
+                                    observed_ms,
+                                    "inconclusive",
+                                )),
+                            },
+                            quality_report,
+                        })),
+                        attempts,
+                    );
+                }
             }
         }
     }
@@ -519,6 +733,35 @@ impl Runner {
             _ = tokio::time::timeout(budget, session.project_quality_report(report)) => {}
         }
     }
+}
+
+fn with_stability_data(
+    mut output: StepOutput,
+    first_assertion: &Value,
+    stability: AssertionStability,
+    samples: u64,
+    observed_ms: u64,
+    outcome: &str,
+) -> StepOutput {
+    let assertion = std::mem::take(&mut output.data);
+    output.summary = format!(
+        "{}; assertion stability {outcome} after {observed_ms} ms across {samples} samples",
+        output.summary
+    );
+    output.data = json!({
+        "assertion": {
+            "first": first_assertion,
+            "last": assertion,
+        },
+        "stability": {
+            "outcome": outcome,
+            "required_ms": stability.stable_for_ms,
+            "sample_interval_ms": stability.sample_interval_ms,
+            "samples": samples,
+            "observed_ms": observed_ms,
+        }
+    });
+    output
 }
 
 enum RetryWait {

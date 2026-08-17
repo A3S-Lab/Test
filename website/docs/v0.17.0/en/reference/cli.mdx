@@ -192,6 +192,52 @@ Remote workers use separate `a3s.test.remote-worker/3` execution and `a3s.test.r
 
 `check` performs admission without starting a surface. `run` executes after admission and separates product failures, specification errors, infrastructure errors, and cleanup errors in its machine result. `distributed plan` matches worker capabilities before `distributed run` dispatches authenticated shards.
 
+### Stable ACL expectations
+
+`stable_for_ms` adds a bounded sampling policy to an ACL `expect`. It works with text, exact URL, and visible-target expectations on every surface whose driver supports that expectation. It does not add a new action type or change a driver contract.
+
+```acl
+expect "settled-total" {
+    visible = testid("order-total")
+    stable_for_ms = 300
+    sample_interval_ms = 25
+}
+```
+
+| Field                | Required            | Admitted values                             | Default                           |
+| -------------------- | ------------------- | ------------------------------------------- | --------------------------------- |
+| `stable_for_ms`      | To enable stability | Integer from 10 through 60,000 ms           | Stability disabled                |
+| `sample_interval_ms` | No                  | Positive integer no greater than the window | 50 ms, or the window when shorter |
+
+The maximum planned work is `ceil(stable_for_ms / sample_interval_ms) + 1` samples, including the initial observation. Admission rejects a plan above 1,001 samples. The runner starts the clock only after the initial sample passes and always samples once at the end of the requested window.
+
+Stable-step JSON keeps the normal step fields and adds the following values under `output.data`.
+
+| JSON path                      | Meaning                                                                                                                   |
+| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------- |
+| `assertion.first`              | Driver data from the initial successful sample                                                                            |
+| `assertion.last`               | Driver data from the final or failing sample; it may be `null` when the driver returned only an error                     |
+| `stability.outcome`            | `passed`, `unstable`, or `inconclusive`                                                                                   |
+| `stability.required_ms`        | Requested stability window                                                                                                |
+| `stability.sample_interval_ms` | Admitted sampling interval                                                                                                |
+| `stability.samples`            | Completed observation points, including the first sample                                                                  |
+| `stability.observed_ms`        | Actual elapsed time after the first successful sample; it may exceed the request because of scheduling and driver latency |
+| step `attempts`                | All driver invocations; it may exceed `samples` when infrastructure retries are enabled                                   |
+
+The first false sample retains its original assertion code. A later false sample uses `test.assert.unstable`. Timeout and cancellation remain terminal `test.run.*` results and may have no stability payload because sampling did not complete.
+
+| Error code                                   | Meaning                                                                   |
+| -------------------------------------------- | ------------------------------------------------------------------------- |
+| `test.spec.type` or `test.spec.number_range` | A duration or interval is not a positive integer                          |
+| `test.spec.stability_duration_required`      | An interval was supplied without a window                                 |
+| `test.spec.stability_range`                  | The window is outside 10 through 60,000 ms                                |
+| `test.spec.stability_interval`               | The interval exceeds the window                                           |
+| `test.spec.stability_sample_limit`           | The plan exceeds 1,001 samples                                            |
+| `test.assert.unstable`                       | The initial sample passed and a later sample was false                    |
+| `test.run.stability_action_invalid`          | A programmatic suite attached stability to a non-assert action            |
+| `test.run.stability_invalid`                 | A programmatic suite bypassed admitted bounds                             |
+| `test.run.stability_output_invalid`          | A programmatic driver returned an advisory report for a sampled assertion |
+
 ## JSON and error contracts
 
 Automation should pass `--json` and read stable error codes, state, and structured fields instead of parsing human help text.

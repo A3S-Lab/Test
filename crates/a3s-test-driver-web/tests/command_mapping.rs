@@ -336,6 +336,7 @@ fn step(id: &str, action: Action) -> TestStep {
     TestStep {
         id: id.to_string(),
         action,
+        stability: None,
     }
 }
 

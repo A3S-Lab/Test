@@ -48,6 +48,7 @@ impl SurfaceDriver for McpWebDriver {
             action: Action::Navigate {
                 url: self.initial_url.clone(),
             },
+            stability: None,
         };
         if let Err(error) = session.execute(&step).await {
             return match session.close().await {

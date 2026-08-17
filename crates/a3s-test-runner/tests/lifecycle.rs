@@ -3,8 +3,9 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use a3s_test_core::{
-    Action, DriverError, DriverSession, PageContextObservation, PageContextSnapshot,
-    ScenarioContext, StepOutput, Surface, SurfaceDriver, TestScenario, TestStep, TestSuite,
+    Action, AssertionStability, DriverError, DriverSession, Expectation, PageContextObservation,
+    PageContextSnapshot, ScenarioContext, StepOutput, Surface, SurfaceDriver, TestScenario,
+    TestStep, TestSuite,
 };
 use a3s_test_runner::{RetryPolicy, RunStatus, Runner, RunnerOptions};
 use async_trait::async_trait;
@@ -137,6 +138,7 @@ fn suite(timeout_ms: u64) -> TestSuite {
             steps: vec![TestStep {
                 id: "step".to_string(),
                 action: Action::Snapshot { interactive: true },
+                stability: None,
             }],
         }],
     }
@@ -227,6 +229,91 @@ async fn rejects_ui_evidence_refs_before_surface_dispatch() {
 }
 
 #[tokio::test]
+async fn rejects_programmatic_stability_on_non_assertion_steps_before_dispatch() {
+    let closes = Arc::new(AtomicUsize::new(0));
+    let mut invalid = suite(1_000);
+    invalid.scenarios[0].steps[0].stability = Some(AssertionStability {
+        stable_for_ms: 100,
+        sample_interval_ms: 10,
+    });
+
+    let result = runner(Behavior::UnexpectedDispatch, Arc::clone(&closes))
+        .run(&invalid, CancellationToken::new())
+        .await;
+
+    assert_eq!(result.status, RunStatus::Failed);
+    assert_eq!(result.scenarios[0].steps[0].attempts, 0);
+    assert_eq!(
+        result.scenarios[0].steps[0]
+            .error
+            .as_ref()
+            .map(|error| error.code.as_str()),
+        Some("test.run.stability_action_invalid")
+    );
+    assert_eq!(closes.load(Ordering::SeqCst), 1);
+}
+
+#[tokio::test]
+async fn rejects_programmatic_stability_outside_admitted_bounds_before_dispatch() {
+    let closes = Arc::new(AtomicUsize::new(0));
+    let mut invalid = stable_assertion_suite(1_000, 100, 10);
+    invalid.scenarios[0].steps[0].stability = Some(AssertionStability {
+        stable_for_ms: 1,
+        sample_interval_ms: 1,
+    });
+
+    let result = runner(Behavior::UnexpectedDispatch, Arc::clone(&closes))
+        .run(&invalid, CancellationToken::new())
+        .await;
+
+    assert_eq!(result.status, RunStatus::Failed);
+    assert_eq!(result.scenarios[0].steps[0].attempts, 0);
+    assert_eq!(
+        result.scenarios[0].steps[0]
+            .error
+            .as_ref()
+            .map(|error| error.code.as_str()),
+        Some("test.run.stability_invalid")
+    );
+    assert_eq!(closes.load(Ordering::SeqCst), 1);
+}
+
+#[tokio::test]
+async fn scenario_deadline_bounds_assertion_stability_sampling() {
+    let closes = Arc::new(AtomicUsize::new(0));
+
+    let result = runner(Behavior::Pass, Arc::clone(&closes))
+        .run(
+            &stable_assertion_suite(10, 100, 20),
+            CancellationToken::new(),
+        )
+        .await;
+
+    assert_eq!(result.status, RunStatus::TimedOut);
+    assert_eq!(result.scenarios[0].steps[0].attempts, 1);
+    assert_eq!(closes.load(Ordering::SeqCst), 1);
+}
+
+#[tokio::test]
+async fn cancellation_interrupts_assertion_stability_sampling() {
+    let closes = Arc::new(AtomicUsize::new(0));
+    let cancellation = CancellationToken::new();
+    let trigger = cancellation.clone();
+    tokio::spawn(async move {
+        tokio::time::sleep(Duration::from_millis(10)).await;
+        trigger.cancel();
+    });
+
+    let result = runner(Behavior::Pass, Arc::clone(&closes))
+        .run(&stable_assertion_suite(1_000, 100, 50), cancellation)
+        .await;
+
+    assert_eq!(result.status, RunStatus::Cancelled);
+    assert_eq!(result.scenarios[0].steps[0].attempts, 1);
+    assert_eq!(closes.load(Ordering::SeqCst), 1);
+}
+
+#[tokio::test]
 async fn closes_surface_after_step_failure() {
     let closes = Arc::new(AtomicUsize::new(0));
     let result = runner(Behavior::Fail, Arc::clone(&closes))
@@ -235,6 +322,25 @@ async fn closes_surface_after_step_failure() {
 
     assert_eq!(result.status, RunStatus::Failed);
     assert_eq!(closes.load(Ordering::SeqCst), 1);
+}
+
+fn stable_assertion_suite(
+    timeout_ms: u64,
+    stable_for_ms: u64,
+    sample_interval_ms: u64,
+) -> TestSuite {
+    let mut suite = suite(timeout_ms);
+    suite.scenarios[0].steps[0] = TestStep {
+        id: "stable-text".to_string(),
+        action: Action::Assert {
+            expectation: Expectation::TextVisible("Ready".to_string()),
+        },
+        stability: Some(AssertionStability {
+            stable_for_ms,
+            sample_interval_ms,
+        }),
+    };
+    suite
 }
 
 #[tokio::test]

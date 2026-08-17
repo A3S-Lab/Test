@@ -141,12 +141,15 @@ The session remains inspectable after the browser closes:
 | Typed actions | Unknown variants and fields fail before reaching a driver. |
 | Scoped policy | Navigation, network, artifacts, and dispatch stay inside admitted boundaries. |
 | Inspectable evidence | Events, screenshots, reports, and provenance remain machine-readable. |
+| Sampled stability | One passing render cannot hide a later flicker or optimistic rollback. |
 | Owned cleanup | A run closes only the process tree, browser namespace, sockets, and files it created. |
 | Separate authority | Browser facts, model advice, human authorization, and workspace mutation cannot impersonate one another. |
 
-Assertions, timeouts, and ambiguously dispatched actions are never replayed
-automatically. JSON fields, error codes, and process exit codes remain stable
-for local runs and CI.
+Ordinary assertions, timeouts, and ambiguously dispatched actions are never
+replayed automatically. An ACL expectation can explicitly request bounded
+stability sampling; the runner then repeats only that read-only assertion.
+JSON fields, error codes, and process exit codes remain stable for local runs
+and CI.
 
 ## Explore first, preserve second
 
@@ -178,6 +181,8 @@ suite "product-smoke" {
 
         expect "heading" {
             text = "Example Domain"
+            stable_for_ms = 300
+            sample_interval_ms = 50
         }
 
         screenshot "evidence" {
@@ -191,6 +196,19 @@ suite "product-smoke" {
 a3s-test check tests/e2e/smoke.acl --json
 a3s-test run tests/e2e/smoke.acl --json
 ```
+
+`stable_for_ms` starts a bounded observation window after the first successful
+sample. The runner samples the same expectation every `sample_interval_ms` and
+always samples once at the window boundary. A later false sample fails with
+`test.assert.unstable`; a passing result records the first and last assertion,
+sample count, requested interval, and observed duration. The window is 10 to
+60,000 ms, the interval defaults to 50 ms (or the shorter window), and one
+expectation may plan at most 1,001 samples.
+
+Sampling is a time-resolution tradeoff. It catches state changes observed at a
+sample point, but it cannot prove what happened between two points. Use a
+smaller interval for short flicker, allow the complete window in the scenario
+timeout, and keep semantic targets stable across renders.
 
 [Compare the workflows](https://a3s-lab.github.io/Test/guide/workflows.html)
 

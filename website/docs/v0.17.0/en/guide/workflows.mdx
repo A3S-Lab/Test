@@ -81,6 +81,57 @@ a3s-test run tests/e2e/smoke.acl --json
 
 Unknown blocks or attributes, duplicate identifiers, ambiguous conditions, invalid locators, and unsafe artifact paths fail before launch. Assertion failures, timeouts, and ambiguously dispatched actions are never replayed automatically.
 
+## Prove that transient UI has settled
+
+A one-shot expectation answers “is this true at this observation?” That is sufficient for static content, but it can accept one frame of a loading flash, hydration replacement, optimistic update, or animation. When the product requirement is “this remains true while the interface settles,” declare that time requirement on the expectation:
+
+```acl
+wait "checkout-ready" {
+    visible = css("[data-checkout-ready]")
+}
+
+expect "settled-total" {
+    visible = testid("order-total")
+    stable_for_ms = 300
+    sample_interval_ms = 25
+}
+```
+
+These three synchronization tools answer different questions.
+
+| Tool              | Question                                              | Completion                                                               |
+| ----------------- | ----------------------------------------------------- | ------------------------------------------------------------------------ |
+| `wait`            | When does a condition first become true?              | The first match or the scenario deadline                                 |
+| Ordinary `expect` | Is the condition true now?                            | One successful or failed observation                                     |
+| Stable `expect`   | Does the condition remain true over a bounded window? | A final boundary sample, a later false sample, cancellation, or deadline |
+
+After the initial expectation passes, the runner starts the 300 ms window, repeats the same read-only assertion every 25 ms, and always takes a final sample at the boundary. If sample 2 or later is false, the step fails with `test.assert.unstable`. A passing step retains machine-readable evidence:
+
+```json
+{
+  "attempts": 13,
+  "output": {
+    "data": {
+      "assertion": {
+        "first": { "visible": true },
+        "last": { "visible": true }
+      },
+      "stability": {
+        "outcome": "passed",
+        "required_ms": 300,
+        "sample_interval_ms": 25,
+        "samples": 13,
+        "observed_ms": 301
+      }
+    }
+  }
+}
+```
+
+The first false sample keeps its original `test.assert.*` code because the stability window never started. A later false sample becomes `test.assert.unstable`. A driver or infrastructure error retains its own code and makes the window inconclusive. Scenario cancellation and deadline can interrupt both interval waits and driver calls; owned cleanup still runs.
+
+Sampling is finite evidence. It detects a change only when that change overlaps an observation point, so it cannot prove absolute continuity between samples. A shorter interval raises temporal resolution and browser work. Reserve it for product-relevant flicker, and budget `timeout_ms` for all preceding steps, the full stability window, command latency, and any admitted infrastructure retry.
+
 ## Local verification still decides the result
 
 A deployment may inject a schema-constrained HTTP LLM provider through `a3s-test agent run`, but the provider can only propose one typed action or request completion. It cannot decide the verdict, fabricate observation, or authorize repair. Success still requires at least one local `expect` and clean closure of the exact owned surface.

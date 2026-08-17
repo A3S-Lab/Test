@@ -34,6 +34,39 @@ pub struct TestScenario {
 pub struct TestStep {
     pub id: String,
     pub action: Action,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub stability: Option<AssertionStability>,
+}
+
+pub const MIN_ASSERTION_STABILITY_MS: u64 = 10;
+pub const MAX_ASSERTION_STABILITY_MS: u64 = 60_000;
+pub const DEFAULT_ASSERTION_SAMPLE_INTERVAL_MS: u64 = 50;
+pub const MAX_ASSERTION_STABILITY_SAMPLES: u64 = 1_001;
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct AssertionStability {
+    pub stable_for_ms: u64,
+    pub sample_interval_ms: u64,
+}
+
+impl AssertionStability {
+    #[must_use]
+    pub fn planned_samples(self) -> u64 {
+        if self.sample_interval_ms == 0 {
+            return u64::MAX;
+        }
+        self.stable_for_ms
+            .div_ceil(self.sample_interval_ms)
+            .saturating_add(1)
+    }
+
+    #[must_use]
+    pub fn is_valid(self) -> bool {
+        (MIN_ASSERTION_STABILITY_MS..=MAX_ASSERTION_STABILITY_MS).contains(&self.stable_for_ms)
+            && (1..=self.stable_for_ms).contains(&self.sample_interval_ms)
+            && self.planned_samples() <= MAX_ASSERTION_STABILITY_SAMPLES
+    }
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]

@@ -5,6 +5,7 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::time::Duration;
 
+use support::assertion_stability::{assert_passed_stability, run_transient_stability_e2e};
 use support::browser_process::{
     assert_no_new_private_runtime_directories, assert_process_success, bounded_output,
     private_runtime_directories, StandaloneBrowserSessionCleanup,
@@ -67,6 +68,12 @@ fn local_web_fixture_has_deterministic_routes_and_owned_lifecycle() {
         .expect("UTF-8 advanced fixture")
         .contains("A3S Test advanced interactions"));
 
+    let transient = get(&origin, "/transient.html").expect("transient assertion fixture");
+    assert_eq!(transient.status, 200);
+    assert!(String::from_utf8(transient.body)
+        .expect("UTF-8 transient assertion fixture")
+        .contains("data-testid=\"transient-state\""));
+
     let containment = get(&origin, "/origin-policy.html").expect("containment fixture");
     assert_eq!(containment.status, 200);
     let containment = String::from_utf8(containment.body).expect("UTF-8 containment fixture");
@@ -90,7 +97,7 @@ fn local_web_fixture_has_deterministic_routes_and_owned_lifecycle() {
     let missing = get(&origin, "/missing").expect("missing route");
     assert_eq!(missing.status, 404);
     assert!(fixture.blocked_requests().is_empty());
-    assert_eq!(fixture.primary_requests().len(), 7);
+    assert_eq!(fixture.primary_requests().len(), 8);
 
     drop(fixture);
     assert!(
@@ -365,6 +372,7 @@ fn real_agent_browser_runs_the_hermetic_web_suite() {
     assert_eq!(report["status"], "passed");
     assert_eq!(report["scenarios"][0]["status"], "passed");
     assert!(report["scenarios"][0]["cleanup_error"].is_null());
+    assert_passed_stability(&report, 0, "submitted", 100, 25);
 
     let evidence_path = report["scenarios"][0]["steps"]
         .as_array()
@@ -376,6 +384,7 @@ fn real_agent_browser_runs_the_hermetic_web_suite() {
         .map(PathBuf::from)
         .expect("screenshot evidence path");
     assert_nonempty_artifact(temp.path(), &evidence_path);
+    run_transient_stability_e2e(&binary(), &browser, &fixture.origin(), temp.path());
     run_agent_domain_containment(&browser, &fixture, temp.path());
 
     let primary_paths = fixture
@@ -948,6 +957,8 @@ fn suite(origin: &str) -> String {
 
         expect "submitted" {{
             text = "submitted: Grace Lovelace"
+            stable_for_ms = 100
+            sample_interval_ms = 25
         }}
 
         screenshot "form-evidence" {{

@@ -1,4 +1,6 @@
 #[allow(dead_code)]
+pub mod assertion_stability;
+#[allow(dead_code)]
 pub mod browser_process;
 #[allow(dead_code)]
 pub mod browser_zoom;

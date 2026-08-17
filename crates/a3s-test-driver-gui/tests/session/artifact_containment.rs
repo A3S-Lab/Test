@@ -55,6 +55,7 @@ async fn directory_symlink_escape_is_rejected_before_any_capture_or_write() {
             action: Action::Screenshot {
                 path: "escape/nested/leak.png".to_string(),
             },
+            stability: None,
         })
         .await
         .expect_err("linked artifact directory must be rejected");
@@ -92,6 +93,7 @@ async fn existing_linked_screenshot_is_rejected_without_touching_its_target() {
             action: Action::Screenshot {
                 path: "linked.png".to_string(),
             },
+            stability: None,
         })
         .await
         .expect_err("linked screenshot must be rejected");
@@ -146,6 +148,7 @@ async fn linked_grounding_file_is_rejected_even_when_its_digest_matches() {
                     y: 10,
                 },
             },
+            stability: None,
         })
         .await
         .expect_err("linked grounding image must be stale");

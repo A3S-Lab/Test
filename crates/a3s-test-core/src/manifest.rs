@@ -4,9 +4,10 @@ use a3s_acl::{Block, Value};
 use url::Url;
 
 use crate::{
-    Action, CaptureOperation, DialogOperation, Expectation, FrameTarget, LoadState, ModifierKey,
-    NetworkRoute, SpecError, Surface, TabOperation, Target, TestScenario, TestStep, TestSuite,
-    VideoOperation, WaitCondition,
+    Action, AssertionStability, CaptureOperation, DialogOperation, Expectation, FrameTarget,
+    LoadState, ModifierKey, NetworkRoute, SpecError, Surface, TabOperation, Target, TestScenario,
+    TestStep, TestSuite, VideoOperation, WaitCondition, DEFAULT_ASSERTION_SAMPLE_INTERVAL_MS,
+    MAX_ASSERTION_STABILITY_MS, MAX_ASSERTION_STABILITY_SAMPLES, MIN_ASSERTION_STABILITY_MS,
 };
 
 const DEFAULT_SCENARIO_TIMEOUT_MS: u64 = 60_000;
@@ -241,6 +242,7 @@ fn parse_step(block: &Block, scenario_path: &str) -> Result<TestStep, SpecError>
         ));
     }
 
+    let mut stability = None;
     let action = match block.name.as_str() {
         "navigate" => {
             ensure_attributes(block, &["url"], &path)?;
@@ -388,7 +390,18 @@ fn parse_step(block: &Block, scenario_path: &str) -> Result<TestStep, SpecError>
             }
         }
         "expect" => {
-            ensure_attributes(block, &["text", "url", "visible"], &path)?;
+            ensure_attributes(
+                block,
+                &[
+                    "text",
+                    "url",
+                    "visible",
+                    "stable_for_ms",
+                    "sample_interval_ms",
+                ],
+                &path,
+            )?;
+            stability = parse_assertion_stability(block, &path)?;
             Action::Assert {
                 expectation: parse_expectation(block, &path)?,
             }
@@ -500,7 +513,11 @@ fn parse_step(block: &Block, scenario_path: &str) -> Result<TestStep, SpecError>
         }
     };
 
-    Ok(TestStep { id, action })
+    Ok(TestStep {
+        id,
+        action,
+        stability,
+    })
 }
 
 fn parse_tab_operation(block: &Block, path: &str) -> Result<TabOperation, SpecError> {
@@ -724,6 +741,59 @@ fn parse_expectation(block: &Block, path: &str) -> Result<Expectation, SpecError
         value,
         &format!("{path}.visible"),
     )?))
+}
+
+fn parse_assertion_stability(
+    block: &Block,
+    path: &str,
+) -> Result<Option<AssertionStability>, SpecError> {
+    let Some(stable_for_value) = block.attributes.get("stable_for_ms") else {
+        if block.attributes.contains_key("sample_interval_ms") {
+            return Err(SpecError::new(
+                "test.spec.stability_duration_required",
+                format!("{path}.sample_interval_ms"),
+                "sample_interval_ms requires stable_for_ms",
+            ));
+        }
+        return Ok(None);
+    };
+    let stable_for_ms = positive_integer(stable_for_value, &format!("{path}.stable_for_ms"))?;
+    if !(MIN_ASSERTION_STABILITY_MS..=MAX_ASSERTION_STABILITY_MS).contains(&stable_for_ms) {
+        return Err(SpecError::new(
+            "test.spec.stability_range",
+            format!("{path}.stable_for_ms"),
+            format!(
+                "stable_for_ms must be between {MIN_ASSERTION_STABILITY_MS} and {MAX_ASSERTION_STABILITY_MS}"
+            ),
+        ));
+    }
+    let sample_interval_ms = optional_integer(
+        block,
+        "sample_interval_ms",
+        DEFAULT_ASSERTION_SAMPLE_INTERVAL_MS.min(stable_for_ms),
+        path,
+    )?;
+    if sample_interval_ms > stable_for_ms {
+        return Err(SpecError::new(
+            "test.spec.stability_interval",
+            format!("{path}.sample_interval_ms"),
+            "sample_interval_ms must not exceed stable_for_ms",
+        ));
+    }
+    let stability = AssertionStability {
+        stable_for_ms,
+        sample_interval_ms,
+    };
+    if stability.planned_samples() > MAX_ASSERTION_STABILITY_SAMPLES {
+        return Err(SpecError::new(
+            "test.spec.stability_sample_limit",
+            path,
+            format!(
+                "assertion stability cannot require more than {MAX_ASSERTION_STABILITY_SAMPLES} samples"
+            ),
+        ));
+    }
+    Ok(Some(stability))
 }
 
 fn condition_count_error(path: &str, count: usize) -> SpecError {

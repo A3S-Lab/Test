@@ -93,6 +93,30 @@ Bind waits to observable conditions.
 
 Do not add infinite polling or an arbitrary long sleep. If the page never becomes ready, repair the host readiness signal or the success condition.
 
+## A stable expectation fails or times out
+
+Start with the step error and do not tune the interval before assigning ownership.
+
+| Result                   | What it proves                                             | Inspect next                                                                     |
+| ------------------------ | ---------------------------------------------------------- | -------------------------------------------------------------------------------- |
+| Original `test.assert.*` | The first sample was false, so no stability window started | Target, product readiness, and the expectation itself                            |
+| `test.assert.unstable`   | The first sample passed and a later sample was false       | First/last assertion data, sample count, visible flicker, hydration, or rollback |
+| `test.driver.*`          | The driver could not complete a sample                     | Adapter log, command deadline, target support, and browser lifecycle             |
+| `test.run.timeout`       | The scenario deadline ended during the window or a sample  | Total scenario budget, preceding steps, driver latency, and retries              |
+| `test.run.cancelled`     | Cancellation interrupted an interval or sample             | The cancellation source and cleanup result                                       |
+
+For `test.assert.unstable`, read `output.data.stability` and compare `observed_ms` with `required_ms`. `samples` counts completed observation points. Step `attempts` counts every driver call and can be larger when infrastructure retries are enabled. `assertion.last` may be `null` when the failing driver command returned an error without data.
+
+Calibrate in this order.
+
+1. Put a typed `wait` before the assertion if the test first needs to reach a ready state.
+2. Set `stable_for_ms` to the product-relevant settling period, not the longest time CI can tolerate.
+3. Set `sample_interval_ms` no larger than the shortest transient the test needs a reasonable chance to observe.
+4. Budget the scenario deadline for preceding work, the full window, command latency, and retry backoff.
+5. Prefer a semantic target that can be resolved on every render; do not carry a stale observation ref through DOM replacement.
+
+Do not increase the interval merely to make a flicker disappear from samples. That reduces time resolution and can hide the defect. Do not add a sleep after the expectation; it creates no assertion evidence. Sampling remains discrete and cannot prove the state between observation points.
+
 ## A ref is stale or the target is rejected
 
 `@eN` and `@cN` are valid only in the latest observation that created them. Navigation, DOM changes, scrolling, viewport changes, focus, and browser-context switches can advance the revision.

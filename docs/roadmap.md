@@ -7,6 +7,9 @@
 - [x] Typed actions, targets, waits, and assertions
 - [x] Surface driver and session contracts
 - [x] Cancellation-safe sequential runner
+- [x] Bounded sampled assertion stability with static duration/sample limits,
+      final boundary sampling, stable transient-failure reporting, and
+      cancellation-safe cleanup
 - [x] Structured JSON report and stable exit codes
 - [x] A3S Browser and standalone agent-browser command layouts
 - [x] Private runtime, unique sessions, graceful close, PID-validated emergency

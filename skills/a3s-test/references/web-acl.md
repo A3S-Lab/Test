@@ -5,6 +5,7 @@
 - [Suite and scenario](#suite-and-scenario)
 - [Targets](#targets)
 - [Core actions](#core-actions)
+- [Assertion stability](#assertion-stability)
 - [Tabs, frames, and dialogs](#tabs-frames-and-dialogs)
 - [Files and network](#files-and-network)
 - [Evidence capture](#evidence-capture)
@@ -50,7 +51,8 @@ target = ref("@e4")
 
 Prefer semantic targets. `ref()` values come from an accessibility snapshot and
 become stale after navigation or dynamic page changes. Non-main frame
-switching, upload, download, and visibility checks require `ref()` or `css()`.
+switching, upload, download, and visible waits require `ref()` or `css()`.
+Visible expectations also accept semantic targets.
 
 ## Core actions
 
@@ -170,6 +172,35 @@ protocol. Click, hover, fill, and check accept all semantic targets. Select
 requires one or more values. Wheel requires a non-zero delta, accepts unique
 `alt`, `control`, `meta`, and `shift` modifiers, and is native when no target
 is supplied. Viewport dimensions and optional scale must be positive.
+
+## Assertion stability
+
+An ordinary expectation proves one sample. A stability-enabled expectation
+requires the same read-only assertion to remain true across a bounded window:
+
+```acl
+expect "settled-total" {
+    visible = testid("order-total")
+    stable_for_ms = 300
+    sample_interval_ms = 25
+}
+```
+
+`stable_for_ms` is 10 through 60,000 ms. `sample_interval_ms` defaults to 50
+ms, or to the window when it is shorter, and cannot exceed the window. A plan
+may contain at most 1,001 samples, calculated as
+`ceil(window / interval) + 1` including the first sample.
+
+The first sample must pass. The runner then samples at the interval and once at
+the window boundary. A later false sample returns `test.assert.unstable` with
+first/last assertion data and `required_ms`, `sample_interval_ms`, `samples`,
+and `observed_ms`. Driver or infrastructure failures retain their own code and
+make the stability outcome inconclusive. Scenario deadline and cancellation
+remain authoritative throughout the window.
+
+Sampling cannot prove the state between observation points. Choose a shorter
+interval only when the product requires finer temporal resolution, and include
+the full window plus command overhead in `timeout_ms`.
 
 ## Tabs, frames, and dialogs
 

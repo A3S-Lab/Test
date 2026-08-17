@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>A3S Test transient assertion fixture</title>
+    <style>
+      body {
+        font: 16px/1.5 system-ui, sans-serif;
+        margin: 24px;
+      }
+
+      output {
+        display: block;
+        padding: 12px;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>A3S Test transient assertion fixture</h1>
+      <output data-testid="transient-state">Transient state is visible</output>
+    </main>
+
+    <script>
+      const transient = document.querySelector('[data-testid="transient-state"]');
+      const readRect = transient.getBoundingClientRect.bind(transient);
+      let firstVisibilitySample = true;
+
+      transient.getBoundingClientRect = () => {
+        const rect = readRect();
+        if (firstVisibilitySample) {
+          firstVisibilitySample = false;
+          queueMicrotask(() => {
+            transient.hidden = true;
+          });
+        }
+        return rect;
+      };
+    </script>
+  </body>
+</html>

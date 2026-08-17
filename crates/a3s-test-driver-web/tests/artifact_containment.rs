@@ -116,6 +116,7 @@ fn screenshot(path: &str) -> TestStep {
         action: Action::Screenshot {
             path: path.to_string(),
         },
+        stability: None,
     }
 }
 
@@ -338,6 +339,7 @@ async fn linked_video_output_is_rejected_when_recording_stops() {
                     url: None,
                 },
             },
+            stability: None,
         })
         .await
         .expect("video start");
@@ -363,6 +365,7 @@ async fn linked_video_output_is_rejected_when_recording_stops() {
             action: Action::Video {
                 operation: VideoOperation::Stop,
             },
+            stability: None,
         })
         .await
         .expect_err("linked video output must be rejected");

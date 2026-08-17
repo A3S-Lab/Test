@@ -232,6 +232,7 @@ async fn execute_with_executor(
         action: Action::Navigate {
             url: config.initial_url.as_str().to_string(),
         },
+        stability: None,
     };
     let initial_error = tokio::select! {
         biased;

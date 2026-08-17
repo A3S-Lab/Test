@@ -144,6 +144,71 @@ command began. `networkidle` uses the browser runtime's bounded idle detector.
 - `url = "..."`
 - `visible = <target>`
 
+### Assertion stability
+
+An ordinary `expect` proves one observation. Add a stability window when the
+product must remain correct through hydration, animation, optimistic updates,
+or another bounded settling period:
+
+```acl
+expect "settled-total" {
+    visible = testid("order-total")
+    stable_for_ms = 300
+    sample_interval_ms = 25
+}
+```
+
+`stable_for_ms` and `sample_interval_ms` are step policy, not new action
+variants. Core stores the policy, and the runner executes the same read-only
+`Action::Assert` through the selected surface driver. The driver contract does
+not change.
+
+| Field | Admission rule | Default |
+| --- | --- | --- |
+| `stable_for_ms` | Required to enable sampling; 10 through 60,000 ms | Sampling disabled |
+| `sample_interval_ms` | Positive, no greater than the stability window | 50 ms, or the shorter window |
+
+The planned sample count is
+`ceil(stable_for_ms / sample_interval_ms) + 1`, including the initial sample.
+Admission caps it at 1,001. The runner follows this sequence:
+
+1. Execute the expectation once. An initial false result retains its original
+   `test.assert.*` error because no stability window began.
+2. Start the window after the first successful sample.
+3. Sample at the requested interval and always once at the window boundary.
+4. Return `test.assert.unstable` if a later sample is false.
+5. Preserve the original error when a driver or infrastructure failure makes
+   the window inconclusive.
+
+The scenario deadline includes the complete stability window, driver command
+time, retry backoff, and preceding steps. Cancellation can interrupt an
+interval wait or a sample; exact owned-surface cleanup still runs.
+
+A completed stable assertion writes `output.data.assertion.first`,
+`output.data.assertion.last`, and these metrics:
+
+```json
+{
+  "stability": {
+    "outcome": "passed",
+    "required_ms": 300,
+    "sample_interval_ms": 25,
+    "samples": 13,
+    "observed_ms": 301
+  }
+}
+```
+
+`samples` counts completed observation points. `attempts` counts driver calls
+and can be larger when an admitted infrastructure retry occurs. Sampling
+detects changes visible at its observation points; it cannot prove that the
+state never changed between two samples. Reduce the interval when shorter
+transients matter, accepting the additional driver work.
+
+Stability attributes are legal only on `expect`. `sample_interval_ms` without
+`stable_for_ms`, an out-of-range window, an interval longer than the window,
+or a plan over 1,001 samples fails static admission before a surface opens.
+
 ## Browser context
 
 Tabs use stable browser tab IDs or an optional user label:
