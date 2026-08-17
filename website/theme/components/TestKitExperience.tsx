@@ -36,8 +36,11 @@ type ContextView = {
   source: string;
 };
 
-function locatorText(locator: LocatorCandidate | undefined) {
-  if (!locator) return 'n/a';
+function locatorText(
+  locator: LocatorCandidate | undefined,
+  notAvailable: string,
+) {
+  if (!locator) return notAvailable;
   if (locator.type === 'role') {
     return `role=${locator.role} · name=${JSON.stringify(locator.name)}`;
   }
@@ -47,9 +50,9 @@ function locatorText(locator: LocatorCandidate | undefined) {
   return `${locator.type}=${JSON.stringify(locator.value)}`;
 }
 
-function geometryText(node: ContextNode) {
+function geometryText(node: ContextNode, notAvailable: string) {
   const bounds = node.geometry?.viewport;
-  if (!bounds) return 'n/a';
+  if (!bounds) return notAvailable;
   return [
     `x ${Math.round(bounds.x)}`,
     `y ${Math.round(bounds.y)}`,
@@ -103,14 +106,14 @@ function LiveContextPanel({
       const source = component?.source;
       const sourceLabel = source
         ? `${source.file}${source.line ? `:${source.line}` : ''}`
-        : (component?.name ?? 'n/a');
+        : (component?.name ?? copy.notAvailable);
       setContext({
         nodeId: node.id,
         revision: snapshot.revision,
         role: node.role ?? node.tag,
-        name: node.name ?? node.text ?? 'n/a',
-        geometry: geometryText(node),
-        locator: locatorText(node.locators[0]),
+        name: node.name ?? node.text ?? copy.notAvailable,
+        geometry: geometryText(node, copy.notAvailable),
+        locator: locatorText(node.locators[0], copy.notAvailable),
         source: sourceLabel,
       });
     };
@@ -206,7 +209,7 @@ function CheckoutSurface({
         orderStatus: confirmed ? 'submitted' : 'review',
       })}
       id="checkout-experience"
-      name="Checkout experience"
+      name={copy.boundaryName}
       source={{
         file: 'website/theme/components/TestKitExperience.tsx',
         line: 191,
@@ -277,7 +280,7 @@ function CheckoutSurface({
               </div>
               <div className="test-order-total">
                 <dt>{copy.payable}</dt>
-                <dd>{copy.subtotal}</dd>
+                <dd>{copy.totalDue}</dd>
               </div>
             </dl>
             <fieldset>
@@ -288,7 +291,7 @@ function CheckoutSurface({
               </label>
             </fieldset>
             <div className="test-selected-action">
-              <span aria-hidden="true">target</span>
+              <span aria-hidden="true">{copy.targetMarker}</span>
               <button
                 aria-pressed={confirmed}
                 data-testid="a3s-experience-submit"
@@ -419,7 +422,7 @@ export function TestKitExperience({
                   <ShieldCheck aria-hidden="true" size={17} weight="bold" />
                   <h2>{copy.reviewTitle}</h2>
                 </div>
-                <span>{reviewStarted ? 'LIVE' : copy.sample}</span>
+                <span>{reviewStarted ? copy.live : copy.sample}</span>
               </header>
               <p>{copy.reviewBody}</p>
               <button
@@ -447,18 +450,26 @@ export function TestKitExperience({
               </header>
               <dl>
                 <div>
-                  <dt>ID</dt>
-                  <dd>{repairs.at(-1)?.id.slice(0, 16) ?? 'n/a'}</dd>
+                  <dt>{copy.receiptId}</dt>
+                  <dd>
+                    {repairs.at(-1)?.id.slice(0, 16) ?? copy.notAvailable}
+                  </dd>
                 </div>
                 <div>
-                  <dt>STATUS</dt>
-                  <dd>{repairs.length ? 'memory' : 'idle'}</dd>
+                  <dt>{copy.receiptStatus}</dt>
+                  <dd>
+                    {repairs.length ? copy.receiptMemory : copy.receiptIdle}
+                  </dd>
                 </div>
                 <div>
-                  <dt>FINDINGS</dt>
+                  <dt>{copy.receiptFindings}</dt>
                   <dd>
                     {repairs.length
-                      ? `${repairs.length} ${copy.findingsUnit}`
+                      ? `${repairs.length} ${
+                          repairs.length === 1
+                            ? copy.findingUnit
+                            : copy.findingsUnit
+                        }`
                       : copy.noFinding}
                   </dd>
                 </div>
@@ -470,7 +481,7 @@ export function TestKitExperience({
             <div className="test-motion-scan">
               <i />
               <Scan size={14} weight="bold" />
-              <span>DOM · A11Y · XY</span>
+              <span>{copy.scanSummary}</span>
             </div>
             <div className="test-motion-context">
               <header>

@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630" role="img" aria-labelledby="title desc">
   <title id="title">A3S Test documentation</title>
-  <desc id="desc">A3S Test turns rendered interfaces into context, repair tasks, and repeatable regression evidence.</desc>
+  <desc id="desc">A3S Test gives coding agents rendered page context, human-authorized repair, and fresh verification evidence.</desc>
   <rect width="1200" height="630" fill="#f8fbff"/>
   <circle cx="1110" cy="36" r="292" fill="none" stroke="#dbe8ff" stroke-width="2"/>
   <circle cx="1110" cy="36" r="212" fill="#edf4ff"/>
@@ -9,8 +9,8 @@
     <text x="76" y="38" fill="#101827" font-family="ui-sans-serif,system-ui,-apple-system,'Segoe UI',sans-serif" font-size="31" font-weight="760">A3S Test</text>
   </g>
   <text x="72" y="204" fill="#101827" font-family="ui-sans-serif,system-ui,-apple-system,'Segoe UI',sans-serif" font-size="62" font-weight="760" letter-spacing="-2">Understand the page.</text>
-  <text x="72" y="274" fill="#101827" font-family="ui-sans-serif,system-ui,-apple-system,'Segoe UI',sans-serif" font-size="62" font-weight="760" letter-spacing="-2">Mark it. Fix it. Verify it.</text>
-  <text x="76" y="322" fill="#56657b" font-family="ui-sans-serif,system-ui,-apple-system,'Segoe UI',sans-serif" font-size="22">Rendered context · point-and-repair · repeatable regression evidence</text>
+  <text x="72" y="274" fill="#101827" font-family="ui-sans-serif,system-ui,-apple-system,'Segoe UI',sans-serif" font-size="62" font-weight="760" letter-spacing="-2">Prove every change.</text>
+  <text x="76" y="322" fill="#56657b" font-family="ui-sans-serif,system-ui,-apple-system,'Segoe UI',sans-serif" font-size="22">Rendered context · human-authorized repair · fresh verification</text>
   <g transform="translate(70 365)">
     <rect width="1060" height="202" rx="18" fill="#ffffff" stroke="#dce4f0" stroke-width="2"/>
     <g transform="translate(18 18)">

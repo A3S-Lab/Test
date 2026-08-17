@@ -30,18 +30,14 @@
 
 ### Changed
 
-- Clarified the bilingual homepage around revision-bound rendered facts,
-  reviewed PRD and design contract candidates, deterministic comparison, and
-  the human repair-authorization boundary. Workflow links, platform support,
-  installer states, and the generated Markdown homepage now use the same
-  terminology and evidence claims.
+- Refined the bilingual homepage around rendered page context, reviewed PRD
+  and design expectations, the five-step mark-to-verify lifecycle, and the
+  human repair-authorization boundary. The live Test Kit specimen now uses
+  localized review and receipt copy, states page-local persistence directly,
+  and routes its closing action to the integration guide.
 - Tightened the desktop Test Kit dock, tool tray, finding editor, settings,
   and batch workspace while retaining 44-pixel targets on mobile and coarse
   pointers, including 320-pixel-wide viewports.
-- Reworked the bilingual homepage around the actual rendered perception,
-  targeting, human submission, scoped repair, and fresh-browser verification
-  path. The embedded demonstration now labels its in-page storage boundary
-  directly instead of implying an external agent handoff.
 - Aligned documentation typography, tables, inline code, and light syntax
   rendering with the A3S UI documentation system. ACL examples now use a
   dedicated presentation grammar while product parsing remains owned by

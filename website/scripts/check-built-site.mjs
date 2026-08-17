@@ -124,34 +124,32 @@ if (!englishHtml.includes('<html lang="en">')) {
   failures.push('English homepage does not declare English');
 }
 if (
-  !rootHtml.includes('把页面事实交给 Agent，') ||
-  !rootHtml.includes('再用新证据验证修复') ||
-  !rootHtml.includes('从页面现场到验证结果，每一步都有边界')
+  !rootHtml.includes('让 Agent 看懂页面') ||
+  !rootHtml.includes('让每次修复都有证据') ||
+  !rootHtml.includes('从点选问题到验证结果，五步闭环')
 ) {
   failures.push('default homepage lacks Chinese product copy');
 }
 if (
-  !englishHtml.includes('Give agents the rendered facts.') ||
-  !englishHtml.includes('Verify changes with fresh evidence.') ||
-  !englishHtml.includes(
-    'Every step from live page to verified result has a boundary',
-  )
+  !englishHtml.includes('Give agents the rendered context.') ||
+  !englishHtml.includes('Prove every change.') ||
+  !englishHtml.includes('Five steps from marked issue to verified result')
 ) {
   failures.push('English homepage lacks English product copy');
 }
 if (
-  !rootHtml.includes('PRD 与设计稿不会被包装成浏览器可访问树') ||
+  !rootHtml.includes('PRD 和设计稿只提供期望来源，不会冒充浏览器可访问树') ||
   !englishHtml.includes(
-    'PRDs and designs never masquerade as a browser accessibility tree',
+    'PRDs and designs provide expected evidence; they never masquerade as a browser accessibility tree',
   ) ||
-  !rootMarkdown.includes('PRD 与设计稿不会被包装成浏览器可访问树')
+  !rootMarkdown.includes('PRD 和设计稿只提供期望来源，不会冒充浏览器可访问树')
 ) {
   failures.push('homepage lacks the source-to-contract authority boundary');
 }
 if (
   !rootHtml.includes('data-testid="a3s-experience-submit"') ||
-  !rootHtml.includes('演示数据仅保存在此页') ||
-  !rootHtml.includes('不联系外部 Agent')
+  !rootHtml.includes('本地演示：问题只保存在当前页面') ||
+  !rootHtml.includes('不会发送给 Agent')
 ) {
   failures.push('homepage lacks the local interactive Test Kit surface');
 }

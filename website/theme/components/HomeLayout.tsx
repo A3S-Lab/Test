@@ -274,7 +274,7 @@ export function HomeLayout() {
         <div className="test-actions">
           <a
             className="test-button test-button-primary"
-            href={route('/guide/')}
+            href={route('/guide/testkit.html')}
           >
             {copy.quickStart}
             <ArrowRight aria-hidden="true" size={16} weight="bold" />
