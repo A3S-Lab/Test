@@ -6,6 +6,7 @@
 - [Targets](#targets)
 - [Core actions](#core-actions)
 - [Control-state expectations](#control-state-expectations)
+- [Rendered-output expectations](#rendered-output-expectations)
 - [Assertion stability](#assertion-stability)
 - [Tabs, frames, and dialogs](#tabs-frames-and-dialogs)
 - [Files and network](#files-and-network)
@@ -182,6 +183,16 @@ expect "status" {
     selected_values = ["review", "published"]
 }
 
+expect "total-copy" {
+    target = testid("total")
+    rendered_text = "Total $42.00"
+}
+
+expect "visible-rows" {
+    target = css("[data-row]")
+    visible_count = 3
+}
+
 screenshot "final" {
     path = "screenshots/final.png"
 }
@@ -190,7 +201,8 @@ screenshot "final" {
 A wait accepts exactly one of `load`, `text`, `regex`, `url`, `visible`, or
 `hidden`. An expectation accepts exactly one of `text`, `url`, `visible`,
 `hidden`, `value`, `enabled`, `disabled`, `checked`, `unchecked`, `selected`,
-`unselected`, or `selected_values`. `expect hidden` immediately proves that a
+`unselected`, `selected_values`, `rendered_text`, or `visible_count`.
+`expect hidden` immediately proves that a
 stable semantic or CSS locator has no visible match, including an absent
 element. A visible match fails as `test.assert.hidden`; a later visible sample
 in a stability window fails as `test.assert.unstable`.
@@ -201,8 +213,8 @@ then every 50 ms through the scenario deadline. It succeeds only on
 counter-evidence plus timing metrics. Both negative forms reject `ref()` and
 `visual_point()` because an unresolved observation-bound target is not proof
 of hidden product state. Driver, stale-target, and ambiguity errors remain
-errors. This is runner policy and adds no action variant; control-state
-expectations advance the current action protocol to revision 8.
+errors. This is runner policy and adds no action variant; rendered-output
+expectations advance the current action protocol to revision 9.
 
 Focus, double-click, context-click, type, uncheck, select, drag, and
 target-scoped wheel require `ref()` or `css()` with the current browser
@@ -257,6 +269,51 @@ read value, enabled, native checkbox/radio checked state, and admitted ARIA
 state. The standalone ref protocol does not expose native option selection or
 multi-select arrays; use a stable semantic/CSS target or a Page Context ref
 that resolves to one.
+
+## Rendered-output expectations
+
+Revision 9 binds copy to one rendered target and counts a stable visible
+locator set:
+
+```acl
+expect "total-copy" {
+    target = testid("total")
+    rendered_text = "Total $42.00"
+}
+
+expect "three-rows" {
+    target = css("[data-row]")
+    visible_count = 3
+}
+
+expect "no-errors" {
+    target = role("alert", "Checkout error")
+    visible_count = 0
+}
+```
+
+Both conditions require `target`. `rendered_text` requires exactly one visible
+match, trims leading/trailing whitespace, and collapses whitespace runs before
+an exact comparison. Missing and ambiguous targets are driver errors; only
+observed copy differences return `test.assert.rendered_text`. A current Web
+ref may identify the single element.
+
+`visible_count` observes the full visible match set. An empty set is the valid
+value zero; a different observed count returns `test.assert.visible_count`.
+Use a semantic or CSS locator. ACL rejects `ref()` and `visual_point()` because
+they identify one observation rather than a repeatable collection. Invalid
+selectors and malformed driver output remain driver errors.
+
+For CSS, visibility means positive rendered geometry with no hidden,
+display-none, visibility-hidden, zero-opacity, or zero-geometry composed
+ancestor. `aria-hidden` alone does not remove visual pixels and therefore does
+not change a CSS count. Semantic locators additionally exclude
+accessibility-hidden ancestry and traverse open Shadow DOM. Neither plane
+proves viewport intersection or pixel occlusion.
+
+Both conditions accept assertion stability. A later text/count mismatch is
+`test.assert.unstable`; a later driver error keeps its driver code. GUI and TUI
+currently reject both conditions as unsupported.
 
 ## Assertion stability
 

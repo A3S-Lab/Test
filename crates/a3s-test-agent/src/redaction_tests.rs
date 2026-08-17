@@ -99,10 +99,26 @@ fn strips_sensitive_components_from_nested_url_fields() {
 }
 
 #[test]
-fn redacts_control_state_targets_values_and_selected_values() {
+fn redacts_assertion_targets_text_values_and_selected_values() {
     let redactor =
         ProvenanceRedactor::from_exact_secrets(["state-secret"]).expect("valid redactor");
     let mut actions = [
+        Action::Assert {
+            expectation: Expectation::RenderedText {
+                target: Target::TestId {
+                    value: "state-secret-summary".to_string(),
+                },
+                value: "Total state-secret".to_string(),
+            },
+        },
+        Action::Assert {
+            expectation: Expectation::VisibleCount {
+                target: Target::Css {
+                    selector: "[data-row=state-secret]".to_string(),
+                },
+                count: 2,
+            },
+        },
         Action::Assert {
             expectation: Expectation::State {
                 target: Target::Css {

@@ -9,7 +9,8 @@ use crate::{
 };
 
 use super::{
-    optional_integer, parse_target, positive_integer, required_target, type_error, value_string,
+    optional_integer, parse_target, positive_integer, required_nonnegative_u32, required_target,
+    type_error, value_string,
 };
 
 pub(super) fn parse_wait(
@@ -92,6 +93,8 @@ pub(super) fn parse_expectation(
         "url",
         "visible",
         "hidden",
+        "rendered_text",
+        "visible_count",
         "value",
         "enabled",
         "disabled",
@@ -110,12 +113,15 @@ pub(super) fn parse_expectation(
         return Err(condition_count_error(path, configured.len()));
     }
     let condition = configured[0];
-    let uses_separate_target = matches!(condition, "value" | "selected_values");
+    let uses_separate_target = matches!(
+        condition,
+        "rendered_text" | "visible_count" | "value" | "selected_values"
+    );
     if block.attributes.contains_key("target") && !uses_separate_target {
         return Err(SpecError::new(
             "test.spec.attribute_unexpected",
             format!("{path}.target"),
-            "target is valid only with value or selected_values expectations",
+            "target is valid only with rendered_text, visible_count, value, or selected_values expectations",
         ));
     }
 
@@ -142,6 +148,27 @@ pub(super) fn parse_expectation(
                 ));
             }
             return Ok((Expectation::Visible(target), AssertionMode::Hidden));
+        }
+        "rendered_text" => Expectation::RenderedText {
+            target: required_target(block, "target", path)?,
+            value: value_string(
+                &block.attributes[condition],
+                format!("{path}.rendered_text"),
+            )?,
+        },
+        "visible_count" => {
+            let target = required_target(block, "target", path)?;
+            if matches!(target, Target::Ref { .. } | Target::VisualPoint { .. }) {
+                return Err(SpecError::new(
+                    "test.spec.visible_count_target_unstable",
+                    format!("{path}.target"),
+                    "visible_count requires a stable semantic or CSS locator, not an observation-bound ref or visual point",
+                ));
+            }
+            Expectation::VisibleCount {
+                target,
+                count: required_nonnegative_u32(block, condition, path)?,
+            }
         }
         "value" => Expectation::Value {
             target: required_target(block, "target", path)?,

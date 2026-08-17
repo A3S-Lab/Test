@@ -88,7 +88,7 @@ a3s-test worker inventory
 | `terminal_resize`                  | columns 与 rows                           | 调整自有 PTY 或 ConPTY，随后终端语义会更新                  |
 | `terminal_recording`               | 相对 artifact 路径                        | 保存受约束终端记录，不写到工作区任意位置                    |
 
-动作协议修订为 8。完整可生成 Schema 以 `a3s-test agent schema` 输出为准。未知字段、缺少必填字段、非法枚举和 surface 不支持的动作会在执行前拒绝。
+动作协议修订为 9。完整可生成 Schema 以 `a3s-test agent schema` 输出为准。未知字段、缺少必填字段、非法枚举和 surface 不支持的动作会在执行前拒绝。
 
 ### 实时控件状态断言
 
@@ -100,6 +100,16 @@ a3s-test worker inventory
 | 稳定控件状态 | 上述任一写法加 `stable_for_ms` 与可选采样间隔                          | 首次与末次断言输出、有界样本数和实际观察窗口   | 后续出现反例时返回 `test.assert.unstable`，并保留初始证据和瞬态不匹配                            |
 
 Web 断言读取实时 DOM 属性。原生 checkbox 和 radio 的 `checked` 值优先于矛盾的 ARIA，自定义控件则可以通过合法 ARIA 暴露布尔状态。`selected_values = []` 是合法的精确空集合断言。GUI 只有在 CUA 确实提供值时才能比较精确值，其他情况关闭失败；布尔和多选状态目前不支持。TUI 不支持控件状态断言。Page Context ref 会在派发前解析为当前语义目标；standalone ref 无法暴露所需属性时返回驱动错误，不进行猜测。
+
+### 渲染输出断言
+
+| 能力               | ACL 写法                                      | 观察证据                                                 | 失败边界                                                                                                |
+| ------------------ | --------------------------------------------- | -------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| 目标绑定的渲染文案 | `target` 加 `rendered_text`                   | 唯一可见目标，以及规范化后的 `expected` 与 `actual` 文本 | 目标缺失或歧义保留为驱动错误；已观察文案不同才是 `test.assert.rendered_text`                            |
+| 可见定位集合数量   | 稳定 `target` 加非负 `visible_count`          | 完整可见匹配集合的数量，包括零                           | ref/visual point 在准入阶段失败，非法 selector 保留为驱动错误，数量不同才是 `test.assert.visible_count` |
+| 稳定渲染输出       | 上述任一写法加 `stable_for_ms` 与可选采样间隔 | 首次/末次文案或数量、样本数与实际窗口                    | 后续观察不匹配返回 `test.assert.unstable`；后续驱动失败仍由驱动负责                                     |
+
+CSS 计数使用视觉渲染几何，单独的 `aria-hidden` 不会让像素消失，因此仍计数。语义定位器还会排除可访问性隐藏祖先，并穿透开放 Shadow DOM。两者都会排除 hidden、display-none、visibility-hidden、完全透明和零几何目标。GUI 与 TUI 对两种修订 9 断言都明确关闭失败。
 
 ## 页面感知与 Test Kit
 

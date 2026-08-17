@@ -747,6 +747,14 @@ async fn gui_value_assertions_use_cua_values_without_inventing_boolean_state() {
     assert_eq!(missing.code(), "test.driver.gui.target_not_found");
 
     for expectation in [
+        Expectation::RenderedText {
+            target: value_target.clone(),
+            value: "draft@example.test".to_string(),
+        },
+        Expectation::VisibleCount {
+            target: value_target.clone(),
+            count: 1,
+        },
         Expectation::State {
             target: value_target.clone(),
             state: ElementState::Enabled,

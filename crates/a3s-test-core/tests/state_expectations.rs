@@ -163,8 +163,8 @@ suite "invalid-state" {{
 }
 
 #[test]
-fn state_expectations_have_a_revision_eight_wire_contract() {
-    assert_eq!(ACTION_PROTOCOL_REVISION, 8);
+fn state_expectations_remain_wire_compatible_at_revision_nine() {
+    assert_eq!(ACTION_PROTOCOL_REVISION, 9);
     let action = Action::Assert {
         expectation: Expectation::State {
             target: Target::Ref {

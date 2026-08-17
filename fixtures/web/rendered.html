@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>A3S Test rendered assertion fixture</title>
+    <style>
+      body {
+        font: 16px/1.5 system-ui, sans-serif;
+        margin: 24px;
+      }
+
+      main {
+        display: grid;
+        gap: 12px;
+        max-width: 560px;
+      }
+
+      [data-row] {
+        min-height: 20px;
+      }
+
+      .display-none {
+        display: none;
+      }
+
+      .visibility-hidden {
+        visibility: hidden;
+      }
+
+      .opacity-hidden {
+        opacity: 0;
+      }
+
+      .zero-geometry {
+        border: 0;
+        height: 0;
+        overflow: hidden;
+        padding: 0;
+        position: absolute;
+        width: 0;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>A3S Test rendered assertion fixture</h1>
+
+      <output data-testid="total-copy">
+        Total
+        <strong>$42.00</strong>
+      </output>
+
+      <ul aria-label="Catalog rows">
+        <li data-row="alpha">Alpha</li>
+        <li data-row="beta">Beta</li>
+        <li data-row="gamma">Gamma</li>
+        <li data-row="decorative" data-testid="decorative-row" aria-hidden="true">
+          Decorative visual row
+        </li>
+        <li data-row="hidden-attribute" hidden>Hidden attribute row</li>
+        <li data-row="display-none" class="display-none">Display none row</li>
+        <li data-row="visibility-hidden" class="visibility-hidden">Visibility hidden row</li>
+        <li data-row="opacity-hidden" class="opacity-hidden">Opacity hidden row</li>
+        <li data-row="zero-geometry" class="zero-geometry">Zero geometry row</li>
+      </ul>
+
+      <p class="duplicate-copy">Duplicate copy</p>
+      <p class="duplicate-copy">Duplicate copy</p>
+
+      <output data-testid="transient-copy">Ready</output>
+      <ul aria-label="Transient rows">
+        <li data-transient-row="persistent">Persistent row</li>
+        <li data-transient-row="disappearing">Disappearing row</li>
+      </ul>
+
+      <rendered-summary></rendered-summary>
+    </main>
+
+    <script>
+      class RenderedSummary extends HTMLElement {
+        constructor() {
+          super();
+          const root = this.attachShadow({ mode: "open" });
+          root.innerHTML = `
+            <section aria-label="Shadow summary">
+              <output data-testid="shadow-total">Shadow total <strong>$7.00</strong></output>
+              <button type="button" aria-label="Shadow checkout">Checkout</button>
+            </section>
+          `;
+        }
+      }
+      customElements.define("rendered-summary", RenderedSummary);
+
+      const transientCopy = document.querySelector('[data-testid="transient-copy"]');
+      const nativeInnerText = Object.getOwnPropertyDescriptor(
+        HTMLElement.prototype,
+        "innerText",
+      ).get;
+      let firstTextSample = true;
+      Object.defineProperty(transientCopy, "innerText", {
+        configurable: true,
+        get() {
+          const value = nativeInnerText.call(this);
+          if (firstTextSample) {
+            firstTextSample = false;
+            queueMicrotask(() => {
+              this.textContent = "Changed";
+            });
+          }
+          return value;
+        },
+      });
+
+      const disappearingRow = document.querySelector(
+        '[data-transient-row="disappearing"]',
+      );
+      const nativeRect = disappearingRow.getBoundingClientRect.bind(disappearingRow);
+      let firstCountSample = true;
+      disappearingRow.getBoundingClientRect = () => {
+        const rect = nativeRect();
+        if (firstCountSample) {
+          firstCountSample = false;
+          queueMicrotask(() => {
+            disappearingRow.hidden = true;
+          });
+        }
+        return rect;
+      };
+    </script>
+  </body>
+</html>

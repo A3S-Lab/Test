@@ -8,6 +8,9 @@
 - [x] Action protocol revision 8 control-state assertions for exact value,
       enabled, checked, selected, and exact selected-value sets, with honest
       per-surface capability failures
+- [x] Action protocol revision 9 target-bound rendered-text and visible-set
+      cardinality assertions with exact observation ownership, zero-count
+      evidence, and honest per-surface capability failures
 - [x] Surface driver and session contracts
 - [x] Cancellation-safe sequential runner
 - [x] Bounded sampled assertion stability with static duration/sample limits,
@@ -636,3 +639,34 @@ The completion work intentionally preserves these product boundaries:
       run took 24.26 seconds on the development host; current semantic-role
       runs took 56.92, 55.80, 23.21, and 26.72 seconds. These timings are
       environment diagnostics, not a performance benchmark.
+
+## M22: Deterministic rendered-output depth
+
+- [x] Add target-bound `rendered_text` and stable-locator `visible_count`
+      expectations under action protocol revision 9
+- [x] Normalize rendered whitespace at the Web probe and Rust comparison
+      boundaries while retaining exact expected and actual evidence
+- [x] Require zero/one/many target resolution for rendered text, but treat an
+      empty visible locator set as the valid numeric observation zero
+- [x] Separate CSS visual visibility from semantic accessibility visibility:
+      include visually rendered `aria-hidden` CSS matches, exclude semantic
+      accessibility-hidden ancestry, and traverse composed open Shadow DOM
+- [x] Reject observation refs and visual points for collection cardinality,
+      while preserving current refs and Page Context resolution for
+      single-target rendered text
+- [x] Preserve invalid selectors and single-target missing/ambiguity as driver
+      errors; reserve `test.assert.rendered_text` and
+      `test.assert.visible_count` for observed product mismatches
+- [x] Redact targets and expected copy in provenance, reuse the same typed
+      actions in Agent Host deterministic verification, and fail closed on GUI
+      and TUI instead of estimating unsupported state
+- [x] Prove 600/600 deterministic Web classifications across text match,
+      text mismatch, missing target, count match including zero, count
+      mismatch, and invalid-selector datasets
+- [x] Prove 200/200 stable text/count windows are accepted and 200/200
+      transient text/count windows are rejected as `test.assert.unstable`
+- [x] Prove seven positive observations and seven negative classifications in
+      standalone Chromium, including normalized nested copy, hidden and
+      transparent elements, CSS/accessibility visibility separation, open
+      Shadow DOM, two 100 ms windows, exact cleanup, and no leaked private
+      runtime directory; keep the same regression in macOS and Windows CI

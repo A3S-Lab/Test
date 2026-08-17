@@ -4,6 +4,20 @@
 
 ### Added
 
+- Added action protocol revision 9 with target-bound `rendered_text` and
+  stable-locator `visible_count` expectations. Rendered text collapses
+  whitespace and requires exactly one visible target; visible count observes
+  the complete match set and treats an empty set as evidence-backed zero while
+  preserving invalid locators as driver errors. CSS counting
+  uses visual rendered-box visibility, while semantic locators respect
+  accessibility-hidden ancestors and traverse open Shadow DOM. Web returns
+  dedicated product-mismatch codes, GUI and TUI fail closed, Page Context refs
+  resolve before dispatch, provenance redacts targets and expected copy, and
+  Agent Host deterministic verification uses the same actions. Evidence now
+  covers 600/600 deterministic driver classifications, 200/200 consistent and
+  200/200 transient stability windows, and a standalone Chromium CLI suite
+  with 7/7 positive observations, 7/7 negative classifications, two 100 ms
+  windows, and no private runtime directory leak.
 - Added action protocol revision 8 with typed ACL control-state expectations:
   exact `value`, `enabled`/`disabled`, `checked`/`unchecked`,
   `selected`/`unselected`, and duplicate-free exact-set `selected_values`.

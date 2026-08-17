@@ -242,6 +242,11 @@ impl ProvenanceRedactor {
             Expectation::TextVisible(text) => self.redact_text(text),
             Expectation::Url(url) => self.redact_url(url),
             Expectation::Visible(target) => self.redact_target(target),
+            Expectation::RenderedText { target, value } => {
+                self.redact_target(target);
+                self.redact_text(value);
+            }
+            Expectation::VisibleCount { target, .. } => self.redact_target(target),
             Expectation::State { target, .. } => self.redact_target(target),
             Expectation::Value { target, value } => {
                 self.redact_target(target);

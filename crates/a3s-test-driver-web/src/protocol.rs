@@ -284,9 +284,14 @@ const SEMANTIC_SHADOW_TARGET_QUERY: &str = r#"
   };
   const visible = (element) => {
     if (!(element instanceof HTMLElement || element instanceof SVGElement)) return false;
-    const style = getComputedStyle(element);
-    if (style.display === "none" || style.visibility === "hidden" || style.visibility === "collapse" || Number(style.opacity) === 0) return false;
-    if (element.closest("[hidden], [aria-hidden='true']")) return false;
+    let current = element;
+    while (current) {
+      const style = getComputedStyle(current);
+      if (style.display === "none" || style.visibility === "hidden" || style.visibility === "collapse" || Number(style.opacity) === 0) return false;
+      if (current.hasAttribute("hidden") || current.getAttribute("aria-hidden") === "true") return false;
+      const root = current.getRootNode();
+      current = current.parentElement || (root instanceof ShadowRoot ? root.host : null);
+    }
     const rect = element.getBoundingClientRect();
     return element.getClientRects().length > 0 && rect.width > 0 && rect.height > 0;
   };
@@ -297,6 +302,8 @@ const SEMANTIC_SHADOW_TARGET_QUERY: &str = r#"
 #[derive(Clone, Copy, Debug)]
 pub(crate) enum AssertionProbe {
     State(ElementState),
+    RenderedText,
+    VisibleCount,
     Value,
     SelectedValues,
 }
@@ -306,6 +313,35 @@ pub(crate) fn assertion_probe_args(
     probe: AssertionProbe,
 ) -> Result<Vec<OsString>, DriverError> {
     let query = match target {
+        Target::Css { .. }
+            if matches!(
+                probe,
+                AssertionProbe::RenderedText | AssertionProbe::VisibleCount
+            ) =>
+        {
+            r#"
+  const renderedVisible = (element) => {
+    if (!(element instanceof HTMLElement || element instanceof SVGElement)) return false;
+    let current = element;
+    while (current) {
+      const style = getComputedStyle(current);
+      if (style.display === "none" || style.visibility === "hidden" || style.visibility === "collapse" || Number(style.opacity) === 0) return false;
+      if (current.hasAttribute("hidden")) return false;
+      const root = current.getRootNode();
+      current = current.parentElement || (root instanceof ShadowRoot ? root.host : null);
+    }
+    const rect = element.getBoundingClientRect();
+    return element.getClientRects().length > 0 && rect.width > 0 && rect.height > 0;
+  };
+  let matchedElements;
+  try {
+    matchedElements = Array.from(document.querySelectorAll(target.selector)).filter(renderedVisible);
+  } catch (error) {
+    return { status: "invalid_target", message: String(error) };
+  }
+  const element = matchedElements[0];
+"#
+        }
         Target::Css { .. } => {
             r#"
   let matchedElements;
@@ -345,14 +381,19 @@ pub(crate) fn assertion_probe_args(
         AssertionProbe::State(ElementState::Enabled) => "enabled",
         AssertionProbe::State(ElementState::Checked) => "checked",
         AssertionProbe::State(ElementState::Selected) => "selected",
+        AssertionProbe::RenderedText => "rendered_text",
+        AssertionProbe::VisibleCount => "visible_count",
         AssertionProbe::Value => "value",
         AssertionProbe::SelectedValues => "selected_values",
     };
     let expression = format!(
         r#"(() => {{
   const target = {target};
-  const A3S_STATE_PROBE = "{probe}";
+  const A3S_ASSERTION_PROBE = "{probe}";
 {query}
+  if (A3S_ASSERTION_PROBE === "visible_count") {{
+    return {{ status: "ok", count: matchedElements.length, actual: matchedElements.length }};
+  }}
   if (matchedElements.length === 0) return {{ status: "not_found", count: 0 }};
   if (matchedElements.length > 1) return {{ status: "ambiguous", count: matchedElements.length }};
 
@@ -362,7 +403,12 @@ pub(crate) fn assertion_probe_args(
     if (value === "false") return false;
     return null;
   }};
-  if (A3S_STATE_PROBE === "enabled") {{
+  if (A3S_ASSERTION_PROBE === "rendered_text") {{
+    const rendered = element instanceof HTMLElement ? element.innerText : element.textContent;
+    const actual = String(rendered ?? "").replace(/\s+/g, " ").trim();
+    return {{ status: "ok", count: 1, actual }};
+  }}
+  if (A3S_ASSERTION_PROBE === "enabled") {{
     let current = element;
     let ariaDisabled = false;
     while (current) {{
@@ -377,7 +423,7 @@ pub(crate) fn assertion_probe_args(
       || ("disabled" in element && element.disabled === true);
     return {{ status: "ok", count: 1, actual: !(nativeDisabled || ariaDisabled) }};
   }}
-  if (A3S_STATE_PROBE === "checked") {{
+  if (A3S_ASSERTION_PROBE === "checked") {{
     if (element instanceof HTMLInputElement && ["checkbox", "radio"].includes(element.type)) {{
       return {{ status: "ok", count: 1, actual: element.checked }};
     }}
@@ -386,7 +432,7 @@ pub(crate) fn assertion_probe_args(
       ? {{ status: "unsupported", count: 1 }}
       : {{ status: "ok", count: 1, actual }};
   }}
-  if (A3S_STATE_PROBE === "selected") {{
+  if (A3S_ASSERTION_PROBE === "selected") {{
     if (element instanceof HTMLOptionElement) {{
       return {{ status: "ok", count: 1, actual: element.selected }};
     }}
@@ -395,12 +441,12 @@ pub(crate) fn assertion_probe_args(
       ? {{ status: "unsupported", count: 1 }}
       : {{ status: "ok", count: 1, actual }};
   }}
-  if (A3S_STATE_PROBE === "value") {{
+  if (A3S_ASSERTION_PROBE === "value") {{
     return "value" in element
       ? {{ status: "ok", count: 1, actual: String(element.value ?? "") }}
       : {{ status: "unsupported", count: 1 }};
   }}
-  if (A3S_STATE_PROBE === "selected_values") {{
+  if (A3S_ASSERTION_PROBE === "selected_values") {{
     return element instanceof HTMLSelectElement
       ? {{
           status: "ok",

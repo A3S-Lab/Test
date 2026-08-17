@@ -171,7 +171,7 @@ async fn semantic_and_css_probes_separate_product_mismatches_from_unknown_target
     assert_eq!(actions.len(), 6);
     for action in &actions[..5] {
         assert_eq!(action[0], "eval");
-        assert!(action[1].contains("A3S_STATE_PROBE"));
+        assert!(action[1].contains("A3S_ASSERTION_PROBE"));
     }
     drop(temp);
 }

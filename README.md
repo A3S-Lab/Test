@@ -296,6 +296,53 @@ classifications, 100/100 stable state windows, 100/100 transient-state
 rejections, and 15/15 positive plus 4/4 negative classifications in real
 Chromium without leaking a private runtime directory.
 
+## Assert rendered output and collection size
+
+Action protocol revision 9 closes two false-positive gaps left by page-wide
+text and one-element visibility checks. Bind the expected copy to one exact
+target, or assert the number of visible matches produced by a stable locator:
+
+```acl
+expect "total-copy" {
+    target = testid("total")
+    rendered_text = "Total $42.00"
+    stable_for_ms = 300
+    sample_interval_ms = 25
+}
+
+expect "three-visible-rows" {
+    target = css("[data-row]")
+    visible_count = 3
+}
+
+expect "no-visible-errors" {
+    target = role("alert", "Checkout error")
+    visible_count = 0
+}
+```
+
+`rendered_text` requires exactly one visible match and compares normalized
+rendered text: leading and trailing whitespace is removed and every run of
+whitespace becomes one space. A missing or ambiguous target remains a driver
+error; only observed copy that differs is `test.assert.rendered_text`.
+
+`visible_count` counts the complete visible match set, including a legitimate
+zero. CSS targets use rendered-box visibility, so visually present
+`aria-hidden` content still counts; semantic targets use the accessible
+locator plane, exclude accessibility-hidden ancestors, and traverse open
+Shadow DOM. Hidden, `display: none`, `visibility: hidden`, fully transparent,
+and zero-geometry matches do not count. Observation refs and visual points are
+rejected because they identify one observation, not a repeatable collection.
+
+The revision-9 evidence set classifies 600/600 deterministic Web cases with no
+misclassification: 100 text matches, 100 text mismatches, 100 missing targets,
+100 count matches including zero, 100 count mismatches, and 100 invalid
+selectors. Runner datasets accept 200/200 consistent text/count windows and
+reject 200/200 transients as `test.assert.unstable`. A standalone Chromium CLI
+run verifies seven positive observations and seven negative classifications,
+including whitespace normalization, CSS and open-Shadow-DOM semantics, two
+100 ms stability windows, and no leaked private runtime directory.
+
 [Compare the workflows](https://a3s-lab.github.io/Test/guide/workflows.html)
 
 ## Embed rendered page context

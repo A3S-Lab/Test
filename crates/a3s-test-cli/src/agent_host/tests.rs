@@ -268,7 +268,7 @@ agent_run "checkout" {{
 }
 
 #[tokio::test]
-async fn deterministic_verification_uses_the_shared_typed_state_assertions() {
+async fn deterministic_verification_uses_the_shared_typed_assertions() {
     let temp = tempfile::tempdir().expect("tempdir");
     let provider = ProviderFixture::start(vec![json!({
         "status": "success",
@@ -304,6 +304,8 @@ agent_run "profile" {{
   verification {{
     expect "display-name" {{ target = css("#display-name") value = "Ada" }}
     expect "terms" {{ checked = css("#terms") }}
+    expect "summary" {{ target = css("#summary") rendered_text = "Profile Ada" }}
+    expect "no-errors" {{ target = css("[role=alert]") visible_count = 0 }}
   }}
 }}
 "##,
@@ -312,9 +314,11 @@ agent_run "profile" {{
     )
     .expect("state verification config");
     let report_path = temp.path().join("reports/state-verification.json");
-    let executor = Arc::new(HostWebExecutor::with_state_probes([
+    let executor = Arc::new(HostWebExecutor::with_assertion_probes([
         json!({ "status": "ok", "count": 1, "actual": "Ada" }),
         json!({ "status": "ok", "count": 1, "actual": true }),
+        json!({ "status": "ok", "count": 1, "actual": "Profile Ada" }),
+        json!({ "status": "ok", "count": 0, "actual": 0 }),
     ]));
 
     let code = execute_with_executor(
@@ -332,7 +336,12 @@ agent_run "profile" {{
     assert_eq!(report["result"]["status"], "succeeded");
     assert_eq!(report["verification"][0]["output"]["data"]["actual"], "Ada");
     assert_eq!(report["verification"][1]["output"]["data"]["actual"], true);
-    assert_eq!(executor.state_probe_count(), 2);
+    assert_eq!(
+        report["verification"][2]["output"]["data"]["actual"],
+        "Profile Ada"
+    );
+    assert_eq!(report["verification"][3]["output"]["data"]["actual"], 0);
+    assert_eq!(executor.assertion_probe_count(), 4);
     assert_eq!(executor.actions(), ["open", "snapshot", "close"]);
     assert_eq!(provider.finish().await.len(), 1);
 }
@@ -463,7 +472,7 @@ struct HostWebExecutor {
     confirmation: String,
     invocations: Mutex<Vec<CommandInvocation>>,
     visibility: Mutex<VecDeque<bool>>,
-    state_probes: Mutex<VecDeque<serde_json::Value>>,
+    assertion_probes: Mutex<VecDeque<serde_json::Value>>,
 }
 
 impl HostWebExecutor {
@@ -472,7 +481,7 @@ impl HostWebExecutor {
             confirmation: confirmation.to_string(),
             invocations: Mutex::new(Vec::new()),
             visibility: Mutex::new(VecDeque::new()),
-            state_probes: Mutex::new(VecDeque::new()),
+            assertion_probes: Mutex::new(VecDeque::new()),
         }
     }
 
@@ -481,20 +490,20 @@ impl HostWebExecutor {
             confirmation: String::new(),
             invocations: Mutex::new(Vec::new()),
             visibility: Mutex::new(values.into_iter().collect()),
-            state_probes: Mutex::new(VecDeque::new()),
+            assertion_probes: Mutex::new(VecDeque::new()),
         }
     }
 
-    fn with_state_probes(values: impl IntoIterator<Item = serde_json::Value>) -> Self {
+    fn with_assertion_probes(values: impl IntoIterator<Item = serde_json::Value>) -> Self {
         Self {
             confirmation: String::new(),
             invocations: Mutex::new(Vec::new()),
             visibility: Mutex::new(VecDeque::new()),
-            state_probes: Mutex::new(values.into_iter().collect()),
+            assertion_probes: Mutex::new(values.into_iter().collect()),
         }
     }
 
-    fn state_probe_count(&self) -> usize {
+    fn assertion_probe_count(&self) -> usize {
         self.invocations
             .lock()
             .expect("invocations")
@@ -502,7 +511,7 @@ impl HostWebExecutor {
             .filter(|invocation| {
                 browser_action(&invocation.args)
                     .get(1)
-                    .is_some_and(|script| script.to_string_lossy().contains("A3S_STATE_PROBE"))
+                    .is_some_and(|script| script.to_string_lossy().contains("A3S_ASSERTION_PROBE"))
             })
             .count()
     }
@@ -530,15 +539,15 @@ impl CommandExecutor for HostWebExecutor {
         let stdout = if version {
             "agent-browser 0.26.0".to_string()
         } else if action.first().is_some_and(|value| value == "eval") {
-            let state_probe = action
+            let assertion_probe = action
                 .get(1)
-                .is_some_and(|script| script.to_string_lossy().contains("A3S_STATE_PROBE"));
-            let result = if state_probe {
-                self.state_probes
+                .is_some_and(|script| script.to_string_lossy().contains("A3S_ASSERTION_PROBE"));
+            let result = if assertion_probe {
+                self.assertion_probes
                     .lock()
-                    .expect("state probes")
+                    .expect("assertion probes")
                     .pop_front()
-                    .expect("scripted state probe")
+                    .expect("scripted assertion probe")
             } else {
                 json!({ "present": false })
             };

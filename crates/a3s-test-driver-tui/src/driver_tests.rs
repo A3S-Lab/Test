@@ -10,7 +10,9 @@ use std::process::Stdio;
 use std::time::Duration;
 
 #[cfg(any(unix, windows))]
-use a3s_test_core::{Action, ScenarioContext, SurfaceDriver as _, TestStep, WaitCondition};
+use a3s_test_core::{
+    Action, Expectation, ScenarioContext, SurfaceDriver as _, Target, TestStep, WaitCondition,
+};
 use serde_json::Value;
 
 use super::*;
@@ -81,6 +83,40 @@ async fn wait_text(session: &mut dyn DriverSession, text: &str) {
         ))
         .await
         .expect("wait for terminal text");
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn target_bound_rendered_assertions_fail_closed_on_terminal_surfaces() {
+    let temp = tempfile::tempdir().expect("temp dir");
+    let mut session = open_session(
+        shell_command("printf 'ready'; sleep 30"),
+        temp.path().join("artifacts"),
+    )
+    .await;
+    wait_text(session.as_mut(), "ready").await;
+
+    let target = Target::Css {
+        selector: "#status".to_string(),
+    };
+    for expectation in [
+        Expectation::RenderedText {
+            target: target.clone(),
+            value: "Ready".to_string(),
+        },
+        Expectation::VisibleCount { target, count: 1 },
+    ] {
+        let error = session
+            .execute(&step(
+                "unsupported-rendered-assertion",
+                Action::Assert { expectation },
+            ))
+            .await
+            .expect_err("terminal surfaces must reject browser-rendered assertions");
+        assert_eq!(error.code(), "test.driver.tui.action_unsupported");
+    }
+
+    session.close().await.expect("close terminal");
 }
 
 #[cfg(unix)]

@@ -7,6 +7,8 @@ pub mod browser_zoom;
 #[allow(dead_code)]
 pub mod control_state;
 #[allow(dead_code)]
+pub mod rendered_assertions;
+#[allow(dead_code)]
 pub mod repair_fixture;
 #[allow(dead_code)]
 pub mod testkit_accessibility;

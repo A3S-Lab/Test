@@ -411,6 +411,8 @@ fn parse_step(block: &Block, scenario_path: &str) -> Result<TestStep, SpecError>
                     "visible",
                     "hidden",
                     "target",
+                    "rendered_text",
+                    "visible_count",
                     "value",
                     "enabled",
                     "disabled",
@@ -908,6 +910,28 @@ fn required_u32(block: &Block, name: &str, path: &str) -> Result<u32, SpecError>
             "integer is outside the supported range",
         )
     })
+}
+
+fn required_nonnegative_u32(block: &Block, name: &str, path: &str) -> Result<u32, SpecError> {
+    let value = block.attributes.get(name).ok_or_else(|| {
+        SpecError::new(
+            "test.spec.attribute_required",
+            format!("{path}.{name}"),
+            "required non-negative integer is missing",
+        )
+    })?;
+    let number = value
+        .as_number()
+        .ok_or_else(|| type_error(format!("{path}.{name}"), "attribute must be an integer"))?;
+    if !number.is_finite() || number < 0.0 || number.fract() != 0.0 || number > f64::from(u32::MAX)
+    {
+        return Err(SpecError::new(
+            "test.spec.number_range",
+            format!("{path}.{name}"),
+            "integer must be non-negative and within the unsigned 32-bit range",
+        ));
+    }
+    Ok(number as u32)
 }
 
 fn required_u16(block: &Block, name: &str, path: &str) -> Result<u16, SpecError> {

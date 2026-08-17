@@ -46,29 +46,31 @@ impl SurfaceDriver for TransientDriver {
 #[async_trait]
 impl DriverSession for TransientSession {
     async fn execute(&mut self, step: &TestStep) -> Result<StepOutput, DriverError> {
-        assert!(matches!(step.action, Action::Assert { .. }));
-        let state_assertion = matches!(
-            step.action,
-            Action::Assert {
-                expectation: Expectation::State { .. }
-            }
-        );
+        let Action::Assert { expectation } = &step.action else {
+            panic!("scripted stability driver accepts assertions only");
+        };
+        let (data, mismatch_code) = match expectation {
+            Expectation::State { .. } => (
+                json!({ "state": "checked", "expected": true, "actual": true }),
+                "test.assert.checked",
+            ),
+            Expectation::RenderedText { value, .. } => (
+                json!({ "expected": value, "actual": value }),
+                "test.assert.rendered_text",
+            ),
+            Expectation::VisibleCount { count, .. } => (
+                json!({ "expected": count, "actual": count }),
+                "test.assert.visible_count",
+            ),
+            _ => (json!({ "visible": true }), "test.assert.visible"),
+        };
         self.executions.fetch_add(1, Ordering::SeqCst);
         self.sample += 1;
         if self.sample == 1 || self.remains_visible {
-            let data = if state_assertion {
-                json!({ "state": "checked", "expected": true, "actual": true })
-            } else {
-                json!({ "visible": true })
-            };
             return Ok(StepOutput::new("scripted assertion matched").with_data(data));
         }
         Err(DriverError::new(
-            if state_assertion {
-                "test.assert.checked"
-            } else {
-                "test.assert.visible"
-            },
+            mismatch_code,
             "scripted assertion became false after the first sample",
         ))
     }
@@ -230,6 +232,106 @@ async fn stable_control_state_assertions_accept_100_of_100_consistent_states() {
     }
 }
 
+#[tokio::test]
+async fn stable_rendered_assertions_reject_200_of_200_text_and_count_transients() {
+    let executions = Arc::new(AtomicUsize::new(0));
+    let runner = scripted_runner(Arc::clone(&executions), false);
+    let stability = AssertionStability {
+        stable_for_ms: 20,
+        sample_interval_ms: 5,
+    };
+
+    let result = runner
+        .run(&rendered_suite(stability), CancellationToken::new())
+        .await;
+
+    assert_eq!(result.status, RunStatus::Failed);
+    assert_eq!(result.scenarios.len(), DATASET_SIZE * 2);
+    assert_eq!(
+        result
+            .scenarios
+            .iter()
+            .filter(|scenario| scenario.id.starts_with("rendered-text-"))
+            .count(),
+        DATASET_SIZE
+    );
+    assert_eq!(
+        result
+            .scenarios
+            .iter()
+            .filter(|scenario| scenario.id.starts_with("visible-count-"))
+            .count(),
+        DATASET_SIZE
+    );
+    for scenario in &result.scenarios {
+        let step = &scenario.steps[0];
+        assert_eq!(scenario.status, RunStatus::Failed);
+        assert_eq!(step.attempts, 2);
+        assert_eq!(
+            step.error.as_ref().map(|error| error.code.as_str()),
+            Some("test.assert.unstable")
+        );
+        let data = &step
+            .output
+            .as_ref()
+            .expect("rendered stability evidence")
+            .data;
+        assert_eq!(
+            data["assertion"]["first"]["actual"],
+            data["assertion"]["first"]["expected"]
+        );
+        assert_eq!(data["stability"]["outcome"], "unstable");
+        assert_eq!(data["stability"]["samples"], 2);
+    }
+    assert_eq!(executions.load(Ordering::SeqCst), DATASET_SIZE * 4);
+}
+
+#[tokio::test]
+async fn stable_rendered_assertions_accept_200_of_200_consistent_text_and_counts() {
+    let executions = Arc::new(AtomicUsize::new(0));
+    let runner = scripted_runner(Arc::clone(&executions), true);
+    let stability = AssertionStability {
+        stable_for_ms: 20,
+        sample_interval_ms: 5,
+    };
+
+    let result = runner
+        .run(&rendered_suite(stability), CancellationToken::new())
+        .await;
+
+    assert_eq!(result.status, RunStatus::Passed);
+    assert_eq!(
+        result
+            .scenarios
+            .iter()
+            .filter(|scenario| scenario.status == RunStatus::Passed)
+            .count(),
+        DATASET_SIZE * 2
+    );
+    let mut measured_executions = 0_usize;
+    for scenario in &result.scenarios {
+        let step = &scenario.steps[0];
+        let data = &step
+            .output
+            .as_ref()
+            .expect("rendered stability evidence")
+            .data;
+        let samples = data["stability"]["samples"].as_u64().expect("sample count");
+        assert_eq!(data["assertion"]["first"], data["assertion"]["last"]);
+        assert_eq!(data["stability"]["outcome"], "passed");
+        assert!(
+            data["stability"]["observed_ms"]
+                .as_u64()
+                .expect("observed time")
+                >= stability.stable_for_ms
+        );
+        assert!((2..=stability.planned_samples()).contains(&samples));
+        measured_executions += usize::try_from(samples).expect("bounded samples");
+    }
+    assert_eq!(executions.load(Ordering::SeqCst), measured_executions);
+    assert!((DATASET_SIZE * 4..=DATASET_SIZE * 10).contains(&measured_executions));
+}
+
 fn scripted_runner(executions: Arc<AtomicUsize>, remains_visible: bool) -> Runner {
     Runner::new(
         vec![Arc::new(TransientDriver {
@@ -302,5 +404,54 @@ fn state_suite(stability: AssertionStability) -> TestSuite {
                 }],
             })
             .collect(),
+    }
+}
+
+fn rendered_suite(stability: AssertionStability) -> TestSuite {
+    let rendered_text = (0..DATASET_SIZE).map(|index| TestScenario {
+        id: format!("rendered-text-{index}"),
+        name: format!("Rendered text {index}"),
+        surface: Surface::Web,
+        timeout_ms: 1_000,
+        steps: vec![TestStep {
+            id: "assert-rendered-text".to_string(),
+            action: Action::Assert {
+                expectation: Expectation::RenderedText {
+                    target: Target::TestId {
+                        value: format!("copy-{index}"),
+                    },
+                    value: format!("Ready {index}"),
+                },
+            },
+            stability: Some(stability),
+            assertion_mode: Default::default(),
+            wait_mode: Default::default(),
+        }],
+    });
+    let visible_count = (0..DATASET_SIZE).map(|index| TestScenario {
+        id: format!("visible-count-{index}"),
+        name: format!("Visible count {index}"),
+        surface: Surface::Web,
+        timeout_ms: 1_000,
+        steps: vec![TestStep {
+            id: "assert-visible-count".to_string(),
+            action: Action::Assert {
+                expectation: Expectation::VisibleCount {
+                    target: Target::Css {
+                        selector: format!("[data-row='{index}']"),
+                    },
+                    count: 3,
+                },
+            },
+            stability: Some(stability),
+            assertion_mode: Default::default(),
+            wait_mode: Default::default(),
+        }],
+    });
+
+    TestSuite {
+        name: "rendered-stability-dataset".to_string(),
+        version: 1,
+        scenarios: rendered_text.chain(visible_count).collect(),
     }
 }

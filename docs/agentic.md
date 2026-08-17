@@ -104,7 +104,7 @@ profile and every later turn reconnects with it; legacy session metadata
 without the field defaults to `disabled`. The same option is available to
 deterministic `run`, direct `agent run`, and Web MCP hosts.
 
-Action protocol revision 8 is the current cross-surface schema. Revision 2
+Action protocol revision 9 is the current cross-surface schema. Revision 2
 introduced the browser interactions needed to inspect document-style
 applications: click, hover, focus, double-click, context-click,
 fill, incremental type, check/uncheck, multi-value select, drag, key press,
@@ -124,6 +124,13 @@ value-set expectations. Web reads live DOM state; GUI admits exact values only
 when CUA reports them; GUI boolean and multi-selection state and every TUI
 control-state assertion fail closed as unsupported. The schema does not permit
 an unavailable target to satisfy a negative state expectation.
+Revision 9 adds target-bound normalized rendered text and visible locator-set
+cardinality. Web distinguishes CSS visual visibility from semantic
+accessibility visibility and traverses open Shadow DOM for semantic targets.
+Rendered text retains zero/one/many target resolution, while an empty stable
+locator set is an observed count of zero. GUI and TUI fail closed because their
+current protocols do not expose equivalent collection or rendered-text
+evidence.
 
 Semantic role, text, test-ID, label, and placeholder targets are used whenever
 the underlying browser command supports the requested subaction. Focus,
@@ -152,7 +159,7 @@ tools:
 | `test_act` | Execute exactly one typed action |
 | `test_finish` | Record a result and close the exact owned surface |
 | `test_abort` | Abort and close the exact owned surface |
-| `test_schema` | Return action protocol revision 8 and its interactive JSON Schema |
+| `test_schema` | Return action protocol revision 9 and its interactive JSON Schema |
 
 The server serializes turns within each session, bounds active sessions and
 request size, advertises only registered surfaces, and closes independent

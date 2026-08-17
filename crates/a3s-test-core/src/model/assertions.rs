@@ -83,6 +83,14 @@ pub enum Expectation {
     TextVisible(String),
     Url(String),
     Visible(Target),
+    RenderedText {
+        target: Target,
+        value: String,
+    },
+    VisibleCount {
+        target: Target,
+        count: u32,
+    },
     State {
         target: Target,
         state: ElementState,

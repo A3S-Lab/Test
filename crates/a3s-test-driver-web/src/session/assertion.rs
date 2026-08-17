@@ -54,6 +54,12 @@ impl AgentBrowserSession {
                     )),
                 }
             }
+            Expectation::RenderedText { target, value } => {
+                self.assert_rendered_text(target, value).await
+            }
+            Expectation::VisibleCount { target, count } => {
+                self.assert_visible_count(target, *count).await
+            }
             Expectation::State {
                 target,
                 state,
@@ -127,6 +133,74 @@ impl AgentBrowserSession {
             "expected": expected,
             "actual": actual,
         })))
+    }
+
+    async fn assert_rendered_text(
+        &self,
+        target: &Target,
+        expected: &str,
+    ) -> Result<StepOutput, DriverError> {
+        let actual = if let Target::Ref { value } = target {
+            let data = self
+                .execute_command(vec!["get".into(), "text".into(), value.into()])
+                .await?;
+            scalar_string(&data)
+                .map(normalize_rendered_text)
+                .ok_or_else(|| output_invalid("string"))?
+        } else {
+            self.probe_target(target, AssertionProbe::RenderedText)
+                .await?
+                .as_str()
+                .map(normalize_rendered_text)
+                .ok_or_else(|| output_invalid("string"))?
+        };
+        let expected = normalize_rendered_text(expected);
+        if actual != expected {
+            return Err(DriverError::new(
+                "test.assert.rendered_text",
+                format!("expected rendered text {expected:?}, received {actual:?}"),
+            ));
+        }
+        Ok(
+            StepOutput::new("target rendered text matched").with_data(json!({
+                "target": target,
+                "expected": expected,
+                "actual": actual,
+            })),
+        )
+    }
+
+    async fn assert_visible_count(
+        &self,
+        target: &Target,
+        expected: u32,
+    ) -> Result<StepOutput, DriverError> {
+        if matches!(target, Target::Ref { .. }) {
+            return Err(DriverError::new(
+                "test.driver.web.target_unsupported",
+                "visible_count requires a stable CSS or semantic locator, not an observation-bound ref",
+            ));
+        }
+        let value = self
+            .probe_target(target, AssertionProbe::VisibleCount)
+            .await?;
+        let actual = value
+            .as_u64()
+            .and_then(|value| u32::try_from(value).ok())
+            .ok_or_else(|| output_invalid("unsigned 32-bit integer"))?;
+        if actual != expected {
+            return Err(DriverError::new(
+                "test.assert.visible_count",
+                format!("expected {expected} visible matches, received {actual}"),
+            ));
+        }
+        Ok(
+            StepOutput::new("target visible count matched").with_data(json!({
+                "target": target,
+                "expected": expected,
+                "actual": actual,
+            })),
+        )
     }
 
     async fn assert_selected_values(
@@ -248,27 +322,27 @@ impl AgentBrowserSession {
                 .ok_or_else(|| output_invalid("actual state")),
             Some("not_found") => Err(DriverError::new(
                 "test.driver.web.target_not_found",
-                "no browser element matched the state assertion target",
+                "no browser element matched the assertion target",
             )),
             Some("ambiguous") => Err(DriverError::new(
                 "test.driver.web.target_ambiguous",
                 format!(
-                    "{} browser elements matched the state assertion target",
+                    "{} browser elements matched the assertion target",
                     result.get("count").and_then(Value::as_u64).unwrap_or(0)
                 ),
             )),
             Some("unsupported") => Err(DriverError::new(
                 "test.driver.web.state_unsupported",
-                "the matched browser element does not expose the requested state",
+                "the matched browser element does not expose the requested assertion state",
             )),
             Some("invalid_target") => Err(DriverError::new(
                 "test.driver.web.target_invalid",
                 result
                     .get("message")
                     .and_then(Value::as_str)
-                    .unwrap_or("the browser rejected the state assertion target"),
+                    .unwrap_or("the browser rejected the assertion target"),
             )),
-            _ => Err(output_invalid("state probe envelope")),
+            _ => Err(output_invalid("assertion probe envelope")),
         }
     }
 }
@@ -294,6 +368,10 @@ fn canonical_values(values: &[String], error_kind: &str) -> Result<Vec<String>, 
         ));
     }
     Ok(selected.into_iter().collect())
+}
+
+fn normalize_rendered_text(value: &str) -> String {
+    value.split_whitespace().collect::<Vec<_>>().join(" ")
 }
 
 fn state_expectation(state: ElementState, expected: bool) -> (&'static str, &'static str) {

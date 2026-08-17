@@ -772,6 +772,52 @@ state windows. The standalone Chromium fixture adds 15 positive state checks,
 four distinct negative classifications, a real 100 ms stability window, and a
 post-run private-runtime leak check.
 
+### Rendered output and locator-set observation
+
+Revision 9 adds two complementary `Expectation` variants. They answer
+questions that page-wide text and single-element visibility cannot answer:
+
+```text
+RenderedText(target, expected)
+  resolve exactly one visible target
+  -> read and normalize its rendered text
+  -> compare expected and observed copy
+
+VisibleCount(locator, expected)
+  resolve the complete visible match set
+  -> observe its cardinality, including zero
+  -> compare expected and observed count
+```
+
+The different target-resolution rules are intentional. Rendered text needs an
+element identity; zero matches and multiple matches are driver errors because
+neither yields authoritative text. Cardinality needs a collection identity;
+an empty set is authoritative numeric evidence, while a ref or visual point
+cannot describe a collection and is rejected before dispatch.
+
+The Web probe performs matching, composed-ancestor visibility checks, and
+value capture inside one page evaluation for semantic and CSS locators. CSS
+uses the visual plane and therefore counts an element whose only exclusion is
+`aria-hidden`. Semantic locators use the accessibility plane, exclude
+`aria-hidden` across composed ancestors, and traverse open Shadow DOM. Both
+exclude hidden, display-none, visibility-hidden, zero-opacity, and
+zero-geometry elements. This boundary is narrower than screenshot perception:
+it does not infer occlusion or intent.
+
+Driver errors own invalid selectors, malformed probe envelopes, and
+single-target resolution failures. Product assertions own only observed text
+or count differences. Runner stability then repeats the exact immutable
+assertion; later product mismatches become `test.assert.unstable`, while later
+driver failures remain driver failures. GUI and TUI explicitly reject both
+variants because their current protocols do not provide equivalent evidence.
+
+Revision-9 coverage contains 600 deterministic Web classifications, split
+into six 100-case classes; 200 consistent and 200 transient text/count
+stability scenarios; four typed assertions in Agent Host deterministic
+verification; and a standalone Chromium CLI fixture with seven passing
+observations, seven error classifications, two 100 ms windows, open Shadow
+DOM, and a post-run private-runtime leak check.
+
 ## Lifecycle and interrupts
 
 ```text

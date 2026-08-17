@@ -261,6 +261,8 @@ fn visit_action_targets(
 fn expectation_target(expectation: &Expectation) -> Option<&Target> {
     match expectation {
         Expectation::Visible(target)
+        | Expectation::RenderedText { target, .. }
+        | Expectation::VisibleCount { target, .. }
         | Expectation::State { target, .. }
         | Expectation::Value { target, .. }
         | Expectation::SelectedValues { target, .. } => Some(target),
@@ -271,6 +273,8 @@ fn expectation_target(expectation: &Expectation) -> Option<&Target> {
 fn expectation_target_mut(expectation: &mut Expectation) -> Option<&mut Target> {
     match expectation {
         Expectation::Visible(target)
+        | Expectation::RenderedText { target, .. }
+        | Expectation::VisibleCount { target, .. }
         | Expectation::State { target, .. }
         | Expectation::Value { target, .. }
         | Expectation::SelectedValues { target, .. } => Some(target),
