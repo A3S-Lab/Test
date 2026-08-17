@@ -145,6 +145,10 @@ wait "dashboard-url" {
     url = "**/dashboard"
 }
 
+wait "dialog-closed" {
+    hidden = role("dialog", "Checkout")
+}
+
 expect "saved" {
     text = "Saved"
 }
@@ -168,14 +172,20 @@ screenshot "final" {
 }
 ```
 
-A wait accepts exactly one of `load`, `text`, `url`, or `visible`. Visible
-waits require a direct `ref()` or `css()` target. An expectation accepts
-exactly one of `text`, `url`, `visible`, or `hidden`. `hidden` means that a
-stable semantic or CSS locator has no visible match, including an absent
-element. It rejects `ref()` and `visual_point()` because an unresolved
-observation-bound target is not proof of hidden product state. A visible match
+A wait accepts exactly one of `load`, `text`, `regex`, `url`, `visible`, or
+`hidden`. An expectation accepts exactly one of `text`, `url`, `visible`, or
+`hidden`. `expect hidden` immediately proves that a stable semantic or CSS
+locator has no visible match, including an absent element. A visible match
 fails as `test.assert.hidden`; a later visible sample in a stability window
-fails as `test.assert.unstable`. Driver and stale-target errors remain errors.
+fails as `test.assert.unstable`.
+
+`wait hidden` uses the same positive visibility probe, first immediately and
+then every 50 ms through the scenario deadline. It succeeds only on
+`test.assert.visible`, caps work at 1,201 probes, and records first/last visible
+counter-evidence plus timing metrics. Both negative forms reject `ref()` and
+`visual_point()` because an unresolved observation-bound target is not proof
+of hidden product state. Driver, stale-target, and ambiguity errors remain
+errors. This is runner policy and does not change action protocol revision 7.
 
 Focus, double-click, context-click, type, uncheck, select, drag, and
 target-scoped wheel require `ref()` or `css()` with the current browser

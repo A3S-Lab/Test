@@ -218,9 +218,23 @@ expect "dialog-closed" {
 }
 ```
 
-The runner evaluates `hidden` through the existing positive visibility action,
-so the driver protocol remains revision 7. A later visible sample fails a
-stable hidden assertion as `test.assert.unstable`. Use a semantic or CSS
+When disappearance is the synchronization point, use the same stable locator
+on a `wait` instead of guessing an animation duration:
+
+```acl
+wait "dialog-closed" {
+    hidden = role("dialog", "Checkout")
+}
+```
+
+The runner evaluates both forms through the existing positive visibility
+action, so the driver protocol remains revision 7. `expect hidden` probes once;
+`wait hidden` probes immediately and then every 50 ms until the first
+`test.assert.visible` mismatch proves that no visible match remains. A scenario
+deadline or cancellation interrupts the wait and still closes the owned
+surface. Work is statically capped at 1,201 probes, and timeout/cancellation
+results retain the last visible counter-evidence. A later visible sample fails
+a stable hidden assertion as `test.assert.unstable`. Use a semantic or CSS
 locator; observation-bound `ref()` and `visual_point()` targets are rejected
 because a missing ephemeral reference is not proof that the product element
 is hidden.

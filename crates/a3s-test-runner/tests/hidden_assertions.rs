@@ -281,6 +281,7 @@ fn suite(stability: Option<AssertionStability>) -> TestSuite {
                     },
                     stability,
                     assertion_mode: AssertionMode::Hidden,
+                    wait_mode: Default::default(),
                 }],
             })
             .collect(),

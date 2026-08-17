@@ -266,6 +266,10 @@ jobs:
         run: |
           export A3S_TEST_AGENT_BROWSER="$(command -v agent-browser)"
           bash .github/scripts/run-cargo-test.sh \
+            cargo test -p a3s-test-cli --test hidden_visibility_e2e \
+            real_agent_browser_runs_hidden_visibility_suite \
+            --locked -- --ignored --exact --nocapture
+          bash .github/scripts/run-cargo-test.sh \
             cargo test -p a3s-test-cli --test web_e2e \
             real_agent_browser_runs_the_hermetic_web_suite \
             --locked -- --ignored --exact --nocapture
@@ -292,6 +296,9 @@ jobs:
             throw "Installed standalone browser executable not found: $browser"
           }
           $env:A3S_TEST_AGENT_BROWSER = $browser
+          cargo test -p a3s-test-cli --test hidden_visibility_e2e `
+            real_agent_browser_runs_hidden_visibility_suite `
+            --locked -- --ignored --exact --nocapture
           cargo test -p a3s-test-cli --test web_e2e `
             real_agent_browser_runs_the_hermetic_web_suite `
             --locked -- --ignored --exact --nocapture

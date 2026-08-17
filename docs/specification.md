@@ -132,11 +132,15 @@ screenshot "final" {
 - `text = "..."`
 - `url = "..."`
 - `visible = css("...")` or `visible = ref("@e1")`
+- `hidden = <stable target>`
 
 Visible waits require a direct CSS selector or current observation ref.
 `domcontentloaded` is evaluated against the current document readiness state,
 so it remains deterministic when navigation completed before the separate wait
 command began. `networkidle` uses the browser runtime's bounded idle detector.
+`hidden` is runner-owned negative synchronization. It accepts a stable semantic
+or CSS locator, completes immediately when no visible match exists, and never
+treats an observation-bound ref failure as disappearance.
 
 `expect` accepts exactly one of:
 
@@ -199,11 +203,73 @@ A successful hidden assertion records:
 }
 ```
 
-`hidden` is an assertion, not a wait for disappearance. Its first probe is
-immediate. Add a typed readiness wait before it when the workflow must first
-reach a known state. Add `stable_for_ms` when the target must remain hidden;
-if it reappears at a later sample, the step fails with
-`test.assert.unstable`.
+`expect hidden` is an immediate assertion. Use `wait hidden` when disappearance
+itself is the readiness condition. Add `stable_for_ms` to an expectation when
+the target must remain hidden after the first successful observation; if it
+reappears at a later sample, the step fails with `test.assert.unstable`.
+
+### Waiting for disappearance
+
+```acl
+wait "dialog-closed" {
+    hidden = role("dialog", "Checkout")
+}
+```
+
+This is `TestStep` wait policy, not a new `Action` or `WaitCondition` variant.
+Core stores `Action::Wait { condition: WaitCondition::Visible(target) }` plus
+`WaitMode::Hidden`; action protocol revision 7 and surface-driver command
+schemas remain unchanged. Runner admission requires `AssertionMode::Positive`,
+no assertion-stability policy, and a locator that is not `ref()` or
+`visual_point()`.
+
+The execution sequence is fixed:
+
+1. Build a read-only `Assert(Visible(target))` probe and execute it immediately.
+2. If the probe returns `test.assert.visible`, finish successfully. An already
+   hidden or absent target therefore requires one probe and no interval wait.
+3. If the probe returns visible evidence, retain the first and latest positive
+   payloads, wait 50 ms through the scenario cancellation/deadline primitive,
+   and probe again.
+4. Preserve every other assertion, driver, stale-target, ambiguity, and
+   infrastructure error. Unknown state is never converted into success.
+5. Stop at 1,201 completed probes even when a programmatic scenario declares a
+   longer deadline. The result is `test.run.hidden_wait_probe_limit`.
+
+The scenario deadline remains authoritative. A target that is still visible at
+that deadline produces the normal timed-out scenario and exit code 124.
+Cancellation produces the normal cancelled result and exit code 130. Both
+terminal paths still run exact owned-session cleanup and retain the last known
+visible payload under `output.data.last_visible`.
+
+A successful delayed wait records bounded metrics:
+
+```json
+{
+  "expected": "hidden",
+  "visible": false,
+  "first_visible": { "visible": true },
+  "last_visible": { "visible": true },
+  "probe_error": {
+    "code": "test.assert.visible",
+    "message": "target is not visible"
+  },
+  "wait": {
+    "condition": "hidden",
+    "outcome": "matched",
+    "poll_interval_ms": 50,
+    "max_probes": 1201,
+    "probes": 3,
+    "observed_ms": 101
+  }
+}
+```
+
+`probes` counts logical visibility observations. `attempts` counts driver
+dispatches and can be larger only when a retryable infrastructure failure is
+admitted. The output outcomes are `matched`, `timed_out`, `cancelled`,
+`probe_limit`, and `inconclusive`; the step status and stable error code remain
+the authoritative verdict.
 
 ### Assertion stability
 

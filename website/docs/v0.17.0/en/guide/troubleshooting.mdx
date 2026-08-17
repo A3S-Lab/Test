@@ -93,7 +93,7 @@ Bind waits to observable conditions.
 
 Do not add infinite polling or an arbitrary long sleep. If the page never becomes ready, repair the host readiness signal or the success condition.
 
-## A hidden assertion fails or is inconclusive
+## A hidden assertion or disappearance wait fails
 
 Read the exact error before changing the locator.
 
@@ -105,8 +105,11 @@ Read the exact error before changing the locator.
 | `test.spec.hidden_target_unstable` | ACL used `ref()` or `visual_point()`                                 | Replace observation-bound identity with a semantic or CSS target   |
 | `test.driver.*`                    | The adapter could not establish visibility                           | Target support, stale/ambiguous state, driver output, and logs     |
 | `test.run.assertion_mode_invalid`  | Programmatic construction bypassed the ACL admission invariant       | Construct hidden mode only around `Assert(Visible(stable target))` |
+| `test.run.wait_mode_invalid`       | Programmatic hidden wait used an invalid action, policy, or target   | Use `Wait(Visible(stable target))` without assertion stability     |
+| `test.run.hidden_wait_probe_limit` | The target stayed visible through all 1,201 bounded probes           | Product transition, locator scope, and scenario-level readiness    |
+| `test.run.timeout` with wait data  | The target was still visible when the scenario deadline expired      | `last_visible`, preceding step time, and the declared deadline     |
 
-`hidden` means “no visible match now”; it is not a wait for a target to disappear. If the product transition is still in progress, establish a typed readiness condition first. Use `stable_for_ms` only when the requirement is that the target remain hidden after the first successful hidden probe.
+`expect hidden` means “no visible match now.” Use `wait hidden` when the product transition itself must remove or hide the target. Its `output.data.wait` reports `matched`, `timed_out`, `cancelled`, `probe_limit`, or `inconclusive`, together with probe count and elapsed time. Use `stable_for_ms` only when the requirement is that the target remain hidden after the first successful hidden probe.
 
 Do not replace a semantic locator with a snapshot ref. A missing ref can mean stale observation state, which is intentionally not accepted as proof that the product element is gone. Do not suppress `test.driver.*`; an invalid selector, ambiguous GUI match, malformed browser response, or lost surface leaves visibility unknown.
 

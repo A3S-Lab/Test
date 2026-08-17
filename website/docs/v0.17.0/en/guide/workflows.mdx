@@ -101,7 +101,7 @@ expect "checkout-dialog-closed" {
 
 Use role, label, test ID, placeholder, text, CSS, or another stable locator supported by the selected surface. ACL admission rejects `ref()` and `visual_point()` as `test.spec.hidden_target_unstable`: both belong to an observation, so an unresolved value may be stale rather than hidden. A programmatic suite that bypasses admission fails before dispatch as `test.run.assertion_mode_invalid`.
 
-`hidden` observes immediately; it does not wait for a transition to finish. Reach a deterministic ready state first when needed. To prove the target remains hidden through hydration or rollback, combine it with bounded sampling:
+`expect hidden` observes immediately. To prove the target remains hidden through hydration or rollback, combine it with bounded sampling:
 
 ```acl
 expect "checkout-dialog-stays-closed" {
@@ -112,6 +112,26 @@ expect "checkout-dialog-stays-closed" {
 ```
 
 If the initial hidden probe passes and a later probe finds a visible target, the result is `test.assert.unstable`. The stability payload retains `visible = false` in `assertion.first` and the visible counterexample in `assertion.last`.
+
+### Wait until a target disappears
+
+Use `wait hidden` when disappearance is the readiness condition. It completes immediately for an already hidden or absent target, without guessing an animation duration.
+
+```acl
+wait "checkout-dialog-closed" {
+    hidden = role("dialog", "Checkout")
+}
+```
+
+The ACL compiler keeps `Action::Wait(WaitCondition::Visible(target))` and adds runner-owned `WaitMode::Hidden`, so action protocol revision 7 is unchanged. Runner executes an immediate positive visibility assertion, then repeats it every 50 ms while the target remains visible.
+
+| Positive probe result                  | Hidden wait result                                                                               |
+| -------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| `test.assert.visible` mismatch         | Pass immediately; record `visible = false`, probe count, and elapsed time                        |
+| Visible target evidence                | Retain first/latest positive data, then continue until deadline, cancellation, or the next probe |
+| Driver, stale, ambiguous, or I/O error | Preserve the original error as `inconclusive`; unknown visibility never proves disappearance     |
+
+The static ceiling is 1,201 probes. A longer programmatic deadline cannot exceed it and fails with `test.run.hidden_wait_probe_limit`. Scenario timeout and cancellation keep their normal statuses and exit codes, close the exact owned session, and retain `last_visible` counter-evidence. `output.data.wait` reports `outcome`, `poll_interval_ms`, `max_probes`, `probes`, and `observed_ms`. Agent-run deterministic verification uses the same runner path, so the ACL has identical semantics there.
 
 ## Prove that transient UI has settled
 

@@ -118,6 +118,7 @@ fn screenshot(path: &str) -> TestStep {
         },
         stability: None,
         assertion_mode: Default::default(),
+        wait_mode: Default::default(),
     }
 }
 
@@ -342,6 +343,7 @@ async fn linked_video_output_is_rejected_when_recording_stops() {
             },
             stability: None,
             assertion_mode: Default::default(),
+            wait_mode: Default::default(),
         })
         .await
         .expect("video start");
@@ -369,6 +371,7 @@ async fn linked_video_output_is_rejected_when_recording_stops() {
             },
             stability: None,
             assertion_mode: Default::default(),
+            wait_mode: Default::default(),
         })
         .await
         .expect_err("linked video output must be rejected");

@@ -4,6 +4,15 @@
 
 ### Added
 
+- Added bounded ACL `wait hidden` synchronization for stable targets. The
+  runner reuses immediate positive visibility assertions at a fixed 50 ms
+  interval, succeeds only on `test.assert.visible`, preserves every driver or
+  target-resolution failure, retains first/last visible counter-evidence on
+  terminal results, stops at the scenario deadline, cancellation, or a static
+  1,201-probe limit, and keeps action protocol revision 7. Four deterministic
+  100-case datasets cover initially hidden, delayed disappearance, persistent
+  visibility, and driver-failure states; cancellation, probe-limit, agent-host
+  verification, and real Chromium fixtures cover the remaining boundaries.
 - Added negative target-visibility assertions for ACL `expect` steps. The new
   `hidden = <stable target>` condition passes when no visible match exists,
   including absent and rendered-hidden elements, and returns

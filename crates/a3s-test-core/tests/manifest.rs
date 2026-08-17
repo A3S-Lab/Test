@@ -1,7 +1,7 @@
 use a3s_test_core::{
     Action, AssertionMode, AssertionStability, CaptureOperation, DialogOperation, Expectation,
     FrameTarget, LoadState, ModifierKey, NetworkRoute, Surface, TabOperation, Target, TestSuite,
-    VideoOperation, WaitCondition,
+    VideoOperation, WaitCondition, WaitMode,
 };
 
 const VALID_SUITE: &str = r#"
@@ -143,6 +143,7 @@ suite "negative-visibility" {
         }
     }
 }
+
 "##,
     )
     .expect("hidden assertion");
@@ -173,6 +174,40 @@ suite "negative-visibility" {
 }
 
 #[test]
+fn parses_hidden_wait_as_runner_policy_without_changing_the_action_contract() {
+    let suite = TestSuite::from_acl(
+        r##"
+suite "negative-wait" {
+    scenario "checkout" {
+        surface = "web"
+        wait "dialog-closed" {
+            hidden = role("dialog", "Checkout")
+        }
+    }
+}
+"##,
+    )
+    .expect("hidden wait");
+
+    let step = &suite.scenarios[0].steps[0];
+    assert_eq!(
+        step.action,
+        Action::Wait {
+            condition: WaitCondition::Visible(Target::Role {
+                role: "dialog".to_string(),
+                name: "Checkout".to_string(),
+            }),
+        }
+    );
+    assert_eq!(step.wait_mode, WaitMode::Hidden);
+
+    let encoded = serde_json::to_value(step).expect("serialize hidden wait step");
+    assert_eq!(encoded["wait_mode"], "hidden");
+    assert_eq!(encoded["action"]["type"], "wait");
+    assert_eq!(encoded["action"]["condition"]["type"], "visible");
+}
+
+#[test]
 fn positive_assertion_mode_is_omitted_from_serialized_steps() {
     let suite = TestSuite::from_acl(VALID_SUITE).expect("valid suite");
     let step = &suite.scenarios[0].steps[4];
@@ -180,6 +215,11 @@ fn positive_assertion_mode_is_omitted_from_serialized_steps() {
     assert_eq!(step.assertion_mode, AssertionMode::Positive);
     let encoded = serde_json::to_value(step).expect("serialize positive assertion step");
     assert!(encoded.get("assertion_mode").is_none());
+    assert!(encoded.get("wait_mode").is_none());
+    let decoded: a3s_test_core::TestStep =
+        serde_json::from_value(encoded).expect("decode a step without runner policy fields");
+    assert_eq!(decoded.assertion_mode, AssertionMode::Positive);
+    assert_eq!(decoded.wait_mode, WaitMode::Positive);
 }
 
 #[test]
@@ -208,6 +248,36 @@ suite "invalid-hidden" {{
 "#,
         );
         let error = TestSuite::from_acl(&source).expect_err("invalid hidden assertion must fail");
+        assert_eq!(error.code(), code);
+    }
+}
+
+#[test]
+fn rejects_ambiguous_or_observation_bound_hidden_waits() {
+    for (attributes, code) in [
+        (
+            "hidden = css(\"#dialog\")\n            visible = css(\"#dialog\")",
+            "test.spec.condition_ambiguous",
+        ),
+        ("hidden = ref(\"@e4\")", "test.spec.hidden_target_unstable"),
+        (
+            "hidden = visual_point(\"screen.png\", 20, 30)",
+            "test.spec.hidden_target_unstable",
+        ),
+    ] {
+        let source = format!(
+            r#"
+suite "invalid-hidden-wait" {{
+    scenario "checkout" {{
+        surface = "web"
+        wait "dialog-closed" {{
+            {attributes}
+        }}
+    }}
+}}
+"#,
+        );
+        let error = TestSuite::from_acl(&source).expect_err("invalid hidden wait must fail");
         assert_eq!(error.code(), code);
     }
 }

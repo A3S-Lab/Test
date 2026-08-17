@@ -520,6 +520,7 @@ async fn semantic_actions_use_opaque_refs_and_owned_cleanup() {
             },
             stability: None,
             assertion_mode: Default::default(),
+            wait_mode: Default::default(),
         })
         .await
         .expect("semantic click");
@@ -535,6 +536,7 @@ async fn semantic_actions_use_opaque_refs_and_owned_cleanup() {
             },
             stability: None,
             assertion_mode: Default::default(),
+            wait_mode: Default::default(),
         })
         .await
         .expect_err("expired reference must fail");
@@ -548,6 +550,7 @@ async fn semantic_actions_use_opaque_refs_and_owned_cleanup() {
             },
             stability: None,
             assertion_mode: Default::default(),
+            wait_mode: Default::default(),
         })
         .await
         .expect("window screenshot");
@@ -605,6 +608,7 @@ async fn ambiguous_semantic_target_fails_without_input() {
             },
             stability: None,
             assertion_mode: Default::default(),
+            wait_mode: Default::default(),
         })
         .await
         .expect_err("ambiguous target must fail");
@@ -621,6 +625,7 @@ async fn ambiguous_semantic_target_fails_without_input() {
             },
             stability: None,
             assertion_mode: Default::default(),
+            wait_mode: Default::default(),
         })
         .await
         .expect_err("ambiguous assertion target must remain a driver error");
@@ -647,6 +652,7 @@ async fn visible_assertions_classify_missing_targets_without_hiding_reference_er
             },
             stability: None,
             assertion_mode: Default::default(),
+            wait_mode: Default::default(),
         })
         .await
         .expect_err("missing semantic target must be an assertion mismatch");
@@ -666,6 +672,7 @@ async fn visible_assertions_classify_missing_targets_without_hiding_reference_er
             },
             stability: None,
             assertion_mode: Default::default(),
+            wait_mode: Default::default(),
         })
         .await
         .expect_err("stale observation ref must remain a driver error");
@@ -781,6 +788,7 @@ async fn window_vision_points_are_grounded_in_verified_image_evidence() {
             },
             stability: None,
             assertion_mode: Default::default(),
+            wait_mode: Default::default(),
         })
         .await
         .expect("grounded visual click");
@@ -821,6 +829,7 @@ async fn visual_actions_reject_old_or_modified_grounding_images() {
             },
             stability: None,
             assertion_mode: Default::default(),
+            wait_mode: Default::default(),
         })
         .await
         .expect_err("old image must fail");
@@ -846,6 +855,7 @@ async fn visual_actions_reject_old_or_modified_grounding_images() {
             },
             stability: None,
             assertion_mode: Default::default(),
+            wait_mode: Default::default(),
         })
         .await
         .expect_err("modified image must fail");
@@ -887,6 +897,7 @@ async fn visual_drag_requires_one_current_grounding_image() {
             },
             stability: None,
             assertion_mode: Default::default(),
+            wait_mode: Default::default(),
         })
         .await
         .expect("visual drag");

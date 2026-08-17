@@ -101,7 +101,7 @@ expect "checkout-dialog-closed" {
 
 应使用所选 surface 支持的 role、label、test ID、placeholder、text、CSS 或其他稳定定位器。ACL 准入会以 `test.spec.hidden_target_unstable` 拒绝 `ref()` 与 `visual_point()`。两者都属于某次观察，解析失败可能只是证据过期，不能证明产品目标已隐藏。绕过准入的程序化 suite 会在派发前以 `test.run.assertion_mode_invalid` 关闭失败。
 
-`hidden` 会立即观察，不会等待过渡自行结束。需要时应先到达确定性的 ready 状态。若要证明目标在水合或回滚期间持续隐藏，可组合有界采样。
+`expect hidden` 会立即观察。若要证明目标在水合或回滚期间持续隐藏，可组合有界采样。
 
 ```acl
 expect "checkout-dialog-stays-closed" {
@@ -112,6 +112,26 @@ expect "checkout-dialog-stays-closed" {
 ```
 
 第一次隐藏探测通过、后续探测又发现可见目标时，结果为 `test.assert.unstable`。稳定性数据会在 `assertion.first` 中保留 `visible = false`，并在 `assertion.last` 中保留可见反例。
+
+### 等待目标消失
+
+当“目标消失”本身就是 ready 条件时，使用 `wait hidden`。目标已经隐藏或不存在时立即结束，不需要猜测动画时长。
+
+```acl
+wait "checkout-dialog-closed" {
+    hidden = role("dialog", "Checkout")
+}
+```
+
+ACL 编译器仍保存 `Action::Wait(WaitCondition::Visible(target))`，只增加 Runner 负责的 `WaitMode::Hidden`，因此 Action 协议修订 7 不变。Runner 先执行一次立即的正向可见性断言；目标仍可见时，每 50 ms 重复一次。
+
+| 正向探测结果                      | 隐藏等待结果                                                            |
+| --------------------------------- | ----------------------------------------------------------------------- |
+| 返回 `test.assert.visible` 不匹配 | 立即通过，记录 `visible = false`、探测次数和耗时                        |
+| 返回目标可见证据                  | 保留第一次和最近一次正向数据，然后继续到 deadline、取消或下一次探测     |
+| 驱动、过期、歧义或 I/O 错误       | 保留原始错误并标记为 `inconclusive`，可见性未知绝不会被当作目标已经消失 |
+
+静态上限为 1,201 次探测。程序化场景即使声明更长 deadline，也会以 `test.run.hidden_wait_probe_limit` 在上限处失败。场景超时和取消保留原有状态与退出码，关闭准确的自有会话，并在 `last_visible` 中保留最近的可见反证。`output.data.wait` 会记录 `outcome`、`poll_interval_ms`、`max_probes`、`probes` 和 `observed_ms`。Agent run 的确定性验证也走同一条 Runner 路径，因此同一 ACL 不会出现两套语义。
 
 ## 证明瞬态界面已经稳定
 

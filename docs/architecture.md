@@ -695,7 +695,7 @@ reference with the GitHub Release.
 ```text
 TestSuite
 └── TestScenario [surface, deadline]
-    └── TestStep [assertion mode, optional stability policy]
+    └── TestStep [assertion mode, wait mode, optional stability policy]
         └── Action [typed locator / condition / assertion]
 
 SurfaceDriver
@@ -716,7 +716,13 @@ assertion, then the runner dispatches a positive probe and deterministically
 inverts only `test.assert.visible`. Visible evidence becomes
 `test.assert.hidden`; driver, stale-reference, and ambiguity errors keep their
 original ownership. Stability sampling repeats that same runner-owned policy,
-so no surface capability revision is needed.
+so no surface capability revision is needed. A hidden wait stores the existing
+visible-target wait condition plus runner-owned wait mode. The runner dispatches
+immediate positive visibility assertions at a fixed interval and stops on the
+first `test.assert.visible` mismatch. Only that assertion mismatch proves the
+negative condition; stale, ambiguous, driver, and infrastructure errors remain
+failures. The scenario deadline, cancellation token, and static probe cap bound
+the loop, while terminal results retain the last positive counter-evidence.
 
 ## Lifecycle and interrupts
 

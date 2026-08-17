@@ -236,7 +236,52 @@ ACL 编译器保存现有的 `Action::Assert(Expectation::Visible(target))`，�
 | `test.assert.hidden`               | 正向探测发现可见目标                        |
 | `test.run.assertion_mode_invalid`  | 程序化 suite 把隐藏模式附在非法动作或目标上 |
 
-`hidden` 是立即断言，不负责等待目标消失。产品要求持续隐藏时，可组合 `stable_for_ms`。后续采样又发现目标可见时返回 `test.assert.unstable`，同时保留第一次隐藏观察和可见反例。
+`expect hidden` 是立即断言。产品要求持续隐藏时，可组合 `stable_for_ms`。后续采样又发现目标可见时返回 `test.assert.unstable`，同时保留第一次隐藏观察和可见反例。目标消失本身就是同步条件时，使用下面的等待形式。
+
+### ACL 隐藏等待
+
+```acl
+wait "dialog-closed" {
+    hidden = role("dialog", "Checkout")
+}
+```
+
+编译器保存现有的可见目标等待条件，并增加 `wait_mode = hidden`；Action 协议修订 7 不变。只要正向探测仍返回可见证据，Runner 就先立即执行一次只读可见性断言，再每 50 ms 探测一次。
+
+| 边界                     | 结果                                                                   |
+| ------------------------ | ---------------------------------------------------------------------- |
+| 目标已经隐藏或不存在     | 一次探测后通过，不等待间隔                                             |
+| 目标随后隐藏             | 第一次收到 `test.assert.visible` 不匹配时通过                          |
+| 到场景 deadline 仍然可见 | `timed_out`、`test.run.timeout`、退出码 124，并保留最近可见反证        |
+| 运行被取消               | `cancelled`、`test.run.cancelled`、退出码 130，执行有界清理并保留反证  |
+| 达到 1,201 次探测        | 以 `test.run.hidden_wait_probe_limit` 失败                             |
+| 驱动、过期或歧义错误     | 保留原始错误并记录 `wait.outcome = inconclusive`，绝不转换为目标已消失 |
+| 程序化策略或目标不匹配   | 派发前返回 `test.run.wait_mode_invalid`                                |
+
+延迟后匹配的等待会在 `output.data` 中给出以下稳定结构：
+
+```json
+{
+  "expected": "hidden",
+  "visible": false,
+  "first_visible": { "visible": true },
+  "last_visible": { "visible": true },
+  "probe_error": {
+    "code": "test.assert.visible",
+    "message": "target is not visible"
+  },
+  "wait": {
+    "condition": "hidden",
+    "outcome": "matched",
+    "poll_interval_ms": 50,
+    "max_probes": 1201,
+    "probes": 3,
+    "observed_ms": 101
+  }
+}
+```
+
+`probes` 统计逻辑观察次数。步骤 `attempts` 统计驱动派发次数，只有已准入的可重试基础设施故障才可能让后者更大。普通 suite 与 agent run 的确定性验证使用同一套 Runner 策略。
 
 ### ACL 稳定窗口断言
 
@@ -312,6 +357,6 @@ expect "settled-total" {
 
 ## Web 能力摘要
 
-Web 驱动支持导航、语义快照、点击、悬停、聚焦、填写与输入、选择范围文本插入、勾选、选择、双击、右键、拖动、按键、修饰键滚轮与视口设置。同步操作包括 load、文本、URL 与可见性 wait 或 expect。证据包括截图、可访问树、console、页面错误、HAR、Chrome trace、WebM 视频和受约束下载。
+Web 驱动支持导航、语义快照、点击、悬停、聚焦、填写与输入、选择范围文本插入、勾选、选择、双击、右键、拖动、按键、修饰键滚轮与视口设置。同步操作包括 load、文本、URL、正向可见性、有界消失等待，以及正向或隐藏断言。证据包括截图、可访问树、console、页面错误、HAR、Chrome trace、WebM 视频和受约束下载。
 
 浏览器默认 headless，`--headed` 是明确的调试选项。网络和导航范围分别受初始 origin、`--allow-origin` 与显式 hostname 例外约束。

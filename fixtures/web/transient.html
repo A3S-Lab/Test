@@ -22,6 +22,7 @@
       <output data-testid="transient-state">Transient state is visible</output>
       <output data-testid="hidden-static" hidden>Static hidden state</output>
       <output data-testid="visible-static">Static visible state</output>
+      <output data-testid="visible-then-hidden">Visible state that disappears</output>
       <output
         data-testid="hidden-then-visible"
         style="box-sizing: border-box; width: 0; height: 20px; padding: 0; overflow: hidden"
@@ -56,6 +57,21 @@
           firstHiddenSample = false;
           queueMicrotask(() => {
             hiddenThenVisible.style.width = "240px";
+          });
+        }
+        return rect;
+      };
+
+      const visibleThenHidden = document.querySelector('[data-testid="visible-then-hidden"]');
+      const readVisibleRect = visibleThenHidden.getBoundingClientRect.bind(visibleThenHidden);
+      let visibleSamplesRemaining = 2;
+
+      visibleThenHidden.getBoundingClientRect = () => {
+        const rect = readVisibleRect();
+        visibleSamplesRemaining -= 1;
+        if (visibleSamplesRemaining === 0) {
+          queueMicrotask(() => {
+            visibleThenHidden.hidden = true;
           });
         }
         return rect;

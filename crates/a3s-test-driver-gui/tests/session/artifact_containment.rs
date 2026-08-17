@@ -57,6 +57,7 @@ async fn directory_symlink_escape_is_rejected_before_any_capture_or_write() {
             },
             stability: None,
             assertion_mode: Default::default(),
+            wait_mode: Default::default(),
         })
         .await
         .expect_err("linked artifact directory must be rejected");
@@ -96,6 +97,7 @@ async fn existing_linked_screenshot_is_rejected_without_touching_its_target() {
             },
             stability: None,
             assertion_mode: Default::default(),
+            wait_mode: Default::default(),
         })
         .await
         .expect_err("linked screenshot must be rejected");
@@ -152,6 +154,7 @@ async fn linked_grounding_file_is_rejected_even_when_its_digest_matches() {
             },
             stability: None,
             assertion_mode: Default::default(),
+            wait_mode: Default::default(),
         })
         .await
         .expect_err("linked grounding image must be stale");

@@ -380,6 +380,7 @@ impl AgentLoop {
                         action: action.clone(),
                         stability: None,
                         assertion_mode: Default::default(),
+                        wait_mode: Default::default(),
                     };
                     match await_stage(&cancellation, deadline, session.execute(&step)).await {
                         Stage::Completed(Ok(output)) => {

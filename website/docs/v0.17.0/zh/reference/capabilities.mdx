@@ -72,20 +72,21 @@ a3s-test worker inventory
 
 ### 同步、网络与证据动作
 
-| 动作                               | 输入                                      | 输出与约束                                                |
-| ---------------------------------- | ----------------------------------------- | --------------------------------------------------------- |
-| `wait`                             | load、文本、URL 或可见性条件              | 有明确 deadline，超时返回结构化失败                       |
-| `assert`                           | 文本、URL、可见性或其他已准入 expectation | 由本地证据决定通过或失败，provider 不能覆盖结果           |
-| 隐藏 `assert`                      | 稳定的语义或 CSS 目标                     | 没有可见匹配时通过；可见反例返回 `test.assert.hidden`     |
-| 稳定 `assert`                      | expectation、`stable_for_ms` 与可选间隔   | 只重复只读断言；后续采样为假时返回 `test.assert.unstable` |
-| `network_route`、`network_unroute` | 已准入 pattern 与静态 route               | 只能在网络策略内添加或移除规则                            |
-| `har`、`trace`、`video`            | start 或 stop 与受约束相对路径            | 只记录显式窗口，停止后产出会话所有的工件                  |
-| `screenshot`                       | 相对 PNG 路径                             | 截图位于当前 artifact 根，可绑定后续 provider 请求        |
-| `accessibility`                    | 相对 JSON 路径与 interactive 选择         | 保存交互树或完整语义树                                    |
-| `console`、`page_errors`           | 相对 JSON 路径与 clear 选择               | 保存浏览器错误基线，清空只影响当前驱动缓冲                |
-| `terminal_paste`                   | 有界文本                                  | 只在 TUI surface 合法                                     |
-| `terminal_resize`                  | columns 与 rows                           | 调整自有 PTY 或 ConPTY，随后终端语义会更新                |
-| `terminal_recording`               | 相对 artifact 路径                        | 保存受约束终端记录，不写到工作区任意位置                  |
+| 动作                               | 输入                                      | 输出与约束                                                  |
+| ---------------------------------- | ----------------------------------------- | ----------------------------------------------------------- |
+| `wait`                             | load、文本、URL 或可见性条件              | 有明确 deadline，超时返回结构化失败                         |
+| 隐藏 `wait`                        | 稳定的语义或 CSS 目标                     | 每 50 ms 只读探测；由 deadline、取消和 1,201 次探测共同约束 |
+| `assert`                           | 文本、URL、可见性或其他已准入 expectation | 由本地证据决定通过或失败，provider 不能覆盖结果             |
+| 隐藏 `assert`                      | 稳定的语义或 CSS 目标                     | 没有可见匹配时通过；可见反例返回 `test.assert.hidden`       |
+| 稳定 `assert`                      | expectation、`stable_for_ms` 与可选间隔   | 只重复只读断言；后续采样为假时返回 `test.assert.unstable`   |
+| `network_route`、`network_unroute` | 已准入 pattern 与静态 route               | 只能在网络策略内添加或移除规则                              |
+| `har`、`trace`、`video`            | start 或 stop 与受约束相对路径            | 只记录显式窗口，停止后产出会话所有的工件                    |
+| `screenshot`                       | 相对 PNG 路径                             | 截图位于当前 artifact 根，可绑定后续 provider 请求          |
+| `accessibility`                    | 相对 JSON 路径与 interactive 选择         | 保存交互树或完整语义树                                      |
+| `console`、`page_errors`           | 相对 JSON 路径与 clear 选择               | 保存浏览器错误基线，清空只影响当前驱动缓冲                  |
+| `terminal_paste`                   | 有界文本                                  | 只在 TUI surface 合法                                       |
+| `terminal_resize`                  | columns 与 rows                           | 调整自有 PTY 或 ConPTY，随后终端语义会更新                  |
+| `terminal_recording`               | 相对 artifact 路径                        | 保存受约束终端记录，不写到工作区任意位置                    |
 
 动作协议修订为 7。完整可生成 Schema 以 `a3s-test agent schema` 输出为准。未知字段、缺少必填字段、非法枚举和 surface 不支持的动作会在执行前拒绝。
 

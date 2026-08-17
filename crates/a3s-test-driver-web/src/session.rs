@@ -310,6 +310,7 @@ impl AgentBrowserSession {
                 action,
                 stability: None,
                 assertion_mode: Default::default(),
+                wait_mode: Default::default(),
             },
         )
         .await

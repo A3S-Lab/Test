@@ -13,6 +13,9 @@
 - [x] Runner-owned `hidden` target assertions with stable-locator admission,
       visible counter-evidence, driver-error preservation, and sampled
       reappearance detection without an action-protocol revision change
+- [x] Runner-owned `wait hidden` synchronization with immediate completion,
+      fixed bounded polling, first/last counter-evidence, static probe limits,
+      deadline/cancellation cleanup, and shared agent-host verification policy
 - [x] Structured JSON report and stable exit codes
 - [x] A3S Browser and standalone agent-browser command layouts
 - [x] Private runtime, unique sessions, graceful close, PID-validated emergency

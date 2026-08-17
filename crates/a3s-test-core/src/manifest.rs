@@ -1,14 +1,20 @@
 use std::collections::HashSet;
 
+mod conditions;
+mod targets;
+
 use a3s_acl::{Block, Value};
 use url::Url;
 
+use self::conditions::{
+    condition_count_error, parse_assertion_stability, parse_expectation, parse_wait,
+};
+use self::targets::{optional_target, parse_target, required_target, target_argument};
+
 use crate::{
-    Action, AssertionMode, AssertionStability, CaptureOperation, DialogOperation, Expectation,
-    FrameTarget, LoadState, ModifierKey, NetworkRoute, SpecError, Surface, TabOperation, Target,
-    TestScenario, TestStep, TestSuite, VideoOperation, WaitCondition,
-    DEFAULT_ASSERTION_SAMPLE_INTERVAL_MS, MAX_ASSERTION_STABILITY_MS,
-    MAX_ASSERTION_STABILITY_SAMPLES, MIN_ASSERTION_STABILITY_MS,
+    Action, AssertionMode, CaptureOperation, DialogOperation, FrameTarget, ModifierKey,
+    NetworkRoute, SpecError, Surface, TabOperation, TestScenario, TestStep, TestSuite,
+    VideoOperation, WaitMode,
 };
 
 const DEFAULT_SCENARIO_TIMEOUT_MS: u64 = 60_000;
@@ -245,6 +251,7 @@ fn parse_step(block: &Block, scenario_path: &str) -> Result<TestStep, SpecError>
 
     let mut stability = None;
     let mut assertion_mode = AssertionMode::Positive;
+    let mut wait_mode = WaitMode::Positive;
     let action = match block.name.as_str() {
         "navigate" => {
             ensure_attributes(block, &["url"], &path)?;
@@ -386,10 +393,14 @@ fn parse_step(block: &Block, scenario_path: &str) -> Result<TestStep, SpecError>
             }
         }
         "wait" => {
-            ensure_attributes(block, &["load", "text", "regex", "url", "visible"], &path)?;
-            Action::Wait {
-                condition: parse_wait(block, &path)?,
-            }
+            ensure_attributes(
+                block,
+                &["load", "text", "regex", "url", "visible", "hidden"],
+                &path,
+            )?;
+            let (condition, parsed_mode) = parse_wait(block, &path)?;
+            wait_mode = parsed_mode;
+            Action::Wait { condition }
         }
         "expect" => {
             ensure_attributes(
@@ -521,6 +532,7 @@ fn parse_step(block: &Block, scenario_path: &str) -> Result<TestStep, SpecError>
         action,
         stability,
         assertion_mode,
+        wait_mode,
     })
 }
 
@@ -663,267 +675,6 @@ fn parse_video_operation(block: &Block, path: &str) -> Result<VideoOperation, Sp
             "video operation must be start or stop",
         )),
     }
-}
-
-fn parse_wait(block: &Block, path: &str) -> Result<WaitCondition, SpecError> {
-    let count = ["load", "text", "regex", "url", "visible"]
-        .iter()
-        .filter(|name| block.attributes.contains_key(**name))
-        .count();
-    if count != 1 {
-        return Err(condition_count_error(path, count));
-    }
-
-    if let Some(value) = block.attributes.get("load") {
-        let state = value
-            .as_str()
-            .ok_or_else(|| type_error(format!("{path}.load"), "load condition must be a string"))?;
-        return match state {
-            "networkidle" => Ok(WaitCondition::Load(LoadState::NetworkIdle)),
-            "domcontentloaded" => Ok(WaitCondition::Load(LoadState::DomContentLoaded)),
-            _ => Err(SpecError::new(
-                "test.spec.load_state_unknown",
-                format!("{path}.load"),
-                "load must be networkidle or domcontentloaded",
-            )),
-        };
-    }
-    if let Some(value) = block.attributes.get("text") {
-        return Ok(WaitCondition::Text(value_string(
-            value,
-            format!("{path}.text"),
-        )?));
-    }
-    if let Some(value) = block.attributes.get("regex") {
-        return Ok(WaitCondition::Regex(value_string(
-            value,
-            format!("{path}.regex"),
-        )?));
-    }
-    if let Some(value) = block.attributes.get("url") {
-        return Ok(WaitCondition::Url(value_string(
-            value,
-            format!("{path}.url"),
-        )?));
-    }
-    let value = block
-        .attributes
-        .get("visible")
-        .expect("condition count guarantees a visible target");
-    Ok(WaitCondition::Visible(parse_target(
-        value,
-        &format!("{path}.visible"),
-    )?))
-}
-
-fn parse_expectation(block: &Block, path: &str) -> Result<(Expectation, AssertionMode), SpecError> {
-    let count = ["text", "url", "visible", "hidden"]
-        .iter()
-        .filter(|name| block.attributes.contains_key(**name))
-        .count();
-    if count != 1 {
-        return Err(condition_count_error(path, count));
-    }
-
-    if let Some(value) = block.attributes.get("text") {
-        return Ok((
-            Expectation::TextVisible(value_string(value, format!("{path}.text"))?),
-            AssertionMode::Positive,
-        ));
-    }
-    if let Some(value) = block.attributes.get("url") {
-        return Ok((
-            Expectation::Url(value_string(value, format!("{path}.url"))?),
-            AssertionMode::Positive,
-        ));
-    }
-    if let Some(value) = block.attributes.get("hidden") {
-        let target = parse_target(value, &format!("{path}.hidden"))?;
-        if matches!(target, Target::Ref { .. } | Target::VisualPoint { .. }) {
-            return Err(SpecError::new(
-                "test.spec.hidden_target_unstable",
-                format!("{path}.hidden"),
-                "hidden assertions require a stable semantic or CSS locator, not an observation-bound ref or visual point",
-            ));
-        }
-        return Ok((Expectation::Visible(target), AssertionMode::Hidden));
-    }
-    let value = block
-        .attributes
-        .get("visible")
-        .expect("condition count guarantees a visible target");
-    Ok((
-        Expectation::Visible(parse_target(value, &format!("{path}.visible"))?),
-        AssertionMode::Positive,
-    ))
-}
-
-fn parse_assertion_stability(
-    block: &Block,
-    path: &str,
-) -> Result<Option<AssertionStability>, SpecError> {
-    let Some(stable_for_value) = block.attributes.get("stable_for_ms") else {
-        if block.attributes.contains_key("sample_interval_ms") {
-            return Err(SpecError::new(
-                "test.spec.stability_duration_required",
-                format!("{path}.sample_interval_ms"),
-                "sample_interval_ms requires stable_for_ms",
-            ));
-        }
-        return Ok(None);
-    };
-    let stable_for_ms = positive_integer(stable_for_value, &format!("{path}.stable_for_ms"))?;
-    if !(MIN_ASSERTION_STABILITY_MS..=MAX_ASSERTION_STABILITY_MS).contains(&stable_for_ms) {
-        return Err(SpecError::new(
-            "test.spec.stability_range",
-            format!("{path}.stable_for_ms"),
-            format!(
-                "stable_for_ms must be between {MIN_ASSERTION_STABILITY_MS} and {MAX_ASSERTION_STABILITY_MS}"
-            ),
-        ));
-    }
-    let sample_interval_ms = optional_integer(
-        block,
-        "sample_interval_ms",
-        DEFAULT_ASSERTION_SAMPLE_INTERVAL_MS.min(stable_for_ms),
-        path,
-    )?;
-    if sample_interval_ms > stable_for_ms {
-        return Err(SpecError::new(
-            "test.spec.stability_interval",
-            format!("{path}.sample_interval_ms"),
-            "sample_interval_ms must not exceed stable_for_ms",
-        ));
-    }
-    let stability = AssertionStability {
-        stable_for_ms,
-        sample_interval_ms,
-    };
-    if stability.planned_samples() > MAX_ASSERTION_STABILITY_SAMPLES {
-        return Err(SpecError::new(
-            "test.spec.stability_sample_limit",
-            path,
-            format!(
-                "assertion stability cannot require more than {MAX_ASSERTION_STABILITY_SAMPLES} samples"
-            ),
-        ));
-    }
-    Ok(Some(stability))
-}
-
-fn condition_count_error(path: &str, count: usize) -> SpecError {
-    let (code, message) = if count == 0 {
-        (
-            "test.spec.condition_required",
-            "exactly one condition is required",
-        )
-    } else {
-        (
-            "test.spec.condition_ambiguous",
-            "only one condition can be configured",
-        )
-    };
-    SpecError::new(code, path, message)
-}
-
-fn required_target(block: &Block, name: &str, path: &str) -> Result<Target, SpecError> {
-    let value = block.attributes.get(name).ok_or_else(|| {
-        SpecError::new(
-            "test.spec.attribute_required",
-            format!("{path}.{name}"),
-            "required target is missing",
-        )
-    })?;
-    parse_target(value, &format!("{path}.{name}"))
-}
-
-fn optional_target(block: &Block, name: &str, path: &str) -> Result<Option<Target>, SpecError> {
-    block
-        .attributes
-        .get(name)
-        .map(|value| parse_target(value, &format!("{path}.{name}")))
-        .transpose()
-}
-
-fn parse_target(value: &Value, path: &str) -> Result<Target, SpecError> {
-    let Value::Call(name, arguments) = value else {
-        return Err(type_error(path, "target must use a typed locator function"));
-    };
-    match (name.as_str(), arguments.as_slice()) {
-        ("ref", [value]) => {
-            let value = target_argument(value, path)?;
-            if crate::page_context::is_ui_evidence_ref(&value) {
-                return Err(SpecError::new(
-                    "test.spec.target_observation_only",
-                    path,
-                    "UI evidence refs are observation-only and cannot be action targets",
-                ));
-            }
-            Ok(Target::Ref { value })
-        }
-        ("css", [value]) => Ok(Target::Css {
-            selector: target_argument(value, path)?,
-        }),
-        ("role", [role, name]) => Ok(Target::Role {
-            role: target_argument(role, path)?,
-            name: target_argument(name, path)?,
-        }),
-        ("text", [value]) => Ok(Target::Text {
-            value: target_argument(value, path)?,
-            exact: false,
-        }),
-        ("text", [value, Value::Bool(exact)]) => Ok(Target::Text {
-            value: target_argument(value, path)?,
-            exact: *exact,
-        }),
-        ("automation_id", [value]) => Ok(Target::AutomationId {
-            value: target_argument(value, path)?,
-        }),
-        ("visual_point", [snapshot, x, y]) => Ok(Target::VisualPoint {
-            snapshot: target_argument(snapshot, path)?,
-            x: target_coordinate(x, path)?,
-            y: target_coordinate(y, path)?,
-        }),
-        ("testid", [value]) => Ok(Target::TestId {
-            value: target_argument(value, path)?,
-        }),
-        ("label", [value]) => Ok(Target::Label {
-            value: target_argument(value, path)?,
-        }),
-        ("placeholder", [value]) => Ok(Target::Placeholder {
-            value: target_argument(value, path)?,
-        }),
-        _ => Err(SpecError::new(
-            "test.spec.target_invalid",
-            path,
-            "unsupported locator function or argument count",
-        )),
-    }
-}
-
-fn target_coordinate(value: &Value, path: &str) -> Result<u32, SpecError> {
-    let Some(number) = value.as_number() else {
-        return Err(type_error(
-            path,
-            "visual point coordinates must be integers",
-        ));
-    };
-    if !number.is_finite() || number < 0.0 || number.fract() != 0.0 || number > f64::from(u32::MAX)
-    {
-        return Err(SpecError::new(
-            "test.spec.target_invalid",
-            path,
-            "visual point coordinates must be unsigned 32-bit integers",
-        ));
-    }
-    Ok(number as u32)
-}
-
-fn target_argument(value: &Value, path: &str) -> Result<String, SpecError> {
-    value
-        .as_str()
-        .map(ToOwned::to_owned)
-        .ok_or_else(|| type_error(path, "locator arguments must be strings"))
 }
 
 fn one_label<'a>(block: &'a Block, path: &str) -> Result<&'a str, SpecError> {

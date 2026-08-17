@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, VecDeque};
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
@@ -186,6 +186,88 @@ async fn embedded_host_runs_one_model_turn_verifies_locally_and_closes() {
 }
 
 #[tokio::test]
+async fn deterministic_verification_uses_runner_owned_hidden_wait_and_assertion_policy() {
+    let temp = tempfile::tempdir().expect("tempdir");
+    let provider = ProviderFixture::start(vec![json!({
+        "status": "success",
+        "protocol": LLM_PROVIDER_PROTOCOL,
+        "response": {
+            "decision": { "type": "finish", "summary": "The dialog transition completed" },
+            "usage": { "input_tokens": 10, "output_tokens": 4, "cost_microusd": 8 },
+            "request_id": "finish-after-transition"
+        }
+    })])
+    .await;
+    let config = temp.path().join("hidden-verification.acl");
+    std::fs::write(
+        &config,
+        format!(
+            r##"
+agent_run "checkout" {{
+  url = "http://127.0.0.1/"
+  goal = "Wait for the checkout dialog to close"
+  success_criteria = ["The checkout dialog is absent"]
+  allow_actions = ["click"]
+  max_turns = 2
+  max_total_tokens = 1000
+  max_cost_microusd = 1000
+  timeout_ms = 10000
+
+  provider {{
+    name = "fixture"
+    model = "planner"
+    endpoint = "{}"
+  }}
+
+  verification {{
+    wait "dialog-closed" {{ hidden = css("#checkout-dialog") }}
+    expect "dialog-absent" {{ hidden = css("#checkout-dialog") }}
+  }}
+}}
+"##,
+            provider.endpoint
+        ),
+    )
+    .expect("hidden verification config");
+    let report_path = temp.path().join("reports/hidden-verification.json");
+    let executor = Arc::new(HostWebExecutor::with_visibility([true, true, false, false]));
+
+    let code = execute_with_executor(
+        args(&config, &report_path),
+        Some(executor.clone()),
+        Some(temp.path().to_path_buf()),
+    )
+    .await
+    .expect("agent host hidden verification");
+
+    assert_eq!(code, ExitCode::SUCCESS);
+    let report: serde_json::Value =
+        serde_json::from_slice(&tokio::fs::read(&report_path).await.expect("report"))
+            .expect("report JSON");
+    assert_eq!(report["result"]["status"], "succeeded");
+    assert_eq!(report["verification"][0]["id"], "dialog-closed");
+    assert!(report["verification"][0]["error"].is_null());
+    assert_eq!(
+        report["verification"][0]["output"]["data"]["wait"]["outcome"],
+        "matched"
+    );
+    assert_eq!(
+        report["verification"][0]["output"]["data"]["wait"]["probes"],
+        3
+    );
+    assert_eq!(report["verification"][1]["id"], "dialog-absent");
+    assert_eq!(
+        report["verification"][1]["output"]["data"]["visible"],
+        false
+    );
+    assert_eq!(
+        executor.actions(),
+        ["open", "snapshot", "is", "is", "is", "is", "close"]
+    );
+    assert_eq!(provider.finish().await.len(), 1);
+}
+
+#[tokio::test]
 async fn deterministic_verification_overrides_a_model_finish() {
     let temp = tempfile::tempdir().expect("tempdir");
     let provider = ProviderFixture::start(vec![json!({
@@ -310,6 +392,7 @@ agent_run "checkout" {{
 struct HostWebExecutor {
     confirmation: String,
     invocations: Mutex<Vec<CommandInvocation>>,
+    visibility: Mutex<VecDeque<bool>>,
 }
 
 impl HostWebExecutor {
@@ -317,6 +400,15 @@ impl HostWebExecutor {
         Self {
             confirmation: confirmation.to_string(),
             invocations: Mutex::new(Vec::new()),
+            visibility: Mutex::new(VecDeque::new()),
+        }
+    }
+
+    fn with_visibility(values: impl IntoIterator<Item = bool>) -> Self {
+        Self {
+            confirmation: String::new(),
+            invocations: Mutex::new(Vec::new()),
+            visibility: Mutex::new(values.into_iter().collect()),
         }
     }
 
@@ -357,6 +449,14 @@ impl CommandExecutor for HostWebExecutor {
                 }
             })
             .to_string()
+        } else if action.first().is_some_and(|value| value == "is") {
+            let visible = self
+                .visibility
+                .lock()
+                .expect("visibility sequence")
+                .pop_front()
+                .unwrap_or(false);
+            json!({ "success": true, "data": { "visible": visible } }).to_string()
         } else if action.first().is_some_and(|value| value == "wait") {
             let expected = action.get(2).or_else(|| action.get(1));
             if expected.is_some_and(|value| value == self.confirmation.as_str()) {

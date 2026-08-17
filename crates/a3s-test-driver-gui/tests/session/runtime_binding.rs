@@ -22,6 +22,7 @@ async fn application_identity_drift_blocks_observation_and_input_before_dispatch
             },
             stability: None,
             assertion_mode: Default::default(),
+            wait_mode: Default::default(),
         })
         .await
         .expect_err("identity drift must block input");
@@ -79,6 +80,7 @@ async fn window_binding_drift_blocks_observation_and_input_before_dispatch() {
             },
             stability: None,
             assertion_mode: Default::default(),
+            wait_mode: Default::default(),
         })
         .await
         .expect_err("window drift must block input");
@@ -108,6 +110,7 @@ async fn window_binding_drift_blocks_observation_and_input_before_dispatch() {
             },
             stability: None,
             assertion_mode: Default::default(),
+            wait_mode: Default::default(),
         })
         .await
         .expect_err("binding failure must invalidate the old window snapshot");

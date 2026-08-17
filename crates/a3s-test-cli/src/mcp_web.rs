@@ -50,6 +50,7 @@ impl SurfaceDriver for McpWebDriver {
             },
             stability: None,
             assertion_mode: Default::default(),
+            wait_mode: Default::default(),
         };
         if let Err(error) = session.execute(&step).await {
             return match session.close().await {

@@ -17,6 +17,7 @@ use a3s_test_core::{
 use a3s_test_driver_web::{
     AgentBrowserConfig, AgentBrowserDriver, BrowserNetworkPolicy, CommandExecutor,
 };
+use a3s_test_runner::{RetryPolicy, RunStatus, Runner, RunnerOptions};
 use anyhow::{Context, Result};
 use clap::Args;
 use serde::{Deserialize, Serialize};
@@ -178,6 +179,19 @@ async fn execute_with_executor(
         scenario_id: config.id.clone(),
         artifacts_dir,
     };
+    let verification_runner = Runner::new(
+        Vec::new(),
+        RunnerOptions {
+            cleanup_timeout: Duration::from_millis(args.cleanup_timeout_ms),
+            retry_policy: RetryPolicy {
+                max_retries: 0,
+                backoff: Duration::ZERO,
+            },
+            ..RunnerOptions::default()
+        },
+    )
+    .map_err(anyhow::Error::msg)
+    .context("invalid deterministic verification runner")?;
     let cancellation = CancellationToken::new();
     let signal_task = install_interrupt_handler(cancellation.clone());
     let workflow_deadline = tokio::time::Instant::now() + config.options.timeout;
@@ -234,6 +248,7 @@ async fn execute_with_executor(
         },
         stability: None,
         assertion_mode: Default::default(),
+        wait_mode: Default::default(),
     };
     let initial_error = tokio::select! {
         biased;
@@ -276,7 +291,14 @@ async fn execute_with_executor(
             ),
         };
         let verification = if result.status == AgentStatus::Succeeded {
-            verify(&config, &mut session, &cancellation, workflow_deadline).await
+            verify(
+                &verification_runner,
+                &config,
+                &mut session,
+                &cancellation,
+                workflow_deadline,
+            )
+            .await
         } else {
             Vec::new()
         };
@@ -334,6 +356,7 @@ async fn execute_with_executor(
 }
 
 async fn verify(
+    runner: &Runner,
     config: &AgentRunConfig,
     session: &mut dyn DriverSession,
     cancellation: &CancellationToken,
@@ -342,31 +365,48 @@ async fn verify(
     let steps = &config.verification.scenarios[0].steps;
     let mut results = Vec::with_capacity(steps.len());
     for step in steps {
-        let execution = tokio::select! {
-            biased;
-            () = cancellation.cancelled() => Err(DriverError::new(
-                "test.agent.cancelled",
-                "agent run was cancelled during deterministic verification",
-            )),
-            result = tokio::time::timeout_at(deadline, session.execute(step)) => match result {
-                Ok(result) => result,
-                Err(_) => Err(DriverError::new(
-                    "test.agent.verification_timeout",
-                    "deterministic verification exceeded the agent deadline",
-                )),
-            },
-        };
-        match execution {
-            Ok(output) => results.push(VerificationStepResult {
+        let execution = runner
+            .execute_admitted_step(session, step, deadline.into_std(), cancellation.clone())
+            .await;
+        match execution.status {
+            RunStatus::Passed => results.push(VerificationStepResult {
                 id: step.id.clone(),
-                output: Some(output),
+                output: execution.output,
                 error: None,
             }),
-            Err(error) => {
+            RunStatus::Failed => {
+                let error = execution.error.unwrap_or_else(|| {
+                    DriverError::new(
+                        "test.run.step_result_invalid",
+                        "deterministic verification failed without an error",
+                    )
+                });
                 results.push(VerificationStepResult {
                     id: step.id.clone(),
-                    output: None,
+                    output: execution.output,
                     error: Some(HostError::from_driver(error)),
+                });
+                break;
+            }
+            RunStatus::TimedOut => {
+                results.push(VerificationStepResult {
+                    id: step.id.clone(),
+                    output: execution.output,
+                    error: Some(HostError::from_driver(DriverError::new(
+                        "test.agent.verification_timeout",
+                        "deterministic verification exceeded the agent deadline",
+                    ))),
+                });
+                break;
+            }
+            RunStatus::Cancelled => {
+                results.push(VerificationStepResult {
+                    id: step.id.clone(),
+                    output: execution.output,
+                    error: Some(HostError::from_driver(DriverError::new(
+                        "test.agent.cancelled",
+                        "agent run was cancelled during deterministic verification",
+                    ))),
                 });
                 break;
             }

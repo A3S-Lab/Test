@@ -100,11 +100,9 @@ pub fn run_transient_stability_e2e(binary: &Path, browser: &Path, origin: &str, 
     assert_eq!(step["attempts"], samples);
     assert!(!step["output"]["data"]["assertion"]["first"].is_null());
     assert!(step["output"]["data"]["assertion"]["last"].is_null());
-
-    run_hidden_visibility_e2e(binary, browser, origin, workspace);
 }
 
-fn run_hidden_visibility_e2e(binary: &Path, browser: &Path, origin: &str, workspace: &Path) {
+pub fn run_hidden_visibility_e2e(binary: &Path, browser: &Path, origin: &str, workspace: &Path) {
     let manifest = workspace.join("hidden-visibility-e2e.acl");
     std::fs::write(&manifest, hidden_suite(origin)).expect("write hidden visibility suite");
     let output = Command::new(binary)
@@ -185,6 +183,24 @@ fn run_hidden_visibility_e2e(binary: &Path, browser: &Path, origin: &str, worksp
         reappearing_step["output"]["data"]["assertion"]["last"]["visible"],
         true
     );
+
+    let waiting = scenario(&report, "wait-until-hidden");
+    assert_eq!(waiting["status"], "passed");
+    assert!(waiting["cleanup_error"].is_null());
+    let waiting_step = step(waiting, "dialog-closes");
+    assert_eq!(waiting_step["status"], "passed");
+    assert_eq!(waiting_step["attempts"], 3);
+    assert_eq!(waiting_step["output"]["data"]["visible"], false);
+    assert_eq!(waiting_step["output"]["data"]["wait"]["outcome"], "matched");
+    assert_eq!(waiting_step["output"]["data"]["wait"]["probes"], 3);
+
+    let already_hidden = scenario(&report, "wait-already-hidden");
+    assert_eq!(already_hidden["status"], "passed");
+    assert!(already_hidden["cleanup_error"].is_null());
+    let already_hidden_step = step(already_hidden, "dialog-already-closed");
+    assert_eq!(already_hidden_step["status"], "passed");
+    assert_eq!(already_hidden_step["attempts"], 1);
+    assert_eq!(already_hidden_step["output"]["data"]["wait"]["probes"], 1);
 }
 
 fn scenario<'a>(report: &'a serde_json::Value, id: &str) -> &'a serde_json::Value {
@@ -290,6 +306,34 @@ fn hidden_suite(origin: &str) -> String {
             hidden = testid("hidden-then-visible")
             stable_for_ms = 200
             sample_interval_ms = 25
+        }}
+    }}
+
+    scenario "wait-until-hidden" {{
+        name = "Wait for a visible target to lose its visible box"
+        surface = "web"
+        timeout_ms = 30000
+
+        navigate "open" {{
+            url = "{origin}/transient.html"
+        }}
+
+        wait "dialog-closes" {{
+            hidden = testid("visible-then-hidden")
+        }}
+    }}
+
+    scenario "wait-already-hidden" {{
+        name = "Finish immediately when the stable target is already hidden"
+        surface = "web"
+        timeout_ms = 30000
+
+        navigate "open" {{
+            url = "{origin}/transient.html"
+        }}
+
+        wait "dialog-already-closed" {{
+            hidden = testid("hidden-static")
         }}
     }}
 }}

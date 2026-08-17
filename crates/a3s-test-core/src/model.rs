@@ -38,6 +38,8 @@ pub struct TestStep {
     pub stability: Option<AssertionStability>,
     #[serde(default, skip_serializing_if = "AssertionMode::is_positive")]
     pub assertion_mode: AssertionMode,
+    #[serde(default, skip_serializing_if = "WaitMode::is_positive")]
+    pub wait_mode: WaitMode,
 }
 
 #[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
@@ -49,6 +51,21 @@ pub enum AssertionMode {
 }
 
 impl AssertionMode {
+    #[must_use]
+    pub fn is_positive(&self) -> bool {
+        *self == Self::Positive
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum WaitMode {
+    #[default]
+    Positive,
+    Hidden,
+}
+
+impl WaitMode {
     #[must_use]
     pub fn is_positive(&self) -> bool {
         *self == Self::Positive

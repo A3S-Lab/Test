@@ -72,20 +72,21 @@ The persistent-session loop is `start -> observe -> act -> observe -> finish`. A
 
 ### Synchronization, network, and evidence actions
 
-| Action                             | Input                                                  | Output and constraint                                                                 |
-| ---------------------------------- | ------------------------------------------------------ | ------------------------------------------------------------------------------------- |
-| `wait`                             | Load, text, URL, or visibility condition               | Runs under a deadline and returns a structured timeout                                |
-| `assert`                           | Admitted text, URL, visibility, or other expectation   | Local evidence decides pass or fail; providers cannot override it                     |
-| Hidden `assert`                    | Stable semantic or CSS target                          | Passes when no visible match exists; visible counter-evidence is `test.assert.hidden` |
-| Stable `assert`                    | Expectation plus `stable_for_ms` and optional interval | Repeats only the read-only assertion; a later false sample is `test.assert.unstable`  |
-| `network_route`, `network_unroute` | Admitted pattern and static route                      | Adds or removes a rule only inside network policy                                     |
-| `har`, `trace`, `video`            | Start or stop plus a bounded relative path             | Records an explicit window and produces session-owned artifacts                       |
-| `screenshot`                       | Relative PNG path                                      | Saves under the artifact root and can bind a later provider request                   |
-| `accessibility`                    | Relative JSON path and interactive selection           | Retains an interactive or complete semantic tree                                      |
-| `console`, `page_errors`           | Relative JSON path and clear selection                 | Retains browser-error baselines; clear affects only the current driver buffer         |
-| `terminal_paste`                   | Bounded text                                           | Legal only on a TUI surface                                                           |
-| `terminal_resize`                  | Columns and rows                                       | Resizes the owned PTY or ConPTY and updates terminal semantics                        |
-| `terminal_recording`               | Relative artifact path                                 | Retains a bounded terminal recording outside arbitrary workspace paths                |
+| Action                             | Input                                                  | Output and constraint                                                                   |
+| ---------------------------------- | ------------------------------------------------------ | --------------------------------------------------------------------------------------- |
+| `wait`                             | Load, text, URL, or visibility condition               | Runs under a deadline and returns a structured timeout                                  |
+| Hidden `wait`                      | Stable semantic or CSS target                          | Polls read-only visibility every 50 ms; deadline/cancellation and 1,201 probes bound it |
+| `assert`                           | Admitted text, URL, visibility, or other expectation   | Local evidence decides pass or fail; providers cannot override it                       |
+| Hidden `assert`                    | Stable semantic or CSS target                          | Passes when no visible match exists; visible counter-evidence is `test.assert.hidden`   |
+| Stable `assert`                    | Expectation plus `stable_for_ms` and optional interval | Repeats only the read-only assertion; a later false sample is `test.assert.unstable`    |
+| `network_route`, `network_unroute` | Admitted pattern and static route                      | Adds or removes a rule only inside network policy                                       |
+| `har`, `trace`, `video`            | Start or stop plus a bounded relative path             | Records an explicit window and produces session-owned artifacts                         |
+| `screenshot`                       | Relative PNG path                                      | Saves under the artifact root and can bind a later provider request                     |
+| `accessibility`                    | Relative JSON path and interactive selection           | Retains an interactive or complete semantic tree                                        |
+| `console`, `page_errors`           | Relative JSON path and clear selection                 | Retains browser-error baselines; clear affects only the current driver buffer           |
+| `terminal_paste`                   | Bounded text                                           | Legal only on a TUI surface                                                             |
+| `terminal_resize`                  | Columns and rows                                       | Resizes the owned PTY or ConPTY and updates terminal semantics                          |
+| `terminal_recording`               | Relative artifact path                                 | Retains a bounded terminal recording outside arbitrary workspace paths                  |
 
 The action protocol revision is 7. Generate the complete schema with `a3s-test agent schema`. Unknown fields, missing required fields, invalid enums, and actions unsupported by the selected surface are rejected before execution.
 

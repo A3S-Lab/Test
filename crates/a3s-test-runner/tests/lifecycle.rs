@@ -140,6 +140,7 @@ fn suite(timeout_ms: u64) -> TestSuite {
                 action: Action::Snapshot { interactive: true },
                 stability: None,
                 assertion_mode: Default::default(),
+                wait_mode: Default::default(),
             }],
         }],
     }
@@ -341,6 +342,7 @@ fn stable_assertion_suite(
             sample_interval_ms,
         }),
         assertion_mode: Default::default(),
+        wait_mode: Default::default(),
     };
     suite
 }

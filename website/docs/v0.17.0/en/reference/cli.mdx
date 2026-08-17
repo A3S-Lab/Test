@@ -236,7 +236,52 @@ Use a semantic or CSS locator supported by the selected surface. `ref()` and `vi
 | `test.assert.hidden`               | The positive probe found a visible target                                |
 | `test.run.assertion_mode_invalid`  | A programmatic suite attached hidden mode to an invalid action or target |
 
-`hidden` is an immediate assertion, not a disappearance wait. Combine it with `stable_for_ms` when the product must remain hidden. A later visible sample then returns `test.assert.unstable` and retains the first hidden observation plus the visible counterexample.
+`expect hidden` is an immediate assertion. Combine it with `stable_for_ms` when the product must remain hidden. A later visible sample then returns `test.assert.unstable` and retains the first hidden observation plus the visible counterexample. Use the wait form below when disappearance is the synchronization condition.
+
+### Hidden ACL waits
+
+```acl
+wait "dialog-closed" {
+    hidden = role("dialog", "Checkout")
+}
+```
+
+The compiler stores the existing visible-target wait condition plus `wait_mode = hidden`; action protocol revision 7 remains unchanged. Runner sends immediate read-only positive visibility assertions and polls every 50 ms only while visible evidence continues.
+
+| Boundary                             | Result                                                                                 |
+| ------------------------------------ | -------------------------------------------------------------------------------------- |
+| Already hidden or absent             | Passed after one probe; no interval wait                                               |
+| Becomes hidden                       | Passed on the first `test.assert.visible` mismatch                                     |
+| Remains visible at scenario deadline | `timed_out`, `test.run.timeout`, exit 124, with latest visible counter-evidence        |
+| Run is cancelled                     | `cancelled`, `test.run.cancelled`, exit 130, with bounded cleanup and counter-evidence |
+| Reaches 1,201 probes                 | Failed with `test.run.hidden_wait_probe_limit`                                         |
+| Driver, stale, or ambiguous failure  | Original code, `wait.outcome = inconclusive`; never converted into disappearance       |
+| Programmatic policy/target mismatch  | `test.run.wait_mode_invalid` before driver dispatch                                    |
+
+A matched delayed wait exposes this stable shape under `output.data`:
+
+```json
+{
+  "expected": "hidden",
+  "visible": false,
+  "first_visible": { "visible": true },
+  "last_visible": { "visible": true },
+  "probe_error": {
+    "code": "test.assert.visible",
+    "message": "target is not visible"
+  },
+  "wait": {
+    "condition": "hidden",
+    "outcome": "matched",
+    "poll_interval_ms": 50,
+    "max_probes": 1201,
+    "probes": 3,
+    "observed_ms": 101
+  }
+}
+```
+
+`probes` counts logical observations. Step `attempts` counts driver dispatches and can exceed it only for admitted retryable infrastructure failures. The same runner policy is used by normal suites and agent-run deterministic verification.
 
 ### Stable ACL expectations
 
@@ -312,6 +357,6 @@ The first `Ctrl+C` requests cancellation and owned-surface cleanup. A second int
 
 ## Web capability summary
 
-The Web driver supports navigation, semantic snapshots, click, hover, focus, fill and type, selection-scoped text insertion, check, select, double and context click, drag, key press, modifier wheel, and viewport control. Synchronization covers load, text, URL, and visibility waits or expectations. Evidence includes screenshots, accessibility trees, console output, page errors, HAR, Chrome traces, WebM video, and contained downloads.
+The Web driver supports navigation, semantic snapshots, click, hover, focus, fill and type, selection-scoped text insertion, check, select, double and context click, drag, key press, modifier wheel, and viewport control. Synchronization covers load, text, URL, positive visibility, bounded disappearance waits, and positive or hidden expectations. Evidence includes screenshots, accessibility trees, console output, page errors, HAR, Chrome traces, WebM video, and contained downloads.
 
 Browser execution is headless by default. `--headed` is an explicit debugging option. Initial origin, `--allow-origin`, and explicit hostname exceptions constrain navigation and network access.

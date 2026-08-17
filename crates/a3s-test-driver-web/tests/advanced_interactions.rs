@@ -360,6 +360,7 @@ fn step(id: &str, action: Action) -> TestStep {
         action,
         stability: None,
         assertion_mode: Default::default(),
+        wait_mode: Default::default(),
     }
 }
 

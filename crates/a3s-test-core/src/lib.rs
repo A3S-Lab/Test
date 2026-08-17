@@ -39,7 +39,7 @@ pub use model::{
     RepairLayoutIntent, RepairRelation, RepairSeverity, RepairStatus, RepairStatusEvent,
     RepairTarget, RepairTargetKind, RepairThreadMessage, RepairVerification, StepOutput, Surface,
     SurfaceObservation, TabOperation, Target, TestScenario, TestStep, TestSuite, VideoOperation,
-    WaitCondition, ACTION_PROTOCOL_REVISION, DEFAULT_ASSERTION_SAMPLE_INTERVAL_MS,
+    WaitCondition, WaitMode, ACTION_PROTOCOL_REVISION, DEFAULT_ASSERTION_SAMPLE_INTERVAL_MS,
     MAX_ASSERTION_STABILITY_MS, MAX_ASSERTION_STABILITY_SAMPLES, MIN_ASSERTION_STABILITY_MS,
     PAGE_CONTEXT_PROTOCOL, REPAIR_PROTOCOL,
 };

@@ -1,5 +1,8 @@
 //! Cancellation-safe orchestration for A3S Test.
 
+mod assertion_stability;
+mod hidden_wait;
+
 use std::collections::HashMap;
 use std::hash::{DefaultHasher, Hash, Hasher};
 use std::path::PathBuf;
@@ -9,15 +12,18 @@ use std::time::{Duration, Instant};
 
 use a3s_test_core::{
     bind_page_context_observation_refs, validate_action_page_context_refs, Action, AssertionMode,
-    AssertionStability, ContractOutcome, DriverError, DriverSession, Expectation, ScenarioContext,
-    StepOutput, Surface, SurfaceContract, SurfaceDriver, Target, TestScenario, TestStep, TestSuite,
+    ContractOutcome, DriverError, DriverSession, Expectation, ScenarioContext, StepOutput, Surface,
+    SurfaceContract, SurfaceDriver, Target, TestScenario, TestStep, TestSuite, WaitMode,
 };
 use futures::{stream, StreamExt};
 use serde::{Deserialize, Serialize};
-use serde_json::{json, Value};
+use serde_json::json;
 use tokio_util::sync::CancellationToken;
 
 static NEXT_RUN_ID: AtomicU64 = AtomicU64::new(1);
+
+pub const HIDDEN_WAIT_POLL_INTERVAL_MS: u64 = 50;
+pub const MAX_HIDDEN_WAIT_PROBES: u64 = 1_201;
 
 #[derive(Clone, Copy, Debug)]
 pub struct RetryPolicy {
@@ -58,6 +64,13 @@ pub struct Runner {
     contracts: ContractRegistry,
     options: RunnerOptions,
     artifacts_root: PathBuf,
+}
+
+pub struct SessionStepResult {
+    pub status: RunStatus,
+    pub attempts: u32,
+    pub output: Option<StepOutput>,
+    pub error: Option<DriverError>,
 }
 
 #[derive(Clone, Default)]
@@ -141,6 +154,51 @@ impl Runner {
         }
         self.artifacts_root = artifacts_root;
         Ok(self)
+    }
+
+    /// Execute an admitted step against an already-open session with the same
+    /// retry, stability, and negative-visibility policies used by full runs.
+    pub async fn execute_admitted_step(
+        &self,
+        session: &mut dyn DriverSession,
+        step: &TestStep,
+        deadline: Instant,
+        cancellation: CancellationToken,
+    ) -> SessionStepResult {
+        let (execution, attempts) = self
+            .execute_step(session, step, deadline, cancellation)
+            .await;
+        match execution {
+            StepExecution::Completed(attempt) => match attempt.verdict {
+                StepVerdict::Passed(output) => SessionStepResult {
+                    status: RunStatus::Passed,
+                    attempts,
+                    output: Some(output),
+                    error: None,
+                },
+                StepVerdict::Failed { error, output } => SessionStepResult {
+                    status: RunStatus::Failed,
+                    attempts,
+                    output,
+                    error: Some(error),
+                },
+            },
+            StepExecution::TimedOut(output) => SessionStepResult {
+                status: RunStatus::TimedOut,
+                attempts,
+                output,
+                error: Some(DriverError::new(
+                    "test.run.timeout",
+                    "scenario deadline exceeded",
+                )),
+            },
+            StepExecution::Cancelled(output) => SessionStepResult {
+                status: RunStatus::Cancelled,
+                attempts,
+                output,
+                error: Some(DriverError::new("test.run.cancelled", "run cancelled")),
+            },
+        }
     }
 
     pub async fn run(&self, suite: &TestSuite, cancellation: CancellationToken) -> RunResult {
@@ -299,7 +357,7 @@ impl Runner {
                     };
                     (step_result, quality_report)
                 }
-                StepExecution::TimedOut => {
+                StepExecution::TimedOut(output) => {
                     status = RunStatus::TimedOut;
                     (
                         StepResult::terminal(
@@ -309,11 +367,12 @@ impl Runner {
                             attempts,
                             "test.run.timeout",
                             "scenario deadline exceeded",
+                            output,
                         ),
                         None,
                     )
                 }
-                StepExecution::Cancelled => {
+                StepExecution::Cancelled(output) => {
                     status = RunStatus::Cancelled;
                     (
                         StepResult::terminal(
@@ -323,6 +382,7 @@ impl Runner {
                             attempts,
                             "test.run.cancelled",
                             "run cancelled",
+                            output,
                         ),
                         None,
                     )
@@ -381,6 +441,11 @@ impl Runner {
         deadline: Instant,
         cancellation: CancellationToken,
     ) -> (StepExecution, u32) {
+        if step.wait_mode == WaitMode::Hidden {
+            return self
+                .execute_hidden_wait(session, step, deadline, cancellation)
+                .await;
+        }
         let Some(stability) = step.stability else {
             return self
                 .execute_with_retries(session, step, deadline, cancellation)
@@ -425,11 +490,13 @@ impl Runner {
                 self.sample_assertion_stability(
                     session,
                     step,
-                    stability,
-                    deadline,
-                    cancellation,
-                    output,
-                    attempts,
+                    assertion_stability::AssertionSampling::new(
+                        stability,
+                        deadline,
+                        cancellation,
+                        output,
+                        attempts,
+                    ),
                 )
                 .await
             }
@@ -462,11 +529,11 @@ impl Runner {
             attempts = attempts.saturating_add(1);
             let execution = tokio::select! {
                 biased;
-                () = cancellation.cancelled() => StepExecution::Cancelled,
+                () = cancellation.cancelled() => StepExecution::Cancelled(None),
                 result = tokio::time::timeout_at(deadline.into(), self.execute_once(session, step)) => {
                     match result {
                         Ok(result) => StepExecution::Completed(Box::new(result)),
-                        Err(_) => StepExecution::TimedOut,
+                        Err(_) => StepExecution::TimedOut(None),
                     }
                 }
             };
@@ -481,149 +548,13 @@ impl Runner {
 
             match wait_for_retry(deadline, &cancellation, self.options.retry_policy.backoff).await {
                 RetryWait::Continue => {}
-                RetryWait::Cancelled => return (StepExecution::Cancelled, attempts),
-                RetryWait::TimedOut => return (StepExecution::TimedOut, attempts),
+                RetryWait::Cancelled => return (StepExecution::Cancelled(None), attempts),
+                RetryWait::TimedOut => return (StepExecution::TimedOut(None), attempts),
             }
         }
     }
 
     #[allow(clippy::too_many_arguments)]
-    async fn sample_assertion_stability(
-        &self,
-        session: &mut dyn DriverSession,
-        step: &TestStep,
-        stability: AssertionStability,
-        deadline: Instant,
-        cancellation: CancellationToken,
-        first_output: StepOutput,
-        mut attempts: u32,
-    ) -> (StepExecution, u32) {
-        let started = Instant::now();
-        let required = Duration::from_millis(stability.stable_for_ms);
-        let interval = Duration::from_millis(stability.sample_interval_ms);
-        let mut samples = 1_u64;
-        let first_assertion = first_output.data;
-
-        loop {
-            let remaining = required.saturating_sub(started.elapsed());
-            let wait = interval.min(remaining);
-            match wait_for_retry(deadline, &cancellation, wait).await {
-                RetryWait::Continue => {}
-                RetryWait::Cancelled => return (StepExecution::Cancelled, attempts),
-                RetryWait::TimedOut => return (StepExecution::TimedOut, attempts),
-            }
-
-            let (execution, sample_attempts) = self
-                .execute_with_retries(session, step, deadline, cancellation.clone())
-                .await;
-            attempts = attempts.saturating_add(sample_attempts);
-            let StepExecution::Completed(attempt) = execution else {
-                return (execution, attempts);
-            };
-            samples = samples.saturating_add(1);
-            let observed_ms = millis(started.elapsed());
-
-            match *attempt {
-                StepAttempt {
-                    verdict: StepVerdict::Passed(output),
-                    quality_report: None,
-                } => {
-                    if started.elapsed() >= required {
-                        return (
-                            StepExecution::Completed(Box::new(StepAttempt::passed(
-                                with_stability_data(
-                                    output,
-                                    &first_assertion,
-                                    stability,
-                                    samples,
-                                    observed_ms,
-                                    "passed",
-                                ),
-                            ))),
-                            attempts,
-                        );
-                    }
-                }
-                StepAttempt {
-                    verdict: StepVerdict::Passed(output),
-                    quality_report: Some(_),
-                } => {
-                    return (
-                        StepExecution::Completed(Box::new(StepAttempt::failed(
-                            DriverError::new(
-                                "test.run.stability_output_invalid",
-                                "assertion stability received an unexpected advisory report",
-                            ),
-                            Some(with_stability_data(
-                                output,
-                                &first_assertion,
-                                stability,
-                                samples,
-                                observed_ms,
-                                "inconclusive",
-                            )),
-                        ))),
-                        attempts,
-                    );
-                }
-                StepAttempt {
-                    verdict: StepVerdict::Failed { error, output },
-                    quality_report: None,
-                } if error.code().starts_with("test.assert.") => {
-                    let code = error.code().to_string();
-                    let message = error.message().to_string();
-                    let output = output.unwrap_or_else(|| {
-                        StepOutput::new("assertion became false during stability sampling")
-                    });
-                    return (
-                        StepExecution::Completed(Box::new(StepAttempt::failed(
-                            DriverError::new(
-                                "test.assert.unstable",
-                                format!(
-                                    "assertion became false on stability sample {samples} after {observed_ms} ms ({code}: {message})"
-                                ),
-                            ),
-                            Some(with_stability_data(
-                                output,
-                                &first_assertion,
-                                stability,
-                                samples,
-                                observed_ms,
-                                "unstable",
-                            )),
-                        ))),
-                        attempts,
-                    );
-                }
-                StepAttempt {
-                    verdict: StepVerdict::Failed { error, output },
-                    quality_report,
-                } => {
-                    let output = output.unwrap_or_else(|| {
-                        StepOutput::new("assertion stability could not be verified")
-                    });
-                    return (
-                        StepExecution::Completed(Box::new(StepAttempt {
-                            verdict: StepVerdict::Failed {
-                                error,
-                                output: Some(with_stability_data(
-                                    output,
-                                    &first_assertion,
-                                    stability,
-                                    samples,
-                                    observed_ms,
-                                    "inconclusive",
-                                )),
-                            },
-                            quality_report,
-                        })),
-                        attempts,
-                    );
-                }
-            }
-        }
-    }
-
     async fn execute_once(&self, session: &mut dyn DriverSession, step: &TestStep) -> StepAttempt {
         if let Err(error) = validate_action_page_context_refs(&step.action) {
             return StepAttempt::failed(
@@ -806,35 +737,6 @@ fn bind_output_page_context(output: &mut StepOutput) {
     }
 }
 
-fn with_stability_data(
-    mut output: StepOutput,
-    first_assertion: &Value,
-    stability: AssertionStability,
-    samples: u64,
-    observed_ms: u64,
-    outcome: &str,
-) -> StepOutput {
-    let assertion = std::mem::take(&mut output.data);
-    output.summary = format!(
-        "{}; assertion stability {outcome} after {observed_ms} ms across {samples} samples",
-        output.summary
-    );
-    output.data = json!({
-        "assertion": {
-            "first": first_assertion,
-            "last": assertion,
-        },
-        "stability": {
-            "outcome": outcome,
-            "required_ms": stability.stable_for_ms,
-            "sample_interval_ms": stability.sample_interval_ms,
-            "samples": samples,
-            "observed_ms": observed_ms,
-        }
-    });
-    output
-}
-
 enum RetryWait {
     Continue,
     Cancelled,
@@ -861,8 +763,8 @@ async fn wait_for_retry(
 
 enum StepExecution {
     Completed(Box<StepAttempt>),
-    TimedOut,
-    Cancelled,
+    TimedOut(Option<StepOutput>),
+    Cancelled(Option<StepOutput>),
 }
 
 struct StepAttempt {
@@ -997,13 +899,14 @@ impl StepResult {
         attempts: u32,
         code: &str,
         message: &str,
+        output: Option<StepOutput>,
     ) -> Self {
         Self {
             id: id.to_string(),
             status,
             duration_ms: millis(duration),
             attempts,
-            output: None,
+            output,
             error: Some(RunError {
                 code: code.to_string(),
                 message: message.to_string(),
