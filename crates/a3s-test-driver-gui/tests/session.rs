@@ -6,7 +6,7 @@ use std::time::Duration;
 
 use a3s_test_core::{
     Action, ElementState, Expectation, LayoutRelation, ScenarioContext, Surface, SurfaceDriver,
-    Target, TestStep,
+    Target, TestStep, ViewportCoverageComparison,
 };
 use a3s_test_driver_gui::{
     ApplicationIdentity, AttachSpec, CuaCompatibility, CuaEndpoint, CuaTransport,
@@ -761,6 +761,11 @@ async fn gui_value_assertions_use_cua_values_without_inventing_boolean_state() {
             count: 1,
         },
         Expectation::InViewport(value_target.clone()),
+        Expectation::ViewportCoverage {
+            target: value_target.clone(),
+            comparison: ViewportCoverageComparison::AtLeast,
+            percent: 80,
+        },
         Expectation::PointerReachable(value_target.clone()),
         Expectation::State {
             target: value_target.clone(),

@@ -38,7 +38,7 @@ a3s-test agent click <ref> --session <name> --observation <id> --json
 a3s-test agent finish --session <name> --status passed --summary <text> --json
 ```
 
-`agent act --action-json` exposes the complete action schema. In v0.17.0, action protocol revision 14 includes the revision-7 selection-scoped `insert_text` action, revision-8 live control-state expectations, revision-9 target-bound rendered-output expectations, revision-10 ordered rendered-text collections, revision-11 two-target rendered-layout relations, revision-12 visual-viewport and pointer-hit expectations, revision-13 exact or component-scoped focus ownership, and revision-14 disclosure, toggle, read-only, required, and validity state. `insert_text` still acts only inside an editing context established by an earlier action and carries no target or locator authority of its own.
+`agent act --action-json` exposes the complete action schema. In v0.17.0, action protocol revision 15 includes the revision-7 selection-scoped `insert_text` action, revision-8 live control-state expectations, revision-9 target-bound rendered-output expectations, revision-10 ordered rendered-text collections, revision-11 two-target rendered-layout relations, revision-12 visual-viewport and pointer-hit expectations, revision-13 exact or component-scoped focus ownership, revision-14 disclosure, toggle, read-only, required, and validity state, and revision-15 bounded visual-viewport coverage. `insert_text` still acts only inside an editing context established by an earlier action and carries no target or locator authority of its own.
 
 ## ACL suites
 
@@ -207,13 +207,23 @@ A passing result records both targets, both rectangles, relation, tolerance, and
 
 The checked-in evidence classifies 3,400/3,400 deterministic relation cases, accepts 100/100 sustained windows, rejects 100/100 transients, and verifies all 17 relations, 25 positive assertions, and 15 negative or driver-error cases in standalone Chromium with exact fixture and runtime cleanup.
 
-## Prove that a rendered target can actually be reached
+## Prove viewport presence and pointer reachability
 
-Rendered visibility establishes a box, not where it is or what receives a pointer hit. Revision 12 exposes those prerequisites separately.
+Rendered visibility establishes a box, not where it is, how much of it is present, or what receives a pointer hit. Revisions 12 and 15 expose those facts separately.
 
 ```acl
 expect "checkout-in-view" {
     in_viewport = testid("checkout")
+}
+
+expect "checkout-mostly-visible" {
+    target = testid("checkout")
+    viewport_coverage_at_least = 80
+}
+
+expect "drawer-mostly-outside" {
+    target = css("#drawer")
+    viewport_coverage_at_most = 10
 }
 
 expect "checkout-pointer-hit" {
@@ -223,13 +233,13 @@ expect "checkout-pointer-hit" {
 }
 ```
 
-Use `in_viewport` when the product claim is simply that some positive area of the target is inside the visual viewport. Use `pointer_reachable` when the claim is that browser hit testing can reach the target or a composed-tree descendant at one of nine deterministic points over the visible intersection. Do not use either as a synonym for enabled, keyboard accessible, event-handled, or valid to click in the business workflow.
+Use `in_viewport` when any positive area is enough. Use `viewport_coverage_at_least` when a minimum material share must be present, and `viewport_coverage_at_most` when most or all of a target should remain outside. Coverage is intersection area divided by complete target area. `at_least` accepts integer percentages from 1 through 100; `at_most` accepts 0 through 99, excluding the two unconditionally true endpoints. Use `pointer_reachable` when browser hit testing must reach the target or a composed-tree descendant at one of nine deterministic points over the visible intersection. Coverage proves geometry, not occlusion. None of these forms proves enabled state, keyboard access, event handling, or business clickability.
 
 Web resolves the stable locator, captures both rectangles, and performs optional deep hit testing in one page evaluation. Semantic locators and hit testing cross open Shadow DOM. Native paint and `pointer-events` rules decide occlusion, so a transparent pointer-receiving cover blocks while `pointer-events: none` passes through. Rust then recomputes the ratio and every `1/6`, `1/2`, `5/6` sample coordinate before accepting the evidence.
 
-Browser refs and visual points fail ACL admission because they cannot be re-resolved through a stability window. A current Page Context ref may resolve to a stable semantic or CSS locator first. Missing, ambiguous, invalid, and malformed evidence stays driver-owned. Valid offscreen geometry becomes `test.assert.in_viewport`; nine valid misses become `test.assert.pointer_reachable`. GUI and TUI fail closed.
+Browser refs and visual points fail ACL admission because they cannot be re-resolved through a stability window. A current Page Context ref may resolve to a stable semantic or CSS locator first. Missing, ambiguous, invalid, and malformed evidence stays driver-owned. Valid offscreen geometry becomes `test.assert.in_viewport`; valid threshold mismatches become `test.assert.viewport_coverage_at_least` or `.viewport_coverage_at_most`; nine valid misses become `test.assert.pointer_reachable`. GUI and TUI fail closed.
 
-The checked-in evidence covers 1,000/1,000 Core geometry cases, 2,000/2,000 Web protocol classifications, 200/200 sustained and 200/200 transient windows, and a standalone Chromium matrix with 20 passing assertions and 15 negative or driver-error classifications plus exact cleanup.
+The checked-in evidence covers 1,000/1,000 base Core geometry cases plus 2,000/2,000 threshold cases, 4,000/4,000 Web protocol classifications, 300/300 sustained and 300/300 transient windows, and a standalone Chromium matrix with 37 passing assertions and 25 negative or driver-error classifications plus exact cleanup.
 
 ## Prove where keyboard focus landed
 
@@ -291,7 +301,7 @@ expect "checkout-dialog-closed" {
 }
 ```
 
-`hidden` is runner policy around the existing positive visibility assertion. It does not add an action variant; the current protocol is revision 14 because of the typed expectations above. The runner sends a positive probe to the surface driver and classifies its result deterministically.
+`hidden` is runner policy around the existing positive visibility assertion. It does not add an action variant; the current protocol is revision 15 because of the typed expectations above. The runner sends a positive probe to the surface driver and classifies its result deterministically.
 
 | Positive probe result                  | Hidden assertion result                                                                |
 | -------------------------------------- | -------------------------------------------------------------------------------------- |
@@ -323,7 +333,7 @@ wait "checkout-dialog-closed" {
 }
 ```
 
-The ACL compiler keeps `Action::Wait(WaitCondition::Visible(target))` and adds runner-owned `WaitMode::Hidden`. This still reuses the earlier visible-action variant under current action protocol revision 14. Runner executes an immediate positive visibility assertion, then repeats it every 50 ms while the target remains visible.
+The ACL compiler keeps `Action::Wait(WaitCondition::Visible(target))` and adds runner-owned `WaitMode::Hidden`. This still reuses the earlier visible-action variant under current action protocol revision 15. Runner executes an immediate positive visibility assertion, then repeats it every 50 ms while the target remains visible.
 
 | Positive probe result                  | Hidden wait result                                                                               |
 | -------------------------------------- | ------------------------------------------------------------------------------------------------ |

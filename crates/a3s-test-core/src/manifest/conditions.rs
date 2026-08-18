@@ -4,9 +4,10 @@ use a3s_acl::{Block, Value};
 
 use crate::{
     AssertionMode, AssertionStability, ElementState, Expectation, LayoutRelation, LoadState,
-    SpecError, Target, WaitCondition, WaitMode, DEFAULT_ASSERTION_SAMPLE_INTERVAL_MS,
-    MAX_ASSERTION_STABILITY_MS, MAX_ASSERTION_STABILITY_SAMPLES, MAX_LAYOUT_TOLERANCE_PX,
-    MAX_RENDERED_TEXT_ITEMS, MIN_ASSERTION_STABILITY_MS,
+    SpecError, Target, ViewportCoverageComparison, WaitCondition, WaitMode,
+    DEFAULT_ASSERTION_SAMPLE_INTERVAL_MS, MAX_ASSERTION_STABILITY_MS,
+    MAX_ASSERTION_STABILITY_SAMPLES, MAX_LAYOUT_TOLERANCE_PX, MAX_RENDERED_TEXT_ITEMS,
+    MAX_VIEWPORT_COVERAGE_PERCENT, MIN_ASSERTION_STABILITY_MS,
 };
 
 use super::{
@@ -95,6 +96,8 @@ pub(super) fn parse_expectation(
         "visible",
         "hidden",
         "in_viewport",
+        "viewport_coverage_at_least",
+        "viewport_coverage_at_most",
         "pointer_reachable",
         "rendered_text",
         "rendered_texts",
@@ -139,13 +142,15 @@ pub(super) fn parse_expectation(
             | "visible_count"
             | "value"
             | "selected_values"
+            | "viewport_coverage_at_least"
+            | "viewport_coverage_at_most"
             | "layout"
     );
     if block.attributes.contains_key("target") && !uses_separate_target {
         return Err(SpecError::new(
             "test.spec.attribute_unexpected",
             format!("{path}.target"),
-            "target is valid only with rendered_text, rendered_texts, visible_count, value, selected_values, or layout expectations",
+            "target is valid only with rendered_text, rendered_texts, visible_count, value, selected_values, viewport coverage, or layout expectations",
         ));
     }
     if condition != "layout" {
@@ -178,6 +183,38 @@ pub(super) fn parse_expectation(
             path,
             "in_viewport",
         )?),
+        "viewport_coverage_at_least" | "viewport_coverage_at_most" => {
+            let comparison = if condition == "viewport_coverage_at_least" {
+                ViewportCoverageComparison::AtLeast
+            } else {
+                ViewportCoverageComparison::AtMost
+            };
+            let target =
+                stable_viewport_coverage_target(required_target(block, "target", path)?, path)?;
+            let raw_percent = required_nonnegative_u32(block, condition, path)?;
+            let percent = match u8::try_from(raw_percent) {
+                Ok(percent) if percent <= MAX_VIEWPORT_COVERAGE_PERCENT => percent,
+                _ => {
+                    return Err(SpecError::new(
+                        "test.spec.viewport_coverage_percent_limit",
+                        format!("{path}.{condition}"),
+                        format!("viewport coverage percentage cannot exceed {MAX_VIEWPORT_COVERAGE_PERCENT}"),
+                    ));
+                }
+            };
+            if !comparison.threshold_is_valid(percent) {
+                return Err(SpecError::new(
+                    "test.spec.viewport_coverage_threshold_trivial",
+                    format!("{path}.{condition}"),
+                    "viewport coverage threshold would make the assertion unconditionally true",
+                ));
+            }
+            Expectation::ViewportCoverage {
+                target,
+                comparison,
+                percent,
+            }
+        }
         "pointer_reachable" => Expectation::PointerReachable(stable_interactability_target(
             parse_target(
                 &block.attributes[condition],
@@ -325,6 +362,17 @@ pub(super) fn parse_expectation(
         _ => unreachable!("condition list and parser must remain aligned"),
     };
     Ok((positive, AssertionMode::Positive))
+}
+
+fn stable_viewport_coverage_target(target: Target, path: &str) -> Result<Target, SpecError> {
+    if matches!(target, Target::Ref { .. } | Target::VisualPoint { .. }) {
+        return Err(SpecError::new(
+            "test.spec.viewport_coverage_target_unstable",
+            format!("{path}.target"),
+            "viewport coverage assertions require a stable semantic or CSS locator, not an observation-bound ref or visual point",
+        ));
+    }
+    Ok(target)
 }
 
 fn stable_semantic_state_target(

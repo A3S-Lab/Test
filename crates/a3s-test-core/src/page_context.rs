@@ -282,6 +282,7 @@ fn expectation_target(expectation: &Expectation) -> Option<&Target> {
     match expectation {
         Expectation::Visible(target)
         | Expectation::InViewport(target)
+        | Expectation::ViewportCoverage { target, .. }
         | Expectation::PointerReachable(target)
         | Expectation::RenderedText { target, .. }
         | Expectation::RenderedTexts { target, .. }
@@ -297,6 +298,7 @@ fn expectation_target_mut(expectation: &mut Expectation) -> Option<&mut Target> 
     match expectation {
         Expectation::Visible(target)
         | Expectation::InViewport(target)
+        | Expectation::ViewportCoverage { target, .. }
         | Expectation::PointerReachable(target)
         | Expectation::RenderedText { target, .. }
         | Expectation::RenderedTexts { target, .. }

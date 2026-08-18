@@ -15,7 +15,7 @@ fn standalone_web() -> WorkerSurfaceCapability {
         browser: BrowserCapabilities {
             integration: BrowserIntegration::Standalone,
             version: "0.26.0".to_string(),
-            protocol_revision: 14,
+            protocol_revision: 15,
             features: [
                 WebCapability::Accessibility,
                 WebCapability::Console,

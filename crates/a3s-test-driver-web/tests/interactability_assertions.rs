@@ -4,7 +4,7 @@ use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-use a3s_test_core::{Action, Expectation, Target};
+use a3s_test_core::{Action, Expectation, Target, ViewportCoverageComparison};
 use a3s_test_driver_web::{
     AgentBrowserConfig, AgentBrowserConnectionConfig, AgentBrowserDriver, BrowserCommand,
     BrowserNetworkPolicy, CommandError, CommandExecutor, CommandInvocation, CommandOutput,
@@ -208,6 +208,109 @@ async fn deterministic_interactability_dataset_classifies_2000_of_2000_cases() {
 }
 
 #[tokio::test]
+async fn viewport_coverage_retains_threshold_and_recomputed_geometry_evidence() {
+    let executor = Arc::new(QueueExecutor::new([geometry_probe(
+        rect(0.0, 0.0, 100.0, 100.0),
+        rect(0.0, 0.0, 80.0, 100.0),
+    )]));
+    let (_temp, mut session) = connected(Arc::clone(&executor)).await;
+
+    let output = session
+        .execute_action(
+            "viewport-coverage",
+            viewport_coverage_action(0, ViewportCoverageComparison::AtLeast, 80),
+        )
+        .await
+        .expect("80 percent viewport coverage");
+
+    assert_eq!(output.data["intersection_ratio"], 0.8);
+    assert_eq!(output.data["actual_percent"], 80.0);
+    assert_eq!(output.data["comparison"], "at_least");
+    assert_eq!(output.data["threshold_percent"], 80);
+    assert_eq!(output.data["matched"], true);
+    assert_eq!(output.data["target_rect"]["width"], 100.0);
+    assert_eq!(output.data["viewport_rect"]["width"], 80.0);
+
+    session.close_surface().await.expect("close");
+    let actions = executor.actions();
+    assert_eq!(actions.len(), 2);
+    assert_eq!(actions[0][0], "eval");
+    assert!(actions[0][1].contains("A3S_INTERACTABILITY_PROBE"));
+    assert!(!actions[0][1].contains("scrollIntoView"));
+}
+
+#[tokio::test]
+async fn deterministic_viewport_coverage_dataset_classifies_2000_of_2000_cases() {
+    let mut outputs = Vec::with_capacity(DATASET_SIZE * 4);
+    for index in 0..DATASET_SIZE {
+        let threshold = u8::try_from(index % 100 + 1).expect("at-least threshold");
+        outputs.push(coverage_probe(threshold));
+    }
+    for index in 0..DATASET_SIZE {
+        let threshold = u8::try_from(index % 100 + 1).expect("at-least threshold");
+        outputs.push(coverage_probe(threshold - 1));
+    }
+    for index in 0..DATASET_SIZE {
+        let threshold = u8::try_from(index % 100).expect("at-most threshold");
+        outputs.push(coverage_probe(threshold));
+    }
+    for index in 0..DATASET_SIZE {
+        let threshold = u8::try_from(index % 100).expect("at-most threshold");
+        outputs.push(coverage_probe(threshold + 1));
+    }
+    let executor = Arc::new(QueueExecutor::new(outputs));
+    let (_temp, mut session) = connected(Arc::clone(&executor)).await;
+
+    for index in 0..DATASET_SIZE {
+        let threshold = u8::try_from(index % 100 + 1).expect("at-least threshold");
+        let output = session
+            .execute_action(
+                format!("coverage-at-least-match-{index}"),
+                viewport_coverage_action(index, ViewportCoverageComparison::AtLeast, threshold),
+            )
+            .await
+            .expect("at-least match");
+        assert_eq!(output.data["matched"], true);
+    }
+    for index in 0..DATASET_SIZE {
+        let threshold = u8::try_from(index % 100 + 1).expect("at-least threshold");
+        let error = session
+            .execute_action(
+                format!("coverage-at-least-mismatch-{index}"),
+                viewport_coverage_action(index, ViewportCoverageComparison::AtLeast, threshold),
+            )
+            .await
+            .expect_err("at-least mismatch");
+        assert_eq!(error.code(), "test.assert.viewport_coverage_at_least");
+    }
+    for index in 0..DATASET_SIZE {
+        let threshold = u8::try_from(index % 100).expect("at-most threshold");
+        let output = session
+            .execute_action(
+                format!("coverage-at-most-match-{index}"),
+                viewport_coverage_action(index, ViewportCoverageComparison::AtMost, threshold),
+            )
+            .await
+            .expect("at-most match");
+        assert_eq!(output.data["matched"], true);
+    }
+    for index in 0..DATASET_SIZE {
+        let threshold = u8::try_from(index % 100).expect("at-most threshold");
+        let error = session
+            .execute_action(
+                format!("coverage-at-most-mismatch-{index}"),
+                viewport_coverage_action(index, ViewportCoverageComparison::AtMost, threshold),
+            )
+            .await
+            .expect_err("at-most mismatch");
+        assert_eq!(error.code(), "test.assert.viewport_coverage_at_most");
+    }
+
+    session.close_surface().await.expect("close");
+    assert_eq!(executor.actions().len(), DATASET_SIZE * 4 + 1);
+}
+
+#[tokio::test]
 async fn interactability_probe_preserves_resolution_and_untrusted_evidence_errors() {
     let malformed_samples = json!([
         { "x": 115.0, "y": 115.0, "reachable": "yes" }
@@ -289,6 +392,11 @@ async fn interactability_programmatic_boundary_rejects_unstable_and_non_web_targ
     ] {
         for expectation in [
             Expectation::InViewport(target.clone()),
+            Expectation::ViewportCoverage {
+                target: target.clone(),
+                comparison: ViewportCoverageComparison::AtLeast,
+                percent: 80,
+            },
             Expectation::PointerReachable(target.clone()),
         ] {
             let error = session
@@ -300,6 +408,27 @@ async fn interactability_programmatic_boundary_rejects_unstable_and_non_web_targ
                 .expect_err("unsupported interactability target");
             assert_eq!(error.code(), "test.driver.web.target_unsupported");
         }
+    }
+    session.close_surface().await.expect("close");
+    assert_eq!(executor.actions(), [vec!["close".to_string()]]);
+}
+
+#[tokio::test]
+async fn viewport_coverage_programmatic_boundary_rejects_trivial_thresholds_before_dispatch() {
+    let executor = Arc::new(QueueExecutor::new([]));
+    let (_temp, mut session) = connected(Arc::clone(&executor)).await;
+    for (comparison, percent) in [
+        (ViewportCoverageComparison::AtLeast, 0),
+        (ViewportCoverageComparison::AtMost, 100),
+    ] {
+        let error = session
+            .execute_action(
+                "invalid-coverage-threshold",
+                viewport_coverage_action(0, comparison, percent),
+            )
+            .await
+            .expect_err("trivial viewport coverage threshold");
+        assert_eq!(error.code(), "test.driver.web.expectation_invalid");
     }
     session.close_surface().await.expect("close");
     assert_eq!(executor.actions(), [vec!["close".to_string()]]);
@@ -318,6 +447,22 @@ fn pointer_action(index: usize) -> Action {
         expectation: Expectation::PointerReachable(Target::TestId {
             value: format!("pointer-{index}"),
         }),
+    }
+}
+
+fn viewport_coverage_action(
+    index: usize,
+    comparison: ViewportCoverageComparison,
+    percent: u8,
+) -> Action {
+    Action::Assert {
+        expectation: Expectation::ViewportCoverage {
+            target: Target::Css {
+                selector: format!("[data-coverage='{index}']"),
+            },
+            comparison,
+            percent,
+        },
     }
 }
 
@@ -357,6 +502,16 @@ fn geometry_probe(target_rect: Rect, viewport_rect: Rect) -> CommandOutput {
         "target_rect": rect_json(target_rect),
         "viewport_rect": rect_json(viewport_rect),
     }))
+}
+
+fn coverage_probe(percent: u8) -> CommandOutput {
+    let target = rect(0.0, 0.0, 100.0, 100.0);
+    let viewport = if percent == 0 {
+        rect(100.0, 0.0, 100.0, 100.0)
+    } else {
+        rect(0.0, 0.0, f64::from(percent), 100.0)
+    };
+    geometry_probe(target, viewport)
 }
 
 fn pointer_probe(

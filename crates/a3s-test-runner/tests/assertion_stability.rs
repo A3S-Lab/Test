@@ -5,7 +5,7 @@ use std::time::Duration;
 use a3s_test_core::{
     Action, AssertionStability, DriverError, DriverSession, ElementState, Expectation,
     LayoutRelation, ScenarioContext, StepOutput, Surface, SurfaceDriver, Target, TestScenario,
-    TestStep, TestSuite,
+    TestStep, TestSuite, ViewportCoverageComparison,
 };
 use a3s_test_runner::{RetryPolicy, RunStatus, Runner, RunnerOptions};
 use async_trait::async_trait;
@@ -118,6 +118,40 @@ impl DriverSession for TransientSession {
                         "in_viewport": true,
                     }),
                     "test.assert.in_viewport",
+                )
+            }
+            Expectation::ViewportCoverage {
+                target,
+                comparison,
+                percent,
+            } => {
+                let offset = self.sample as f64;
+                let mismatch_code = match comparison {
+                    ViewportCoverageComparison::AtLeast => "test.assert.viewport_coverage_at_least",
+                    ViewportCoverageComparison::AtMost => "test.assert.viewport_coverage_at_most",
+                };
+                (
+                    json!({
+                        "target": target,
+                        "target_rect": {
+                            "x": offset,
+                            "y": 0.0,
+                            "width": 100.0,
+                            "height": 100.0,
+                        },
+                        "viewport_rect": {
+                            "x": 0.0,
+                            "y": 0.0,
+                            "width": 1000.0,
+                            "height": 800.0,
+                        },
+                        "intersection_ratio": f64::from(*percent) / 100.0,
+                        "actual_percent": percent,
+                        "comparison": comparison,
+                        "threshold_percent": percent,
+                        "matched": true,
+                    }),
+                    mismatch_code,
                 )
             }
             Expectation::PointerReachable(target) => {
@@ -579,6 +613,86 @@ async fn stable_interactability_assertions_accept_200_of_200_sustained_signals()
 }
 
 #[tokio::test]
+async fn stable_viewport_coverage_assertions_reject_100_of_100_transient_signals() {
+    let executions = Arc::new(AtomicUsize::new(0));
+    let runner = scripted_runner(Arc::clone(&executions), false);
+    let stability = AssertionStability {
+        stable_for_ms: 20,
+        sample_interval_ms: 5,
+    };
+
+    let result = runner
+        .run(
+            &viewport_coverage_suite(stability),
+            CancellationToken::new(),
+        )
+        .await;
+
+    assert_eq!(result.status, RunStatus::Failed);
+    assert_eq!(result.scenarios.len(), DATASET_SIZE);
+    for scenario in &result.scenarios {
+        let step = &scenario.steps[0];
+        let data = &step
+            .output
+            .as_ref()
+            .expect("viewport coverage stability evidence")
+            .data;
+        assert_eq!(step.attempts, 2);
+        assert_eq!(
+            step.error.as_ref().map(|error| error.code.as_str()),
+            Some("test.assert.unstable")
+        );
+        assert_eq!(data["assertion"]["first"]["matched"], true);
+        assert_eq!(data["stability"]["outcome"], "unstable");
+        assert_eq!(data["stability"]["samples"], 2);
+    }
+    assert_eq!(executions.load(Ordering::SeqCst), DATASET_SIZE * 2);
+}
+
+#[tokio::test]
+async fn stable_viewport_coverage_assertions_accept_100_of_100_sustained_signals() {
+    let executions = Arc::new(AtomicUsize::new(0));
+    let runner = scripted_runner(Arc::clone(&executions), true);
+    let stability = AssertionStability {
+        stable_for_ms: 20,
+        sample_interval_ms: 5,
+    };
+
+    let result = runner
+        .run(
+            &viewport_coverage_suite(stability),
+            CancellationToken::new(),
+        )
+        .await;
+
+    assert_eq!(result.status, RunStatus::Passed);
+    assert_eq!(result.scenarios.len(), DATASET_SIZE);
+    let mut measured_executions = 0_usize;
+    for scenario in &result.scenarios {
+        let data = &scenario.steps[0]
+            .output
+            .as_ref()
+            .expect("viewport coverage stability evidence")
+            .data;
+        let first = &data["assertion"]["first"];
+        let last = &data["assertion"]["last"];
+        let samples = data["stability"]["samples"]
+            .as_u64()
+            .expect("viewport coverage samples");
+        assert_eq!(first["matched"], true);
+        assert_eq!(last["matched"], true);
+        assert!(first["target_rect"].is_object());
+        assert!(last["target_rect"].is_object());
+        assert_ne!(first["target_rect"]["x"], last["target_rect"]["x"]);
+        assert_eq!(data["stability"]["outcome"], "passed");
+        assert!((2..=stability.planned_samples()).contains(&samples));
+        measured_executions += usize::try_from(samples).expect("bounded coverage samples");
+    }
+    assert_eq!(executions.load(Ordering::SeqCst), measured_executions);
+    assert!((DATASET_SIZE * 2..=DATASET_SIZE * 5).contains(&measured_executions));
+}
+
+#[tokio::test]
 async fn stable_rendered_assertions_reject_300_of_300_scalar_sequence_and_count_transients() {
     let executions = Arc::new(AtomicUsize::new(0));
     let runner = scripted_runner(Arc::clone(&executions), false);
@@ -892,6 +1006,43 @@ fn interactability_suite(stability: AssertionStability) -> TestSuite {
         name: "interactability-stability-dataset".to_string(),
         version: 1,
         scenarios: viewport.chain(pointer).collect(),
+    }
+}
+
+fn viewport_coverage_suite(stability: AssertionStability) -> TestSuite {
+    TestSuite {
+        name: "viewport-coverage-stability-dataset".to_string(),
+        version: 1,
+        scenarios: (0..DATASET_SIZE)
+            .map(|index| {
+                let (comparison, percent) = if index % 2 == 0 {
+                    (ViewportCoverageComparison::AtLeast, 80)
+                } else {
+                    (ViewportCoverageComparison::AtMost, 20)
+                };
+                TestScenario {
+                    id: format!("viewport-coverage-{index}"),
+                    name: format!("Viewport coverage {index}"),
+                    surface: Surface::Web,
+                    timeout_ms: 1_000,
+                    steps: vec![TestStep {
+                        id: "assert-viewport-coverage".to_string(),
+                        action: Action::Assert {
+                            expectation: Expectation::ViewportCoverage {
+                                target: Target::TestId {
+                                    value: format!("coverage-{index}"),
+                                },
+                                comparison,
+                                percent,
+                            },
+                        },
+                        stability: Some(stability),
+                        assertion_mode: Default::default(),
+                        wait_mode: Default::default(),
+                    }],
+                }
+            })
+            .collect(),
     }
 }
 

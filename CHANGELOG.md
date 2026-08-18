@@ -4,6 +4,24 @@
 
 ### Added
 
+- Added action protocol revision 15 with bounded visual-viewport coverage
+  expectations. `viewport_coverage_at_least` accepts integer percentages from
+  1 through 100; `viewport_coverage_at_most` accepts 0 through 99. The ratio is
+  the intersection area of the rendered target rectangle and current
+  visual viewport divided by the complete target area, so one visible pixel no
+  longer proves a materially visible target. Web captures both rectangles in
+  one page evaluation and Rust independently validates the geometry and
+  recomputes the ratio. Stable semantic or CSS locators are required, Page
+  Context refs may resolve before dispatch, browser refs and visual points fail
+  admission, and GUI/TUI fail closed without equivalent visual-viewport
+  evidence. Coverage classifies 2,000/2,000 Core cases and 2,000/2,000 Web
+  protocol cases, accepts 100/100 sustained windows, rejects 100/100 transient
+  windows, and extends the standalone Chromium matrix to 37 passing assertions
+  plus 25 negative or driver-error classifications. The fixture covers exact
+  threshold boundaries, one-pixel intersection, four-sided clipping, fully
+  offscreen and oversized targets, open Shadow DOM, accessibility-hidden
+  differences, transient geometry, exact fixture cleanup, and no private
+  runtime leak.
 - Added action protocol revision 14 with ten deterministic live semantic-state
   expectations: `expanded`/`collapsed`, `pressed`/`unpressed`,
   `readonly`/`writable`, `required`/`optional`, and `invalid`/`valid`. Web gives

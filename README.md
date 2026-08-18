@@ -428,14 +428,24 @@ accepts 100/100 sustained layout windows, rejects 100/100 transients, and runs
 all 17 relations plus 15 negative/error cases in standalone Chromium with
 exact socket and private-runtime cleanup.
 
-## Prove viewport intersection and pointer reachability
+## Prove viewport coverage and pointer reachability
 
 A rendered box can exist outside the visual viewport or behind another
-element. Action protocol revision 12 keeps those questions separate:
+element. Action protocol revisions 12 and 15 keep those questions separate:
 
 ```acl
 expect "checkout-in-view" {
     in_viewport = testid("checkout")
+}
+
+expect "checkout-mostly-visible" {
+    target = testid("checkout")
+    viewport_coverage_at_least = 80
+}
+
+expect "drawer-mostly-outside" {
+    target = css("#drawer")
+    viewport_coverage_at_most = 10
 }
 
 expect "checkout-pointer-hit" {
@@ -446,25 +456,31 @@ expect "checkout-pointer-hit" {
 ```
 
 `in_viewport` requires the rendered target rectangle to have a positive-area
-intersection with the visual viewport. `pointer_reachable` clips the target to
-that viewport, samples a fixed 3 by 3 grid at the `1/6`, `1/2`, and `5/6`
-fractions on each axis, and requires at least one deep browser hit on the
-target or a composed-tree descendant. It does not infer enabled state,
-keyboard access, an event listener, or business clickability.
+intersection with the visual viewport. Revision 15 adds quantitative coverage:
+the intersection area divided by the complete rendered target area.
+`viewport_coverage_at_least` accepts `1..=100`, while
+`viewport_coverage_at_most` accepts `0..=99`; the two excluded endpoints would
+be unconditionally true. These conditions prove geometry only, not occlusion
+or pointer access. `pointer_reachable` clips the target to that viewport,
+samples a fixed 3 by 3 grid at the `1/6`, `1/2`, and `5/6` fractions on each
+axis, and requires at least one deep browser hit on the target or a
+composed-tree descendant. None of the forms infers enabled state, keyboard
+access, an event listener, or business clickability.
 
-Both expectations require a repeatable semantic or CSS locator. ACL rejects
-browser refs and visual points, while a current Page Context `@cN` may resolve
-to a stable locator before dispatch. Web acquires geometry and hit evidence in
-one page evaluation, validates the untrusted response again in Rust, traverses
-open Shadow DOM for semantic targets, and uses native hit testing for
-occlusion. A transparent covering element blocks the target;
+These target-bound expectations require a repeatable semantic or CSS locator.
+ACL rejects browser refs and visual points, while a current Page Context `@cN`
+may resolve to a stable locator before dispatch. Web acquires geometry and hit
+evidence in one page evaluation, validates the untrusted response again in
+Rust, traverses open Shadow DOM for semantic targets, and uses native hit
+testing for occlusion. A transparent covering element blocks the target;
 `pointer-events: none` content does not. GUI and TUI fail closed because their
 current protocols do not expose equivalent evidence.
 
-Checked-in evidence covers 1,000/1,000 Core geometry cases, 2,000/2,000 Web
-protocol classifications, 200/200 sustained and 200/200 transient stability
-windows, and a standalone Chromium run with 20 positive assertions and 15
-negative or driver-error classifications plus exact cleanup.
+Checked-in evidence covers 1,000/1,000 base intersection cases plus 2,000/2,000
+Core threshold cases, 4,000/4,000 Web protocol classifications, 300/300
+sustained and 300/300 transient stability windows, and a standalone Chromium
+run with 37 passing assertions and 25 negative or driver-error classifications
+plus exact cleanup.
 
 ## Prove exact and component-scoped focus ownership
 

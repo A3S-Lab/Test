@@ -12,7 +12,9 @@ use std::time::Duration;
 #[cfg(any(unix, windows))]
 use a3s_test_core::{Action, ScenarioContext, SurfaceDriver as _, TestStep, WaitCondition};
 #[cfg(unix)]
-use a3s_test_core::{ElementState, Expectation, LayoutRelation, Target};
+use a3s_test_core::{
+    ElementState, Expectation, LayoutRelation, Target, ViewportCoverageComparison,
+};
 use serde_json::Value;
 
 use super::*;
@@ -113,6 +115,11 @@ async fn target_bound_rendered_assertions_fail_closed_on_terminal_surfaces() {
             count: 1,
         },
         Expectation::InViewport(target.clone()),
+        Expectation::ViewportCoverage {
+            target: target.clone(),
+            comparison: ViewportCoverageComparison::AtLeast,
+            percent: 80,
+        },
         Expectation::PointerReachable(target.clone()),
         Expectation::State {
             target: target.clone(),

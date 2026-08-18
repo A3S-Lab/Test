@@ -35,6 +35,24 @@ const POINTER_STEPS: [&str; 10] = [
     "pointer-partial-cover",
     "pointer-pass-through",
 ];
+const COVERAGE_STEPS: [(&str, &str, u64, f64); 16] = [
+    ("coverage-full-semantic", "at_least", 100, 100.0),
+    ("coverage-left-at-least", "at_least", 50, 50.0),
+    ("coverage-left-at-most", "at_most", 50, 50.0),
+    ("coverage-right-at-least", "at_least", 50, 50.0),
+    ("coverage-right-at-most", "at_most", 50, 50.0),
+    ("coverage-top-at-least", "at_least", 50, 50.0),
+    ("coverage-top-at-most", "at_most", 50, 50.0),
+    ("coverage-bottom-at-least", "at_least", 50, 50.0),
+    ("coverage-bottom-at-most", "at_most", 50, 50.0),
+    ("coverage-one-pixel-at-least", "at_least", 1, 1.0),
+    ("coverage-one-pixel-at-most", "at_most", 1, 1.0),
+    ("coverage-offscreen", "at_most", 0, 0.0),
+    ("coverage-large-at-least", "at_least", 25, 25.0),
+    ("coverage-large-at-most", "at_most", 25, 25.0),
+    ("coverage-css-aria-hidden", "at_least", 100, 100.0),
+    ("coverage-shadow-semantic", "at_least", 100, 100.0),
+];
 
 fn binary() -> PathBuf {
     PathBuf::from(env!("CARGO_BIN_EXE_a3s-test"))
@@ -136,6 +154,23 @@ fn run_success(browser: &Path, fixture: &WebFixture, workspace: &Path) {
         .expect("partial viewport ratio");
     assert!(partial_ratio > 0.0 && partial_ratio < 1.0);
 
+    for (id, comparison, threshold, expected_percent) in COVERAGE_STEPS {
+        let data = &step(scenario, id)["output"]["data"];
+        assert_eq!(step(scenario, id)["status"], "passed", "{id}");
+        assert_eq!(data["comparison"], comparison, "{id}");
+        assert_eq!(data["threshold_percent"], threshold, "{id}");
+        assert_eq!(data["matched"], true, "{id}");
+        assert!(data["target_rect"].is_object(), "{id}");
+        assert!(data["viewport_rect"].is_object(), "{id}");
+        let actual_percent = data["actual_percent"]
+            .as_f64()
+            .unwrap_or_else(|| panic!("missing actual viewport coverage for {id}"));
+        assert!(
+            (actual_percent - expected_percent).abs() <= 0.000_001,
+            "unexpected viewport coverage for {id}: {actual_percent}"
+        );
+    }
+
     for id in POINTER_STEPS {
         let data = &step(scenario, id)["output"]["data"];
         assert_eq!(step(scenario, id)["status"], "passed", "{id}");
@@ -153,7 +188,7 @@ fn run_success(browser: &Path, fixture: &WebFixture, workspace: &Path) {
         9
     );
 
-    for id in ["stable-viewport", "stable-pointer"] {
+    for id in ["stable-viewport", "stable-pointer", "stable-coverage"] {
         assert_passed_stability(&report, 0, id, 100, 25);
         let data = &step(scenario, id)["output"]["data"];
         assert!(data["assertion"]["first"]["target_rect"].is_object());
@@ -187,7 +222,7 @@ fn run_failures(browser: &Path, fixture: &WebFixture, workspace: &Path) {
     let scenarios = report["scenarios"]
         .as_array()
         .expect("interactability failure scenarios");
-    assert_eq!(scenarios.len(), 15);
+    assert_eq!(scenarios.len(), 25);
     for (scenario_id, error_code) in [
         ("offscreen-viewport", "test.assert.in_viewport"),
         ("offscreen-pointer", "test.assert.pointer_reachable"),
@@ -210,6 +245,34 @@ fn run_failures(browser: &Path, fixture: &WebFixture, workspace: &Path) {
         ("invalid-pointer-geometry", "test.driver.web.output_invalid"),
         ("transient-viewport", "test.assert.unstable"),
         ("transient-pointer", "test.assert.unstable"),
+        (
+            "coverage-at-least-too-high",
+            "test.assert.viewport_coverage_at_least",
+        ),
+        (
+            "coverage-at-most-too-low",
+            "test.assert.viewport_coverage_at_most",
+        ),
+        (
+            "coverage-offscreen-at-least-one",
+            "test.assert.viewport_coverage_at_least",
+        ),
+        ("coverage-missing", "test.driver.web.target_not_found"),
+        ("coverage-ambiguous", "test.driver.web.target_ambiguous"),
+        (
+            "coverage-invalid-selector",
+            "test.driver.web.target_invalid",
+        ),
+        (
+            "coverage-semantic-hidden",
+            "test.driver.web.target_not_found",
+        ),
+        ("coverage-shadow-css", "test.driver.web.target_not_found"),
+        (
+            "coverage-invalid-geometry",
+            "test.driver.web.output_invalid",
+        ),
+        ("coverage-transient", "test.assert.unstable"),
     ] {
         let scenario = scenarios
             .iter()

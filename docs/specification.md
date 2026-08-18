@@ -161,6 +161,9 @@ treats an observation-bound ref failure as disappearance.
   `required`, `optional`, `invalid`, or `valid` with a stable inline target
 - `layout = <relation>` with separate `target` and `relative_to` targets
 - `in_viewport = <stable target>`
+- `viewport_coverage_at_least = <integer percent>` or
+  `viewport_coverage_at_most = <integer percent>` with a separate stable
+  `target`
 - `pointer_reachable = <stable target>`
 
 ### Negative visibility
@@ -233,7 +236,7 @@ wait "dialog-closed" {
 This is `TestStep` wait policy, not a new `Action` or `WaitCondition` variant.
 Core stores `Action::Wait { condition: WaitCondition::Visible(target) }` plus
 `WaitMode::Hidden`; it reuses the visible condition introduced before the
-current action protocol revision 14 and does not change surface-driver command
+current action protocol revision 15 and does not change surface-driver command
 schemas. Runner admission requires `AssertionMode::Positive`,
 no assertion-stability policy, and a locator that is not `ref()` or
 `visual_point()`.
@@ -618,13 +621,24 @@ windows, rejects 100/100 transients, and covers every relation plus 15 negative
 or driver-error cases in standalone Chromium without leaking the fixture
 socket or a private runtime directory.
 
-### Visual-viewport and pointer-reachability expectations
+### Visual-viewport coverage and pointer-reachability expectations
 
-Action protocol revision 12 adds two orthogonal single-target expectations:
+Action protocol revision 12 adds viewport intersection and pointer hit
+reachability. Revision 15 adds bounded viewport-coverage thresholds:
 
 ```acl
 expect "checkout-in-view" {
     in_viewport = testid("checkout")
+}
+
+expect "checkout-mostly-visible" {
+    target = testid("checkout")
+    viewport_coverage_at_least = 80
+}
+
+expect "drawer-mostly-outside" {
+    target = css("#drawer")
+    viewport_coverage_at_most = 10
 }
 
 expect "checkout-pointer-hit" {
@@ -640,6 +654,14 @@ has an intersection ratio of `1`; partial intersection has a ratio strictly
 between `0` and `1`; a fully offscreen target or boundary-only contact has
 ratio `0` and fails as `test.assert.in_viewport`.
 
+Viewport coverage is the target/viewport intersection area divided by the
+complete target rectangle area. `viewport_coverage_at_least` admits integer
+thresholds from 1 through 100. `viewport_coverage_at_most` admits 0 through 99.
+ACL rejects `at_least = 0` and `at_most = 100` because either would be true for
+every valid rectangle. `at_least = 100` proves complete geometric containment;
+`at_most = 0` proves no positive-area intersection. Coverage does not prove
+that pixels are unobscured or reachable by a pointer.
+
 `pointer_reachable` first computes the same intersection rectangle. When it is
 positive, Web samples the Cartesian 3 by 3 grid formed by the `1/6`, `1/2`,
 and `5/6` fractions on both axes. Each point is passed through deep
@@ -649,11 +671,13 @@ browser hit reachability only. It does not claim that the target is enabled,
 keyboard accessible, backed by an event listener, or valid for a business
 workflow.
 
-Both forms accept role, text, test ID, label, placeholder, or CSS locators.
+All of these expectations accept role, text, test ID, label, placeholder, or
+CSS locators.
 ACL rejects `ref()` and `visual_point()` with
 `test.spec.in_viewport_target_unstable` or
-`test.spec.pointer_reachable_target_unstable`. A current Page Context `@cN`
-may be used only after Core resolves it to a stable locator before dispatch.
+`test.spec.pointer_reachable_target_unstable`; coverage uses
+`test.spec.viewport_coverage_target_unstable`. A current Page Context `@cN` may
+be used only after Core resolves it to a stable locator before dispatch.
 
 Web performs target resolution, rectangle capture, viewport capture, and all
 requested hit tests in one page evaluation. Semantic locators traverse open
@@ -672,6 +696,10 @@ coordinate, and accepts only boolean hit results. An offscreen pointer probe
 must return an empty sample array. No JavaScript result can pass by supplying a
 different sample pattern or malformed geometry.
 
+Coverage additionally validates the non-trivial percentage at the typed Web
+boundary, compares only the Rust-recomputed ratio, and returns the actual
+percentage, comparison direction, threshold, and match result.
+
 Passing payloads have these stable shapes:
 
 ```json
@@ -681,6 +709,19 @@ Passing payloads have these stable shapes:
   "viewport_rect": { "x": 0.0, "y": 0.0, "width": 1280.0, "height": 720.0 },
   "intersection_ratio": 1.0,
   "in_viewport": true
+}
+```
+
+```json
+{
+  "target": { "type": "test_id", "value": "checkout" },
+  "target_rect": { "x": 120.0, "y": 420.0, "width": 240.0, "height": 48.0 },
+  "viewport_rect": { "x": 0.0, "y": 0.0, "width": 1280.0, "height": 720.0 },
+  "intersection_ratio": 0.8,
+  "actual_percent": 80.0,
+  "comparison": "at_least",
+  "threshold_percent": 80,
+  "matched": true
 }
 ```
 
@@ -711,6 +752,9 @@ Passing payloads have these stable shapes:
 | --- | --- |
 | Positive target/viewport intersection | `in_viewport` passes with both rectangles and the ratio |
 | Valid rectangles with no positive intersection | `test.assert.in_viewport` |
+| Valid coverage satisfies its admitted threshold | Coverage passes with both rectangles, ratio, percentage, comparison, and threshold |
+| Valid coverage is below an `at_least` threshold | `test.assert.viewport_coverage_at_least` |
+| Valid coverage is above an `at_most` threshold | `test.assert.viewport_coverage_at_most` |
 | At least one of nine valid points reaches the target or a composed descendant | `pointer_reachable` passes with all points and hit counts |
 | No valid point reaches the target, including an offscreen target | `test.assert.pointer_reachable` |
 | Target is missing or ambiguous, or its CSS selector is invalid | `test.driver.web.target_not_found`, `.target_ambiguous`, or `.target_invalid` |
@@ -718,16 +762,16 @@ Passing payloads have these stable shapes:
 | Required browser hit testing is unavailable | `test.driver.web.interactability_unsupported` |
 
 GUI returns `test.driver.gui.assertion_unsupported`; TUI returns its explicit
-unsupported-action error. Neither adapter estimates visual-viewport or deep
-pointer-hit evidence. Both expectations compose with assertion stability. A
-later valid assertion mismatch becomes `test.assert.unstable`; a later driver
-failure keeps driver ownership.
+unsupported-action error. Neither adapter estimates visual-viewport coverage
+or deep pointer-hit evidence. All expectations compose with assertion
+stability. A later valid assertion mismatch becomes `test.assert.unstable`; a
+later driver failure keeps driver ownership.
 
-Checked-in evidence classifies 1,000/1,000 Core geometry cases and 2,000/2,000
-Web protocol cases, accepts 200/200 sustained windows, rejects 200/200
-transients, and proves 20 positive assertions plus 15 negative or driver-error
-classifications in standalone Chromium with exact fixture and private-runtime
-cleanup.
+Checked-in evidence classifies 1,000/1,000 base Core geometry cases plus
+2,000/2,000 threshold cases and 4,000/4,000 Web protocol cases, accepts 300/300
+sustained windows, rejects 300/300 transients, and proves 37 passing assertions
+plus 25 negative or driver-error classifications in standalone Chromium with
+exact fixture and private-runtime cleanup.
 
 ### Focus-ownership expectations
 
@@ -1459,7 +1503,7 @@ code and path to repair manifests.
 ## Browser admission and runner bounds
 
 `a3s-test capabilities --json` probes the configured executable before any
-browser session launches. Action protocol revision 14 admits A3S Browser
+browser session launches. Action protocol revision 15 admits A3S Browser
 `>= 0.4.0, < 0.5.0` and standalone agent-browser `>= 0.26.0, < 0.27.0`.
 Unverified versions fail with `test.driver.web.version_unsupported`.
 

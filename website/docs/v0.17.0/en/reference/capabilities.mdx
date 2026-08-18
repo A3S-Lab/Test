@@ -88,7 +88,7 @@ The persistent-session loop is `start -> observe -> act -> observe -> finish`. A
 | `terminal_resize`                  | Columns and rows                                       | Resizes the owned PTY or ConPTY and updates terminal semantics                          |
 | `terminal_recording`               | Relative artifact path                                 | Retains a bounded terminal recording outside arbitrary workspace paths                  |
 
-The action protocol revision is 14. Generate the complete schema with `a3s-test agent schema`. Unknown fields, missing required fields, invalid enums, and actions unsupported by the selected surface are rejected before execution.
+The action protocol revision is 15. Generate the complete schema with `a3s-test agent schema`. Unknown fields, missing required fields, invalid enums, and actions unsupported by the selected surface are rejected before execution.
 
 ### Live control-state assertions
 
@@ -150,17 +150,19 @@ The 17 relations cover four directions, containment/inside, overlap/non-overlap,
 
 Web resolves both targets and reads both rectangles in one page evaluation. CSS keeps visually rendered `aria-hidden` elements, while semantic locators exclude accessibility-hidden ancestry and traverse open Shadow DOM. GUI requires both frames in one fresh CUA snapshot. TUI fails closed because terminal cells are not equivalent rendered-page geometry. Checked-in evidence covers 3,400/3,400 deterministic cases, 100/100 sustained and 100/100 transient windows, all 17 relations, and 15 negative/error classifications in standalone Chromium.
 
-### Viewport and pointer-hit assertions
+### Viewport coverage and pointer-hit assertions
 
-| Capability                      | ACL form                                      | Observed evidence                                                                 | Failure boundary                                                                                                                    |
-| ------------------------------- | --------------------------------------------- | --------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
-| Visual-viewport intersection    | `in_viewport = <stable target>`               | Target rectangle, visual-viewport rectangle, and independently recomputed ratio   | Zero-area intersection is `test.assert.in_viewport`; target resolution and malformed evidence remain driver errors                  |
-| Pointer hit reachability        | `pointer_reachable = <stable target>`         | The same geometry plus an ordered 3 by 3 deep-hit grid and reachable-sample count | Nine valid misses are `test.assert.pointer_reachable`; this does not imply enabled state, keyboard access, or business clickability |
-| Stable interaction prerequisite | Either form plus `stable_for_ms` and interval | First and last complete geometry or hit payloads plus bounded stability metrics   | A later valid mismatch is `test.assert.unstable`; a later resolution or evidence failure keeps driver ownership                     |
+| Capability                      | ACL form                                                    | Observed evidence                                                                 | Failure boundary                                                                                                                    |
+| ------------------------------- | ----------------------------------------------------------- | --------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| Visual-viewport intersection    | `in_viewport = <stable target>`                             | Target rectangle, visual-viewport rectangle, and independently recomputed ratio   | Zero-area intersection is `test.assert.in_viewport`; target resolution and malformed evidence remain driver errors                  |
+| Minimum viewport coverage       | Stable `target` plus `viewport_coverage_at_least = 1..=100` | The same rectangles, ratio, actual percent, comparison, and threshold             | Valid geometry below the threshold is `test.assert.viewport_coverage_at_least`; the trivial zero threshold fails admission          |
+| Maximum viewport coverage       | Stable `target` plus `viewport_coverage_at_most = 0..=99`   | The same independently recomputed coverage evidence                               | Valid geometry above the threshold is `test.assert.viewport_coverage_at_most`; the trivial 100 threshold fails admission            |
+| Pointer hit reachability        | `pointer_reachable = <stable target>`                       | The same geometry plus an ordered 3 by 3 deep-hit grid and reachable-sample count | Nine valid misses are `test.assert.pointer_reachable`; this does not imply enabled state, keyboard access, or business clickability |
+| Stable interaction prerequisite | Any form plus `stable_for_ms` and interval                  | First and last complete geometry or hit payloads plus bounded stability metrics   | A later valid mismatch is `test.assert.unstable`; a later resolution or evidence failure keeps driver ownership                     |
 
-Both forms require a repeatable semantic or CSS locator. Browser refs and visual points fail admission, while a current Page Context ref may resolve to a stable locator before dispatch. Web captures the target, visual viewport, and optional nine-point hit grid atomically. Semantic targets and deep hit testing traverse open Shadow DOM. Native hit testing treats a pointer-receiving transparent overlay as a blocker and skips `pointer-events: none` overlays. GUI and TUI fail closed because their current protocols do not expose equivalent evidence.
+All forms require a repeatable semantic or CSS locator. Browser refs and visual points fail admission, while a current Page Context ref may resolve to a stable locator before dispatch. Coverage is intersection area divided by complete target area, so it proves geometry without claiming occlusion or pointer reachability. Web captures the target, visual viewport, and optional nine-point hit grid atomically. Semantic targets and deep hit testing traverse open Shadow DOM. Native hit testing treats a pointer-receiving transparent overlay as a blocker and skips `pointer-events: none` overlays. GUI and TUI fail closed because their current protocols do not expose equivalent evidence.
 
-Checked-in evidence covers 1,000/1,000 Core geometry cases, 2,000/2,000 Web protocol classifications, 200/200 sustained and 200/200 transient windows, plus 20 positive assertions and 15 negative or driver-error classifications in standalone Chromium with exact cleanup.
+Checked-in evidence covers 1,000/1,000 base Core geometry cases plus 2,000/2,000 threshold cases, 4,000/4,000 Web protocol classifications, 300/300 sustained and 300/300 transient windows, plus 37 passing assertions and 25 negative or driver-error classifications in standalone Chromium with exact cleanup.
 
 ## Page perception and Test Kit
 

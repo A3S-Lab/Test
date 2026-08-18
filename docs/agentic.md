@@ -104,7 +104,7 @@ profile and every later turn reconnects with it; legacy session metadata
 without the field defaults to `disabled`. The same option is available to
 deterministic `run`, direct `agent run`, and Web MCP hosts.
 
-Action protocol revision 14 is the current cross-surface schema. Revision 2
+Action protocol revision 15 is the current cross-surface schema. Revision 2
 introduced the browser interactions needed to inspect document-style
 applications: click, hover, focus, double-click, context-click,
 fill, incremental type, check/uncheck, multi-value select, drag, key press,
@@ -168,6 +168,13 @@ targets never prove a negative state. ACL requires a stable semantic or CSS
 locator, while current Page Context refs may resolve before dispatch. GUI and
 TUI fail closed because their current protocols do not expose equivalent live
 semantic-state evidence.
+Revision 15 adds bounded visual-viewport coverage thresholds. Web atomically
+captures the rendered target and visual viewport rectangles, while Rust
+validates both and recomputes intersection area divided by target area.
+`at_least` admits 1 through 100 percent and `at_most` admits 0 through 99, so
+unconditionally true endpoint claims never enter execution. Stable semantic or
+CSS locators are required, current Page Context refs may resolve before
+dispatch, and GUI/TUI fail closed without equivalent viewport evidence.
 
 Semantic role, text, test-ID, label, and placeholder targets are used whenever
 the underlying browser command supports the requested subaction. Focus,
@@ -196,7 +203,7 @@ tools:
 | `test_act` | Execute exactly one typed action |
 | `test_finish` | Record a result and close the exact owned surface |
 | `test_abort` | Abort and close the exact owned surface |
-| `test_schema` | Return action protocol revision 14 and its interactive JSON Schema |
+| `test_schema` | Return action protocol revision 15 and its interactive JSON Schema |
 
 The server serializes turns within each session, bounds active sessions and
 request size, advertises only registered surfaces, and closes independent

@@ -26,6 +26,9 @@
 - [x] Action protocol revision 14 deterministic disclosure, toggle, read-only,
       required, and validity state with native/ARIA precedence and honest
       per-surface capability failures
+- [x] Action protocol revision 15 bounded visual-viewport coverage thresholds
+      with independently recomputed geometry and honest per-surface capability
+      failures
 - [x] Surface driver and session contracts
 - [x] Cancellation-safe sequential runner
 - [x] Bounded sampled assertion stability with static duration/sample limits,
@@ -846,3 +849,31 @@ The completion work intentionally preserves these product boundaries:
       classifications in standalone Chromium, including native controls,
       valid and invalid ARIA, open Shadow DOM, precedence, transient state,
       exact fixture cleanup, and no private runtime leak
+
+## M27: Deterministic visual-viewport coverage depth
+
+- [x] Add `viewport_coverage_at_least` and `viewport_coverage_at_most` under
+      action protocol revision 15 without weakening revision 12 intersection or
+      pointer-hit semantics
+- [x] Define coverage as target/visual-viewport intersection area divided by
+      complete rendered target area, with integer percentage thresholds
+- [x] Admit `at_least` from 1 through 100 and `at_most` from 0 through 99 while
+      rejecting the two unconditionally true endpoint claims
+- [x] Require stable semantic or CSS locators, resolve current Page Context refs
+      before dispatch, and reject browser refs and visual points
+- [x] Capture both rectangles atomically in Web, validate them again in Rust,
+      recompute the ratio independently, and preserve resolution or malformed
+      geometry as driver errors
+- [x] Reserve `test.assert.viewport_coverage_at_least` and
+      `test.assert.viewport_coverage_at_most` for valid observed mismatches
+- [x] Fail closed on GUI and TUI without equivalent visual-viewport evidence;
+      preserve Agent provenance redaction and bounded assertion stability
+- [x] Prove 2,000/2,000 Core threshold classifications and 2,000/2,000 Web
+      protocol classifications
+- [x] Prove 100/100 sustained coverage windows pass and 100/100 transient
+      windows fail as `test.assert.unstable`
+- [x] Extend standalone Chromium coverage to 37 passing assertions and 25
+      negative or driver-error classifications, including exact boundaries,
+      one-pixel intersection, four-sided clipping, oversized and offscreen
+      targets, open Shadow DOM, accessibility-hidden differences, transient
+      geometry, exact fixture cleanup, and no private runtime leak

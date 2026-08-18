@@ -748,6 +748,8 @@ rendered box
     |
     +--> positive-area visual-viewport intersection --> in_viewport
     |
+    +--> intersection / target area meets threshold ---> viewport_coverage
+    |
     +--> deterministic deep hit reaches target --------> pointer_reachable
 ```
 
@@ -778,10 +780,19 @@ while a current Page Context ref may first resolve to a stable locator. GUI and
 TUI return explicit unsupported errors because neither current protocol
 provides equivalent visual-viewport and deep hit-test evidence.
 
+Revision 15 reuses the same atomic rectangle probe but makes material viewport
+presence explicit. Core stores an integer percentage and an `AtLeast` or
+`AtMost` comparison, rejects the two unconditionally true endpoints, and
+compares only the ratio recomputed from admitted rectangles. The denominator is
+the complete rendered target rectangle, so an oversized target and a one-pixel
+intersection have precise, different claims. This remains geometric evidence;
+it does not inherit pointer-hit or occlusion authority.
+
 Runner stability repeats the same immutable read-only action. Coverage proves
-1,000 Core geometry cases, 2,000 Web protocol classifications, 200 sustained
-and 200 transient windows, and a standalone Chromium matrix with 20 passing
-assertions and 15 negative or driver-error classifications.
+1,000 base Core geometry cases plus 2,000 threshold cases, 4,000 Web protocol
+classifications, 300 sustained and 300 transient windows, and a standalone
+Chromium matrix with 37 passing assertions and 25 negative or driver-error
+classifications.
 
 ### Focus-ownership observation
 

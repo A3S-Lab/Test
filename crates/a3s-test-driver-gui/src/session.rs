@@ -737,10 +737,12 @@ impl GuiSession {
                     "matched": true,
                 })))
             }
-            Expectation::InViewport(_) | Expectation::PointerReachable(_) => {
+            Expectation::InViewport(_)
+            | Expectation::ViewportCoverage { .. }
+            | Expectation::PointerReachable(_) => {
                 Err(DriverError::new(
                     "test.driver.gui.assertion_unsupported",
-                    "the current CUA semantic protocol does not expose visual-viewport intersection or point-level pointer hit evidence",
+                    "the current CUA semantic protocol does not expose visual-viewport coverage or point-level pointer hit evidence",
                 ))
             }
             Expectation::Url(_) => Err(DriverError::new(

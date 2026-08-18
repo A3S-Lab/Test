@@ -8,7 +8,7 @@
 - [Control-state expectations](#control-state-expectations)
 - [Rendered-output expectations](#rendered-output-expectations)
 - [Rendered-layout expectations](#rendered-layout-expectations)
-- [Visual-viewport and pointer-reachability expectations](#visual-viewport-and-pointer-reachability-expectations)
+- [Visual-viewport coverage and pointer-reachability expectations](#visual-viewport-coverage-and-pointer-reachability-expectations)
 - [Focus-ownership expectations](#focus-ownership-expectations)
 - [Live semantic-state expectations](#live-semantic-state-expectations)
 - [Assertion stability](#assertion-stability)
@@ -226,7 +226,8 @@ A wait accepts exactly one of `load`, `text`, `regex`, `url`, `visible`, or
 `hidden`. An expectation accepts exactly one of `text`, `url`, `visible`,
 `hidden`, `value`, `enabled`, `disabled`, `checked`, `unchecked`, `selected`,
 `unselected`, `selected_values`, `rendered_text`, `rendered_texts`,
-`visible_count`, `layout`, `in_viewport`, `pointer_reachable`, `focused`,
+`visible_count`, `layout`, `in_viewport`, `viewport_coverage_at_least`,
+`viewport_coverage_at_most`, `pointer_reachable`, `focused`,
 `unfocused`, `focus_within`, `focus_outside`, `expanded`, `collapsed`,
 `pressed`, `unpressed`, `readonly`, `writable`, `required`, `optional`,
 `invalid`, or `valid`.
@@ -243,7 +244,8 @@ counter-evidence plus timing metrics. Both negative forms reject `ref()` and
 `visual_point()` because an unresolved observation-bound target is not proof
 of hidden product state. Driver, stale-target, and ambiguity errors remain
 errors. This is runner policy and adds no action variant; focus ownership
-and semantic state advance the current action protocol to revision 14.
+semantic state and viewport coverage advance the current action protocol to
+revision 15.
 
 Focus, double-click, context-click, type, uncheck, select, drag, and
 target-scoped wheel require `ref()` or `css()` with the current browser
@@ -413,13 +415,24 @@ the first and last dual-rectangle payloads; a later relation mismatch becomes
 `test.assert.unstable`, while a later target or geometry failure keeps driver
 ownership.
 
-## Visual-viewport and pointer-reachability expectations
+## Visual-viewport coverage and pointer-reachability expectations
 
-Revision 12 separates viewport intersection from pointer hit reachability:
+Revision 12 separates viewport intersection from pointer hit reachability.
+Revision 15 adds bounded coverage thresholds:
 
 ```acl
 expect "checkout-in-view" {
     in_viewport = testid("checkout")
+}
+
+expect "checkout-mostly-visible" {
+    target = testid("checkout")
+    viewport_coverage_at_least = 80
+}
+
+expect "drawer-mostly-outside" {
+    target = css("#drawer")
+    viewport_coverage_at_most = 10
 }
 
 expect "checkout-pointer-hit" {
@@ -430,13 +443,17 @@ expect "checkout-pointer-hit" {
 ```
 
 `in_viewport` passes only when the rendered target rectangle has a
-positive-area intersection with the visual viewport. `pointer_reachable`
-samples a fixed 3 by 3 grid over that intersection and passes when at least one
+positive-area intersection with the visual viewport. Coverage divides that
+intersection area by the complete target area. `at_least` accepts integer
+percentages from 1 through 100; `at_most` accepts 0 through 99. The excluded
+endpoints would be unconditionally true. Coverage proves geometry, not
+occlusion or pointer access. `pointer_reachable` samples a fixed 3 by 3 grid
+over that intersection and passes when at least one
 deep browser hit reaches the target or a composed-tree descendant. It does not
 prove enabled state, keyboard access, event handling, or business
 clickability.
 
-Both conditions require a stable semantic or CSS locator. ACL rejects
+All conditions require a stable semantic or CSS locator. ACL rejects
 `ref()` and `visual_point()`; a current Page Context ref may first resolve to a
 stable locator. Semantic targets traverse open Shadow DOM and exclude
 accessibility-hidden ancestry. CSS keeps visually rendered `aria-hidden`
@@ -444,13 +461,16 @@ targets. Native hit testing makes pointer-receiving transparent overlays block
 the target and skips `pointer-events: none` overlays.
 
 A pass records the target and visual-viewport rectangles plus the independently
-validated intersection ratio. Pointer evidence also records all nine ordered
-sample coordinates, booleans, and reachable count. Missing, ambiguous,
+validated intersection ratio. Coverage also records the actual percentage,
+comparison, threshold, and `matched = true`. Pointer evidence records all nine
+ordered sample coordinates, booleans, and reachable count. Missing, ambiguous,
 invalid, or malformed evidence remains `test.driver.web.*`; valid offscreen
 geometry is `test.assert.in_viewport`, and nine valid misses are
-`test.assert.pointer_reachable`. GUI and TUI fail closed. Stability sampling
-retains the first and last complete payloads, while later product mismatches
-become `test.assert.unstable`.
+`test.assert.pointer_reachable`. Coverage mismatches are
+`test.assert.viewport_coverage_at_least` or
+`test.assert.viewport_coverage_at_most`. GUI and TUI fail closed. Stability
+sampling retains the first and last complete payloads, while later product
+mismatches become `test.assert.unstable`.
 
 ## Focus-ownership expectations
 

@@ -1,4 +1,6 @@
-use a3s_test_core::{Action, ElementState, Expectation, LayoutRelation, Target};
+use a3s_test_core::{
+    Action, ElementState, Expectation, LayoutRelation, Target, ViewportCoverageComparison,
+};
 use serde_json::json;
 
 use super::*;
@@ -123,6 +125,15 @@ fn redacts_assertion_targets_text_values_and_selected_values() {
             expectation: Expectation::InViewport(Target::TestId {
                 value: "state-secret-viewport".to_string(),
             }),
+        },
+        Action::Assert {
+            expectation: Expectation::ViewportCoverage {
+                target: Target::TestId {
+                    value: "state-secret-viewport-coverage".to_string(),
+                },
+                comparison: ViewportCoverageComparison::AtLeast,
+                percent: 80,
+            },
         },
         Action::Assert {
             expectation: Expectation::PointerReachable(Target::Css {

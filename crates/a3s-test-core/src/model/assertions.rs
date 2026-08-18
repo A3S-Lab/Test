@@ -40,6 +40,7 @@ pub const MAX_ASSERTION_STABILITY_SAMPLES: u64 = 1_001;
 pub const MAX_RENDERED_TEXT_ITEMS: usize = 256;
 pub const MAX_LAYOUT_TOLERANCE_PX: u32 = 1_024;
 pub const MAX_LAYOUT_COORDINATE_ABS: f64 = 16_777_216.0;
+pub const MAX_VIEWPORT_COVERAGE_PERCENT: u8 = 100;
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
@@ -206,6 +207,38 @@ impl LayoutRelation {
     }
 }
 
+#[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ViewportCoverageComparison {
+    AtLeast,
+    AtMost,
+}
+
+impl ViewportCoverageComparison {
+    #[must_use]
+    pub fn threshold_is_valid(self, percent: u8) -> bool {
+        match self {
+            Self::AtLeast => (1..=MAX_VIEWPORT_COVERAGE_PERCENT).contains(&percent),
+            Self::AtMost => percent < MAX_VIEWPORT_COVERAGE_PERCENT,
+        }
+    }
+
+    #[must_use]
+    pub fn matches(self, intersection_ratio: f64, percent: u8) -> bool {
+        if !self.threshold_is_valid(percent)
+            || !intersection_ratio.is_finite()
+            || !(0.0..=1.0).contains(&intersection_ratio)
+        {
+            return false;
+        }
+        let threshold_ratio = f64::from(percent) / f64::from(MAX_VIEWPORT_COVERAGE_PERCENT);
+        match self {
+            Self::AtLeast => intersection_ratio >= threshold_ratio,
+            Self::AtMost => intersection_ratio <= threshold_ratio,
+        }
+    }
+}
+
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
 #[serde(
     tag = "type",
@@ -218,6 +251,12 @@ pub enum Expectation {
     Url(String),
     Visible(Target),
     InViewport(Target),
+    ViewportCoverage {
+        target: Target,
+        comparison: ViewportCoverageComparison,
+        #[schemars(range(max = 100))]
+        percent: u8,
+    },
     PointerReachable(Target),
     RenderedText {
         target: Target,

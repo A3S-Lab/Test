@@ -20,6 +20,71 @@ pub(super) fn interactability_success_suite(origin: &str) -> String {
         expect "viewport-css-aria-hidden" {{ in_viewport = css("#css-aria-hidden") }}
         expect "viewport-shadow" {{ in_viewport = role("button", "Shadow pointer target") }}
 
+        expect "coverage-full-semantic" {{
+            target = testid("plain-target")
+            viewport_coverage_at_least = 100
+        }}
+        expect "coverage-left-at-least" {{
+            target = testid("partial-viewport-target")
+            viewport_coverage_at_least = 50
+        }}
+        expect "coverage-left-at-most" {{
+            target = testid("partial-viewport-target")
+            viewport_coverage_at_most = 50
+        }}
+        expect "coverage-right-at-least" {{
+            target = testid("right-clipped-target")
+            viewport_coverage_at_least = 50
+        }}
+        expect "coverage-right-at-most" {{
+            target = testid("right-clipped-target")
+            viewport_coverage_at_most = 50
+        }}
+        expect "coverage-top-at-least" {{
+            target = testid("top-clipped-target")
+            viewport_coverage_at_least = 50
+        }}
+        expect "coverage-top-at-most" {{
+            target = testid("top-clipped-target")
+            viewport_coverage_at_most = 50
+        }}
+        expect "coverage-bottom-at-least" {{
+            target = testid("bottom-clipped-target")
+            viewport_coverage_at_least = 50
+        }}
+        expect "coverage-bottom-at-most" {{
+            target = testid("bottom-clipped-target")
+            viewport_coverage_at_most = 50
+        }}
+        expect "coverage-one-pixel-at-least" {{
+            target = testid("one-pixel-target")
+            viewport_coverage_at_least = 1
+        }}
+        expect "coverage-one-pixel-at-most" {{
+            target = testid("one-pixel-target")
+            viewport_coverage_at_most = 1
+        }}
+        expect "coverage-offscreen" {{
+            target = testid("offscreen-target")
+            viewport_coverage_at_most = 0
+        }}
+        expect "coverage-large-at-least" {{
+            target = testid("large-coverage-target")
+            viewport_coverage_at_least = 25
+        }}
+        expect "coverage-large-at-most" {{
+            target = testid("large-coverage-target")
+            viewport_coverage_at_most = 25
+        }}
+        expect "coverage-css-aria-hidden" {{
+            target = css("#css-aria-hidden")
+            viewport_coverage_at_least = 100
+        }}
+        expect "coverage-shadow-semantic" {{
+            target = role("button", "Shadow pointer target")
+            viewport_coverage_at_least = 100
+        }}
+
         expect "pointer-testid" {{ pointer_reachable = testid("plain-target") }}
         expect "pointer-role" {{ pointer_reachable = role("button", "Role pointer target") }}
         expect "pointer-label" {{ pointer_reachable = label("Label pointer target") }}
@@ -38,6 +103,12 @@ pub(super) fn interactability_success_suite(origin: &str) -> String {
         }}
         expect "stable-pointer" {{
             pointer_reachable = testid("stable-pointer-target")
+            stable_for_ms = 100
+            sample_interval_ms = 25
+        }}
+        expect "stable-coverage" {{
+            target = testid("stable-viewport-target")
+            viewport_coverage_at_least = 100
             stable_for_ms = 100
             sample_interval_ms = 25
         }}
@@ -134,6 +205,56 @@ pub(super) fn interactability_failure_suite(origin: &str) -> String {
         scenario(
             "transient-pointer",
             "pointer_reachable = testid(\"transient-pointer-target\")",
+            "\n            stable_for_ms = 100\n            sample_interval_ms = 25",
+        ),
+        scenario(
+            "coverage-at-least-too-high",
+            "target = testid(\"one-pixel-target\")\n            viewport_coverage_at_least = 2",
+            "",
+        ),
+        scenario(
+            "coverage-at-most-too-low",
+            "target = testid(\"partial-viewport-target\")\n            viewport_coverage_at_most = 49",
+            "",
+        ),
+        scenario(
+            "coverage-offscreen-at-least-one",
+            "target = testid(\"offscreen-target\")\n            viewport_coverage_at_least = 1",
+            "",
+        ),
+        scenario(
+            "coverage-missing",
+            "target = testid(\"missing-coverage-target\")\n            viewport_coverage_at_least = 50",
+            "",
+        ),
+        scenario(
+            "coverage-ambiguous",
+            "target = css(\".ambiguous-target\")\n            viewport_coverage_at_least = 50",
+            "",
+        ),
+        scenario(
+            "coverage-invalid-selector",
+            "target = css(\"[\")\n            viewport_coverage_at_least = 50",
+            "",
+        ),
+        scenario(
+            "coverage-semantic-hidden",
+            "target = role(\"button\", \"Hidden semantic pointer target\")\n            viewport_coverage_at_least = 50",
+            "",
+        ),
+        scenario(
+            "coverage-shadow-css",
+            "target = css(\"#shadow-pointer-target\")\n            viewport_coverage_at_least = 50",
+            "",
+        ),
+        scenario(
+            "coverage-invalid-geometry",
+            "target = testid(\"invalid-geometry-target\")\n            viewport_coverage_at_least = 50",
+            "",
+        ),
+        scenario(
+            "coverage-transient",
+            "target = testid(\"transient-viewport-target\")\n            viewport_coverage_at_least = 100",
             "\n            stable_for_ms = 100\n            sample_interval_ms = 25",
         ),
     ]

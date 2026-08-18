@@ -3,7 +3,8 @@ use std::ffi::OsString;
 
 use a3s_test_core::{
     DriverError, ElementState, Expectation, LayoutRect, LayoutRelation, StepOutput, Target,
-    MAX_LAYOUT_TOLERANCE_PX, MAX_RENDERED_TEXT_ITEMS,
+    ViewportCoverageComparison, MAX_LAYOUT_TOLERANCE_PX, MAX_RENDERED_TEXT_ITEMS,
+    MAX_VIEWPORT_COVERAGE_PERCENT,
 };
 use serde_json::{json, Value};
 
@@ -62,6 +63,14 @@ impl AgentBrowserSession {
                 self.assert_interactability(target, InteractabilityProbe::InViewport)
                     .await
             }
+            Expectation::ViewportCoverage {
+                target,
+                comparison,
+                percent,
+            } => {
+                self.assert_viewport_coverage(target, *comparison, *percent)
+                    .await
+            }
             Expectation::PointerReachable(target) => {
                 self.assert_interactability(target, InteractabilityProbe::PointerReachable)
                     .await
@@ -94,6 +103,55 @@ impl AgentBrowserSession {
                     .await
             }
         }
+    }
+
+    async fn assert_viewport_coverage(
+        &self,
+        target: &Target,
+        comparison: ViewportCoverageComparison,
+        percent: u8,
+    ) -> Result<StepOutput, DriverError> {
+        if !comparison.threshold_is_valid(percent) {
+            return Err(DriverError::new(
+                "test.driver.web.expectation_invalid",
+                format!(
+                    "viewport coverage threshold must be non-trivial and no greater than {MAX_VIEWPORT_COVERAGE_PERCENT} percent"
+                ),
+            ));
+        }
+        let data = self
+            .execute_command(interactability_probe_args(
+                target,
+                InteractabilityProbe::InViewport,
+            )?)
+            .await?;
+        let result = browser_result(data);
+        let (target_rect, viewport_rect) = interactability_rects(&result)?;
+        let intersection_ratio = target_rect
+            .intersection_ratio(viewport_rect)
+            .ok_or_else(|| output_invalid("viewport coverage geometry"))?;
+        let actual_percent = intersection_ratio * f64::from(MAX_VIEWPORT_COVERAGE_PERCENT);
+        if !comparison.matches(intersection_ratio, percent) {
+            let (description, code) = viewport_coverage_expectation(comparison);
+            return Err(DriverError::new(
+                code,
+                format!(
+                    "expected viewport coverage to be {description} {percent} percent, observed {actual_percent} percent"
+                ),
+            ));
+        }
+        Ok(
+            StepOutput::new("target viewport coverage matched").with_data(json!({
+                "target": target,
+                "target_rect": rect_data(target_rect),
+                "viewport_rect": rect_data(viewport_rect),
+                "intersection_ratio": intersection_ratio,
+                "actual_percent": actual_percent,
+                "comparison": comparison,
+                "threshold_percent": percent,
+                "matched": true,
+            })),
+        )
     }
 
     async fn assert_interactability(
@@ -520,6 +578,17 @@ impl AgentBrowserSession {
             )),
             _ => Err(output_invalid("assertion probe envelope")),
         }
+    }
+}
+
+fn viewport_coverage_expectation(
+    comparison: ViewportCoverageComparison,
+) -> (&'static str, &'static str) {
+    match comparison {
+        ViewportCoverageComparison::AtLeast => {
+            ("at least", "test.assert.viewport_coverage_at_least")
+        }
+        ViewportCoverageComparison::AtMost => ("at most", "test.assert.viewport_coverage_at_most"),
     }
 }
 

@@ -185,7 +185,7 @@ fn viewport_intersection_rejects_invalid_untrusted_geometry() {
 
 #[test]
 fn interactability_assertions_have_a_revision_twelve_wire_contract() {
-    assert_eq!(ACTION_PROTOCOL_REVISION, 14);
+    assert_eq!(ACTION_PROTOCOL_REVISION, 15);
     for (expectation, encoded_expectation) in [
         (
             Expectation::InViewport(Target::TestId {

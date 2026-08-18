@@ -88,7 +88,7 @@ a3s-test worker inventory
 | `terminal_resize`                  | columns 与 rows                           | 调整自有 PTY 或 ConPTY，随后终端语义会更新                  |
 | `terminal_recording`               | 相对 artifact 路径                        | 保存受约束终端记录，不写到工作区任意位置                    |
 
-动作协议修订为 14。完整可生成 Schema 以 `a3s-test agent schema` 输出为准。未知字段、缺少必填字段、非法枚举和 surface 不支持的动作会在执行前拒绝。
+动作协议修订为 15。完整可生成 Schema 以 `a3s-test agent schema` 输出为准。未知字段、缺少必填字段、非法枚举和 surface 不支持的动作会在执行前拒绝。
 
 ### 实时控件状态断言
 
@@ -108,7 +108,7 @@ Web 断言读取实时 DOM 属性。原生 checkbox 和 radio 的 `checked` 值�
 | 展开状态   | `expanded` 或 `collapsed` | `<details>.open`，否则读取合法 `aria-expanded`                               | 缺失状态属于 unsupported；不匹配使用 `test.assert.expanded` 或 `.collapsed` |
 | 按压状态   | `pressed` 或 `unpressed`  | 精确布尔 `aria-pressed`                                                      | `mixed` 属于 unsupported；不匹配使用 `test.assert.pressed` 或 `.unpressed`  |
 | 只读状态   | `readonly` 或 `writable`  | 适用时读取原生 `readOnly`，否则读取合法 `aria-readonly`                      | writable 不蕴含 enabled；不匹配使用 `test.assert.readonly` 或 `.writable`   |
-| 必填状态   | `required` 或 `optional`  | 适用时读取原生 `required`，否则读取合法 `aria-required`                      | 不支持的控件仍归驱动所有；不匹配使用 `test.assert.required` 或 `.optional`  |
+| 必填状态   | `required` 或 `optional`  | 适用时读取原生 `required`，否则读取合法 `aria-required`                      | 不支持的控件仍由驱动归类；不匹配使用 `test.assert.required` 或 `.optional`  |
 | 有效性状态 | `invalid` 或 `valid`      | `willValidate` 时读取 Constraint Validation，否则读取定义内的 `aria-invalid` | 未知状态不能证明 valid；不匹配使用 `test.assert.invalid` 或 `.valid`        |
 
 原生状态优先于矛盾 ARIA。布尔 ARIA 只接受精确的 `true` 和 `false`；`aria-invalid` 还接受 `grammar` 与 `spelling`，并映射为 invalid。五个维度彼此独立，每种负向写法都要求解析到唯一目标并得到权威布尔证据。
@@ -150,17 +150,19 @@ CSS 集合探测使用视觉渲染几何，单独的 `aria-hidden` 不会让像�
 
 Web 在一次页面求值中解析两个目标并读取两个矩形。CSS 保留仍有视觉像素的 `aria-hidden` 元素，语义定位器则排除可访问性隐藏祖先并穿透开放 Shadow DOM。GUI 要求两个 frame 来自同一份新鲜 CUA snapshot。TUI 会关闭失败，因为终端单元格不等价于页面渲染几何。当前检入证据覆盖 3,400/3,400 个确定性案例、100/100 个持续窗口、100/100 个瞬态窗口、全部 17 种关系，以及 standalone Chromium 中 15 个负向或错误分类。
 
-### 视口与指针命中断言
+### 视口覆盖率与指针命中断言
 
-| 能力                 | ACL 写法                                  | 观察证据                                           | 失败边界                                                                                         |
-| -------------------- | ----------------------------------------- | -------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
-| visual viewport 相交 | `in_viewport = <稳定目标>`                | 目标矩形、visual viewport 矩形和独立重算的相交比例 | 零面积相交返回 `test.assert.in_viewport`；目标解析和畸形证据仍由驱动负责                         |
-| 指针命中可达         | `pointer_reachable = <稳定目标>`          | 同一几何，加有序 3×3 深层命中网格和可达样本数      | 九个合法样本全部未命中时返回 `test.assert.pointer_reachable`；不推断 enabled、键盘或业务可点击性 |
-| 稳定交互前提         | 上述任一写法加 `stable_for_ms` 与采样间隔 | 首次和末次完整几何或命中载荷，以及有界稳定性指标   | 后续合法不匹配返回 `test.assert.unstable`；解析或证据失败保留驱动归属                            |
+| 能力                 | ACL 写法                                                | 观察证据                                           | 失败边界                                                                                         |
+| -------------------- | ------------------------------------------------------- | -------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| visual viewport 相交 | `in_viewport = <稳定目标>`                              | 目标矩形、visual viewport 矩形和独立重算的相交比例 | 零面积相交返回 `test.assert.in_viewport`；目标解析和畸形证据仍由驱动负责                         |
+| 最低视口覆盖率       | 稳定 `target` 加 `viewport_coverage_at_least = 1..=100` | 同一组矩形、比例、实际百分比、比较方向与阈值       | 合法几何低于阈值时返回 `test.assert.viewport_coverage_at_least`；恒真的零阈值在准入阶段失败      |
+| 最高视口覆盖率       | 稳定 `target` 加 `viewport_coverage_at_most = 0..=99`   | 同一份独立重算的覆盖率证据                         | 合法几何高于阈值时返回 `test.assert.viewport_coverage_at_most`；恒真的 100 阈值在准入阶段失败    |
+| 指针命中可达         | `pointer_reachable = <稳定目标>`                        | 同一几何，加有序 3×3 深层命中网格和可达样本数      | 九个合法样本全部未命中时返回 `test.assert.pointer_reachable`；不推断 enabled、键盘或业务可点击性 |
+| 稳定交互前提         | 任一写法加 `stable_for_ms` 与采样间隔                   | 首次和末次完整几何或命中载荷，以及有界稳定性指标   | 后续合法不匹配返回 `test.assert.unstable`；解析或证据失败保留驱动归属                            |
 
-两种断言都要求可重复解析的语义或 CSS 定位器。浏览器 ref 与 visual point 在准入阶段失败，当前 Page Context ref 可以先解析为稳定定位器。Web 在一次页面求值中原子采集目标、visual viewport 和可选九点命中网格。语义目标与深层命中测试都可穿透开放 Shadow DOM。原生命中测试会把接收指针事件的透明覆盖层视为阻挡，并跳过 `pointer-events: none` 覆盖层。GUI 与 TUI 的当前协议没有等价证据，因此明确关闭失败。
+所有断言都要求可重复解析的语义或 CSS 定位器。浏览器 ref 与 visual point 在准入阶段失败，当前 Page Context ref 可以先解析为稳定定位器。覆盖率等于相交面积除以完整目标面积，只证明几何，不声称无遮挡或指针可达。Web 在一次页面求值中原子采集目标、visual viewport 和可选九点命中网格。语义目标与深层命中测试都可穿透开放 Shadow DOM。原生命中测试会把接收指针事件的透明覆盖层视为阻挡，并跳过 `pointer-events: none` 覆盖层。GUI 与 TUI 的当前协议没有等价证据，因此明确关闭失败。
 
-当前检入证据覆盖 1,000/1,000 个 Core 几何案例、2,000/2,000 个 Web 协议分类、200/200 个持续窗口与 200/200 个瞬态窗口，以及 standalone Chromium 中 20 个正向断言和 15 个负向或驱动错误分类，并完成精确清理。
+当前检入证据覆盖 1,000/1,000 个基础 Core 几何案例与 2,000/2,000 个阈值案例、4,000/4,000 个 Web 协议分类、300/300 个持续窗口与 300/300 个瞬态窗口，以及 standalone Chromium 中 37 个通过断言和 25 个负向或驱动错误分类，并完成精确清理。
 
 ## 页面感知与 Test Kit
 

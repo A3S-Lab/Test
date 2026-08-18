@@ -243,6 +243,7 @@ impl ProvenanceRedactor {
             Expectation::Url(url) => self.redact_url(url),
             Expectation::Visible(target)
             | Expectation::InViewport(target)
+            | Expectation::ViewportCoverage { target, .. }
             | Expectation::PointerReachable(target) => self.redact_target(target),
             Expectation::RenderedText { target, value } => {
                 self.redact_target(target);
