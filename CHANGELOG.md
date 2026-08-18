@@ -4,6 +4,23 @@
 
 ### Added
 
+- Added action protocol revision 14 with ten deterministic live semantic-state
+  expectations: `expanded`/`collapsed`, `pressed`/`unpressed`,
+  `readonly`/`writable`, `required`/`optional`, and `invalid`/`valid`. Web gives
+  applicable native state priority over ARIA, reads `<details>.open`, native
+  read-only and required properties, and Constraint Validation only when the
+  control participates. ARIA fallbacks accept only defined boolean tokens;
+  invalid-state ARIA additionally accepts `grammar` and `spelling`, while
+  mixed pressed state and unknown tokens fail closed. The five dimensions stay
+  orthogonal, so writable does not imply enabled. Stable semantic or CSS
+  locators are required, Page Context refs may resolve before dispatch,
+  browser refs and visual points fail admission, missing targets never prove a
+  negative state, and GUI/TUI fail closed without equivalent evidence.
+  Coverage classifies 1,000/1,000 deterministic Web cases, accepts 100/100
+  sustained windows, rejects 100/100 transient windows, and verifies 27
+  positive assertions plus 17 negative or driver-error classifications in
+  standalone Chromium with native controls, ARIA, open Shadow DOM, exact
+  fixture cleanup, and no private runtime leak.
 - Added action protocol revision 13 with four deterministic focus-ownership
   expectations: `focused`, `unfocused`, `focus_within`, and `focus_outside`.
   Web resolves one stable target and reads the deepest active element from the

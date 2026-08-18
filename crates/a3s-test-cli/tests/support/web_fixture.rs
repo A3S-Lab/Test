@@ -17,6 +17,7 @@ const FOCUS_HTML: &str = include_str!("../../../../fixtures/web/focus.html");
 const LAYOUT_HTML: &str = include_str!("../../../../fixtures/web/layout.html");
 const INTERACTABILITY_HTML: &str = include_str!("../../../../fixtures/web/interactability.html");
 const RENDERED_HTML: &str = include_str!("../../../../fixtures/web/rendered.html");
+const SEMANTIC_STATE_HTML: &str = include_str!("../../../../fixtures/web/semantic-state.html");
 const TRANSIENT_HTML: &str = include_str!("../../../../fixtures/web/transient.html");
 const TESTKIT_HTML: &str = include_str!("../../../../packages/testkit/src/browser-fixture.html");
 const SCREEN_READER_WORKFLOWS: &str =
@@ -435,6 +436,7 @@ fn route_primary(path: &str, blocked_origin: &str) -> Response {
         "/layout.html" => Response::html(LAYOUT_HTML.to_string()),
         "/interactability.html" => Response::html(INTERACTABILITY_HTML.to_string()),
         "/rendered.html" => Response::html(RENDERED_HTML.to_string()),
+        "/semantic-state.html" => Response::html(SEMANTIC_STATE_HTML.to_string()),
         "/transient.html" => Response::html(TRANSIENT_HTML.to_string()),
         "/origin-policy.html" => Response::html(origin_policy_html(blocked_origin)),
         "/health" => Response::text("200 OK", "ready"),

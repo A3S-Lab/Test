@@ -110,6 +110,16 @@ pub(super) fn parse_expectation(
         "unfocused",
         "focus_within",
         "focus_outside",
+        "expanded",
+        "collapsed",
+        "pressed",
+        "unpressed",
+        "readonly",
+        "writable",
+        "required",
+        "optional",
+        "invalid",
+        "valid",
         "selected_values",
         "layout",
     ];
@@ -264,7 +274,9 @@ pub(super) fn parse_expectation(
             }
         }
         "enabled" | "disabled" | "checked" | "unchecked" | "selected" | "unselected"
-        | "focused" | "unfocused" | "focus_within" | "focus_outside" => {
+        | "focused" | "unfocused" | "focus_within" | "focus_outside" | "expanded" | "collapsed"
+        | "pressed" | "unpressed" | "readonly" | "writable" | "required" | "optional"
+        | "invalid" | "valid" => {
             let (state, expected) = match condition {
                 "enabled" => (ElementState::Enabled, true),
                 "disabled" => (ElementState::Enabled, false),
@@ -276,12 +288,31 @@ pub(super) fn parse_expectation(
                 "unfocused" => (ElementState::Focused, false),
                 "focus_within" => (ElementState::FocusWithin, true),
                 "focus_outside" => (ElementState::FocusWithin, false),
+                "expanded" => (ElementState::Expanded, true),
+                "collapsed" => (ElementState::Expanded, false),
+                "pressed" => (ElementState::Pressed, true),
+                "unpressed" => (ElementState::Pressed, false),
+                "readonly" => (ElementState::ReadOnly, true),
+                "writable" => (ElementState::ReadOnly, false),
+                "required" => (ElementState::Required, true),
+                "optional" => (ElementState::Required, false),
+                "invalid" => (ElementState::Invalid, true),
+                "valid" => (ElementState::Invalid, false),
                 _ => unreachable!("bounded state condition"),
             };
             let target =
                 parse_target(&block.attributes[condition], &format!("{path}.{condition}"))?;
             let target = if matches!(state, ElementState::Focused | ElementState::FocusWithin) {
                 stable_focus_target(target, path, condition)?
+            } else if matches!(
+                state,
+                ElementState::Expanded
+                    | ElementState::Pressed
+                    | ElementState::ReadOnly
+                    | ElementState::Required
+                    | ElementState::Invalid
+            ) {
+                stable_semantic_state_target(target, path, condition)?
             } else {
                 target
             };
@@ -294,6 +325,21 @@ pub(super) fn parse_expectation(
         _ => unreachable!("condition list and parser must remain aligned"),
     };
     Ok((positive, AssertionMode::Positive))
+}
+
+fn stable_semantic_state_target(
+    target: Target,
+    path: &str,
+    condition: &str,
+) -> Result<Target, SpecError> {
+    if matches!(target, Target::Ref { .. } | Target::VisualPoint { .. }) {
+        return Err(SpecError::new(
+            "test.spec.semantic_state_target_unstable",
+            format!("{path}.{condition}"),
+            "semantic state assertions require a stable semantic or CSS locator, not an observation-bound ref or visual point",
+        ));
+    }
+    Ok(target)
 }
 
 fn stable_focus_target(target: Target, path: &str, condition: &str) -> Result<Target, SpecError> {

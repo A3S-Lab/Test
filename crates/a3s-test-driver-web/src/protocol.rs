@@ -396,6 +396,11 @@ pub(crate) fn assertion_probe_args(
         AssertionProbe::State(ElementState::Selected) => "selected",
         AssertionProbe::State(ElementState::Focused) => "focused",
         AssertionProbe::State(ElementState::FocusWithin) => "focus_within",
+        AssertionProbe::State(ElementState::Expanded) => "expanded",
+        AssertionProbe::State(ElementState::Pressed) => "pressed",
+        AssertionProbe::State(ElementState::ReadOnly) => "readonly",
+        AssertionProbe::State(ElementState::Required) => "required",
+        AssertionProbe::State(ElementState::Invalid) => "invalid",
         AssertionProbe::RenderedText => "rendered_text",
         AssertionProbe::RenderedTexts => "rendered_texts",
         AssertionProbe::VisibleCount => "visible_count",
@@ -497,6 +502,64 @@ pub(crate) fn assertion_probe_args(
     return actual === null
       ? {{ status: "unsupported", count: 1 }}
       : {{ status: "ok", count: 1, actual }};
+  }}
+  if (A3S_ASSERTION_PROBE === "expanded") {{
+    if (element instanceof HTMLDetailsElement) {{
+      return {{ status: "ok", count: 1, actual: element.open }};
+    }}
+    const actual = ariaBoolean("aria-expanded");
+    return actual === null
+      ? {{ status: "unsupported", count: 1 }}
+      : {{ status: "ok", count: 1, actual }};
+  }}
+  if (A3S_ASSERTION_PROBE === "pressed") {{
+    const actual = ariaBoolean("aria-pressed");
+    return actual === null
+      ? {{ status: "unsupported", count: 1 }}
+      : {{ status: "ok", count: 1, actual }};
+  }}
+  if (A3S_ASSERTION_PROBE === "readonly") {{
+    const readonlyInputTypes = new Set([
+      "date", "datetime-local", "email", "month", "number", "password",
+      "search", "tel", "text", "time", "url", "week",
+    ]);
+    if (element instanceof HTMLTextAreaElement
+        || (element instanceof HTMLInputElement && readonlyInputTypes.has(element.type))) {{
+      return {{ status: "ok", count: 1, actual: element.readOnly }};
+    }}
+    const actual = ariaBoolean("aria-readonly");
+    return actual === null
+      ? {{ status: "unsupported", count: 1 }}
+      : {{ status: "ok", count: 1, actual }};
+  }}
+  if (A3S_ASSERTION_PROBE === "required") {{
+    const requiredInputTypes = new Set([
+      "checkbox", "date", "datetime-local", "email", "file", "month", "number",
+      "password", "radio", "search", "tel", "text", "time", "url", "week",
+    ]);
+    if (element instanceof HTMLSelectElement
+        || element instanceof HTMLTextAreaElement
+        || (element instanceof HTMLInputElement && requiredInputTypes.has(element.type))) {{
+      return {{ status: "ok", count: 1, actual: element.required }};
+    }}
+    const actual = ariaBoolean("aria-required");
+    return actual === null
+      ? {{ status: "unsupported", count: 1 }}
+      : {{ status: "ok", count: 1, actual }};
+  }}
+  if (A3S_ASSERTION_PROBE === "invalid") {{
+    if ((element instanceof HTMLInputElement
+          || element instanceof HTMLSelectElement
+          || element instanceof HTMLTextAreaElement)
+        && element.willValidate) {{
+      return {{ status: "ok", count: 1, actual: !element.validity.valid }};
+    }}
+    const value = element.getAttribute("aria-invalid")?.trim();
+    if (value === "false") return {{ status: "ok", count: 1, actual: false }};
+    if (["true", "grammar", "spelling"].includes(value)) {{
+      return {{ status: "ok", count: 1, actual: true }};
+    }}
+    return {{ status: "unsupported", count: 1 }};
   }}
   if (A3S_ASSERTION_PROBE === "value") {{
     return "value" in element

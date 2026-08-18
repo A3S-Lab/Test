@@ -157,6 +157,8 @@ treats an observation-bound ref failure as disappearance.
   with an inline target
 - `focused`, `unfocused`, `focus_within`, or `focus_outside` with a stable
   inline target
+- `expanded`, `collapsed`, `pressed`, `unpressed`, `readonly`, `writable`,
+  `required`, `optional`, `invalid`, or `valid` with a stable inline target
 - `layout = <relation>` with separate `target` and `relative_to` targets
 - `in_viewport = <stable target>`
 - `pointer_reachable = <stable target>`
@@ -231,7 +233,7 @@ wait "dialog-closed" {
 This is `TestStep` wait policy, not a new `Action` or `WaitCondition` variant.
 Core stores `Action::Wait { condition: WaitCondition::Visible(target) }` plus
 `WaitMode::Hidden`; it reuses the visible condition introduced before the
-current action protocol revision 13 and does not change surface-driver command
+current action protocol revision 14 and does not change surface-driver command
 schemas. Runner admission requires `AssertionMode::Positive`,
 no assertion-stability policy, and a locator that is not `ref()` or
 `visual_point()`.
@@ -808,6 +810,97 @@ standalone Chromium. The browser fixture covers forward and reverse Tab, open
 Shadow DOM, assigned slots, accessibility-hidden ancestry, timed focus
 movement, exact fixture cleanup, and no private-runtime leak.
 
+### Live semantic-state expectations
+
+Action protocol revision 14 adds five independent boolean state dimensions
+and their positive and negative ACL spellings:
+
+```acl
+expect "filters-expanded" { expanded = testid("filters") }
+expect "details-collapsed" { collapsed = css("#details") }
+expect "pin-pressed" { pressed = role("button", "Pin") }
+expect "pin-unpressed" { unpressed = testid("pin") }
+expect "name-readonly" { readonly = label("Display name") }
+expect "name-writable" { writable = css("#display-name") }
+expect "email-required" { required = placeholder("Email") }
+expect "phone-optional" { optional = testid("phone") }
+expect "email-invalid" { invalid = testid("email") }
+expect "email-valid" { valid = css("#email") }
+```
+
+The wire representation stores five `ElementState` values and an expected
+boolean:
+
+| ACL condition | Typed state | Expected | Authoritative Web observation |
+| --- | --- | --- | --- |
+| `expanded` / `collapsed` | `Expanded` | true / false | `<details>.open`; otherwise valid `aria-expanded` |
+| `pressed` / `unpressed` | `Pressed` | true / false | Valid boolean `aria-pressed` |
+| `readonly` / `writable` | `ReadOnly` | true / false | Native `readOnly` on applicable inputs and textareas; otherwise valid `aria-readonly` |
+| `required` / `optional` | `Required` | true / false | Native `required` on applicable inputs, selects, and textareas; otherwise valid `aria-required` |
+| `invalid` / `valid` | `Invalid` | true / false | `!validity.valid` when a native control has `willValidate = true`; otherwise valid `aria-invalid` |
+
+Valid boolean ARIA values are exactly `true` and `false`. `aria-invalid` also
+maps `grammar` and `spelling` to invalid. `aria-pressed="mixed"`, absent state,
+unknown tokens, and native controls that do not participate in the requested
+state remain unsupported. A native property is authoritative whenever it is
+applicable, even if contradictory ARIA is present. `<details>.open` likewise
+wins over `aria-expanded`.
+
+These dimensions deliberately do not imply one another. A disabled text input
+whose `readOnly` property is false is observed as writable; proving that the
+user can edit it requires separate `enabled` and `writable` expectations.
+Validity is observed only through the platform Constraint Validation result or
+a defined ARIA token. A non-validating native control without such ARIA does
+not become valid by default.
+
+All ten forms accept role, text, test ID, label, placeholder, or CSS locators.
+ACL rejects `ref()` and `visual_point()` with
+`test.spec.semantic_state_target_unstable` because neither identity can be
+re-resolved through a stability window. A current Page Context `@cN` may be
+used only after Core resolves it to a stable locator before dispatch. A typed
+Web assertion that bypasses ACL with an observation-bound browser ref returns
+`test.driver.web.state_unsupported`.
+
+Web resolves exactly one target and reads its state in one page evaluation.
+Semantic locators traverse open Shadow DOM and exclude accessibility-hidden
+composed ancestry; CSS keeps current-document query semantics and can inspect
+a visually rendered element that is accessibility-hidden. A pass retains the
+target, canonical positive state name, `expected`, and `actual`:
+
+```json
+{
+  "target": { "type": "test_id", "value": "filters" },
+  "state": "expanded",
+  "expected": false,
+  "actual": false
+}
+```
+
+| Observation | Result ownership |
+| --- | --- |
+| Exactly one target exposes an authoritative state and it matches | The expectation passes with target and boolean evidence |
+| Exactly one target exposes an authoritative state and it differs | `test.assert.expanded`, `.collapsed`, `.pressed`, `.unpressed`, `.readonly`, `.writable`, `.required`, `.optional`, `.invalid`, or `.valid` |
+| Target is missing or ambiguous, or its CSS selector is invalid | `test.driver.web.target_not_found`, `.target_ambiguous`, or `.target_invalid` |
+| The resolved target has no authoritative state or exposes an unsupported token | `test.driver.web.state_unsupported` |
+| An observation-bound browser ref requests semantic state | `test.driver.web.state_unsupported` |
+| The surface cannot expose equivalent semantic-state evidence | The surface's explicit unsupported assertion error |
+
+The negative forms invert only an observed boolean. Missing, ambiguous,
+invalid, unsupported, and malformed evidence therefore cannot prove
+`collapsed`, `unpressed`, `writable`, `optional`, or `valid`. GUI and TUI do
+not infer these states from labels, pixels, frames, or terminal cells and fail
+closed until their protocols expose equivalent evidence. All forms compose
+with bounded assertion stability; a later valid mismatch becomes
+`test.assert.unstable`, while a later driver failure retains driver ownership.
+
+Checked-in evidence classifies 1,000/1,000 deterministic Web cases, accepts
+100/100 sustained semantic-state windows, rejects 100/100 transients, and
+verifies 27 positive assertions plus 17 negative or driver-error
+classifications in standalone Chromium. The browser fixture covers native
+controls, valid and invalid ARIA, open Shadow DOM, state precedence, mixed
+pressed state, transient expansion, exact fixture cleanup, and no private
+runtime leak.
+
 ## Browser context
 
 Tabs use stable browser tab IDs or an optional user label:
@@ -1366,7 +1459,7 @@ code and path to repair manifests.
 ## Browser admission and runner bounds
 
 `a3s-test capabilities --json` probes the configured executable before any
-browser session launches. Action protocol revision 13 admits A3S Browser
+browser session launches. Action protocol revision 14 admits A3S Browser
 `>= 0.4.0, < 0.5.0` and standalone agent-browser `>= 0.26.0, < 0.27.0`.
 Unverified versions fail with `test.driver.web.version_unsupported`.
 

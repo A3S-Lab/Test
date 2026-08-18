@@ -38,7 +38,7 @@ a3s-test agent click <ref> --session <name> --observation <id> --json
 a3s-test agent finish --session <name> --status passed --summary <text> --json
 ```
 
-`agent act --action-json` 暴露完整动作 Schema。v0.17.0 的动作协议修订为 13，其中包含修订 7 的选择范围 `insert_text`、修订 8 的实时控件状态断言、修订 9 的目标绑定渲染输出断言、修订 10 的有序渲染文本集合、修订 11 的双目标渲染布局关系、修订 12 的 visual viewport 与指针命中断言，以及修订 13 的精确或组件范围焦点归属。`insert_text` 仍然只作用于先前已经建立的编辑上下文，不携带新的目标或定位权限。
+`agent act --action-json` 暴露完整动作 Schema。v0.17.0 的动作协议修订为 14，其中包含修订 7 的选择范围 `insert_text`、修订 8 的实时控件状态断言、修订 9 的目标绑定渲染输出断言、修订 10 的有序渲染文本集合、修订 11 的双目标渲染布局关系、修订 12 的 visual viewport 与指针命中断言、修订 13 的精确或组件范围焦点归属，以及修订 14 的展开、按压、只读、必填与有效性状态。`insert_text` 仍然只作用于先前已经建立的编辑上下文，不携带新的目标或定位权限。
 
 ## ACL 套件
 
@@ -261,6 +261,26 @@ Web 在一次页面求值中解析稳定定位器，并沿嵌套开放 Shadow DO
 
 焦点归属不能替代可见焦点样式、指针可达、enabled 状态或业务激活结果。当前检入覆盖 600/600 个确定性 Web 案例、200/200 个持续窗口、200/200 个瞬态窗口，以及 standalone Chromium 中 17 个正向断言和 11 个负向或驱动错误分类。真实浏览器流程包含正向与反向 Tab、开放 Shadow DOM、assigned slot、隐藏 slot ancestry、定时焦点移动和精确清理。
 
+## 证明实时语义状态
+
+修订 14 会直接观察渲染控件的五个状态维度。
+
+```acl
+expect "filters-open" { expanded = testid("filters") }
+expect "pin-off" { unpressed = role("button", "Pin") }
+expect "name-locked" { readonly = label("Display name") }
+expect "email-required" { required = placeholder("Email") }
+expect "email-invalid" { invalid = css("#email") }
+```
+
+对应的反向写法是 `collapsed`、`pressed`、`writable`、`optional` 和 `valid`。Web 优先读取适用的原生状态，包括 `<details>.open`、原生只读或必填属性，以及 `willValidate` 为 true 时的 Constraint Validation。其他元素可以使用合法 ARIA 状态。布尔 ARIA 只接受 `true` 与 `false`；`aria-invalid` 还接受 `grammar` 和 `spelling`。混合按压状态、未知 token 与缺失证据都会关闭失败为 unsupported。
+
+五个维度彼此独立。`writable` 只证明适用的只读状态为 false；若产品要求是真正可编辑，还要组合 `enabled`。反向状态仍然要求目标解析成功，并且浏览器观察到明确布尔值。元素缺失不能伪装成 collapsed、unpressed、writable、optional 或 valid。
+
+ACL 只接受可重复解析的语义或 CSS 定位器，并以 `test.spec.semantic_state_target_unstable` 拒绝 browser ref 与 visual point。当前 Page Context ref 可以在派发前解析为稳定定位器。缺失、歧义、非法和不支持的证据仍归驱动所有；只有已观察状态不符才返回对应的 `test.assert.*`。GUI 与 TUI 明确关闭失败，十种写法都支持有界稳定性窗口。
+
+当前检入覆盖 1,000/1,000 个确定性 Web 案例、100/100 个持续窗口、100/100 个瞬态窗口，以及 standalone Chromium 中 27 个正向断言和 17 个负向或驱动错误分类。真实浏览器 fixture 包含原生状态、合法与非法 ARIA、开放 Shadow DOM、优先级、瞬态展开和精确清理。
+
 ## 证明界面已经没有可见匹配
 
 当产品要求是关闭、移除或隐藏某个目标时，使用 `hidden`。稳定定位器没有匹配元素，或所有匹配元素都没有渲染出的可见边界时，断言通过。
@@ -271,7 +291,7 @@ expect "checkout-dialog-closed" {
 }
 ```
 
-`hidden` 是 Runner 围绕现有正向可见性断言执行的步骤策略，不会增加 Action 变体。当前协议已推进到修订 13，是因为上面的类型化 expectation。Runner 向 surface 驱动发送正向探测，再确定性地分类结果。
+`hidden` 是 Runner 围绕现有正向可见性断言执行的步骤策略，不会增加 Action 变体。当前协议已推进到修订 14，是因为上面的类型化 expectation。Runner 向 surface 驱动发送正向探测，再确定性地分类结果。
 
 | 正向探测结果                      | `hidden` 断言结果                                                 |
 | --------------------------------- | ----------------------------------------------------------------- |
@@ -303,7 +323,7 @@ wait "checkout-dialog-closed" {
 }
 ```
 
-ACL 编译器仍保存 `Action::Wait(WaitCondition::Visible(target))`，只增加 Runner 负责的 `WaitMode::Hidden`。在当前 Action 协议修订 13 下，它仍然复用早先的可见性 Action 变体。Runner 先执行一次立即的正向可见性断言；目标仍可见时，每 50 ms 重复一次。
+ACL 编译器仍保存 `Action::Wait(WaitCondition::Visible(target))`，只增加 Runner 负责的 `WaitMode::Hidden`。在当前 Action 协议修订 14 下，它仍然复用早先的可见性 Action 变体。Runner 先执行一次立即的正向可见性断言；目标仍可见时，每 50 ms 重复一次。
 
 | 正向探测结果                      | 隐藏等待结果                                                            |
 | --------------------------------- | ----------------------------------------------------------------------- |

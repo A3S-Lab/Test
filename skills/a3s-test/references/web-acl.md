@@ -10,6 +10,7 @@
 - [Rendered-layout expectations](#rendered-layout-expectations)
 - [Visual-viewport and pointer-reachability expectations](#visual-viewport-and-pointer-reachability-expectations)
 - [Focus-ownership expectations](#focus-ownership-expectations)
+- [Live semantic-state expectations](#live-semantic-state-expectations)
 - [Assertion stability](#assertion-stability)
 - [Tabs, frames, and dialogs](#tabs-frames-and-dialogs)
 - [Files and network](#files-and-network)
@@ -226,7 +227,9 @@ A wait accepts exactly one of `load`, `text`, `regex`, `url`, `visible`, or
 `hidden`, `value`, `enabled`, `disabled`, `checked`, `unchecked`, `selected`,
 `unselected`, `selected_values`, `rendered_text`, `rendered_texts`,
 `visible_count`, `layout`, `in_viewport`, `pointer_reachable`, `focused`,
-`unfocused`, `focus_within`, or `focus_outside`.
+`unfocused`, `focus_within`, `focus_outside`, `expanded`, `collapsed`,
+`pressed`, `unpressed`, `readonly`, `writable`, `required`, `optional`,
+`invalid`, or `valid`.
 
 `expect hidden` immediately proves that a stable semantic or CSS locator has no
 visible match, including an absent element. A visible match fails as
@@ -240,7 +243,7 @@ counter-evidence plus timing metrics. Both negative forms reject `ref()` and
 `visual_point()` because an unresolved observation-bound target is not proof
 of hidden product state. Driver, stale-target, and ambiguity errors remain
 errors. This is runner policy and adds no action variant; focus ownership
-advances the current action protocol to revision 13.
+and semantic state advance the current action protocol to revision 14.
 
 Focus, double-click, context-click, type, uncheck, select, drag, and
 target-scoped wheel require `ref()` or `css()` with the current browser
@@ -504,6 +507,64 @@ negative or driver-error classifications in standalone Chromium. The browser
 fixture includes forward and reverse Tab, open Shadow DOM, assigned slots,
 accessibility-hidden ancestry, timed focus movement, exact cleanup, and no
 private runtime leak.
+
+## Live semantic-state expectations
+
+Revision 14 observes five independent state dimensions:
+
+```acl
+expect "filters-open" { expanded = testid("filters") }
+expect "pin-off" { unpressed = role("button", "Pin") }
+expect "name-locked" { readonly = label("Display name") }
+expect "email-required" { required = placeholder("Email") }
+expect "email-invalid" { invalid = css("#email") }
+```
+
+The inverse forms are `collapsed`, `pressed`, `writable`, `optional`, and
+`valid`. Each inverse compares a successfully observed boolean. A missing or
+unsupported target never proves a negative state.
+
+Web uses these authoritative sources in order:
+
+| State | Native source | ARIA fallback |
+| --- | --- | --- |
+| expanded | `<details>.open` | exact `aria-expanded="true"` or `"false"` |
+| pressed | none | exact `aria-pressed="true"` or `"false"` |
+| readonly | `readOnly` on applicable inputs and textareas | exact `aria-readonly="true"` or `"false"` |
+| required | `required` on applicable inputs, selects, and textareas | exact `aria-required="true"` or `"false"` |
+| invalid | `!validity.valid` when `willValidate` is true | `false`, or `true`/`grammar`/`spelling` |
+
+Native state wins whenever it is applicable. `aria-pressed="mixed"`, unknown
+tokens, absent state, and non-validating native controls without valid ARIA
+return `test.driver.web.state_unsupported`. The dimensions do not imply one
+another: use both `enabled` and `writable` to prove that an applicable control
+is editable.
+
+Use a stable role, text, test ID, label, placeholder, or CSS locator. ACL
+rejects `ref()` and `visual_point()` as
+`test.spec.semantic_state_target_unstable`. A current Page Context ref may
+first resolve to a stable locator. A typed Web action that bypasses ACL with a
+standalone browser ref returns `test.driver.web.state_unsupported`.
+
+Web resolves one target and reads state in one page evaluation. Semantic
+locators traverse open Shadow DOM and exclude accessibility-hidden composed
+ancestry. CSS retains current-document query semantics. Missing, ambiguous,
+invalid, unsupported, and malformed evidence remains driver-owned. Only an
+observed mismatch uses `test.assert.expanded`, `.collapsed`, `.pressed`,
+`.unpressed`, `.readonly`, `.writable`, `.required`, `.optional`, `.invalid`,
+or `.valid`.
+
+GUI and TUI fail closed because their current protocols do not expose
+equivalent state. All ten forms accept assertion stability. A later observed
+mismatch becomes `test.assert.unstable`, while a later driver error keeps its
+original code.
+
+Checked-in evidence covers 1,000/1,000 deterministic Web classifications,
+100/100 sustained and 100/100 transient windows, plus 27 positive assertions
+and 17 negative or driver-error classifications in standalone Chromium. The
+browser fixture includes native state, ARIA, open Shadow DOM, precedence,
+mixed and unknown tokens, transient expansion, exact cleanup, and no private
+runtime leak.
 
 ## Assertion stability
 

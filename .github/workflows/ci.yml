@@ -275,6 +275,10 @@ jobs:
             --locked -- --ignored --exact --nocapture
           bash .github/scripts/run-cargo-test.sh \
             cargo test -p a3s-test-cli --test web_e2e \
+            'support::semantic_state::real_agent_browser_verifies_and_classifies_semantic_state' \
+            --locked -- --ignored --exact --nocapture
+          bash .github/scripts/run-cargo-test.sh \
+            cargo test -p a3s-test-cli --test web_e2e \
             'support::focus_ownership::real_agent_browser_verifies_and_classifies_focus_ownership' \
             --locked -- --ignored --exact --nocapture
           bash .github/scripts/run-cargo-test.sh \
@@ -313,6 +317,9 @@ jobs:
             --locked -- --ignored --exact --nocapture
           cargo test -p a3s-test-cli --test web_e2e `
             'support::control_state::real_agent_browser_verifies_and_classifies_control_state' `
+            --locked -- --ignored --exact --nocapture
+          cargo test -p a3s-test-cli --test web_e2e `
+            'support::semantic_state::real_agent_browser_verifies_and_classifies_semantic_state' `
             --locked -- --ignored --exact --nocapture
           cargo test -p a3s-test-cli --test web_e2e `
             'support::focus_ownership::real_agent_browser_verifies_and_classifies_focus_ownership' `

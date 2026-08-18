@@ -23,6 +23,9 @@
 - [x] Action protocol revision 13 deterministic exact and component-scoped
       focus ownership with flat-tree evidence and honest per-surface
       capability failures
+- [x] Action protocol revision 14 deterministic disclosure, toggle, read-only,
+      required, and validity state with native/ARIA precedence and honest
+      per-surface capability failures
 - [x] Surface driver and session contracts
 - [x] Cancellation-safe sequential runner
 - [x] Bounded sampled assertion stability with static duration/sample limits,
@@ -807,3 +810,39 @@ The completion work intentionally preserves these product boundaries:
       classifications in standalone Chromium, including forward and reverse
       Tab, open Shadow DOM, assigned slots, accessibility-hidden slot ancestry,
       timed focus movement, exact fixture cleanup, and no private runtime leak
+
+## M26: Deterministic live semantic-state depth
+
+- [x] Add `expanded`/`collapsed`, `pressed`/`unpressed`,
+      `readonly`/`writable`, `required`/`optional`, and `invalid`/`valid`
+      expectations under action protocol revision 14
+- [x] Keep the five state dimensions orthogonal so writable does not imply
+      enabled, optional does not imply valid, and callers can compose the exact
+      product requirement
+- [x] Give `<details>.open` and applicable native read-only, required, and
+      Constraint Validation properties priority over contradictory ARIA
+- [x] Accept only exact boolean ARIA tokens, map `grammar` and `spelling` to
+      invalid, and fail mixed pressed state, unknown tokens, or absent evidence
+      closed as unsupported
+- [x] Require a successfully resolved target for both positive and negative
+      forms so missing elements cannot prove collapsed, unpressed, writable,
+      optional, or valid
+- [x] Admit only stable semantic or CSS locators, resolve current Page Context
+      refs before dispatch, reject browser refs and visual points in ACL, and
+      fail programmatic browser-ref state queries as unsupported
+- [x] Traverse open Shadow DOM for semantic targets, preserve CSS
+      current-document semantics, and capture target resolution plus live state
+      in one Web page evaluation
+- [x] Preserve missing, ambiguous, invalid, unsupported, and malformed evidence
+      as driver errors, with ten distinct `test.assert.*` mismatch codes
+- [x] Fail closed on GUI and TUI where current protocols cannot provide
+      equivalent live state; preserve Agent provenance redaction and runner
+      stability semantics
+- [x] Prove 1,000/1,000 deterministic Web classifications across all five
+      positive and negative state dimensions
+- [x] Prove 100/100 sustained semantic-state windows pass and 100/100 transient
+      windows fail as `test.assert.unstable`
+- [x] Prove 27 positive assertions and 17 negative or driver-error
+      classifications in standalone Chromium, including native controls,
+      valid and invalid ARIA, open Shadow DOM, precedence, transient state,
+      exact fixture cleanup, and no private runtime leak

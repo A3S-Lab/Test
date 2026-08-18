@@ -160,6 +160,15 @@ fn redacts_assertion_targets_text_values_and_selected_values() {
             },
         },
         Action::Assert {
+            expectation: Expectation::State {
+                target: Target::TestId {
+                    value: "state-secret-semantic-state".to_string(),
+                },
+                state: ElementState::Expanded,
+                expected: true,
+            },
+        },
+        Action::Assert {
             expectation: Expectation::Value {
                 target: Target::Label {
                     value: "state-secret field".to_string(),

@@ -75,6 +75,12 @@ pub enum ElementState {
     Selected,
     Focused,
     FocusWithin,
+    Expanded,
+    Pressed,
+    #[serde(rename = "readonly")]
+    ReadOnly,
+    Required,
+    Invalid,
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]

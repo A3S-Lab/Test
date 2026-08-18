@@ -38,7 +38,7 @@ a3s-test agent click <ref> --session <name> --observation <id> --json
 a3s-test agent finish --session <name> --status passed --summary <text> --json
 ```
 
-`agent act --action-json` exposes the complete action schema. In v0.17.0, action protocol revision 13 includes the revision-7 selection-scoped `insert_text` action, revision-8 live control-state expectations, revision-9 target-bound rendered-output expectations, revision-10 ordered rendered-text collections, revision-11 two-target rendered-layout relations, revision-12 visual-viewport and pointer-hit expectations, and revision-13 exact or component-scoped focus ownership. `insert_text` still acts only inside an editing context established by an earlier action and carries no target or locator authority of its own.
+`agent act --action-json` exposes the complete action schema. In v0.17.0, action protocol revision 14 includes the revision-7 selection-scoped `insert_text` action, revision-8 live control-state expectations, revision-9 target-bound rendered-output expectations, revision-10 ordered rendered-text collections, revision-11 two-target rendered-layout relations, revision-12 visual-viewport and pointer-hit expectations, revision-13 exact or component-scoped focus ownership, and revision-14 disclosure, toggle, read-only, required, and validity state. `insert_text` still acts only inside an editing context established by an earlier action and carries no target or locator authority of its own.
 
 ## ACL suites
 
@@ -261,6 +261,26 @@ Web resolves the stable locator and reads the deepest active element through nes
 
 Keep these assertions separate from visible focus styling, pointer reachability, enabled state, and business activation. A correct focus owner does not prove any of those facts. Checked-in coverage classifies 600/600 deterministic Web cases, accepts 200/200 sustained windows, rejects 200/200 transients, and verifies 17 positive assertions plus 11 negative or driver-error classifications in standalone Chromium. The browser flow includes forward and reverse Tab, open Shadow DOM, assigned slots, hidden slot ancestry, timed focus movement, and exact cleanup.
 
+## Prove live semantic state
+
+Revision 14 observes five state dimensions directly from the rendered control.
+
+```acl
+expect "filters-open" { expanded = testid("filters") }
+expect "pin-off" { unpressed = role("button", "Pin") }
+expect "name-locked" { readonly = label("Display name") }
+expect "email-required" { required = placeholder("Email") }
+expect "email-invalid" { invalid = css("#email") }
+```
+
+The inverse forms are `collapsed`, `pressed`, `writable`, `optional`, and `valid`. Web gives applicable native state priority: `<details>.open`, native read-only or required properties, and Constraint Validation when `willValidate` is true. Other elements may expose valid ARIA state. Boolean ARIA accepts only `true` and `false`; `aria-invalid` also accepts `grammar` and `spelling`. Mixed pressed state, unknown tokens, and absent evidence fail closed as unsupported.
+
+The dimensions remain independent. `writable` proves only that the applicable read-only state is false, so combine it with `enabled` when the requirement is actual editability. Negative forms still require a resolved target and an observed boolean. Missing elements cannot masquerade as collapsed, unpressed, writable, optional, or valid.
+
+ACL accepts repeatable semantic and CSS locators and rejects browser refs or visual points as `test.spec.semantic_state_target_unstable`. A current Page Context ref may resolve to a stable locator before dispatch. Missing, ambiguous, invalid, and unsupported evidence stays driver-owned; only an observed mismatch receives the condition-specific `test.assert.*` code. GUI and TUI fail closed, and all ten forms accept bounded assertion stability.
+
+Checked-in coverage classifies 1,000/1,000 deterministic Web cases, accepts 100/100 sustained windows, rejects 100/100 transient windows, and verifies 27 positive assertions plus 17 negative or driver-error classifications in standalone Chromium. The fixture covers native state, valid and invalid ARIA, open Shadow DOM, precedence, transient expansion, and exact cleanup.
+
 ## Prove that UI has no visible match
 
 Use `hidden` when closing, dismissing, removing, or visually hiding a target is the product requirement. The assertion passes when the stable locator has no matching element or when every match has no rendered visible box.
@@ -271,7 +291,7 @@ expect "checkout-dialog-closed" {
 }
 ```
 
-`hidden` is runner policy around the existing positive visibility assertion. It does not add an action variant; the current protocol is revision 13 because of the typed expectations above. The runner sends a positive probe to the surface driver and classifies its result deterministically.
+`hidden` is runner policy around the existing positive visibility assertion. It does not add an action variant; the current protocol is revision 14 because of the typed expectations above. The runner sends a positive probe to the surface driver and classifies its result deterministically.
 
 | Positive probe result                  | Hidden assertion result                                                                |
 | -------------------------------------- | -------------------------------------------------------------------------------------- |
@@ -303,7 +323,7 @@ wait "checkout-dialog-closed" {
 }
 ```
 
-The ACL compiler keeps `Action::Wait(WaitCondition::Visible(target))` and adds runner-owned `WaitMode::Hidden`. This still reuses the earlier visible-action variant under current action protocol revision 13. Runner executes an immediate positive visibility assertion, then repeats it every 50 ms while the target remains visible.
+The ACL compiler keeps `Action::Wait(WaitCondition::Visible(target))` and adds runner-owned `WaitMode::Hidden`. This still reuses the earlier visible-action variant under current action protocol revision 14. Runner executes an immediate positive visibility assertion, then repeats it every 50 ms while the target remains visible.
 
 | Positive probe result                  | Hidden wait result                                                                               |
 | -------------------------------------- | ------------------------------------------------------------------------------------------------ |

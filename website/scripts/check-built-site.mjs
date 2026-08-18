@@ -184,7 +184,12 @@ if (
   !rootHtml.includes('data-testid="capability-group-repair"') ||
   !rootHtml.includes('data-testid="capability-group-execution"') ||
   !rootHtml.includes('data-testid="capability-group-contracts"') ||
-  !rootHtml.includes('查看 42 项能力的入口、输出、证据和失败边界') ||
+  !rootHtml.includes('查看 47 项能力的入口、输出、证据和失败边界') ||
+  !rootHtml.includes('展开与折叠状态') ||
+  !rootHtml.includes('按压开关状态') ||
+  !rootHtml.includes('只读与可写状态') ||
+  !rootHtml.includes('必填与可选状态') ||
+  !rootHtml.includes('无效与有效状态') ||
   !rootHtml.includes('精确焦点归属') ||
   !rootHtml.includes('组件内焦点归属') ||
   !rootHtml.includes('视口正面积相交') ||
@@ -200,8 +205,13 @@ if (
     'Inspect capabilities down to signals, evidence, and expiry rules',
   ) ||
   !englishHtml.includes(
-    'Inspect all 42 entry points, outputs, evidence rules, and failure boundaries',
+    'Inspect all 47 entry points, outputs, evidence rules, and failure boundaries',
   ) ||
+  !englishHtml.includes('Expanded and collapsed state') ||
+  !englishHtml.includes('Pressed toggle state') ||
+  !englishHtml.includes('Read-only and writable state') ||
+  !englishHtml.includes('Required and optional state') ||
+  !englishHtml.includes('Invalid and valid state') ||
   !englishHtml.includes('Exact focus ownership') ||
   !englishHtml.includes('Component-scoped focus ownership') ||
   !englishHtml.includes('Positive-area viewport intersection') ||
@@ -214,6 +224,11 @@ if (
   !rootMarkdown.includes('观察绑定引用') ||
   !rootMarkdown.includes('新页面验证与人工验收') ||
   !rootMarkdown.includes('标签页、Frame 与对话框') ||
+  !rootMarkdown.includes('展开与折叠状态') ||
+  !rootMarkdown.includes('按压开关状态') ||
+  !rootMarkdown.includes('只读与可写状态') ||
+  !rootMarkdown.includes('必填与可选状态') ||
+  !rootMarkdown.includes('无效与有效状态') ||
   !rootMarkdown.includes('精确焦点归属') ||
   !rootMarkdown.includes('组件内焦点归属') ||
   !rootMarkdown.includes('PRD 候选生成')
@@ -403,11 +418,13 @@ if (
 if (
   !capabilitiesHtml.includes('核心会话') ||
   !capabilitiesHtml.includes('界面执行') ||
+  !capabilitiesHtml.includes('实时语义状态断言') ||
   !capabilitiesHtml.includes('<code>network_route</code>') ||
   !capabilitiesHtml.includes('人工评审与修复') ||
   !capabilitiesHtml.includes('证据、回归与调度') ||
   !englishCapabilitiesHtml.includes('Core sessions') ||
   !englishCapabilitiesHtml.includes('Surface execution') ||
+  !englishCapabilitiesHtml.includes('Live semantic-state assertions') ||
   !englishCapabilitiesHtml.includes('<code>network_route</code>') ||
   !englishCapabilitiesHtml.includes('Human review and repair') ||
   !englishCapabilitiesHtml.includes('Evidence, regression, and scheduling')

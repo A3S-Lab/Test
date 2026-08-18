@@ -69,6 +69,16 @@ impl DriverSession for TransientSession {
                     (ElementState::FocusWithin, false) => {
                         ("focus_within", "test.assert.focus_outside")
                     }
+                    (ElementState::Expanded, true) => ("expanded", "test.assert.expanded"),
+                    (ElementState::Expanded, false) => ("expanded", "test.assert.collapsed"),
+                    (ElementState::Pressed, true) => ("pressed", "test.assert.pressed"),
+                    (ElementState::Pressed, false) => ("pressed", "test.assert.unpressed"),
+                    (ElementState::ReadOnly, true) => ("readonly", "test.assert.readonly"),
+                    (ElementState::ReadOnly, false) => ("readonly", "test.assert.writable"),
+                    (ElementState::Required, true) => ("required", "test.assert.required"),
+                    (ElementState::Required, false) => ("required", "test.assert.optional"),
+                    (ElementState::Invalid, true) => ("invalid", "test.assert.invalid"),
+                    (ElementState::Invalid, false) => ("invalid", "test.assert.valid"),
                 };
                 (
                     json!({ "state": name, "expected": expected, "actual": expected }),
@@ -279,7 +289,7 @@ async fn stable_assertions_accept_100_of_100_consistent_states_with_bounded_metr
 }
 
 #[tokio::test]
-async fn stable_control_state_assertions_reject_100_of_100_transient_states() {
+async fn stable_semantic_state_assertions_reject_100_of_100_transient_states() {
     let executions = Arc::new(AtomicUsize::new(0));
     let runner = scripted_runner(Arc::clone(&executions), false);
     let stability = AssertionStability {
@@ -307,7 +317,7 @@ async fn stable_control_state_assertions_reject_100_of_100_transient_states() {
 }
 
 #[tokio::test]
-async fn stable_control_state_assertions_accept_100_of_100_consistent_states() {
+async fn stable_semantic_state_assertions_accept_100_of_100_consistent_states() {
     let executions = Arc::new(AtomicUsize::new(0));
     let runner = scripted_runner(Arc::clone(&executions), true);
     let stability = AssertionStability {
@@ -722,6 +732,13 @@ fn transient_suite(stability: Option<AssertionStability>) -> TestSuite {
 }
 
 fn state_suite(stability: AssertionStability) -> TestSuite {
+    let states = [
+        ElementState::Expanded,
+        ElementState::Pressed,
+        ElementState::ReadOnly,
+        ElementState::Required,
+        ElementState::Invalid,
+    ];
     TestSuite {
         name: "state-stability-dataset".to_string(),
         version: 1,
@@ -732,13 +749,13 @@ fn state_suite(stability: AssertionStability) -> TestSuite {
                 surface: Surface::Web,
                 timeout_ms: 1_000,
                 steps: vec![TestStep {
-                    id: "assert-checked".to_string(),
+                    id: "assert-semantic-state".to_string(),
                     action: Action::Assert {
                         expectation: Expectation::State {
                             target: Target::Css {
-                                selector: "#terms".to_string(),
+                                selector: format!("#semantic-state-{index}"),
                             },
-                            state: ElementState::Checked,
+                            state: states[index % states.len()],
                             expected: true,
                         },
                     },

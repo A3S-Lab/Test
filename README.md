@@ -516,6 +516,48 @@ standalone Chromium. The real browser fixture covers forward and reverse Tab,
 open Shadow DOM, assigned slots, accessibility-hidden ancestry, timed focus
 movement, exact socket cleanup, and no private-runtime leak.
 
+## Prove live disclosure, toggle, editability, requirement, and validity state
+
+Rendered copy and geometry do not prove what a control currently means. Action
+protocol revision 14 adds five orthogonal state pairs that read authoritative
+browser state instead of inferring it from labels or pixels:
+
+```acl
+expect "filters-open" { expanded = testid("filters") }
+expect "pin-off" { unpressed = role("button", "Pin") }
+expect "name-locked" { readonly = label("Display name") }
+expect "email-required" { required = placeholder("Email") }
+expect "email-invalid" { invalid = testid("email") }
+```
+
+The inverse forms are `collapsed`, `pressed`, `writable`, `optional`, and
+`valid`. Native state wins where the platform defines it: `<details>.open`,
+applicable input or textarea `readOnly`, applicable input, select, or textarea
+`required`, and Constraint Validation when `willValidate` is true. Otherwise
+Web accepts only valid ARIA state tokens. `aria-pressed="mixed"`, unknown ARIA
+tokens, and elements with no authoritative state fail closed as
+`test.driver.web.state_unsupported`.
+
+Each pair answers one question. In particular, `writable` means the applicable
+read-only state is false; it does not imply `enabled`. Proving editability
+therefore requires both `enabled` and `writable`. Negative forms require a
+successfully resolved target and observed state, so a missing element never
+proves `collapsed`, `unpressed`, `writable`, `optional`, or `valid`.
+
+All ten conditions require a repeatable semantic or CSS locator. ACL rejects
+browser refs and visual points as `test.spec.semantic_state_target_unstable`;
+a current Page Context ref may first resolve to a stable locator. Missing,
+ambiguous, invalid, unsupported, and malformed observations remain
+`test.driver.*`. Only an observed mismatch becomes the condition-specific
+`test.assert.*` error. GUI and TUI fail closed without equivalent state
+evidence, and every form composes with bounded assertion stability.
+
+Checked-in evidence classifies 1,000/1,000 deterministic Web cases, accepts
+100/100 sustained windows, rejects 100/100 transient windows, and runs 27
+positive assertions plus 17 negative or driver-error classifications in
+standalone Chromium with native controls, ARIA, open Shadow DOM, exact fixture
+cleanup, and no private-runtime leak.
+
 ## Embed rendered page context
 
 Development frontends can embed `@a3s-lab/testkit` so A3S Test can read the

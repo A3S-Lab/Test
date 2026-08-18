@@ -82,6 +82,95 @@ suite "unstable-focus" {{
 }
 
 #[test]
+fn parses_extended_semantic_state_expectations() {
+    let suite = TestSuite::from_acl(
+        r##"
+suite "semantic-state" {
+    scenario "controls" {
+        surface = "web"
+
+        expect "details-expanded" { expanded = testid("details") }
+        expect "details-collapsed" { collapsed = css("#details") }
+        expect "toggle-pressed" { pressed = role("button", "Pin") }
+        expect "toggle-unpressed" { unpressed = testid("pin") }
+        expect "name-readonly" { readonly = label("Display name") }
+        expect "name-writable" { writable = css("#display-name") }
+        expect "email-required" { required = placeholder("Email") }
+        expect "email-optional" { optional = testid("email") }
+        expect "email-invalid" { invalid = css("#email") }
+        expect "email-valid" { valid = testid("email") }
+    }
+}
+"##,
+    )
+    .expect("typed semantic state suite");
+
+    let steps = &suite.scenarios[0].steps;
+    assert_eq!(steps.len(), 10);
+    for (index, state, expected) in [
+        (0, ElementState::Expanded, true),
+        (1, ElementState::Expanded, false),
+        (2, ElementState::Pressed, true),
+        (3, ElementState::Pressed, false),
+        (4, ElementState::ReadOnly, true),
+        (5, ElementState::ReadOnly, false),
+        (6, ElementState::Required, true),
+        (7, ElementState::Required, false),
+        (8, ElementState::Invalid, true),
+        (9, ElementState::Invalid, false),
+    ] {
+        let Action::Assert {
+            expectation:
+                Expectation::State {
+                    state: actual_state,
+                    expected: actual_expected,
+                    ..
+                },
+        } = &steps[index].action
+        else {
+            panic!("step {index} was not a semantic state assertion");
+        };
+        assert_eq!(*actual_state, state);
+        assert_eq!(*actual_expected, expected);
+    }
+}
+
+#[test]
+fn semantic_state_acl_rejects_observation_bound_targets() {
+    for condition in [
+        "expanded",
+        "collapsed",
+        "pressed",
+        "unpressed",
+        "readonly",
+        "writable",
+        "required",
+        "optional",
+        "invalid",
+        "valid",
+    ] {
+        for target in ["ref(\"@e1\")", "visual_point(\"@v1\", 10, 20)"] {
+            let acl = format!(
+                r#"
+suite "unstable-semantic-state" {{
+    scenario "controls" {{
+        surface = "web"
+        expect "state" {{ {condition} = {target} }}
+    }}
+}}
+"#
+            );
+            let error = TestSuite::from_acl(&acl).expect_err("unstable semantic state target");
+            assert_eq!(
+                error.code(),
+                "test.spec.semantic_state_target_unstable",
+                "{condition}: {target}"
+            );
+        }
+    }
+}
+
+#[test]
 fn parses_typed_control_state_value_and_selection_expectations() {
     let suite = TestSuite::from_acl(
         r##"
@@ -241,7 +330,7 @@ suite "invalid-state" {{
 
 #[test]
 fn state_expectations_remain_wire_compatible_after_revision_nine() {
-    assert_eq!(ACTION_PROTOCOL_REVISION, 13);
+    assert_eq!(ACTION_PROTOCOL_REVISION, 14);
     let action = Action::Assert {
         expectation: Expectation::State {
             target: Target::Ref {
@@ -270,6 +359,33 @@ fn state_expectations_remain_wire_compatible_after_revision_nine() {
         serde_json::from_value::<Action>(encoded).expect("decode state action"),
         action
     );
+}
+
+#[test]
+fn extended_semantic_states_have_stable_wire_names() {
+    for (state, expected_name) in [
+        (ElementState::Expanded, "expanded"),
+        (ElementState::Pressed, "pressed"),
+        (ElementState::ReadOnly, "readonly"),
+        (ElementState::Required, "required"),
+        (ElementState::Invalid, "invalid"),
+    ] {
+        let action = Action::Assert {
+            expectation: Expectation::State {
+                target: Target::TestId {
+                    value: "semantic-control".to_string(),
+                },
+                state,
+                expected: true,
+            },
+        };
+        let encoded = serde_json::to_value(&action).expect("semantic state action JSON");
+        assert_eq!(encoded["expectation"]["value"]["state"], expected_name);
+        assert_eq!(
+            serde_json::from_value::<Action>(encoded).expect("decode semantic state action"),
+            action
+        );
+    }
 }
 
 #[test]
@@ -311,6 +427,13 @@ fn state_expectation_targets_keep_observation_and_page_context_binding() {
                 value: "@c1".to_string(),
             },
             state: ElementState::Enabled,
+            expected: true,
+        },
+        Expectation::State {
+            target: Target::Ref {
+                value: "@c1".to_string(),
+            },
+            state: ElementState::Expanded,
             expected: true,
         },
         Expectation::Value {

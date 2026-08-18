@@ -400,13 +400,21 @@ async fn exact_and_composed_focus_ownership_are_separate_live_states() {
 }
 
 #[tokio::test]
-async fn observation_refs_cannot_claim_live_focus_ownership() {
+async fn observation_refs_cannot_claim_stable_only_states() {
     let executor = Arc::new(QueueExecutor::new([]));
     let (_temp, mut session) = connected(executor.clone()).await;
-    for state in [ElementState::Focused, ElementState::FocusWithin] {
+    for state in [
+        ElementState::Focused,
+        ElementState::FocusWithin,
+        ElementState::Expanded,
+        ElementState::Pressed,
+        ElementState::ReadOnly,
+        ElementState::Required,
+        ElementState::Invalid,
+    ] {
         let error = session
             .execute_action(
-                "unstable-focus-ref",
+                "unstable-state-ref",
                 assert_state(
                     Target::Ref {
                         value: "@e4".to_string(),
@@ -416,11 +424,188 @@ async fn observation_refs_cannot_claim_live_focus_ownership() {
                 ),
             )
             .await
-            .expect_err("focus ownership requires a live stable locator");
+            .expect_err("state requires a live stable locator");
         assert_eq!(error.code(), "test.driver.web.state_unsupported");
     }
     session.close_surface().await.expect("close");
     assert_eq!(executor.actions(), [vec!["close".to_string()]]);
+}
+
+#[tokio::test]
+async fn extended_semantic_states_keep_matches_mismatches_and_unknowns_separate() {
+    let dimensions = semantic_state_dimensions();
+    let mut outputs = Vec::new();
+    for actual in [true, false, false, true] {
+        outputs.extend(
+            dimensions
+                .iter()
+                .map(|_| probe(json!({ "status": "ok", "actual": actual, "count": 1 }))),
+        );
+    }
+    outputs.extend(
+        dimensions
+            .iter()
+            .map(|_| probe(json!({ "status": "not_found", "count": 0 }))),
+    );
+    outputs.extend(
+        dimensions
+            .iter()
+            .map(|_| probe(json!({ "status": "unsupported", "count": 1 }))),
+    );
+    let executor = Arc::new(QueueExecutor::new(outputs));
+    let (_temp, mut session) = connected(executor.clone()).await;
+
+    for &(state, probe_name, _, _, _) in &dimensions {
+        let output = session
+            .execute_action(
+                format!("{probe_name}-positive"),
+                assert_state(
+                    Target::TestId {
+                        value: format!("{probe_name}-positive"),
+                    },
+                    state,
+                    true,
+                ),
+            )
+            .await
+            .unwrap_or_else(|error| panic!("positive {probe_name} state failed: {error}"));
+        assert_eq!(output.data["state"], probe_name);
+        assert_eq!(output.data["expected"], true);
+        assert_eq!(output.data["actual"], true);
+    }
+    for &(state, probe_name, negative_name, _, _) in &dimensions {
+        let output = session
+            .execute_action(
+                format!("{negative_name}-negative"),
+                assert_state(
+                    Target::Css {
+                        selector: format!("#{negative_name}-negative"),
+                    },
+                    state,
+                    false,
+                ),
+            )
+            .await
+            .unwrap_or_else(|error| panic!("negative {negative_name} state failed: {error}"));
+        assert_eq!(output.data["state"], probe_name);
+        assert_eq!(output.data["expected"], false);
+        assert_eq!(output.data["actual"], false);
+    }
+    for &(state, probe_name, _, positive_code, _) in &dimensions {
+        let error = session
+            .execute_action(
+                format!("{probe_name}-mismatch"),
+                assert_state(
+                    Target::TestId {
+                        value: format!("{probe_name}-mismatch"),
+                    },
+                    state,
+                    true,
+                ),
+            )
+            .await
+            .expect_err("false state must fail its positive assertion");
+        assert_eq!(error.code(), positive_code);
+    }
+    for &(state, _, negative_name, _, negative_code) in &dimensions {
+        let error = session
+            .execute_action(
+                format!("{negative_name}-mismatch"),
+                assert_state(
+                    Target::TestId {
+                        value: format!("{negative_name}-mismatch"),
+                    },
+                    state,
+                    false,
+                ),
+            )
+            .await
+            .expect_err("true state must fail its negative assertion");
+        assert_eq!(error.code(), negative_code);
+    }
+    for &(state, _, negative_name, _, _) in &dimensions {
+        let error = session
+            .execute_action(
+                format!("missing-{negative_name}"),
+                assert_state(
+                    Target::Css {
+                        selector: format!("#missing-{negative_name}"),
+                    },
+                    state,
+                    false,
+                ),
+            )
+            .await
+            .expect_err("missing target must not prove a negative semantic state");
+        assert_eq!(error.code(), "test.driver.web.target_not_found");
+    }
+    for &(state, probe_name, _, _, _) in &dimensions {
+        let error = session
+            .execute_action(
+                format!("unsupported-{probe_name}"),
+                assert_state(
+                    Target::Css {
+                        selector: format!("#unsupported-{probe_name}"),
+                    },
+                    state,
+                    true,
+                ),
+            )
+            .await
+            .expect_err("unsupported semantic state must remain unknown");
+        assert_eq!(error.code(), "test.driver.web.state_unsupported");
+    }
+    session.close_surface().await.expect("close");
+
+    let actions = executor.actions();
+    assert_eq!(actions.len(), dimensions.len() * 6 + 1);
+    for action in &actions[..dimensions.len() * 6] {
+        assert_eq!(action[0], "eval");
+        assert!(action[1].contains("A3S_ASSERTION_PROBE"));
+    }
+}
+
+#[tokio::test]
+async fn deterministic_extended_state_dataset_classifies_1000_of_1000_cases() {
+    let dimensions = semantic_state_dimensions();
+    let mut outputs = Vec::with_capacity(DATASET_SIZE * dimensions.len() * 2);
+    for _ in &dimensions {
+        for actual in [true, false] {
+            outputs.extend(
+                (0..DATASET_SIZE)
+                    .map(|_| probe(json!({ "status": "ok", "actual": actual, "count": 1 }))),
+            );
+        }
+    }
+    let executor = Arc::new(QueueExecutor::new(outputs));
+    let (_temp, mut session) = connected(executor.clone()).await;
+
+    for &(state, probe_name, negative_name, _, _) in &dimensions {
+        for (expected, assertion_name) in [(true, probe_name), (false, negative_name)] {
+            for index in 0..DATASET_SIZE {
+                session
+                    .execute_action(
+                        format!("{assertion_name}-{index}"),
+                        assert_state(
+                            Target::TestId {
+                                value: format!("{assertion_name}-{index}"),
+                            },
+                            state,
+                            expected,
+                        ),
+                    )
+                    .await
+                    .unwrap_or_else(|error| {
+                        panic!("{assertion_name} case {index} failed: {error}")
+                    });
+            }
+        }
+    }
+    session.close_surface().await.expect("close");
+    assert_eq!(
+        executor.actions().len(),
+        DATASET_SIZE * dimensions.len() * 2 + 1
+    );
 }
 
 #[tokio::test]
@@ -596,6 +781,52 @@ fn assert_state(target: Target, state: ElementState, expected: bool) -> Action {
             expected,
         },
     }
+}
+
+fn semantic_state_dimensions() -> [(
+    ElementState,
+    &'static str,
+    &'static str,
+    &'static str,
+    &'static str,
+); 5] {
+    [
+        (
+            ElementState::Expanded,
+            "expanded",
+            "collapsed",
+            "test.assert.expanded",
+            "test.assert.collapsed",
+        ),
+        (
+            ElementState::Pressed,
+            "pressed",
+            "unpressed",
+            "test.assert.pressed",
+            "test.assert.unpressed",
+        ),
+        (
+            ElementState::ReadOnly,
+            "readonly",
+            "writable",
+            "test.assert.readonly",
+            "test.assert.writable",
+        ),
+        (
+            ElementState::Required,
+            "required",
+            "optional",
+            "test.assert.required",
+            "test.assert.optional",
+        ),
+        (
+            ElementState::Invalid,
+            "invalid",
+            "valid",
+            "test.assert.invalid",
+            "test.assert.valid",
+        ),
+    ]
 }
 
 async fn connected(

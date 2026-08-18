@@ -88,7 +88,7 @@ The persistent-session loop is `start -> observe -> act -> observe -> finish`. A
 | `terminal_resize`                  | Columns and rows                                       | Resizes the owned PTY or ConPTY and updates terminal semantics                          |
 | `terminal_recording`               | Relative artifact path                                 | Retains a bounded terminal recording outside arbitrary workspace paths                  |
 
-The action protocol revision is 13. Generate the complete schema with `a3s-test agent schema`. Unknown fields, missing required fields, invalid enums, and actions unsupported by the selected surface are rejected before execution.
+The action protocol revision is 14. Generate the complete schema with `a3s-test agent schema`. Unknown fields, missing required fields, invalid enums, and actions unsupported by the selected surface are rejected before execution.
 
 ### Live control-state assertions
 
@@ -100,6 +100,20 @@ The action protocol revision is 13. Generate the complete schema with `a3s-test 
 | Stable control state  | Any form above plus `stable_for_ms` and optional interval               | First and last assertion output, bounded sample count, and elapsed window | A later counterexample is `test.assert.unstable` and retains both the initial evidence and transient mismatch                      |
 
 Web assertions read live DOM properties. Native checkbox and radio `checked` values take priority over contradictory ARIA, while custom controls can expose boolean state through valid ARIA. `selected_values = []` is a valid exact empty-set assertion. GUI can compare an exact value only when CUA supplies one and otherwise fails closed; boolean and multi-selection state are currently unsupported there. TUI control-state assertions are unsupported. Page Context refs resolve to their current semantic target before dispatch, while a standalone ref that cannot expose the requested property returns a driver error rather than guessing.
+
+### Live semantic-state assertions
+
+| Capability        | ACL form                  | Authoritative Web evidence                                                  | Failure boundary                                                                              |
+| ----------------- | ------------------------- | --------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| Disclosure state  | `expanded` or `collapsed` | `<details>.open`, otherwise valid `aria-expanded`                           | Missing state is unsupported; a mismatch uses `test.assert.expanded` or `.collapsed`          |
+| Toggle state      | `pressed` or `unpressed`  | Exact boolean `aria-pressed`                                                | `mixed` is unsupported; a mismatch uses `test.assert.pressed` or `.unpressed`                 |
+| Read-only state   | `readonly` or `writable`  | Native `readOnly` where applicable, otherwise valid `aria-readonly`         | Writable does not imply enabled; a mismatch uses `test.assert.readonly` or `.writable`        |
+| Requirement state | `required` or `optional`  | Native `required` where applicable, otherwise valid `aria-required`         | Unsupported controls stay driver-owned; a mismatch uses `test.assert.required` or `.optional` |
+| Validity state    | `invalid` or `valid`      | Constraint Validation when `willValidate`, otherwise defined `aria-invalid` | Unknown state never proves valid; a mismatch uses `test.assert.invalid` or `.valid`           |
+
+Native state takes priority over contradictory ARIA. Boolean ARIA accepts exactly `true` and `false`; `aria-invalid` additionally accepts `grammar` and `spelling` as invalid. The five dimensions are orthogonal, and every negative form requires one resolved target plus authoritative boolean evidence.
+
+ACL rejects browser refs and visual points as `test.spec.semantic_state_target_unstable`; a current Page Context ref may resolve to a stable locator first. Semantic locators traverse open Shadow DOM and exclude accessibility-hidden ancestry, while CSS retains current-document semantics. Unsupported state returns `test.driver.web.state_unsupported`. GUI and TUI fail closed. Every form supports bounded stability; checked-in evidence covers 1,000/1,000 deterministic Web classifications, 100/100 sustained and 100/100 transient windows, plus 27 positive assertions and 17 negative or driver-error classifications in standalone Chromium.
 
 ### Focus-ownership assertions
 

@@ -777,6 +777,31 @@ async fn gui_value_assertions_use_cua_values_without_inventing_boolean_state() {
             state: ElementState::FocusWithin,
             expected: true,
         },
+        Expectation::State {
+            target: value_target.clone(),
+            state: ElementState::Expanded,
+            expected: true,
+        },
+        Expectation::State {
+            target: value_target.clone(),
+            state: ElementState::Pressed,
+            expected: true,
+        },
+        Expectation::State {
+            target: value_target.clone(),
+            state: ElementState::ReadOnly,
+            expected: true,
+        },
+        Expectation::State {
+            target: value_target.clone(),
+            state: ElementState::Required,
+            expected: true,
+        },
+        Expectation::State {
+            target: value_target.clone(),
+            state: ElementState::Invalid,
+            expected: true,
+        },
         Expectation::SelectedValues {
             target: value_target.clone(),
             values: vec!["review".to_string()],

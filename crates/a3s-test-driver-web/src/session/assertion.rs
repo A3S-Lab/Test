@@ -443,6 +443,13 @@ impl AgentBrowserSession {
             ElementState::Focused | ElementState::FocusWithin => Err(state_unsupported(
                 "focus ownership through an observation-bound ref",
             )),
+            ElementState::Expanded
+            | ElementState::Pressed
+            | ElementState::ReadOnly
+            | ElementState::Required
+            | ElementState::Invalid => Err(state_unsupported(
+                "semantic state through an observation-bound ref",
+            )),
         }
     }
 
@@ -774,6 +781,16 @@ fn state_expectation(state: ElementState, expected: bool) -> (&'static str, &'st
         (ElementState::Focused, false) => ("unfocused", "test.assert.unfocused"),
         (ElementState::FocusWithin, true) => ("focus_within", "test.assert.focus_within"),
         (ElementState::FocusWithin, false) => ("focus_outside", "test.assert.focus_outside"),
+        (ElementState::Expanded, true) => ("expanded", "test.assert.expanded"),
+        (ElementState::Expanded, false) => ("collapsed", "test.assert.collapsed"),
+        (ElementState::Pressed, true) => ("pressed", "test.assert.pressed"),
+        (ElementState::Pressed, false) => ("unpressed", "test.assert.unpressed"),
+        (ElementState::ReadOnly, true) => ("readonly", "test.assert.readonly"),
+        (ElementState::ReadOnly, false) => ("writable", "test.assert.writable"),
+        (ElementState::Required, true) => ("required", "test.assert.required"),
+        (ElementState::Required, false) => ("optional", "test.assert.optional"),
+        (ElementState::Invalid, true) => ("invalid", "test.assert.invalid"),
+        (ElementState::Invalid, false) => ("valid", "test.assert.valid"),
     }
 }
 
@@ -784,6 +801,11 @@ fn element_state_name(state: ElementState) -> &'static str {
         ElementState::Selected => "selected",
         ElementState::Focused => "focused",
         ElementState::FocusWithin => "focus_within",
+        ElementState::Expanded => "expanded",
+        ElementState::Pressed => "pressed",
+        ElementState::ReadOnly => "readonly",
+        ElementState::Required => "required",
+        ElementState::Invalid => "invalid",
     }
 }
 

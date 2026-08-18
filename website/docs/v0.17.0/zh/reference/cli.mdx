@@ -111,7 +111,7 @@ a3s-test agent act \
   --json
 ```
 
-先用 `a3s-test agent schema` 获取修订 13 的完整 JSON Schema。当前动作类型如下。
+先用 `a3s-test agent schema` 获取修订 14 的完整 JSON Schema。当前动作类型如下。
 
 | 类别       | `type` 值                                                                                                        |
 | ---------- | ---------------------------------------------------------------------------------------------------------------- |
@@ -266,6 +266,30 @@ expect "page-does-not-own-focus" { focus_outside = testid("page-shell") }
 
 语义定位器穿透开放 Shadow DOM，并排除可访问性隐藏的 composed ancestry，包括隐藏的 slot wrapper。CSS 保持当前 document 查询语义。GUI 与 TUI 没有等价归属证据时明确关闭失败。当前检入覆盖 600/600 个确定性 Web 分类、200/200 个持续窗口、200/200 个瞬态窗口，以及 standalone Chromium 中 17 个正向断言和 11 个负向或驱动错误分类。
 
+### 实时语义状态 ACL 断言
+
+Action 协议修订 14 新增五组彼此独立的正向与负向状态。
+
+```acl
+expect "filters-open" { expanded = testid("filters") }
+expect "pin-off" { unpressed = role("button", "Pin") }
+expect "name-locked" { readonly = label("Display name") }
+expect "email-required" { required = placeholder("Email") }
+expect "email-invalid" { invalid = css("#email") }
+```
+
+完整配对为 `expanded`/`collapsed`、`pressed`/`unpressed`、`readonly`/`writable`、`required`/`optional` 和 `invalid`/`valid`。状态适用时以原生属性为准，包括 `<details>.open`、原生只读与必填属性，以及 `willValidate` 为 true 时的 Constraint Validation。ARIA 回退只接受精确布尔值；`aria-invalid` 还会把 `grammar` 和 `spelling` 映射为 invalid。混合按压状态、未知 token 和缺失状态属于 unsupported，不会被当成 false。
+
+| 错误码                                                                                                                                     | 边界                                                       |
+| ------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------- |
+| `test.spec.semantic_state_target_unstable`                                                                                                 | ACL 目标是 browser ref 或 visual point                     |
+| `test.driver.web.target_not_found`、`.target_ambiguous` 或 `.target_invalid`                                                               | 稳定目标解析失败，绝不能借此证明负向状态                   |
+| `test.driver.web.state_unsupported`                                                                                                        | 目标、token、surface 或程序化 browser ref 无法提供权威状态 |
+| `test.assert.expanded`、`.collapsed`、`.pressed`、`.unpressed`、`.readonly`、`.writable`、`.required`、`.optional`、`.invalid` 或 `.valid` | 唯一目标暴露了明确布尔值，但与请求条件不同                 |
+| `test.assert.unstable`                                                                                                                     | 后续合法采样推翻了首次通过的语义状态断言                   |
+
+`writable` 不蕴含 `enabled`，产品要求真正可编辑时应组合两者。当前 Page Context ref 可以在派发前解析为稳定定位器。语义定位器穿透开放 Shadow DOM，并排除可访问性隐藏祖先；CSS 保持当前 document 语义。GUI 与 TUI 明确关闭失败。当前检入证据覆盖 1,000/1,000 个确定性 Web 分类、100/100 个持续窗口、100/100 个瞬态窗口，以及 standalone Chromium 中 27 个正向断言和 17 个负向或驱动错误分类。
+
 ### 渲染文本、有序序列与可见数量 ACL 断言
 
 Action 协议修订 9 把预期文案绑定到唯一目标，并观察稳定定位器产生的完整可见数量。修订 10 新增精确的有序渲染文本向量。
@@ -406,7 +430,7 @@ expect "dialog-closed" {
 }
 ```
 
-ACL 编译器保存现有的 `Action::Assert(Expectation::Visible(target))`，并增加由 Runner 负责的隐藏模式。这个策略不会增加 Action 变体；当前协议已推进到修订 13，是因为上面的类型化 expectation。Runner 派发正向可见性探测，再按以下契约分类。
+ACL 编译器保存现有的 `Action::Assert(Expectation::Visible(target))`，并增加由 Runner 负责的隐藏模式。这个策略不会增加 Action 变体；当前协议已推进到修订 14，是因为上面的类型化 expectation。Runner 派发正向可见性探测，再按以下契约分类。
 
 | 探测结果                    | 步骤结果                                                          |
 | --------------------------- | ----------------------------------------------------------------- |
@@ -450,7 +474,7 @@ wait "dialog-closed" {
 }
 ```
 
-编译器保存现有的可见目标等待条件，并增加 `wait_mode = hidden`；在当前修订 13 下，它仍然复用早先的可见性 Action 变体。只要正向探测仍返回可见证据，Runner 就先立即执行一次只读可见性断言，再每 50 ms 探测一次。
+编译器保存现有的可见目标等待条件，并增加 `wait_mode = hidden`；在当前修订 14 下，它仍然复用早先的可见性 Action 变体。只要正向探测仍返回可见证据，Runner 就先立即执行一次只读可见性断言，再每 50 ms 探测一次。
 
 | 边界                     | 结果                                                                   |
 | ------------------------ | ---------------------------------------------------------------------- |
@@ -561,6 +585,6 @@ expect "settled-total" {
 
 ## Web 能力摘要
 
-Web 驱动支持导航、语义快照、点击、悬停、聚焦、填写与输入、选择范围文本插入、勾选、选择、双击、右键、拖动、按键、修饰键滚轮与视口设置。同步操作包括 load、文本、URL、正向可见性、有界消失等待、精确或范围焦点归属，以及正向或隐藏断言。证据包括截图、可访问树、console、页面错误、HAR、Chrome trace、WebM 视频和受约束下载。
+Web 驱动支持导航、语义快照、点击、悬停、聚焦、填写与输入、选择范围文本插入、勾选、选择、双击、右键、拖动、按键、修饰键滚轮与视口设置。同步操作包括 load、文本、URL、正向可见性、有界消失等待、精确或范围焦点归属、实时展开/按压/只读/必填/有效性状态，以及正向或隐藏断言。证据包括截图、可访问树、console、页面错误、HAR、Chrome trace、WebM 视频和受约束下载。
 
 浏览器默认 headless，`--headed` 是明确的调试选项。网络和导航范围分别受初始 origin、`--allow-origin` 与显式 hostname 例外约束。

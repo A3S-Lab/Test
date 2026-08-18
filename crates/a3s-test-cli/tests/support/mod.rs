@@ -17,6 +17,8 @@ pub mod rendered_assertions;
 #[allow(dead_code)]
 pub mod repair_fixture;
 #[allow(dead_code)]
+pub mod semantic_state;
+#[allow(dead_code)]
 pub mod testkit_accessibility;
 #[allow(dead_code)]
 pub mod testkit_browser;

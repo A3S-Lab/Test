@@ -111,7 +111,7 @@ a3s-test agent act \
   --json
 ```
 
-Generate the complete revision-13 JSON Schema with `a3s-test agent schema`. Current action types are grouped below.
+Generate the complete revision-14 JSON Schema with `a3s-test agent schema`. Current action types are grouped below.
 
 | Category              | `type` values                                                                                                    |
 | --------------------- | ---------------------------------------------------------------------------------------------------------------- |
@@ -266,6 +266,30 @@ expect "page-does-not-own-focus" { focus_outside = testid("page-shell") }
 
 Semantic locators traverse open Shadow DOM and exclude accessibility-hidden composed ancestry, including hidden slot wrappers. CSS retains current-document query semantics. GUI and TUI fail closed without equivalent ownership evidence. Checked-in coverage includes 600/600 deterministic Web classifications, 200/200 sustained and 200/200 transient windows, plus 17 positive assertions and 11 negative or driver-error classifications in standalone Chromium.
 
+### Live semantic-state ACL expectations
+
+Action protocol revision 14 adds five independent positive/negative pairs.
+
+```acl
+expect "filters-open" { expanded = testid("filters") }
+expect "pin-off" { unpressed = role("button", "Pin") }
+expect "name-locked" { readonly = label("Display name") }
+expect "email-required" { required = placeholder("Email") }
+expect "email-invalid" { invalid = css("#email") }
+```
+
+The complete pairs are `expanded`/`collapsed`, `pressed`/`unpressed`, `readonly`/`writable`, `required`/`optional`, and `invalid`/`valid`. Native state wins where applicable: `<details>.open`, native read-only and required properties, and Constraint Validation when `willValidate` is true. ARIA fallback accepts exact booleans; `aria-invalid` additionally maps `grammar` and `spelling` to invalid. Mixed pressed state, unknown tokens, and absent state are unsupported rather than false.
+
+| Code                                                                                                                                        | Boundary                                                                              |
+| ------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| `test.spec.semantic_state_target_unstable`                                                                                                  | ACL target is a browser ref or visual point                                           |
+| `test.driver.web.target_not_found`, `.target_ambiguous`, or `.target_invalid`                                                               | Stable target resolution failed; this never proves a negative state                   |
+| `test.driver.web.state_unsupported`                                                                                                         | Target, token, surface, or programmatic browser ref cannot expose authoritative state |
+| `test.assert.expanded`, `.collapsed`, `.pressed`, `.unpressed`, `.readonly`, `.writable`, `.required`, `.optional`, `.invalid`, or `.valid` | Exactly one target exposed a boolean that differed from the requested condition       |
+| `test.assert.unstable`                                                                                                                      | A later valid sample contradicted an initially passing semantic-state expectation     |
+
+`writable` does not imply `enabled`; combine both when editability is the requirement. A current Page Context ref may resolve to a stable locator before dispatch. Semantic locators cross open Shadow DOM and exclude accessibility-hidden ancestry, while CSS retains current-document semantics. GUI and TUI fail closed. Checked-in evidence covers 1,000/1,000 deterministic Web classifications, 100/100 sustained and 100/100 transient windows, plus 27 positive assertions and 17 negative or driver-error classifications in standalone Chromium.
+
 ### Rendered-text, ordered-sequence, and visible-count ACL expectations
 
 Action protocol revision 9 binds expected copy to one target and observes the complete visible count produced by a stable locator. Revision 10 adds the exact ordered rendered-text vector.
@@ -406,7 +430,7 @@ expect "dialog-closed" {
 }
 ```
 
-The ACL compiler stores the existing `Action::Assert(Expectation::Visible(target))` plus a runner-owned hidden mode. This policy adds no action variant; the current protocol is revision 13 because of the typed expectations above. The runner dispatches a positive visibility probe and uses this contract.
+The ACL compiler stores the existing `Action::Assert(Expectation::Visible(target))` plus a runner-owned hidden mode. This policy adds no action variant; the current protocol is revision 14 because of the typed expectations above. The runner dispatches a positive visibility probe and uses this contract.
 
 | Probe result                       | Step result                                                                                  |
 | ---------------------------------- | -------------------------------------------------------------------------------------------- |
@@ -450,7 +474,7 @@ wait "dialog-closed" {
 }
 ```
 
-The compiler stores the existing visible-target wait condition plus `wait_mode = hidden`; under current revision 13 it still reuses the earlier visible-action variant. Runner sends immediate read-only positive visibility assertions and polls every 50 ms only while visible evidence continues.
+The compiler stores the existing visible-target wait condition plus `wait_mode = hidden`; under current revision 14 it still reuses the earlier visible-action variant. Runner sends immediate read-only positive visibility assertions and polls every 50 ms only while visible evidence continues.
 
 | Boundary                             | Result                                                                                 |
 | ------------------------------------ | -------------------------------------------------------------------------------------- |
@@ -561,6 +585,6 @@ The first `Ctrl+C` requests cancellation and owned-surface cleanup. A second int
 
 ## Web capability summary
 
-The Web driver supports navigation, semantic snapshots, click, hover, focus, fill and type, selection-scoped text insertion, check, select, double and context click, drag, key press, modifier wheel, and viewport control. Synchronization covers load, text, URL, positive visibility, bounded disappearance waits, exact or scoped focus ownership, and positive or hidden expectations. Evidence includes screenshots, accessibility trees, console output, page errors, HAR, Chrome traces, WebM video, and contained downloads.
+The Web driver supports navigation, semantic snapshots, click, hover, focus, fill and type, selection-scoped text insertion, check, select, double and context click, drag, key press, modifier wheel, and viewport control. Synchronization covers load, text, URL, positive visibility, bounded disappearance waits, exact or scoped focus ownership, live disclosure/toggle/read-only/required/validity state, and positive or hidden expectations. Evidence includes screenshots, accessibility trees, console output, page errors, HAR, Chrome traces, WebM video, and contained downloads.
 
 Browser execution is headless by default. `--headed` is an explicit debugging option. Initial origin, `--allow-origin`, and explicit hostname exceptions constrain navigation and network access.

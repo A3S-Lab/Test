@@ -1,0 +1,210 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>A3S Test semantic state assertion fixture</title>
+    <style>
+      :root {
+        color-scheme: light;
+        font-family: system-ui, sans-serif;
+      }
+
+      body {
+        margin: 0;
+        padding: 24px;
+      }
+
+      main {
+        display: grid;
+        gap: 18px;
+        max-width: 760px;
+      }
+
+      section {
+        display: grid;
+        gap: 8px;
+        padding: 12px;
+        border: 1px solid #cbd5e1;
+      }
+
+      button,
+      input,
+      [role="button"],
+      [role="textbox"] {
+        width: max-content;
+        min-width: 180px;
+        padding: 8px;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>A3S Test semantic state assertion fixture</h1>
+
+      <section aria-label="Expansion state">
+        <details data-testid="native-expanded" aria-expanded="false" open>
+          <summary>Native expanded disclosure</summary>
+          <p>Expanded content</p>
+        </details>
+        <details data-testid="native-collapsed" aria-expanded="true">
+          <summary>Native collapsed disclosure</summary>
+          <p>Collapsed content</p>
+        </details>
+        <button data-testid="aria-expanded" aria-expanded="true">ARIA expanded</button>
+        <button data-testid="aria-collapsed" aria-expanded="false">ARIA collapsed</button>
+        <button data-testid="stable-expanded" aria-expanded="true">Stable expanded</button>
+        <button id="arm-transient" type="button">Arm transient expansion</button>
+        <button data-testid="transient-expanded" aria-expanded="false">
+          Transient expansion
+        </button>
+      </section>
+
+      <section aria-label="Pressed state">
+        <button data-testid="pressed" aria-pressed="true">Pin feature</button>
+        <button data-testid="unpressed" aria-pressed="false">Mute feature</button>
+        <button data-testid="mixed-pressed" aria-pressed="mixed">Mixed feature</button>
+      </section>
+
+      <section aria-label="Readonly state">
+        <label for="readonly-name">Readonly name</label>
+        <input
+          id="readonly-name"
+          data-testid="readonly-name"
+          value="Ada"
+          aria-readonly="false"
+          readonly
+        />
+        <label for="writable-name">Writable name</label>
+        <input
+          id="writable-name"
+          data-testid="writable-name"
+          value="Grace"
+          aria-readonly="true"
+        />
+        <div
+          data-testid="aria-readonly"
+          role="textbox"
+          aria-label="ARIA readonly"
+          aria-readonly="true"
+        >
+          Read only custom field
+        </div>
+        <div
+          data-testid="aria-writable"
+          role="textbox"
+          aria-label="ARIA writable"
+          aria-readonly="false"
+        >
+          Writable custom field
+        </div>
+        <input data-testid="disabled-writable" value="Disabled" disabled />
+        <input data-testid="unsupported-readonly" type="checkbox" readonly />
+      </section>
+
+      <section aria-label="Required state">
+        <input
+          data-testid="required-email"
+          type="email"
+          placeholder="Required email"
+          aria-required="false"
+          required
+        />
+        <input
+          data-testid="optional-email"
+          type="email"
+          placeholder="Optional email"
+          aria-required="true"
+        />
+        <div
+          data-testid="aria-required"
+          role="textbox"
+          aria-label="ARIA required"
+          aria-required="true"
+        ></div>
+        <div
+          data-testid="aria-optional"
+          role="textbox"
+          aria-label="ARIA optional"
+          aria-required="false"
+        ></div>
+        <input data-testid="unsupported-required" type="range" required />
+      </section>
+
+      <section aria-label="Validity state">
+        <input
+          data-testid="invalid-email"
+          type="email"
+          value="not-an-email"
+          aria-invalid="false"
+          required
+        />
+        <input
+          data-testid="valid-email"
+          type="email"
+          value="valid@example.test"
+          aria-invalid="true"
+          required
+        />
+        <div
+          data-testid="aria-invalid"
+          role="textbox"
+          aria-label="ARIA invalid"
+          aria-invalid="true"
+        ></div>
+        <div
+          data-testid="aria-valid"
+          role="textbox"
+          aria-label="ARIA valid"
+          aria-invalid="false"
+        ></div>
+        <div
+          data-testid="grammar-invalid"
+          role="textbox"
+          aria-label="Grammar invalid"
+          aria-invalid="grammar"
+        ></div>
+        <div data-testid="unknown-invalid" role="textbox" aria-invalid="unknown"></div>
+        <input data-testid="unsupported-invalid" type="email" value="bad" disabled />
+      </section>
+
+      <section aria-label="Resolution boundaries">
+        <div id="unsupported-expanded">No expansion semantics</div>
+        <button class="ambiguous-state" aria-expanded="true">Duplicate one</button>
+        <button class="ambiguous-state" aria-expanded="false">Duplicate two</button>
+        <div aria-hidden="true">
+          <button aria-expanded="true">Hidden semantic disclosure</button>
+        </div>
+        <button id="hidden-css-expanded" aria-hidden="true" aria-expanded="true">
+          CSS-only hidden disclosure
+        </button>
+      </section>
+
+      <section aria-label="Open shadow state">
+        <div id="semantic-shadow-host"></div>
+      </section>
+    </main>
+
+    <script>
+      const shadowHost = document.querySelector("#semantic-shadow-host");
+      const shadowRoot = shadowHost.attachShadow({ mode: "open" });
+      shadowRoot.innerHTML = `
+        <style>
+          :host { display: grid; gap: 8px; }
+          button, [role="textbox"] { display: block; padding: 8px; }
+        </style>
+        <button aria-expanded="false">Shadow collapsed</button>
+        <button aria-pressed="true">Shadow pressed</button>
+        <div role="textbox" aria-label="Shadow readonly" aria-readonly="true"></div>
+        <div role="textbox" aria-label="Shadow required" aria-required="true"></div>
+        <div role="textbox" aria-label="Shadow spelling" aria-invalid="spelling"></div>
+      `;
+
+      document.querySelector("#arm-transient").addEventListener("click", () => {
+        const target = document.querySelector('[data-testid="transient-expanded"]');
+        target.setAttribute("aria-expanded", "true");
+        window.setTimeout(() => target.setAttribute("aria-expanded", "false"), 500);
+      });
+    </script>
+  </body>
+</html>

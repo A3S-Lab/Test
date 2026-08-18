@@ -842,6 +842,63 @@ browser path includes forward and reverse Tab, open-shadow focus,
 assigned slots, accessibility-hidden slot ancestry, timed focus movement,
 exact socket cleanup, and a private-runtime leak check.
 
+### Live semantic-state observation
+
+Revision 14 extends the same typed state assertion boundary with five facts
+that cannot be recovered reliably from pixels, copy, or geometry:
+
+```text
+stable target
+    |
+    +--> resolve exactly one live element
+            |
+            +--> select the authoritative native or ARIA state source
+                    |
+                    +--> observe boolean --> compare expected --> pass/mismatch
+                    |
+                    +--> no valid source ---------------------> unsupported
+```
+
+Core represents `Expanded`, `Pressed`, `ReadOnly`, `Required`, and `Invalid`
+as independent `ElementState` values plus one expected boolean. Their inverse
+ACL names do not create separate wire states. This keeps schema, provenance,
+stability, and result comparison shared while preserving a distinct mismatch
+code for every user-facing condition.
+
+The Web adapter resolves the stable locator and observes state inside one page
+evaluation. Native platform state has priority only where the property is
+defined: `<details>.open`; `readOnly` for applicable inputs and textareas;
+`required` for applicable inputs, selects, and textareas; and Constraint
+Validation only when `willValidate` is true. Other elements may use valid ARIA
+tokens. Boolean ARIA accepts exactly `true` or `false`; `aria-invalid` also
+accepts `grammar` and `spelling` as invalid. Mixed pressed state, unknown
+tokens, and absent evidence remain unsupported.
+
+This precedence avoids two opposite errors. Contradictory ARIA cannot override
+real native state, and an inapplicable native property cannot fabricate a
+state that the element does not own. Orthogonality also prevents the adapter
+from treating writable as enabled or valid as optional. Callers combine typed
+expectations when the product requirement spans more than one dimension.
+
+Stable target admission is shared by all five states. ACL rejects browser refs
+and visual points before any driver opens; a current Page Context ref may first
+resolve to a repeatable semantic or CSS locator. Direct programmatic refs fail
+closed in Web. Semantic lookup traverses open Shadow DOM and applies
+accessibility-hidden ancestry, while CSS retains current-document visual-plane
+semantics.
+
+Resolution and support failures remain driver-owned, including for inverse
+expectations. Only a successfully observed boolean can become one of the ten
+condition-specific assertion mismatches. GUI and TUI return explicit
+unsupported errors because their current evidence cannot establish the same
+facts. Runner stability repeats the immutable assertion and preserves later
+driver ownership instead of converting unknown state into a product verdict.
+
+Coverage classifies 1,000 deterministic Web cases, accepts 100 sustained
+windows, rejects 100 transients, and runs 27 passing assertions plus 17
+negative or driver-error classifications in standalone Chromium with native,
+ARIA, open-shadow, precedence, transient-state, and exact-cleanup coverage.
+
 ### Typed control-state observation
 
 Revision 8 adds new `Expectation` wire variants because control state is part

@@ -124,6 +124,31 @@ async fn target_bound_rendered_assertions_fail_closed_on_terminal_surfaces() {
             state: ElementState::FocusWithin,
             expected: true,
         },
+        Expectation::State {
+            target: target.clone(),
+            state: ElementState::Expanded,
+            expected: true,
+        },
+        Expectation::State {
+            target: target.clone(),
+            state: ElementState::Pressed,
+            expected: true,
+        },
+        Expectation::State {
+            target: target.clone(),
+            state: ElementState::ReadOnly,
+            expected: true,
+        },
+        Expectation::State {
+            target: target.clone(),
+            state: ElementState::Required,
+            expected: true,
+        },
+        Expectation::State {
+            target: target.clone(),
+            state: ElementState::Invalid,
+            expected: true,
+        },
         Expectation::Layout {
             target,
             relative_to: Target::Css {

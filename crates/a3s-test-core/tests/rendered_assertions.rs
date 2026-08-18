@@ -224,7 +224,7 @@ suite "invalid-rendered-limit" {{
 
 #[test]
 fn rendered_assertions_retain_the_revision_ten_wire_contract() {
-    assert_eq!(ACTION_PROTOCOL_REVISION, 13);
+    assert_eq!(ACTION_PROTOCOL_REVISION, 14);
     assert_eq!(MAX_RENDERED_TEXT_ITEMS, 256);
     let action = Action::Assert {
         expectation: Expectation::RenderedText {
