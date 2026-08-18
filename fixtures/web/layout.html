@@ -1,0 +1,264 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>A3S Test layout assertion fixture</title>
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        font: 16px/1.5 system-ui, sans-serif;
+        margin: 24px;
+      }
+
+      main {
+        display: grid;
+        gap: 16px;
+      }
+
+      .case {
+        height: 340px;
+        position: relative;
+        width: 380px;
+      }
+
+      .probe {
+        align-items: center;
+        background: #dbeafe;
+        display: flex;
+        justify-content: center;
+        outline: 1px solid #2563eb;
+        overflow: hidden;
+        position: absolute;
+      }
+
+      .reference {
+        background: #f3f4f6;
+        outline-color: #4b5563;
+      }
+
+      .visually-hidden {
+        clip: rect(0 0 0 0);
+        clip-path: inset(50%);
+        height: 1px;
+        overflow: hidden;
+        position: absolute;
+        white-space: nowrap;
+        width: 1px;
+      }
+
+      layout-shadow-fixture {
+        display: block;
+        height: 340px;
+        left: 0;
+        position: absolute;
+        top: 0;
+        width: 380px;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>A3S Test layout assertion fixture</h1>
+      <section id="relation-cases" aria-label="Layout relation cases"></section>
+
+      <section class="case" id="locator-case" aria-label="Locator policy case">
+        <div
+          class="probe reference"
+          data-testid="locator-reference"
+          style="left: 100px; top: 80px; width: 100px; height: 100px"
+        >
+          Reference
+        </div>
+        <button
+          class="probe"
+          type="button"
+          aria-label="Role layout target"
+          style="left: 120px; top: 20px; width: 40px; height: 50px"
+        ></button>
+        <label class="visually-hidden" for="label-layout-target">Label layout target</label>
+        <input
+          class="probe"
+          id="label-layout-target"
+          style="left: 165px; top: 20px; width: 30px; height: 50px"
+        />
+        <input
+          class="probe"
+          placeholder="Placeholder layout target"
+          style="left: 205px; top: 20px; width: 30px; height: 50px"
+        />
+        <span
+          class="probe"
+          style="left: 245px; top: 20px; width: 70px; height: 50px"
+        >Exact layout copy</span>
+        <span
+          class="probe"
+          id="css-aria-hidden"
+          aria-hidden="true"
+          style="left: 320px; top: 20px; width: 40px; height: 50px"
+        >CSS only</span>
+        <button
+          class="probe"
+          type="button"
+          aria-label="Hidden semantic layout target"
+          aria-hidden="true"
+          style="left: 20px; top: 20px; width: 70px; height: 50px"
+        ></button>
+      </section>
+
+      <section class="case" id="shadow-case" aria-label="Open shadow-root case">
+        <layout-shadow-fixture></layout-shadow-fixture>
+      </section>
+
+      <section class="case" id="error-case" aria-label="Error classification case">
+        <div
+          class="probe reference"
+          data-testid="error-reference"
+          style="left: 100px; top: 80px; width: 100px; height: 100px"
+        >
+          Error reference
+        </div>
+        <div
+          class="probe ambiguous-layout"
+          style="left: 120px; top: 20px; width: 40px; height: 50px"
+        >
+          Duplicate A
+        </div>
+        <div
+          class="probe ambiguous-layout"
+          style="left: 165px; top: 20px; width: 40px; height: 50px"
+        >
+          Duplicate B
+        </div>
+        <div
+          class="probe"
+          data-testid="ambiguous-relative-target"
+          style="left: 120px; top: 210px; width: 40px; height: 50px"
+        >
+          Relative target
+        </div>
+        <div
+          class="probe reference ambiguous-relative"
+          style="left: 100px; top: 270px; width: 100px; height: 50px"
+        >
+          Relative A
+        </div>
+        <div
+          class="probe reference ambiguous-relative"
+          style="left: 210px; top: 270px; width: 100px; height: 50px"
+        >
+          Relative B
+        </div>
+      </section>
+
+      <section class="case" id="transient-case" aria-label="Transient geometry case">
+        <div
+          class="probe reference"
+          data-testid="transient-reference"
+          style="left: 100px; top: 80px; width: 100px; height: 100px"
+        >
+          Transient reference
+        </div>
+        <div
+          class="probe"
+          data-testid="transient-target"
+          style="left: 120px; top: 20px; width: 40px; height: 50px"
+        >
+          Transient target
+        </div>
+        <div
+          class="probe"
+          data-testid="invalid-geometry-target"
+          style="left: 220px; top: 20px; width: 40px; height: 50px"
+        >
+          Invalid geometry
+        </div>
+      </section>
+    </main>
+
+    <script>
+      const relationCases = [
+        ["above", [120, 20, 40, 50], [100, 80, 100, 100]],
+        ["below", [120, 190, 40, 50], [100, 80, 100, 100]],
+        ["left-of", [20, 100, 50, 40], [100, 80, 100, 100]],
+        ["right-of", [210, 100, 50, 40], [100, 80, 100, 100]],
+        ["contains", [90, 70, 120, 120], [100, 80, 100, 100]],
+        ["inside", [120, 100, 40, 40], [100, 80, 100, 100]],
+        ["overlaps", [180, 160, 40, 40], [100, 80, 100, 100]],
+        ["not-overlapping", [210, 190, 40, 40], [100, 80, 100, 100]],
+        ["aligned-left", [100, 200, 40, 40], [100, 80, 100, 100]],
+        ["aligned-right", [140, 200, 60, 40], [100, 80, 100, 100]],
+        ["aligned-top", [220, 80, 40, 40], [100, 80, 100, 100]],
+        ["aligned-bottom", [220, 120, 40, 60], [100, 80, 100, 100]],
+        ["aligned-center-x", [130, 200, 40, 40], [100, 80, 100, 100]],
+        ["aligned-center-y", [220, 110, 40, 40], [100, 80, 100, 100]],
+        ["same-width", [220, 200, 100, 40], [100, 80, 100, 100]],
+        ["same-height", [220, 200, 40, 100], [100, 80, 100, 100]],
+        ["same-size", [220, 200, 100, 100], [100, 80, 100, 100]],
+        ["tolerance", [120, 29, 40, 52], [100, 80, 100, 100]],
+      ];
+
+      const relationRoot = document.querySelector("#relation-cases");
+      const position = ([left, top, width, height]) =>
+        `left:${left}px;top:${top}px;width:${width}px;height:${height}px`;
+      for (const [name, targetRect, referenceRect] of relationCases) {
+        const section = document.createElement("section");
+        section.className = "case";
+        section.setAttribute("aria-label", `${name} relation`);
+        section.innerHTML = `
+          <div class="probe reference" data-testid="${name}-reference" style="${position(referenceRect)}">
+            ${name} reference
+          </div>
+          <div class="probe" data-testid="${name}-target" style="${position(targetRect)}">
+            ${name} target
+          </div>
+        `;
+        relationRoot.append(section);
+      }
+
+      class LayoutShadowFixture extends HTMLElement {
+        constructor() {
+          super();
+          const root = this.attachShadow({ mode: "open" });
+          root.innerHTML = `
+            <style>
+              .probe { align-items:center; box-sizing:border-box; display:flex; justify-content:center; outline:1px solid #7c3aed; overflow:hidden; position:absolute; }
+            </style>
+            <div class="probe" data-testid="shadow-reference" style="left:100px;top:80px;width:100px;height:100px">Shadow reference</div>
+            <button class="probe" id="shadow-target" type="button" aria-label="Shadow layout target" style="left:120px;top:20px;width:40px;height:50px"></button>
+          `;
+        }
+      }
+      customElements.define("layout-shadow-fixture", LayoutShadowFixture);
+
+      const transient = document.querySelector('[data-testid="transient-target"]');
+      const transientRect = transient.getBoundingClientRect.bind(transient);
+      let transientSampled = false;
+      transient.getBoundingClientRect = () => {
+        const rect = transientRect();
+        if (!transientSampled) {
+          transientSampled = true;
+          queueMicrotask(() => {
+            transient.style.top = "110px";
+          });
+        }
+        return rect;
+      };
+
+      const invalidGeometry = document.querySelector(
+        '[data-testid="invalid-geometry-target"]',
+      );
+      const validGeometryRect = invalidGeometry.getBoundingClientRect.bind(invalidGeometry);
+      let geometryReads = 0;
+      invalidGeometry.getBoundingClientRect = () => {
+        geometryReads += 1;
+        const rect = validGeometryRect();
+        if (geometryReads === 1) return rect;
+        return new DOMRect(rect.x, rect.y, 0, rect.height);
+      };
+    </script>
+  </body>
+</html>

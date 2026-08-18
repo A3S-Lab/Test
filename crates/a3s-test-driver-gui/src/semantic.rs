@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 
-use a3s_test_core::{DriverError, Target};
+use a3s_test_core::{DriverError, LayoutRect, Target};
 use serde_json::{json, Value};
 
 use crate::api::{CuaElement, CuaFrame, CuaWindowState};
@@ -330,6 +330,12 @@ impl SemanticElement {
             reference: self.reference.clone(),
             token: self.token.clone(),
             value: self.value.clone(),
+            frame: self.frame.as_ref().map(|frame| LayoutRect {
+                x: frame.x,
+                y: frame.y,
+                width: frame.w,
+                height: frame.h,
+            }),
         }
     }
 
@@ -363,6 +369,7 @@ pub(crate) struct ElementAddress {
     pub reference: String,
     pub token: String,
     pub value: Option<String>,
+    pub frame: Option<LayoutRect>,
 }
 
 struct VisualSnapshot {

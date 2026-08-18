@@ -5,12 +5,13 @@ use serde_json::Value;
 mod assertions;
 
 pub use assertions::{
-    AssertionMode, AssertionStability, ElementState, Expectation, WaitMode,
-    DEFAULT_ASSERTION_SAMPLE_INTERVAL_MS, MAX_ASSERTION_STABILITY_MS,
-    MAX_ASSERTION_STABILITY_SAMPLES, MAX_RENDERED_TEXT_ITEMS, MIN_ASSERTION_STABILITY_MS,
+    AssertionMode, AssertionStability, ElementState, Expectation, LayoutRect, LayoutRelation,
+    WaitMode, DEFAULT_ASSERTION_SAMPLE_INTERVAL_MS, MAX_ASSERTION_STABILITY_MS,
+    MAX_ASSERTION_STABILITY_SAMPLES, MAX_LAYOUT_COORDINATE_ABS, MAX_LAYOUT_TOLERANCE_PX,
+    MAX_RENDERED_TEXT_ITEMS, MIN_ASSERTION_STABILITY_MS,
 };
 
-pub const ACTION_PROTOCOL_REVISION: u32 = 10;
+pub const ACTION_PROTOCOL_REVISION: u32 = 11;
 pub const PAGE_CONTEXT_PROTOCOL: &str = "a3s.test.page-context/1";
 pub const REPAIR_PROTOCOL: &str = "a3s.test.repair/1";
 

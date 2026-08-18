@@ -80,6 +80,12 @@ fn local_web_fixture_has_deterministic_routes_and_owned_lifecycle() {
         .expect("UTF-8 rendered assertion fixture")
         .contains("data-testid=\"total-copy\""));
 
+    let layout = get(&origin, "/layout.html").expect("layout assertion fixture");
+    assert_eq!(layout.status, 200);
+    assert!(String::from_utf8(layout.body)
+        .expect("UTF-8 layout assertion fixture")
+        .contains("A3S Test layout assertion fixture"));
+
     let containment = get(&origin, "/origin-policy.html").expect("containment fixture");
     assert_eq!(containment.status, 200);
     let containment = String::from_utf8(containment.body).expect("UTF-8 containment fixture");
@@ -103,7 +109,7 @@ fn local_web_fixture_has_deterministic_routes_and_owned_lifecycle() {
     let missing = get(&origin, "/missing").expect("missing route");
     assert_eq!(missing.status, 404);
     assert!(fixture.blocked_requests().is_empty());
-    assert_eq!(fixture.primary_requests().len(), 9);
+    assert_eq!(fixture.primary_requests().len(), 10);
 
     drop(fixture);
     assert!(

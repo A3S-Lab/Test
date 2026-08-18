@@ -12,7 +12,7 @@ use std::time::Duration;
 #[cfg(any(unix, windows))]
 use a3s_test_core::{Action, ScenarioContext, SurfaceDriver as _, TestStep, WaitCondition};
 #[cfg(unix)]
-use a3s_test_core::{Expectation, Target};
+use a3s_test_core::{Expectation, LayoutRelation, Target};
 use serde_json::Value;
 
 use super::*;
@@ -108,7 +108,18 @@ async fn target_bound_rendered_assertions_fail_closed_on_terminal_surfaces() {
             target: target.clone(),
             values: vec!["Ready".to_string()],
         },
-        Expectation::VisibleCount { target, count: 1 },
+        Expectation::VisibleCount {
+            target: target.clone(),
+            count: 1,
+        },
+        Expectation::Layout {
+            target,
+            relative_to: Target::Css {
+                selector: "#reference".to_string(),
+            },
+            relation: LayoutRelation::Above,
+            tolerance_px: 0,
+        },
     ] {
         let error = session
             .execute(&step(

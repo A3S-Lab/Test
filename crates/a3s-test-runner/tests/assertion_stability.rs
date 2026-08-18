@@ -4,7 +4,8 @@ use std::time::Duration;
 
 use a3s_test_core::{
     Action, AssertionStability, DriverError, DriverSession, ElementState, Expectation,
-    ScenarioContext, StepOutput, Surface, SurfaceDriver, Target, TestScenario, TestStep, TestSuite,
+    LayoutRelation, ScenarioContext, StepOutput, Surface, SurfaceDriver, Target, TestScenario,
+    TestStep, TestSuite,
 };
 use a3s_test_runner::{RetryPolicy, RunStatus, Runner, RunnerOptions};
 use async_trait::async_trait;
@@ -66,6 +67,36 @@ impl DriverSession for TransientSession {
                 json!({ "expected": count, "actual": count }),
                 "test.assert.visible_count",
             ),
+            Expectation::Layout {
+                target,
+                relative_to,
+                relation,
+                tolerance_px,
+            } => {
+                let offset = self.sample as f64;
+                (
+                    json!({
+                        "target": target,
+                        "relative_to": relative_to,
+                        "relation": relation,
+                        "tolerance_px": tolerance_px,
+                        "target_rect": {
+                            "x": 120.0 + offset,
+                            "y": 40.0 + offset,
+                            "width": 40.0,
+                            "height": 50.0,
+                        },
+                        "relative_rect": {
+                            "x": 100.0 + offset,
+                            "y": 100.0 + offset,
+                            "width": 100.0,
+                            "height": 100.0,
+                        },
+                        "matched": true,
+                    }),
+                    "test.assert.layout",
+                )
+            }
             _ => (json!({ "visible": true }), "test.assert.visible"),
         };
         self.executions.fetch_add(1, Ordering::SeqCst);
@@ -234,6 +265,91 @@ async fn stable_control_state_assertions_accept_100_of_100_consistent_states() {
         assert_eq!(data["assertion"]["last"]["actual"], true);
         assert_eq!(data["stability"]["outcome"], "passed");
     }
+}
+
+#[tokio::test]
+async fn stable_layout_assertions_reject_100_of_100_transient_relations() {
+    let executions = Arc::new(AtomicUsize::new(0));
+    let runner = scripted_runner(Arc::clone(&executions), false);
+    let stability = AssertionStability {
+        stable_for_ms: 20,
+        sample_interval_ms: 5,
+    };
+
+    let result = runner
+        .run(&layout_suite(stability), CancellationToken::new())
+        .await;
+
+    assert_eq!(result.status, RunStatus::Failed);
+    assert_eq!(result.scenarios.len(), DATASET_SIZE);
+    for scenario in &result.scenarios {
+        let step = &scenario.steps[0];
+        let data = &step
+            .output
+            .as_ref()
+            .expect("layout stability evidence")
+            .data;
+        assert_eq!(scenario.status, RunStatus::Failed);
+        assert_eq!(step.attempts, 2);
+        assert_eq!(
+            step.error.as_ref().map(|error| error.code.as_str()),
+            Some("test.assert.unstable")
+        );
+        assert_eq!(data["assertion"]["first"]["relation"], "above");
+        assert_eq!(data["assertion"]["first"]["matched"], true);
+        assert!(data["assertion"]["first"]["target_rect"].is_object());
+        assert!(data["assertion"]["first"]["relative_rect"].is_object());
+        assert_eq!(data["stability"]["outcome"], "unstable");
+        assert_eq!(data["stability"]["samples"], 2);
+    }
+    assert_eq!(executions.load(Ordering::SeqCst), DATASET_SIZE * 2);
+}
+
+#[tokio::test]
+async fn stable_layout_assertions_accept_100_of_100_consistent_relations_with_dual_rect_evidence() {
+    let executions = Arc::new(AtomicUsize::new(0));
+    let runner = scripted_runner(Arc::clone(&executions), true);
+    let stability = AssertionStability {
+        stable_for_ms: 20,
+        sample_interval_ms: 5,
+    };
+
+    let result = runner
+        .run(&layout_suite(stability), CancellationToken::new())
+        .await;
+
+    assert_eq!(result.status, RunStatus::Passed);
+    assert_eq!(result.scenarios.len(), DATASET_SIZE);
+    let mut measured_executions = 0_usize;
+    for scenario in &result.scenarios {
+        let step = &scenario.steps[0];
+        let data = &step
+            .output
+            .as_ref()
+            .expect("layout stability evidence")
+            .data;
+        let first = &data["assertion"]["first"];
+        let last = &data["assertion"]["last"];
+        let samples = data["stability"]["samples"]
+            .as_u64()
+            .expect("layout sample count");
+        assert_eq!(scenario.status, RunStatus::Passed);
+        assert_eq!(first["relation"], "above");
+        assert_eq!(last["relation"], "above");
+        assert_eq!(first["matched"], true);
+        assert_eq!(last["matched"], true);
+        assert!(first["target_rect"].is_object());
+        assert!(first["relative_rect"].is_object());
+        assert!(last["target_rect"].is_object());
+        assert!(last["relative_rect"].is_object());
+        assert_ne!(first["target_rect"]["x"], last["target_rect"]["x"]);
+        assert_ne!(first["relative_rect"]["x"], last["relative_rect"]["x"]);
+        assert_eq!(data["stability"]["outcome"], "passed");
+        assert!((2..=stability.planned_samples()).contains(&samples));
+        measured_executions += usize::try_from(samples).expect("bounded layout samples");
+    }
+    assert_eq!(executions.load(Ordering::SeqCst), measured_executions);
+    assert!((DATASET_SIZE * 2..=DATASET_SIZE * 5).contains(&measured_executions));
 }
 
 #[tokio::test]
@@ -408,6 +524,39 @@ fn state_suite(stability: AssertionStability) -> TestSuite {
                             },
                             state: ElementState::Checked,
                             expected: true,
+                        },
+                    },
+                    stability: Some(stability),
+                    assertion_mode: Default::default(),
+                    wait_mode: Default::default(),
+                }],
+            })
+            .collect(),
+    }
+}
+
+fn layout_suite(stability: AssertionStability) -> TestSuite {
+    TestSuite {
+        name: "layout-stability-dataset".to_string(),
+        version: 1,
+        scenarios: (0..DATASET_SIZE)
+            .map(|index| TestScenario {
+                id: format!("layout-{index}"),
+                name: format!("Layout {index}"),
+                surface: Surface::Web,
+                timeout_ms: 1_000,
+                steps: vec![TestStep {
+                    id: "assert-layout".to_string(),
+                    action: Action::Assert {
+                        expectation: Expectation::Layout {
+                            target: Target::TestId {
+                                value: format!("subject-{index}"),
+                            },
+                            relative_to: Target::TestId {
+                                value: format!("reference-{index}"),
+                            },
+                            relation: LayoutRelation::Above,
+                            tolerance_px: 1,
                         },
                     },
                     stability: Some(stability),

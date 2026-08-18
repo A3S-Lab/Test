@@ -38,7 +38,7 @@ a3s-test agent click <ref> --session <name> --observation <id> --json
 a3s-test agent finish --session <name> --status passed --summary <text> --json
 ```
 
-`agent act --action-json` 暴露完整动作 Schema。v0.17.0 的动作协议修订为 10，其中包含修订 7 的选择范围 `insert_text`、修订 8 的实时控件状态断言、修订 9 的目标绑定渲染输出断言，以及修订 10 的有序渲染文本集合。`insert_text` 仍然只作用于先前已经建立的编辑上下文，不携带新的目标或定位权限。
+`agent act --action-json` 暴露完整动作 Schema。v0.17.0 的动作协议修订为 11，其中包含修订 7 的选择范围 `insert_text`、修订 8 的实时控件状态断言、修订 9 的目标绑定渲染输出断言、修订 10 的有序渲染文本集合，以及修订 11 的双目标渲染布局关系。`insert_text` 仍然只作用于先前已经建立的编辑上下文，不携带新的目标或定位权限。
 
 ## ACL 套件
 
@@ -182,6 +182,31 @@ CSS 数量遵循视觉渲染。单独的 `aria-hidden` 仍有像素，因此计�
 
 修订 9 数据集精确分类 600/600 个标量文案与数量案例。修订 10 新增 600/600 个有序向量案例，覆盖匹配、错序、重复项或内容错误、空集合匹配、空集合与非空预期不符，以及非法 selector。组合稳定性数据集接受 300/300 个持续一致的标量文案、向量和数量窗口，并拒绝 300/300 个瞬态窗口。真实 Chromium CLI 回归证明 12 个通过观察、12 个错误类别、三个通过和三个被拒绝的 100 ms 窗口，以及准确 runtime 清理。
 
+## 用渲染几何证明空间关系
+
+Page Context 可以描述几何，但回归测试仍然需要明确的产品断言。修订 11 在同一次 surface 观察中比较两个重新解析的矩形。
+
+```acl
+expect "checkout-below-summary" {
+    target = testid("checkout")
+    relative_to = role("region", "Order summary")
+    layout = "below"
+    tolerance_px = 1
+    stable_for_ms = 300
+    sample_interval_ms = 25
+}
+```
+
+封闭关系词表覆盖方向关系 `above`、`below`、`left_of`、`right_of`，包含关系 `contains`、`inside`，相交关系 `overlaps`、`not_overlapping`，六种边缘或中心对齐，以及宽、高、尺寸相同。容差必须是 0 到 1,024 的整数 CSS 像素。方向与包含允许边界在容差内侵入，相交要求两个轴的交集都大于容差，对齐与尺寸则比较绝对差。
+
+两个目标都必须是可重复解析的语义或 CSS 定位器。浏览器 ref 与 visual point 的几何只属于一次观察，因此在 ACL 准入阶段失败。当前 Page Context ref 只有在两个目标都解析成稳定定位器后才能使用。Web 随后在一次页面求值中解析并读取两个矩形，避免动态页面把不同时间点的几何拼接成伪证据。
+
+CSS 遵循视觉渲染可见性，因此仅设置 `aria-hidden` 但仍有像素的目标可以测量。语义定位器遵循可访问交互平面，会排除可访问性隐藏祖先，并穿透开放 Shadow DOM。缺失、歧义、非法、语义隐藏或畸形几何仍由驱动负责；只有两个合法矩形违反指定关系时才返回 `test.assert.layout`。
+
+通过结果记录两个目标、两个矩形、关系、容差与 `matched = true`。稳定性采样把完整载荷保存在 `assertion.first` 和 `assertion.last` 中，后续关系不成立时返回 `test.assert.unstable`。GUI 要求两个 frame 来自同一份新鲜 CUA snapshot；TUI 不会把终端单元格冒充浏览器几何，而是明确关闭失败。
+
+当前检入证据精确分类 3,400/3,400 个确定性关系案例，接受 100/100 个持续窗口，拒绝 100/100 个瞬态窗口，并在 standalone Chromium 中验证全部 17 种关系、25 个正向断言和 15 个负向或驱动错误案例，同时完成精确 fixture 与 runtime 清理。
+
 ## 证明界面已经没有可见匹配
 
 当产品要求是关闭、移除或隐藏某个目标时，使用 `hidden`。稳定定位器没有匹配元素，或所有匹配元素都没有渲染出的可见边界时，断言通过。
@@ -192,7 +217,7 @@ expect "checkout-dialog-closed" {
 }
 ```
 
-`hidden` 是 Runner 围绕现有正向可见性断言执行的步骤策略，不会增加 Action 变体。当前协议已推进到修订 10，是因为上面的类型化 expectation。Runner 向 surface 驱动发送正向探测，再确定性地分类结果。
+`hidden` 是 Runner 围绕现有正向可见性断言执行的步骤策略，不会增加 Action 变体。当前协议已推进到修订 11，是因为上面的类型化 expectation。Runner 向 surface 驱动发送正向探测，再确定性地分类结果。
 
 | 正向探测结果                      | `hidden` 断言结果                                                 |
 | --------------------------------- | ----------------------------------------------------------------- |
@@ -224,7 +249,7 @@ wait "checkout-dialog-closed" {
 }
 ```
 
-ACL 编译器仍保存 `Action::Wait(WaitCondition::Visible(target))`，只增加 Runner 负责的 `WaitMode::Hidden`。在当前 Action 协议修订 10 下，它仍然复用早先的可见性 Action 变体。Runner 先执行一次立即的正向可见性断言；目标仍可见时，每 50 ms 重复一次。
+ACL 编译器仍保存 `Action::Wait(WaitCondition::Visible(target))`，只增加 Runner 负责的 `WaitMode::Hidden`。在当前 Action 协议修订 11 下，它仍然复用早先的可见性 Action 变体。Runner 先执行一次立即的正向可见性断言；目标仍可见时，每 50 ms 重复一次。
 
 | 正向探测结果                      | 隐藏等待结果                                                            |
 | --------------------------------- | ----------------------------------------------------------------------- |

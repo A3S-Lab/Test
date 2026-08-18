@@ -5,8 +5,9 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 
 use a3s_test_core::{
-    Action, DriverError, DriverSession, Evidence, Expectation, ScenarioContext, StepOutput,
-    Surface, SurfaceDriver, SurfaceObservation, Target, TestStep,
+    Action, DriverError, DriverSession, Evidence, Expectation, LayoutRect, ScenarioContext,
+    StepOutput, Surface, SurfaceDriver, SurfaceObservation, Target, TestStep,
+    MAX_LAYOUT_TOLERANCE_PX,
 };
 use async_trait::async_trait;
 use serde_json::{json, Map, Value};
@@ -692,6 +693,50 @@ impl GuiSession {
                     "actual": actual,
                 })))
             }
+            Expectation::Layout {
+                target,
+                relative_to,
+                relation,
+                tolerance_px,
+            } => {
+                if *tolerance_px > MAX_LAYOUT_TOLERANCE_PX {
+                    return Err(DriverError::new(
+                        "test.driver.gui.assertion_invalid",
+                        format!(
+                            "layout tolerance cannot exceed {MAX_LAYOUT_TOLERANCE_PX} pixels"
+                        ),
+                    ));
+                }
+                if matches!(target, Target::Ref { .. } | Target::VisualPoint { .. })
+                    || matches!(relative_to, Target::Ref { .. } | Target::VisualPoint { .. })
+                {
+                    return Err(DriverError::new(
+                        "test.driver.gui.assertion_unsupported",
+                        "layout assertions require two stable semantic or automation-ID targets",
+                    ));
+                }
+                let target_address = self.semantics.resolve(target)?;
+                let relative_address = self.semantics.resolve(relative_to)?;
+                let target_rect = layout_frame(target_address.frame, "target")?;
+                let relative_rect = layout_frame(relative_address.frame, "relative_to target")?;
+                if !relation.matches(target_rect, relative_rect, *tolerance_px) {
+                    return Err(DriverError::new(
+                        "test.assert.layout",
+                        format!(
+                            "expected {target_rect:?} to be {relation:?} relative to {relative_rect:?} within {tolerance_px}px"
+                        ),
+                    ));
+                }
+                Ok(StepOutput::new("GUI layout relation matched").with_data(json!({
+                    "target_ref": target_address.reference,
+                    "relative_ref": relative_address.reference,
+                    "relation": relation,
+                    "tolerance_px": tolerance_px,
+                    "target_rect": layout_rect_data(target_rect),
+                    "relative_rect": layout_rect_data(relative_rect),
+                    "matched": true,
+                })))
+            }
             Expectation::Url(_) => Err(DriverError::new(
                 "test.driver.gui.assertion_unsupported",
                 "URL assertions are not available on GUI surfaces",
@@ -720,6 +765,31 @@ impl GuiSession {
                 media_type: "image/png".to_string(),
             }))
     }
+}
+
+fn layout_frame(frame: Option<LayoutRect>, subject: &str) -> Result<LayoutRect, DriverError> {
+    let frame = frame.ok_or_else(|| {
+        DriverError::new(
+            "test.driver.gui.assertion_unsupported",
+            format!("the matched GUI {subject} does not expose a frame"),
+        )
+    })?;
+    if !frame.is_valid() {
+        return Err(DriverError::new(
+            "test.driver.gui.cua_output_invalid",
+            format!("the matched GUI {subject} exposes invalid layout geometry"),
+        ));
+    }
+    Ok(frame)
+}
+
+fn layout_rect_data(rect: LayoutRect) -> Value {
+    json!({
+        "x": rect.x,
+        "y": rect.y,
+        "width": rect.width,
+        "height": rect.height,
+    })
 }
 
 impl Drop for GuiSession {

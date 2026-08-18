@@ -38,7 +38,7 @@ a3s-test agent click <ref> --session <name> --observation <id> --json
 a3s-test agent finish --session <name> --status passed --summary <text> --json
 ```
 
-`agent act --action-json` exposes the complete action schema. In v0.17.0, action protocol revision 10 includes the revision-7 selection-scoped `insert_text` action, revision-8 live control-state expectations, revision-9 target-bound rendered-output expectations, and revision-10 ordered rendered-text collections. `insert_text` still acts only inside an editing context established by an earlier action and carries no target or locator authority of its own.
+`agent act --action-json` exposes the complete action schema. In v0.17.0, action protocol revision 11 includes the revision-7 selection-scoped `insert_text` action, revision-8 live control-state expectations, revision-9 target-bound rendered-output expectations, revision-10 ordered rendered-text collections, and revision-11 two-target rendered-layout relations. `insert_text` still acts only inside an editing context established by an earlier action and carries no target or locator authority of its own.
 
 ## ACL suites
 
@@ -182,6 +182,31 @@ CSS counting follows rendered pixels: `aria-hidden` by itself still counts, whil
 
 The revision-9 datasets classify 600/600 scalar-text/count cases. Revision 10 adds 600/600 ordered-vector cases covering matches, reorders, duplicate/content mismatches, empty matches, empty-versus-expected mismatches, and invalid selectors. Combined stability datasets accept 300/300 consistent scalar-text/vector/count windows and reject 300/300 transients. The standalone Chromium CLI regression proves 12 passing observations, 12 error classes, three accepted and three rejected 100 ms windows, and exact runtime cleanup.
 
+## Prove spatial relationships from rendered geometry
+
+Page Context can describe geometry, but a regression still needs an explicit product claim. Revision 11 compares two freshly resolved rectangles in one surface observation:
+
+```acl
+expect "checkout-below-summary" {
+    target = testid("checkout")
+    relative_to = role("region", "Order summary")
+    layout = "below"
+    tolerance_px = 1
+    stable_for_ms = 300
+    sample_interval_ms = 25
+}
+```
+
+The closed vocabulary covers direction (`above`, `below`, `left_of`, `right_of`), containment (`contains`, `inside`), intersection (`overlaps`, `not_overlapping`), six edge/center alignments, and width/height/size equality. Tolerance is a bounded integer from 0 through 1,024 CSS pixels. It allows limited edge intrusion for direction and containment, requires overlap greater than the tolerance on both axes, and uses absolute difference for alignment and size.
+
+Both targets must be repeatable semantic or CSS locators. Browser refs and visual points fail ACL admission because their geometry belongs to one observation. Current Page Context refs remain usable only after both resolve to stable locators. Web then resolves and reads both rectangles in one page evaluation, preventing a dynamic page from combining geometry sampled at different moments.
+
+CSS follows visual rendered visibility, so an otherwise visible `aria-hidden` target remains measurable. Semantic locators follow the accessible interaction plane, exclude accessibility-hidden ancestry, and traverse open Shadow DOM. Missing, ambiguous, invalid, hidden-semantic, and malformed geometry stay driver errors. Only two valid rectangles that violate the requested relation become `test.assert.layout`.
+
+A passing result records both targets, both rectangles, relation, tolerance, and `matched = true`. Stability retains that complete payload under `assertion.first` and `assertion.last`; a later relation mismatch becomes `test.assert.unstable`. GUI requires both frames in one fresh CUA snapshot, while TUI fails closed instead of treating terminal cells as browser geometry.
+
+The checked-in evidence classifies 3,400/3,400 deterministic relation cases, accepts 100/100 sustained windows, rejects 100/100 transients, and verifies all 17 relations, 25 positive assertions, and 15 negative or driver-error cases in standalone Chromium with exact fixture and runtime cleanup.
+
 ## Prove that UI has no visible match
 
 Use `hidden` when closing, dismissing, removing, or visually hiding a target is the product requirement. The assertion passes when the stable locator has no matching element or when every match has no rendered visible box.
@@ -192,7 +217,7 @@ expect "checkout-dialog-closed" {
 }
 ```
 
-`hidden` is runner policy around the existing positive visibility assertion. It does not add an action variant; the current protocol is revision 10 because of the typed expectations above. The runner sends a positive probe to the surface driver and classifies its result deterministically.
+`hidden` is runner policy around the existing positive visibility assertion. It does not add an action variant; the current protocol is revision 11 because of the typed expectations above. The runner sends a positive probe to the surface driver and classifies its result deterministically.
 
 | Positive probe result                  | Hidden assertion result                                                                |
 | -------------------------------------- | -------------------------------------------------------------------------------------- |
@@ -224,7 +249,7 @@ wait "checkout-dialog-closed" {
 }
 ```
 
-The ACL compiler keeps `Action::Wait(WaitCondition::Visible(target))` and adds runner-owned `WaitMode::Hidden`. This still reuses the earlier visible-action variant under current action protocol revision 10. Runner executes an immediate positive visibility assertion, then repeats it every 50 ms while the target remains visible.
+The ACL compiler keeps `Action::Wait(WaitCondition::Visible(target))` and adds runner-owned `WaitMode::Hidden`. This still reuses the earlier visible-action variant under current action protocol revision 11. Runner executes an immediate positive visibility assertion, then repeats it every 50 ms while the target remains visible.
 
 | Positive probe result                  | Hidden wait result                                                                               |
 | -------------------------------------- | ------------------------------------------------------------------------------------------------ |

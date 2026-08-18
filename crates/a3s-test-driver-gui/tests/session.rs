@@ -5,7 +5,8 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use a3s_test_core::{
-    Action, ElementState, Expectation, ScenarioContext, Surface, SurfaceDriver, Target, TestStep,
+    Action, ElementState, Expectation, LayoutRelation, ScenarioContext, Surface, SurfaceDriver,
+    Target, TestStep,
 };
 use a3s_test_driver_gui::{
     ApplicationIdentity, AttachSpec, CuaCompatibility, CuaEndpoint, CuaTransport,
@@ -783,6 +784,80 @@ async fn gui_value_assertions_use_cua_values_without_inventing_boolean_state() {
     }
 
     session.close().await.expect("close GUI session");
+}
+
+#[tokio::test]
+async fn gui_layout_assertions_compare_two_frames_from_one_fresh_snapshot() {
+    let temp = TempDir::new().expect("temp dir");
+    let transport = FakeTransport::new(FakeOptions::default());
+    let mut session = driver(launch_config(&temp), Arc::clone(&transport))
+        .open(&context(&temp))
+        .await
+        .expect("GUI session");
+    let save = Target::AutomationId {
+        value: "save-button".to_string(),
+    };
+    let email = Target::Label {
+        value: "Email".to_string(),
+    };
+
+    for relation in [
+        LayoutRelation::Above,
+        LayoutRelation::AlignedLeft,
+        LayoutRelation::SameHeight,
+    ] {
+        let output = session
+            .execute(&layout_step(save.clone(), email.clone(), relation, 0))
+            .await
+            .unwrap_or_else(|error| panic!("GUI {relation:?} relation failed: {error}"));
+        assert_eq!(output.data["matched"], true);
+        assert_eq!(output.data["target_rect"]["x"], 10.0);
+        assert_eq!(output.data["relative_rect"]["y"], 50.0);
+    }
+
+    for relation in [LayoutRelation::Below, LayoutRelation::SameWidth] {
+        let error = session
+            .execute(&layout_step(save.clone(), email.clone(), relation, 0))
+            .await
+            .expect_err("violating GUI layout relation");
+        assert_eq!(error.code(), "test.assert.layout");
+    }
+
+    let unstable = session
+        .execute(&layout_step(
+            Target::Ref {
+                value: "@g1.1".to_string(),
+            },
+            email,
+            LayoutRelation::Above,
+            0,
+        ))
+        .await
+        .expect_err("GUI layout refs are not stable across refresh");
+    assert_eq!(unstable.code(), "test.driver.gui.assertion_unsupported");
+    session.close().await.expect("close GUI session");
+}
+
+fn layout_step(
+    target: Target,
+    relative_to: Target,
+    relation: LayoutRelation,
+    tolerance_px: u32,
+) -> TestStep {
+    TestStep {
+        id: format!("layout-{relation:?}"),
+        action: Action::Assert {
+            expectation: Expectation::Layout {
+                target,
+                relative_to,
+                relation,
+                tolerance_px,
+            },
+        },
+        stability: None,
+        assertion_mode: Default::default(),
+        wait_mode: Default::default(),
+    }
 }
 
 #[tokio::test]

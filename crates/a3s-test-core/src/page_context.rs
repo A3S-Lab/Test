@@ -202,11 +202,21 @@ fn action_targets(action: &Action) -> impl Iterator<Item = &Target> {
         | Action::Wait {
             condition: WaitCondition::Visible(target),
         } => targets.push(target),
-        Action::Assert { expectation } => {
-            if let Some(target) = expectation_target(expectation) {
+        Action::Assert { expectation } => match expectation {
+            Expectation::Layout {
+                target,
+                relative_to,
+                ..
+            } => {
                 targets.push(target);
+                targets.push(relative_to);
             }
-        }
+            _ => {
+                if let Some(target) = expectation_target(expectation) {
+                    targets.push(target);
+                }
+            }
+        },
         Action::Drag { source, target } => {
             targets.push(source);
             targets.push(target);
@@ -240,11 +250,21 @@ fn visit_action_targets(
         | Action::Wait {
             condition: WaitCondition::Visible(target),
         } => visitor(target)?,
-        Action::Assert { expectation } => {
-            if let Some(target) = expectation_target_mut(expectation) {
+        Action::Assert { expectation } => match expectation {
+            Expectation::Layout {
+                target,
+                relative_to,
+                ..
+            } => {
                 visitor(target)?;
+                visitor(relative_to)?;
             }
-        }
+            _ => {
+                if let Some(target) = expectation_target_mut(expectation) {
+                    visitor(target)?;
+                }
+            }
+        },
         Action::Drag { source, target } => {
             visitor(source)?;
             visitor(target)?;
@@ -267,7 +287,7 @@ fn expectation_target(expectation: &Expectation) -> Option<&Target> {
         | Expectation::State { target, .. }
         | Expectation::Value { target, .. }
         | Expectation::SelectedValues { target, .. } => Some(target),
-        Expectation::TextVisible(_) | Expectation::Url(_) => None,
+        Expectation::TextVisible(_) | Expectation::Url(_) | Expectation::Layout { .. } => None,
     }
 }
 
@@ -280,7 +300,7 @@ fn expectation_target_mut(expectation: &mut Expectation) -> Option<&mut Target> 
         | Expectation::State { target, .. }
         | Expectation::Value { target, .. }
         | Expectation::SelectedValues { target, .. } => Some(target),
-        Expectation::TextVisible(_) | Expectation::Url(_) => None,
+        Expectation::TextVisible(_) | Expectation::Url(_) | Expectation::Layout { .. } => None,
     }
 }
 

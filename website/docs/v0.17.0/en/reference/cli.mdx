@@ -111,7 +111,7 @@ a3s-test agent act \
   --json
 ```
 
-Generate the complete revision-7 JSON Schema with `a3s-test agent schema`. Current action types are grouped below.
+Generate the complete revision-11 JSON Schema with `a3s-test agent schema`. Current action types are grouped below.
 
 | Category              | `type` values                                                                                                    |
 | --------------------- | ---------------------------------------------------------------------------------------------------------------- |
@@ -296,6 +296,47 @@ Both planes exclude zero-geometry elements. They do not claim viewport intersect
 
 All three conditions accept `stable_for_ms`. A later scalar-text, ordered-vector, or count mismatch becomes `test.assert.unstable`; a driver failure keeps its original code. Revision 9 covers 600/600 deterministic scalar-text/count classifications. Revision 10 adds 600/600 ordered-vector classifications. Combined stability evidence covers 300/300 consistent and 300/300 transient windows, plus a real Chromium CLI suite with 12 positive observations, 12 negative classifications, three accepted and three rejected 100 ms windows, and no private runtime leak.
 
+### Rendered-layout ACL expectations
+
+Action protocol revision 11 compares the rendered geometry of two stable targets.
+
+```acl
+expect "checkout-below-summary" {
+    target = testid("checkout")
+    relative_to = role("region", "Order summary")
+    layout = "below"
+    tolerance_px = 1
+    stable_for_ms = 300
+    sample_interval_ms = 25
+}
+```
+
+`target`, `relative_to`, and `layout` are required. Both targets accept role, text, test ID, label, placeholder, or CSS locators. ACL rejects `ref()` and `visual_point()` with `test.spec.layout_target_unstable`; each is bound to one observation and cannot be re-resolved through a stability window. Current Page Context refs remain usable after both resolve to stable locators. `tolerance_px` defaults to zero and accepts only integers through 1,024.
+
+| Group        | Relations                                                                                                | Comparison rule                                                                 |
+| ------------ | -------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| Direction    | `above`, `below`, `left_of`, `right_of`                                                                  | Boundary intrusion cannot exceed the tolerance                                  |
+| Containment  | `contains`, `inside`                                                                                     | Every containing edge may miss by at most the tolerance                         |
+| Intersection | `overlaps`, `not_overlapping`                                                                            | Overlap exceeds the tolerance on both axes; non-overlap needs one axis at/below |
+| Alignment    | `aligned_left`, `aligned_right`, `aligned_top`, `aligned_bottom`, `aligned_center_x`, `aligned_center_y` | Absolute edge or center difference is at most the tolerance                     |
+| Size         | `same_width`, `same_height`, `same_size`                                                                 | Absolute width or height difference is at most the tolerance                    |
+
+Web resolves both targets and captures both rectangles in one page evaluation. CSS uses visual rendered visibility, including an otherwise visible `aria-hidden` element. Semantic locators additionally exclude accessibility-hidden ancestry and traverse open Shadow DOM. A passing payload returns both targets, both rectangles, relation, tolerance, and `matched = true`.
+
+| Code                                | Boundary                                                                                     |
+| ----------------------------------- | -------------------------------------------------------------------------------------------- |
+| `test.spec.layout_target_unstable`  | Either ACL target is a ref or visual point                                                   |
+| `test.spec.layout_relation_unknown` | `layout` is outside the closed 17-relation vocabulary                                        |
+| `test.spec.layout_tolerance_limit`  | ACL tolerance exceeds 1,024 pixels                                                           |
+| `test.driver.web.target_not_found`  | Either stable target has no eligible match                                                   |
+| `test.driver.web.target_ambiguous`  | Either stable target has multiple eligible matches                                           |
+| `test.driver.web.target_invalid`    | Either CSS selector is invalid                                                               |
+| `test.driver.web.output_invalid`    | Either rectangle or the untrusted result envelope is malformed or outside the geometry bound |
+| `test.assert.layout`                | Two valid rectangles violate the requested relation                                          |
+| `test.assert.unstable`              | A later stability sample violates a relation that initially matched                          |
+
+GUI requires both frames in one fresh CUA snapshot. TUI returns an explicit unsupported error. Stability output retains the first and last complete dual-rectangle payloads; later resolution or geometry failure keeps driver ownership. The checked-in evidence covers 3,400/3,400 deterministic cases, 100/100 accepted sustained windows, 100/100 rejected transients, all 17 relations, 25 positive assertions, and 15 negative/error classifications in standalone Chromium with exact cleanup.
+
 ### Hidden ACL expectations
 
 `hidden` asserts that a stable target locator has no visible match at the current observation. Both an absent target and a matching element without a rendered visible box satisfy the condition.
@@ -306,7 +347,7 @@ expect "dialog-closed" {
 }
 ```
 
-The ACL compiler stores the existing `Action::Assert(Expectation::Visible(target))` plus a runner-owned hidden mode. This policy adds no action variant; the current protocol is revision 10 because of the typed expectations above. The runner dispatches a positive visibility probe and uses this contract.
+The ACL compiler stores the existing `Action::Assert(Expectation::Visible(target))` plus a runner-owned hidden mode. This policy adds no action variant; the current protocol is revision 11 because of the typed expectations above. The runner dispatches a positive visibility probe and uses this contract.
 
 | Probe result                       | Step result                                                                                  |
 | ---------------------------------- | -------------------------------------------------------------------------------------------- |
@@ -350,7 +391,7 @@ wait "dialog-closed" {
 }
 ```
 
-The compiler stores the existing visible-target wait condition plus `wait_mode = hidden`; under current revision 10 it still reuses the earlier visible-action variant. Runner sends immediate read-only positive visibility assertions and polls every 50 ms only while visible evidence continues.
+The compiler stores the existing visible-target wait condition plus `wait_mode = hidden`; under current revision 11 it still reuses the earlier visible-action variant. Runner sends immediate read-only positive visibility assertions and polls every 50 ms only while visible evidence continues.
 
 | Boundary                             | Result                                                                                 |
 | ------------------------------------ | -------------------------------------------------------------------------------------- |

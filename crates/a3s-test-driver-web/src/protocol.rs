@@ -10,6 +10,10 @@ use serde_json::Value;
 
 use crate::{AgentBrowserConfig, CommandInvocation};
 
+mod layout;
+
+pub(crate) use layout::layout_probe_args;
+
 pub(crate) fn invocation(
     config: &AgentBrowserConfig,
     namespace: &str,

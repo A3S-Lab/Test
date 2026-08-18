@@ -4,6 +4,21 @@
 
 ### Added
 
+- Added action protocol revision 11 with deterministic rendered-layout
+  expectations between two stable targets. ACL now admits 17 explicit
+  relations covering direction, containment, overlap, edge/center alignment,
+  and exact size, with a bounded non-negative CSS-pixel tolerance. Web resolves
+  both targets and captures both rectangles in one page evaluation, preserving
+  missing, ambiguous, invalid, and malformed geometry as driver failures while
+  reserving `test.assert.layout` for an observed relation mismatch. Semantic
+  locators use the accessibility-visible plane across open Shadow DOM; CSS
+  locators retain visually rendered `aria-hidden` elements. Both Page Context
+  targets resolve before dispatch, provenance redacts both locators, GUI reads
+  both frames from one fresh CUA snapshot, and TUI fails closed. Evidence covers
+  3,400/3,400 deterministic Web classifications, 100/100 accepted stable layout
+  windows, 100/100 transient rejections, and a standalone Chromium CLI suite
+  with all 17 relations, 25 positive assertions, 15 negative/error
+  classifications, exact fixture cleanup, and no private runtime leak.
 - Added action protocol revision 10 with bounded `rendered_texts` expectations
   for the complete ordered visible text sequence produced by a stable semantic
   or CSS locator. The comparison preserves order and duplicates, normalizes

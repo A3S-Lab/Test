@@ -222,7 +222,7 @@ wait "dialog-closed" {
 This is `TestStep` wait policy, not a new `Action` or `WaitCondition` variant.
 Core stores `Action::Wait { condition: WaitCondition::Visible(target) }` plus
 `WaitMode::Hidden`; it reuses the visible condition introduced before the
-current action protocol revision 10 and does not change surface-driver command
+current action protocol revision 11 and does not change surface-driver command
 schemas. Runner admission requires `AssertionMode::Positive`,
 no assertion-stability policy, and a locator that is not `ref()` or
 `visual_point()`.
@@ -517,6 +517,95 @@ runner repeats the identical read-only action through the scenario deadline
 and cancellation boundary. A later scalar text, ordered sequence, or count
 mismatch becomes
 `test.assert.unstable`; driver errors remain inconclusive driver errors.
+
+### Rendered-layout expectations
+
+Action protocol revision 11 compares the browser-rendered geometry of two
+stable targets:
+
+```acl
+expect "checkout-below-summary" {
+    target = testid("checkout")
+    relative_to = role("region", "Order summary")
+    layout = "below"
+    tolerance_px = 1
+    stable_for_ms = 300
+    sample_interval_ms = 25
+}
+```
+
+`target`, `relative_to`, and `layout` are required. `tolerance_px` defaults to
+zero and must be an integer from 0 through
+`MAX_LAYOUT_TOLERANCE_PX = 1_024`. Both targets accept role, text, test ID,
+label, placeholder, or CSS locators. ACL rejects `ref()` and `visual_point()`
+with `test.spec.layout_target_unstable`: neither can be re-resolved across
+samples. A current Page Context `@cN` remains usable only after Core resolves
+it to a stable locator before dispatch; both targets are resolved
+independently.
+
+The relation vocabulary is closed:
+
+| Group | Relations | Tolerance meaning |
+| --- | --- | --- |
+| Direction | `above`, `below`, `left_of`, `right_of` | Permit at most `tolerance_px` boundary intrusion |
+| Containment | `contains`, `inside` | Permit each containing edge to miss by at most the tolerance |
+| Intersection | `overlaps`, `not_overlapping` | Overlap must exceed the tolerance on both axes; non-overlap needs one axis at or below it |
+| Alignment | `aligned_left`, `aligned_right`, `aligned_top`, `aligned_bottom`, `aligned_center_x`, `aligned_center_y` | Absolute edge or center difference is at most the tolerance |
+| Size | `same_width`, `same_height`, `same_size` | Absolute dimension difference is at most the tolerance |
+
+Core evaluates only finite admitted rectangles. Width and height must be
+positive and no larger than `MAX_LAYOUT_COORDINATE_ABS = 16_777_216`; `x`,
+`y`, right, and bottom must also be finite and have absolute values no larger
+than that bound. An invalid rectangle cannot satisfy any relation.
+
+Web resolves both targets and reads both `getBoundingClientRect()` values in
+one JavaScript evaluation. This atomic probe prevents a mutation between two
+driver calls from combining geometry from different page states. CSS uses
+current-document query semantics and visual rendered visibility, so an
+otherwise visible `aria-hidden` target remains eligible. Semantic locators
+traverse the document and open Shadow DOM, apply the same rendered checks, and
+exclude accessibility-hidden composed ancestry. Neither plane claims viewport
+intersection or pixel-level occlusion.
+
+The result boundary separates observation from product comparison:
+
+| Observation | Result ownership |
+| --- | --- |
+| Both targets resolve uniquely, both rectangles are valid, and the relation matches | Pass with both targets, both rectangles, relation, tolerance, and `matched = true` |
+| Both rectangles are valid but the relation differs | `test.assert.layout` |
+| Either target is missing or ambiguous | `test.driver.web.target_not_found` or `test.driver.web.target_ambiguous` |
+| Either CSS selector is invalid | `test.driver.web.target_invalid` |
+| Either rectangle or the untrusted result envelope is malformed or out of bounds | `test.driver.web.output_invalid` |
+| A typed caller bypasses ACL with an excessive tolerance | `test.driver.web.expectation_invalid` |
+
+A passing Web payload has this stable shape:
+
+```json
+{
+  "target": { "type": "test_id", "value": "checkout" },
+  "relative_to": { "type": "role", "role": "region", "name": "Order summary" },
+  "relation": "below",
+  "tolerance_px": 1,
+  "target_rect": { "x": 120.0, "y": 420.0, "width": 240.0, "height": 48.0 },
+  "relative_rect": { "x": 96.0, "y": 240.0, "width": 288.0, "height": 160.0 },
+  "matched": true
+}
+```
+
+GUI requires both semantic elements and frames in the same fresh CUA snapshot;
+it never joins frames from separate observations. Observation-bound refs are
+rejected at admission, and unavailable or malformed semantic geometry fails
+closed. TUI returns `test.driver.tui.action_unsupported` because terminal
+cells do not establish equivalent rendered-page geometry.
+
+Layout expectations accept assertion stability. A later relation mismatch is
+`test.assert.unstable`, and the result retains the first and last complete
+dual-rectangle payloads plus the usual bounded sampling metrics. A later
+resolution or geometry failure keeps driver ownership. Checked-in evidence
+classifies 3,400/3,400 deterministic relation cases, accepts 100/100 sustained
+windows, rejects 100/100 transients, and covers every relation plus 15 negative
+or driver-error cases in standalone Chromium without leaking the fixture
+socket or a private runtime directory.
 
 ## Browser context
 
@@ -1076,7 +1165,7 @@ code and path to repair manifests.
 ## Browser admission and runner bounds
 
 `a3s-test capabilities --json` probes the configured executable before any
-browser session launches. Action protocol revision 10 admits A3S Browser
+browser session launches. Action protocol revision 11 admits A3S Browser
 `>= 0.4.0, < 0.5.0` and standalone agent-browser `>= 0.26.0, < 0.27.0`.
 Unverified versions fail with `test.driver.web.version_unsupported`.
 

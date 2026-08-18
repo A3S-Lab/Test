@@ -7,6 +7,7 @@
 - [Core actions](#core-actions)
 - [Control-state expectations](#control-state-expectations)
 - [Rendered-output expectations](#rendered-output-expectations)
+- [Rendered-layout expectations](#rendered-layout-expectations)
 - [Assertion stability](#assertion-stability)
 - [Tabs, frames, and dialogs](#tabs-frames-and-dialogs)
 - [Files and network](#files-and-network)
@@ -198,6 +199,13 @@ expect "visible-rows" {
     visible_count = 3
 }
 
+expect "checkout-below-summary" {
+    target = testid("checkout")
+    relative_to = testid("summary")
+    layout = "below"
+    tolerance_px = 1
+}
+
 screenshot "final" {
     path = "screenshots/final.png"
 }
@@ -206,12 +214,13 @@ screenshot "final" {
 A wait accepts exactly one of `load`, `text`, `regex`, `url`, `visible`, or
 `hidden`. An expectation accepts exactly one of `text`, `url`, `visible`,
 `hidden`, `value`, `enabled`, `disabled`, `checked`, `unchecked`, `selected`,
-`unselected`, `selected_values`, `rendered_text`, `rendered_texts`, or
-`visible_count`.
-`expect hidden` immediately proves that a
-stable semantic or CSS locator has no visible match, including an absent
-element. A visible match fails as `test.assert.hidden`; a later visible sample
-in a stability window fails as `test.assert.unstable`.
+`unselected`, `selected_values`, `rendered_text`, `rendered_texts`,
+`visible_count`, or `layout`.
+
+`expect hidden` immediately proves that a stable semantic or CSS locator has no
+visible match, including an absent element. A visible match fails as
+`test.assert.hidden`; a later visible sample in a stability window fails as
+`test.assert.unstable`.
 
 `wait hidden` uses the same positive visibility probe, first immediately and
 then every 50 ms through the scenario deadline. It succeeds only on
@@ -219,8 +228,8 @@ then every 50 ms through the scenario deadline. It succeeds only on
 counter-evidence plus timing metrics. Both negative forms reject `ref()` and
 `visual_point()` because an unresolved observation-bound target is not proof
 of hidden product state. Driver, stale-target, and ambiguity errors remain
-errors. This is runner policy and adds no action variant; rendered-output
-expectations advance the current action protocol to revision 10.
+errors. This is runner policy and adds no action variant; rendered-layout
+expectations advance the current action protocol to revision 11.
 
 Focus, double-click, context-click, type, uncheck, select, drag, and
 target-scoped wheel require `ref()` or `css()` with the current browser
@@ -340,6 +349,55 @@ All three conditions accept assertion stability. A later scalar-text,
 ordered-sequence, or count mismatch is
 `test.assert.unstable`; a later driver error keeps its driver code. GUI and TUI
 currently reject all three conditions as unsupported.
+
+## Rendered-layout expectations
+
+Revision 11 compares the rendered rectangles of two stable targets:
+
+```acl
+expect "checkout-below-summary" {
+    target = testid("checkout")
+    relative_to = role("region", "Order summary")
+    layout = "below"
+    tolerance_px = 1
+    stable_for_ms = 300
+    sample_interval_ms = 25
+}
+```
+
+`target`, `relative_to`, and `layout` are required. Both targets accept role,
+text, test ID, label, placeholder, or CSS locators. ACL rejects `ref()` and
+`visual_point()` as `test.spec.layout_target_unstable`; a Page Context ref is
+usable only after it resolves to a stable locator. `tolerance_px` defaults to
+zero and is bounded to 1,024 integer CSS pixels.
+
+The 17 relations are:
+
+- Direction: `above`, `below`, `left_of`, and `right_of`.
+- Containment: `contains` and `inside`.
+- Intersection: `overlaps` and `not_overlapping`.
+- Alignment: `aligned_left`, `aligned_right`, `aligned_top`,
+  `aligned_bottom`, `aligned_center_x`, and `aligned_center_y`.
+- Size: `same_width`, `same_height`, and `same_size`.
+
+Directional tolerance permits that many pixels of edge intrusion.
+Containment permits each boundary to miss by at most the tolerance. Overlap
+must exceed the tolerance on both axes; non-overlap requires one intersection
+axis at or below it. Alignment and size use absolute difference.
+
+Web resolves both targets and captures both rectangles in one page evaluation.
+CSS targets use visual rendered visibility and remain eligible when only
+`aria-hidden`; semantic locators additionally exclude accessibility-hidden
+ancestry and traverse open Shadow DOM. A pass returns both targets, both
+rectangles, the relation, tolerance, and `matched = true`. Missing, ambiguous,
+invalid, or malformed geometry remains `test.driver.web.*`; only two valid
+rectangles that violate the relation produce `test.assert.layout`.
+
+GUI requires both frames in one fresh CUA snapshot. TUI fails closed because
+terminal cells are not equivalent browser geometry. Stability sampling retains
+the first and last dual-rectangle payloads; a later relation mismatch becomes
+`test.assert.unstable`, while a later target or geometry failure keeps driver
+ownership.
 
 ## Assertion stability
 

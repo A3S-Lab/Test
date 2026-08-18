@@ -14,6 +14,9 @@
 - [x] Action protocol revision 10 bounded ordered rendered-text collection
       assertions with exact order/duplicate evidence, observable empty sets,
       and honest per-surface capability failures
+- [x] Action protocol revision 11 deterministic rendered-layout relations
+      between two stable targets with atomic geometry evidence and honest
+      per-surface capability failures
 - [x] Surface driver and session contracts
 - [x] Cancellation-safe sequential runner
 - [x] Bounded sampled assertion stability with static duration/sample limits,
@@ -696,3 +699,34 @@ The completion work intentionally preserves these product boundaries:
       sequences, open Shadow DOM, three accepted and three rejected 100 ms
       windows, exact cleanup, and no leaked private runtime directory; keep
       the same regression in macOS and Windows CI
+
+## M23: Deterministic rendered-layout depth
+
+- [x] Add a two-target `layout` expectation under action protocol revision 11
+      with 17 explicit direction, containment, overlap, alignment, and size
+      relations
+- [x] Admit only stable semantic or CSS targets, resolve both Page Context
+      refs before dispatch, and reject browser refs and visual points whose
+      geometry is observation-bound
+- [x] Bound tolerance to 0 through 1,024 integer CSS pixels and bound finite
+      rectangle coordinates, dimensions, right edges, and bottom edges before
+      relation evaluation
+- [x] Resolve both Web targets and capture both rectangles atomically in one
+      page evaluation, retaining CSS visual visibility and semantic
+      accessibility visibility across open Shadow DOM
+- [x] Preserve missing, ambiguous, invalid, hidden-semantic, and malformed
+      geometry as driver errors; reserve `test.assert.layout` for two valid
+      rectangles that violate the requested relation
+- [x] Resolve both GUI frames from one fresh CUA snapshot and fail closed for
+      unstable refs, unsupported semantic evidence, and all TUI layout queries
+- [x] Redact both targets, reuse the expectation in Agent Host verification,
+      and retain first/last dual-rectangle evidence through bounded stability
+      sampling
+- [x] Prove 3,400/3,400 deterministic Web classifications across 17 relations
+      with 100 matching and 100 violating cases per relation
+- [x] Prove 100/100 sustained layout windows pass and 100/100 transient
+      relations fail as `test.assert.unstable`
+- [x] Prove all 17 relations, 25 positive layout assertions, and 15 negative or
+      driver-error classifications in standalone Chromium, including semantic,
+      CSS, open Shadow DOM, accessibility-hidden, tolerance, invalid geometry,
+      exact fixture cleanup, and no private runtime leak

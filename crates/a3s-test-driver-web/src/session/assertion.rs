@@ -2,12 +2,14 @@ use std::collections::BTreeSet;
 use std::ffi::OsString;
 
 use a3s_test_core::{
-    DriverError, ElementState, Expectation, StepOutput, Target, MAX_RENDERED_TEXT_ITEMS,
+    DriverError, ElementState, Expectation, LayoutRect, LayoutRelation, StepOutput, Target,
+    MAX_LAYOUT_TOLERANCE_PX, MAX_RENDERED_TEXT_ITEMS,
 };
 use serde_json::{json, Value};
 
 use crate::protocol::{
-    assertion_probe_args, scalar_bool, scalar_string, visibility_args, AssertionProbe,
+    assertion_probe_args, layout_probe_args, scalar_bool, scalar_string, visibility_args,
+    AssertionProbe,
 };
 
 use super::{browser_result, AgentBrowserSession};
@@ -74,7 +76,53 @@ impl AgentBrowserSession {
             Expectation::SelectedValues { target, values } => {
                 self.assert_selected_values(target, values).await
             }
+            Expectation::Layout {
+                target,
+                relative_to,
+                relation,
+                tolerance_px,
+            } => {
+                self.assert_layout(target, relative_to, *relation, *tolerance_px)
+                    .await
+            }
         }
+    }
+
+    async fn assert_layout(
+        &self,
+        target: &Target,
+        relative_to: &Target,
+        relation: LayoutRelation,
+        tolerance_px: u32,
+    ) -> Result<StepOutput, DriverError> {
+        if tolerance_px > MAX_LAYOUT_TOLERANCE_PX {
+            return Err(DriverError::new(
+                "test.driver.web.expectation_invalid",
+                format!("layout tolerance cannot exceed {MAX_LAYOUT_TOLERANCE_PX} pixels"),
+            ));
+        }
+        let data = self
+            .execute_command(layout_probe_args(target, relative_to)?)
+            .await?;
+        let result = browser_result(data);
+        let (target_rect, relative_rect) = layout_rects(&result)?;
+        if !relation.matches(target_rect, relative_rect, tolerance_px) {
+            return Err(DriverError::new(
+                "test.assert.layout",
+                format!(
+                    "expected {target_rect:?} to be {relation:?} relative to {relative_rect:?} within {tolerance_px}px"
+                ),
+            ));
+        }
+        Ok(StepOutput::new("layout relation matched").with_data(json!({
+            "target": target,
+            "relative_to": relative_to,
+            "relation": relation,
+            "tolerance_px": tolerance_px,
+            "target_rect": rect_data(target_rect),
+            "relative_rect": rect_data(relative_rect),
+            "matched": true,
+        })))
     }
 
     async fn assert_state(
@@ -394,6 +442,87 @@ impl AgentBrowserSession {
             _ => Err(output_invalid("assertion probe envelope")),
         }
     }
+}
+
+fn layout_rects(value: &Value) -> Result<(LayoutRect, LayoutRect), DriverError> {
+    match value.get("status").and_then(Value::as_str) {
+        Some("ok") => Ok((
+            layout_rect(value.get("target_rect"), "target")?,
+            layout_rect(value.get("relative_rect"), "relative_to")?,
+        )),
+        Some("not_found") => {
+            let subject = layout_subject(value)?;
+            Err(DriverError::new(
+                "test.driver.web.target_not_found",
+                format!("no browser element matched the layout {subject}"),
+            ))
+        }
+        Some("ambiguous") => {
+            let subject = layout_subject(value)?;
+            Err(DriverError::new(
+                "test.driver.web.target_ambiguous",
+                format!(
+                    "{} browser elements matched the layout {subject}",
+                    value.get("count").and_then(Value::as_u64).unwrap_or(0)
+                ),
+            ))
+        }
+        Some("invalid_target") => {
+            let subject = layout_subject(value)?;
+            Err(DriverError::new(
+                "test.driver.web.target_invalid",
+                format!(
+                    "layout {subject}: {}",
+                    value
+                        .get("message")
+                        .and_then(Value::as_str)
+                        .unwrap_or("the browser rejected the locator")
+                ),
+            ))
+        }
+        Some("invalid_geometry") => {
+            let subject = layout_subject(value)?;
+            Err(output_invalid(&format!("{subject} layout rectangle")))
+        }
+        _ => Err(output_invalid("layout probe envelope")),
+    }
+}
+
+fn layout_subject(value: &Value) -> Result<&'static str, DriverError> {
+    match value.get("subject").and_then(Value::as_str) {
+        Some("target") => Ok("target"),
+        Some("relative_to") => Ok("relative_to target"),
+        _ => Err(output_invalid("layout probe subject")),
+    }
+}
+
+fn layout_rect(value: Option<&Value>, subject: &str) -> Result<LayoutRect, DriverError> {
+    let value = value.ok_or_else(|| output_invalid(&format!("{subject} layout rectangle")))?;
+    let number = |name: &str| {
+        value
+            .get(name)
+            .and_then(Value::as_f64)
+            .ok_or_else(|| output_invalid(&format!("{subject} layout rectangle '{name}'")))
+    };
+    let rect = LayoutRect {
+        x: number("x")?,
+        y: number("y")?,
+        width: number("width")?,
+        height: number("height")?,
+    };
+    if !rect.is_valid() {
+        return Err(output_invalid(&format!("{subject} layout rectangle")));
+    }
+    Ok(rect)
+}
+
+fn rect_data(rect: LayoutRect) -> Value {
+    json!({
+        "x": rect.x,
+        "y": rect.y,
+        "width": rect.width,
+        "height": rect.height,
+    })
 }
 
 fn rendered_text_values(value: &Value) -> Result<Vec<String>, DriverError> {

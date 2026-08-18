@@ -3,9 +3,10 @@ use std::collections::BTreeSet;
 use a3s_acl::{Block, Value};
 
 use crate::{
-    AssertionMode, AssertionStability, ElementState, Expectation, LoadState, SpecError, Target,
-    WaitCondition, WaitMode, DEFAULT_ASSERTION_SAMPLE_INTERVAL_MS, MAX_ASSERTION_STABILITY_MS,
-    MAX_ASSERTION_STABILITY_SAMPLES, MAX_RENDERED_TEXT_ITEMS, MIN_ASSERTION_STABILITY_MS,
+    AssertionMode, AssertionStability, ElementState, Expectation, LayoutRelation, LoadState,
+    SpecError, Target, WaitCondition, WaitMode, DEFAULT_ASSERTION_SAMPLE_INTERVAL_MS,
+    MAX_ASSERTION_STABILITY_MS, MAX_ASSERTION_STABILITY_SAMPLES, MAX_LAYOUT_TOLERANCE_PX,
+    MAX_RENDERED_TEXT_ITEMS, MIN_ASSERTION_STABILITY_MS,
 };
 
 use super::{
@@ -104,6 +105,7 @@ pub(super) fn parse_expectation(
         "selected",
         "unselected",
         "selected_values",
+        "layout",
     ];
     let configured = conditions
         .iter()
@@ -116,14 +118,30 @@ pub(super) fn parse_expectation(
     let condition = configured[0];
     let uses_separate_target = matches!(
         condition,
-        "rendered_text" | "rendered_texts" | "visible_count" | "value" | "selected_values"
+        "rendered_text"
+            | "rendered_texts"
+            | "visible_count"
+            | "value"
+            | "selected_values"
+            | "layout"
     );
     if block.attributes.contains_key("target") && !uses_separate_target {
         return Err(SpecError::new(
             "test.spec.attribute_unexpected",
             format!("{path}.target"),
-            "target is valid only with rendered_text, rendered_texts, visible_count, value, or selected_values expectations",
+            "target is valid only with rendered_text, rendered_texts, visible_count, value, selected_values, or layout expectations",
         ));
+    }
+    if condition != "layout" {
+        for name in ["relative_to", "tolerance_px"] {
+            if block.attributes.contains_key(name) {
+                return Err(SpecError::new(
+                    "test.spec.attribute_unexpected",
+                    format!("{path}.{name}"),
+                    "attribute is valid only with layout expectations",
+                ));
+            }
+        }
     }
 
     let positive = match condition {
@@ -199,6 +217,33 @@ pub(super) fn parse_expectation(
                 &format!("{path}.selected_values"),
             )?,
         },
+        "layout" => {
+            let target =
+                stable_layout_target(required_target(block, "target", path)?, path, "target")?;
+            let relative_to = stable_layout_target(
+                required_target(block, "relative_to", path)?,
+                path,
+                "relative_to",
+            )?;
+            let tolerance_px = if block.attributes.contains_key("tolerance_px") {
+                required_nonnegative_u32(block, "tolerance_px", path)?
+            } else {
+                0
+            };
+            if tolerance_px > MAX_LAYOUT_TOLERANCE_PX {
+                return Err(SpecError::new(
+                    "test.spec.layout_tolerance_limit",
+                    format!("{path}.tolerance_px"),
+                    format!("layout tolerance cannot exceed {MAX_LAYOUT_TOLERANCE_PX} pixels"),
+                ));
+            }
+            Expectation::Layout {
+                target,
+                relative_to,
+                relation: layout_relation(&block.attributes[condition], &format!("{path}.layout"))?,
+                tolerance_px,
+            }
+        }
         "enabled" | "disabled" | "checked" | "unchecked" | "selected" | "unselected" => {
             let (state, expected) = match condition {
                 "enabled" => (ElementState::Enabled, true),
@@ -218,6 +263,47 @@ pub(super) fn parse_expectation(
         _ => unreachable!("condition list and parser must remain aligned"),
     };
     Ok((positive, AssertionMode::Positive))
+}
+
+fn stable_layout_target(target: Target, path: &str, name: &str) -> Result<Target, SpecError> {
+    if matches!(target, Target::Ref { .. } | Target::VisualPoint { .. }) {
+        return Err(SpecError::new(
+            "test.spec.layout_target_unstable",
+            format!("{path}.{name}"),
+            "layout assertions require stable locators for both elements, not observation-bound refs or visual points",
+        ));
+    }
+    Ok(target)
+}
+
+fn layout_relation(value: &Value, path: &str) -> Result<LayoutRelation, SpecError> {
+    let relation = value
+        .as_str()
+        .ok_or_else(|| type_error(path, "layout relation must be a string"))?;
+    match relation {
+        "above" => Ok(LayoutRelation::Above),
+        "below" => Ok(LayoutRelation::Below),
+        "left_of" => Ok(LayoutRelation::LeftOf),
+        "right_of" => Ok(LayoutRelation::RightOf),
+        "contains" => Ok(LayoutRelation::Contains),
+        "inside" => Ok(LayoutRelation::Inside),
+        "overlaps" => Ok(LayoutRelation::Overlaps),
+        "not_overlapping" => Ok(LayoutRelation::NotOverlapping),
+        "aligned_left" => Ok(LayoutRelation::AlignedLeft),
+        "aligned_right" => Ok(LayoutRelation::AlignedRight),
+        "aligned_top" => Ok(LayoutRelation::AlignedTop),
+        "aligned_bottom" => Ok(LayoutRelation::AlignedBottom),
+        "aligned_center_x" => Ok(LayoutRelation::AlignedCenterX),
+        "aligned_center_y" => Ok(LayoutRelation::AlignedCenterY),
+        "same_width" => Ok(LayoutRelation::SameWidth),
+        "same_height" => Ok(LayoutRelation::SameHeight),
+        "same_size" => Ok(LayoutRelation::SameSize),
+        _ => Err(SpecError::new(
+            "test.spec.layout_relation_unknown",
+            path,
+            "unknown layout relation",
+        )),
+    }
 }
 
 fn rendered_texts(value: &Value, path: &str) -> Result<Vec<String>, SpecError> {

@@ -1,4 +1,4 @@
-use a3s_test_core::{Action, ElementState, Expectation, Target};
+use a3s_test_core::{Action, ElementState, Expectation, LayoutRelation, Target};
 use serde_json::json;
 
 use super::*;
@@ -154,6 +154,18 @@ fn redacts_assertion_targets_text_values_and_selected_values() {
                     value: "state-secret-select".to_string(),
                 },
                 values: vec!["public".to_string(), "state-secret".to_string()],
+            },
+        },
+        Action::Assert {
+            expectation: Expectation::Layout {
+                target: Target::TestId {
+                    value: "state-secret-subject".to_string(),
+                },
+                relative_to: Target::Css {
+                    selector: "[data-reference=state-secret]".to_string(),
+                },
+                relation: LayoutRelation::Below,
+                tolerance_px: 1,
             },
         },
     ];

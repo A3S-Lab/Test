@@ -264,6 +264,14 @@ impl ProvenanceRedactor {
                     self.redact_text(value);
                 }
             }
+            Expectation::Layout {
+                target,
+                relative_to,
+                ..
+            } => {
+                self.redact_target(target);
+                self.redact_target(relative_to);
+            }
         }
     }
 

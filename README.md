@@ -382,6 +382,52 @@ private runtime leak.
 
 [Compare the workflows](https://a3s-lab.github.io/Test/guide/workflows.html)
 
+## Assert rendered layout relations
+
+Action protocol revision 11 turns geometry that the browser already knows into
+repeatable product assertions. Each expectation resolves two stable targets,
+captures both rendered rectangles atomically, and compares one explicit
+relation:
+
+```acl
+expect "checkout-below-summary" {
+    target = testid("checkout")
+    relative_to = testid("summary")
+    layout = "below"
+    tolerance_px = 1
+    stable_for_ms = 300
+    sample_interval_ms = 25
+}
+```
+
+Supported relations are `above`, `below`, `left_of`, `right_of`, `contains`,
+`inside`, `overlaps`, `not_overlapping`, `aligned_left`, `aligned_right`,
+`aligned_top`, `aligned_bottom`, `aligned_center_x`, `aligned_center_y`,
+`same_width`, `same_height`, and `same_size`. `tolerance_px` defaults to zero
+and is bounded to 1,024 integer CSS pixels. Directional tolerance permits that
+many pixels of boundary intrusion; alignment and size use absolute difference;
+overlap must exceed the tolerance on both axes.
+
+Both targets must be repeatable semantic or CSS locators. ACL rejects browser
+refs and visual points because their geometry belongs to one observation. A
+Page Context `@cN` is accepted only after it resolves to a stable locator.
+Missing, ambiguous, invalid, hidden-semantic, and malformed geometry remain
+`test.driver.*`; only two valid rectangles that violate the requested relation
+produce `test.assert.layout`. A stability window promotes a later relation
+violation to `test.assert.unstable` and retains the first and last dual-rectangle
+evidence.
+
+Web captures both rectangles in one page evaluation. CSS follows visual
+rendering and therefore admits visually present `aria-hidden` targets, while
+semantic locators exclude accessibility-hidden ancestry and traverse open
+Shadow DOM. GUI evaluates two elements from one fresh CUA snapshot; TUI fails
+closed instead of estimating geometry from terminal cells.
+
+The checked-in evidence classifies 3,400/3,400 deterministic relation cases,
+accepts 100/100 sustained layout windows, rejects 100/100 transients, and runs
+all 17 relations plus 15 negative/error cases in standalone Chromium with
+exact socket and private-runtime cleanup.
+
 ## Embed rendered page context
 
 Development frontends can embed `@a3s-lab/testkit` so A3S Test can read the

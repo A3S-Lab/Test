@@ -433,7 +433,8 @@ impl TuiSession {
             | Expectation::VisibleCount { .. }
             | Expectation::State { .. }
             | Expectation::Value { .. }
-            | Expectation::SelectedValues { .. } => {
+            | Expectation::SelectedValues { .. }
+            | Expectation::Layout { .. } => {
                 Err(unsupported("terminal assertions support visible text only"))
             }
         }

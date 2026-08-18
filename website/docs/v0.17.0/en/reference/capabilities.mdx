@@ -88,7 +88,7 @@ The persistent-session loop is `start -> observe -> act -> observe -> finish`. A
 | `terminal_resize`                  | Columns and rows                                       | Resizes the owned PTY or ConPTY and updates terminal semantics                          |
 | `terminal_recording`               | Relative artifact path                                 | Retains a bounded terminal recording outside arbitrary workspace paths                  |
 
-The action protocol revision is 10. Generate the complete schema with `a3s-test agent schema`. Unknown fields, missing required fields, invalid enums, and actions unsupported by the selected surface are rejected before execution.
+The action protocol revision is 11. Generate the complete schema with `a3s-test agent schema`. Unknown fields, missing required fields, invalid enums, and actions unsupported by the selected surface are rejected before execution.
 
 ### Live control-state assertions
 
@@ -111,6 +111,18 @@ Web assertions read live DOM properties. Native checkbox and radio `checked` val
 | Stable rendered output      | Any form above plus `stable_for_ms` and optional interval | First/last scalar text, vector, or count plus the bounded window              | A later observed mismatch is `test.assert.unstable`; later driver failure keeps driver ownership                                        |
 
 CSS collection probes use visual rendered geometry and do not treat `aria-hidden` alone as invisible. Semantic locators additionally exclude accessibility-hidden ancestry and traverse open Shadow DOM. Both exclude hidden, display-none, visibility-hidden, fully transparent, and zero-geometry targets. `rendered_texts` is bounded to 256 expected and observed items. GUI and TUI fail closed for all revision-9/revision-10 forms.
+
+### Rendered-layout assertions
+
+| Capability                 | ACL form                                                       | Observed evidence                                                      | Failure boundary                                                                                                                |
+| -------------------------- | -------------------------------------------------------------- | ---------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| Two-target layout relation | `target`, `relative_to`, and one of 17 `layout` relation names | Both freshly resolved rectangles, relation, tolerance, and match state | Missing/ambiguous/invalid/malformed geometry stays a driver error; two valid rectangles that differ become `test.assert.layout` |
+| Bounded tolerance          | Optional integer `tolerance_px` from 0 through 1,024           | Exact CSS-pixel tolerance used by Core                                 | Negative, fractional, or excessive values fail ACL admission; typed callers above the bound fail before page dispatch           |
+| Stable layout relation     | Layout form plus `stable_for_ms` and optional interval         | First and last complete dual-rectangle payloads plus bounded metrics   | A later relation mismatch is `test.assert.unstable`; later target resolution or geometry failure keeps driver ownership         |
+
+The 17 relations cover four directions, containment/inside, overlap/non-overlap, six edge or center alignments, and width/height/size equality. Both targets must be stable semantic or CSS locators; browser refs and visual points fail admission, while current Page Context refs can resolve to stable locators before dispatch.
+
+Web resolves both targets and reads both rectangles in one page evaluation. CSS keeps visually rendered `aria-hidden` elements, while semantic locators exclude accessibility-hidden ancestry and traverse open Shadow DOM. GUI requires both frames in one fresh CUA snapshot. TUI fails closed because terminal cells are not equivalent rendered-page geometry. Checked-in evidence covers 3,400/3,400 deterministic cases, 100/100 sustained and 100/100 transient windows, all 17 relations, and 15 negative/error classifications in standalone Chromium.
 
 ## Page perception and Test Kit
 

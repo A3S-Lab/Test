@@ -724,6 +724,20 @@ negative condition; stale, ambiguous, driver, and infrastructure errors remain
 failures. The scenario deadline, cancellation token, and static probe cap bound
 the loop, while terminal results retain the last positive counter-evidence.
 
+Layout assertions remain a typed action rather than a derived Test Kit
+verdict. Core owns the 17-relation truth table and the bounded CSS-pixel
+tolerance; a surface owns only evidence acquisition. Web resolves both stable
+locators and reads both `DOMRect` values inside one JavaScript evaluation, so a
+mutation cannot splice rectangles from two page states. GUI resolves both
+semantic elements from one fresh CUA snapshot and rejects refs whose frames
+cannot be proven in that snapshot. TUI reports the capability as unsupported.
+Every passing result carries both rectangles, both targets, the relation, the
+tolerance, and `matched = true`. Missing, ambiguous, invalid,
+accessibility-hidden, and malformed geometry retain driver ownership; only two
+admitted rectangles that violate the relation become `test.assert.layout`.
+Runner-owned stability then retains the first and last dual-rectangle payloads
+without changing deadline, retry, cancellation, or cleanup ownership.
+
 ### Typed control-state observation
 
 Revision 8 adds new `Expectation` wire variants because control state is part
