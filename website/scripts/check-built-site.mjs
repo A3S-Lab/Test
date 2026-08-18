@@ -184,7 +184,9 @@ if (
   !rootHtml.includes('data-testid="capability-group-repair"') ||
   !rootHtml.includes('data-testid="capability-group-execution"') ||
   !rootHtml.includes('data-testid="capability-group-contracts"') ||
-  !rootHtml.includes('查看 38 项能力的入口、输出、证据和失败边界')
+  !rootHtml.includes('查看 40 项能力的入口、输出、证据和失败边界') ||
+  !rootHtml.includes('视口正面积相交') ||
+  !rootHtml.includes('确定性指针命中可达')
 ) {
   failures.push('default homepage lacks Chinese product copy');
 }
@@ -196,8 +198,10 @@ if (
     'Inspect capabilities down to signals, evidence, and expiry rules',
   ) ||
   !englishHtml.includes(
-    'Inspect all 38 entry points, outputs, evidence rules, and failure boundaries',
-  )
+    'Inspect all 40 entry points, outputs, evidence rules, and failure boundaries',
+  ) ||
+  !englishHtml.includes('Positive-area viewport intersection') ||
+  !englishHtml.includes('Deterministic pointer hit reachability')
 ) {
   failures.push('English homepage lacks English product copy');
 }

@@ -38,7 +38,7 @@ a3s-test agent click <ref> --session <name> --observation <id> --json
 a3s-test agent finish --session <name> --status passed --summary <text> --json
 ```
 
-`agent act --action-json` 暴露完整动作 Schema。v0.17.0 的动作协议修订为 11，其中包含修订 7 的选择范围 `insert_text`、修订 8 的实时控件状态断言、修订 9 的目标绑定渲染输出断言、修订 10 的有序渲染文本集合，以及修订 11 的双目标渲染布局关系。`insert_text` 仍然只作用于先前已经建立的编辑上下文，不携带新的目标或定位权限。
+`agent act --action-json` 暴露完整动作 Schema。v0.17.0 的动作协议修订为 12，其中包含修订 7 的选择范围 `insert_text`、修订 8 的实时控件状态断言、修订 9 的目标绑定渲染输出断言、修订 10 的有序渲染文本集合、修订 11 的双目标渲染布局关系，以及修订 12 的 visual viewport 和指针命中断言。`insert_text` 仍然只作用于先前已经建立的编辑上下文，不携带新的目标或定位权限。
 
 ## ACL 套件
 
@@ -207,6 +207,30 @@ CSS 遵循视觉渲染可见性，因此仅设置 `aria-hidden` 但仍有像素�
 
 当前检入证据精确分类 3,400/3,400 个确定性关系案例，接受 100/100 个持续窗口，拒绝 100/100 个瞬态窗口，并在 standalone Chromium 中验证全部 17 种关系、25 个正向断言和 15 个负向或驱动错误案例，同时完成精确 fixture 与 runtime 清理。
 
+## 证明渲染目标确实能够到达
+
+渲染可见性只证明存在边界盒，不能证明目标在哪里，也不能证明指针最终命中了谁。修订 12 把这两个前提分别建模。
+
+```acl
+expect "checkout-in-view" {
+    in_viewport = testid("checkout")
+}
+
+expect "checkout-pointer-hit" {
+    pointer_reachable = testid("checkout")
+    stable_for_ms = 300
+    sample_interval_ms = 25
+}
+```
+
+产品要求只是目标有正面积进入 visual viewport 时，使用 `in_viewport`。产品要求是浏览器命中测试能在可见交集的九个确定性点中到达目标或 composed-tree 后代时，使用 `pointer_reachable`。两者都不能替代 enabled、键盘可达性、事件处理或业务上是否应该点击的判断。
+
+Web 在一次页面求值中解析稳定定位器、采集两个矩形，并执行可选的深层命中测试。语义定位器和命中测试都能穿透开放 Shadow DOM。遮挡由浏览器原生绘制和 `pointer-events` 规则决定，因此接收指针事件的透明覆盖层会阻挡，`pointer-events: none` 则会穿透。Rust 随后重算相交比例，并校验每一个 `1/6`、`1/2`、`5/6` 样本坐标。
+
+浏览器 ref 与 visual point 无法在稳定窗口中重复解析，因此 ACL 会拒绝。当前 Page Context ref 可以先解析成稳定语义或 CSS 定位器。缺失、歧义、非法与畸形证据仍归驱动所有。合法离屏几何返回 `test.assert.in_viewport`，九个合法样本都未命中时返回 `test.assert.pointer_reachable`。GUI 与 TUI 明确关闭失败。
+
+当前检入证据覆盖 1,000/1,000 个 Core 几何案例、2,000/2,000 个 Web 协议分类、200/200 个持续窗口与 200/200 个瞬态窗口，以及 standalone Chromium 中 20 个通过断言和 15 个负向或驱动错误分类，并完成精确清理。
+
 ## 证明界面已经没有可见匹配
 
 当产品要求是关闭、移除或隐藏某个目标时，使用 `hidden`。稳定定位器没有匹配元素，或所有匹配元素都没有渲染出的可见边界时，断言通过。
@@ -217,7 +241,7 @@ expect "checkout-dialog-closed" {
 }
 ```
 
-`hidden` 是 Runner 围绕现有正向可见性断言执行的步骤策略，不会增加 Action 变体。当前协议已推进到修订 11，是因为上面的类型化 expectation。Runner 向 surface 驱动发送正向探测，再确定性地分类结果。
+`hidden` 是 Runner 围绕现有正向可见性断言执行的步骤策略，不会增加 Action 变体。当前协议已推进到修订 12，是因为上面的类型化 expectation。Runner 向 surface 驱动发送正向探测，再确定性地分类结果。
 
 | 正向探测结果                      | `hidden` 断言结果                                                 |
 | --------------------------------- | ----------------------------------------------------------------- |
@@ -249,7 +273,7 @@ wait "checkout-dialog-closed" {
 }
 ```
 
-ACL 编译器仍保存 `Action::Wait(WaitCondition::Visible(target))`，只增加 Runner 负责的 `WaitMode::Hidden`。在当前 Action 协议修订 11 下，它仍然复用早先的可见性 Action 变体。Runner 先执行一次立即的正向可见性断言；目标仍可见时，每 50 ms 重复一次。
+ACL 编译器仍保存 `Action::Wait(WaitCondition::Visible(target))`，只增加 Runner 负责的 `WaitMode::Hidden`。在当前 Action 协议修订 12 下，它仍然复用早先的可见性 Action 变体。Runner 先执行一次立即的正向可见性断言；目标仍可见时，每 50 ms 重复一次。
 
 | 正向探测结果                      | 隐藏等待结果                                                            |
 | --------------------------------- | ----------------------------------------------------------------------- |

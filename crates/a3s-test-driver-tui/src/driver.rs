@@ -428,6 +428,8 @@ impl TuiSession {
             }
             Expectation::Url(_)
             | Expectation::Visible(_)
+            | Expectation::InViewport(_)
+            | Expectation::PointerReachable(_)
             | Expectation::RenderedText { .. }
             | Expectation::RenderedTexts { .. }
             | Expectation::VisibleCount { .. }

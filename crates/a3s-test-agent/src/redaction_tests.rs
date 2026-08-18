@@ -120,6 +120,16 @@ fn redacts_assertion_targets_text_values_and_selected_values() {
             },
         },
         Action::Assert {
+            expectation: Expectation::InViewport(Target::TestId {
+                value: "state-secret-viewport".to_string(),
+            }),
+        },
+        Action::Assert {
+            expectation: Expectation::PointerReachable(Target::Css {
+                selector: "[data-pointer=state-secret]".to_string(),
+            }),
+        },
+        Action::Assert {
             expectation: Expectation::RenderedTexts {
                 target: Target::Css {
                     selector: "[data-row=state-secret]".to_string(),

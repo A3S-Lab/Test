@@ -301,7 +301,7 @@ fn layout_rect_validation_bounds_untrusted_surface_geometry() {
 
 #[test]
 fn layout_assertion_has_a_revision_eleven_wire_contract() {
-    assert_eq!(ACTION_PROTOCOL_REVISION, 11);
+    assert_eq!(ACTION_PROTOCOL_REVISION, 12);
     let action = Action::Assert {
         expectation: Expectation::Layout {
             target: Target::TestId {

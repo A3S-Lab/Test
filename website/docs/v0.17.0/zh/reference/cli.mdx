@@ -111,7 +111,7 @@ a3s-test agent act \
   --json
 ```
 
-先用 `a3s-test agent schema` 获取修订 11 的完整 JSON Schema。当前动作类型如下。
+先用 `a3s-test agent schema` 获取修订 12 的完整 JSON Schema。当前动作类型如下。
 
 | 类别       | `type` 值                                                                                                        |
 | ---------- | ---------------------------------------------------------------------------------------------------------------- |
@@ -337,6 +337,41 @@ Web 在一次页面求值中解析两个目标并采集两个矩形。CSS 使用
 
 GUI 要求两个 frame 来自同一份新鲜 CUA snapshot。TUI 返回明确的不支持错误。稳定性输出保留首次与末次完整双矩形载荷；后续解析或几何失败仍由驱动负责。当前检入证据覆盖 3,400/3,400 个确定性案例、100/100 个持续窗口通过、100/100 个瞬态窗口拒绝、全部 17 种关系，以及 standalone Chromium 中 25 个正向断言和 15 个负向或错误分类，同时完成精确清理。
 
+### visual viewport 与指针命中 ACL 断言
+
+Action 协议修订 12 区分目标与 visual viewport 相交，以及指针命中测试能否到达目标。
+
+```acl
+expect "checkout-in-view" {
+    in_viewport = testid("checkout")
+}
+
+expect "checkout-pointer-hit" {
+    pointer_reachable = role("button", "Checkout")
+    stable_for_ms = 300
+    sample_interval_ms = 25
+}
+```
+
+`in_viewport` 要求正面积相交。部分进入视口的目标会通过，并返回零到一之间的 `intersection_ratio`；完全离屏或只有边界接触会失败。`pointer_reachable` 在裁剪后的目标矩形上使用确定性 3×3 网格，至少一个深层命中到达目标或其 composed-tree 后代时通过。它不证明 enabled 状态、键盘可达性、事件处理或产品意图。
+
+两种写法都接受稳定的 role、text、test ID、label、placeholder 或 CSS 定位器。ACL 拒绝 ref 和 visual point；当前 Page Context ref 可以在派发前解析为稳定定位器。语义目标穿透开放 Shadow DOM，并排除可访问性隐藏祖先。CSS 保留仍有视觉像素的 `aria-hidden` 目标。原生命中测试会让接收指针事件的透明覆盖层形成阻挡，也会让 `pointer-events: none` 覆盖层穿透。
+
+| 错误码                                        | 边界                                           |
+| --------------------------------------------- | ---------------------------------------------- |
+| `test.spec.in_viewport_target_unstable`       | ACL 目标是浏览器 ref 或 visual point           |
+| `test.spec.pointer_reachable_target_unstable` | ACL 目标是浏览器 ref 或 visual point           |
+| `test.driver.web.target_not_found`            | 稳定目标没有合格匹配                           |
+| `test.driver.web.target_ambiguous`            | 稳定目标存在多个合格匹配                       |
+| `test.driver.web.target_invalid`              | CSS selector 非法                              |
+| `test.driver.web.output_invalid`              | 矩形、样本数量、顺序、坐标、类型或响应信封畸形 |
+| `test.driver.web.interactability_unsupported` | 浏览器没有提供必需的命中测试能力               |
+| `test.assert.in_viewport`                     | 合法目标矩形与 visual viewport 没有正面积相交  |
+| `test.assert.pointer_reachable`               | 没有合格样本命中目标或 composed-tree 后代      |
+| `test.assert.unstable`                        | 初次通过后，后续稳定性样本违反断言             |
+
+通过的 viewport 载荷包含两个矩形和独立重算的比例。通过的 pointer 载荷还包含全部九个有序样本坐标与布尔值，以及 `sample_count` 和 `reachable_samples`。GUI 与 TUI 的当前协议没有等价证据，因此明确关闭失败。当前检入证据覆盖 1,000/1,000 个 Core 几何案例、2,000/2,000 个 Web 协议分类、200/200 个持续窗口与 200/200 个瞬态窗口，以及 standalone Chromium 中 20 个正向断言和 15 个负向或驱动错误分类，并完成精确清理。
+
 ### ACL 隐藏断言
 
 `hidden` 断言稳定目标定位器在当前观察中没有可见匹配。目标不存在，或匹配元素没有渲染出的可见边界，都满足条件。
@@ -347,7 +382,7 @@ expect "dialog-closed" {
 }
 ```
 
-ACL 编译器保存现有的 `Action::Assert(Expectation::Visible(target))`，并增加由 Runner 负责的隐藏模式。这个策略不会增加 Action 变体；当前协议已推进到修订 11，是因为上面的类型化 expectation。Runner 派发正向可见性探测，再按以下契约分类。
+ACL 编译器保存现有的 `Action::Assert(Expectation::Visible(target))`，并增加由 Runner 负责的隐藏模式。这个策略不会增加 Action 变体；当前协议已推进到修订 12，是因为上面的类型化 expectation。Runner 派发正向可见性探测，再按以下契约分类。
 
 | 探测结果                    | 步骤结果                                                          |
 | --------------------------- | ----------------------------------------------------------------- |
@@ -391,7 +426,7 @@ wait "dialog-closed" {
 }
 ```
 
-编译器保存现有的可见目标等待条件，并增加 `wait_mode = hidden`；在当前修订 11 下，它仍然复用早先的可见性 Action 变体。只要正向探测仍返回可见证据，Runner 就先立即执行一次只读可见性断言，再每 50 ms 探测一次。
+编译器保存现有的可见目标等待条件，并增加 `wait_mode = hidden`；在当前修订 12 下，它仍然复用早先的可见性 Action 变体。只要正向探测仍返回可见证据，Runner 就先立即执行一次只读可见性断言，再每 50 ms 探测一次。
 
 | 边界                     | 结果                                                                   |
 | ------------------------ | ---------------------------------------------------------------------- |

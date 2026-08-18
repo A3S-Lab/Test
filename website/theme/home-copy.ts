@@ -78,7 +78,7 @@ export const homeCopy: Record<Locale, LocalizedCopy> = {
     capabilityLedgerTitle: '功能清单细到输入、证据和失效规则',
     capabilityLedgerBody:
       '展开任一组即可核对采集信号、公开引用、权限边界和验证方式。这里列的是当前实现契约，不把可选模型或待审核平台写成既有能力。',
-    capabilityReference: '查看 38 项能力的入口、输出、证据和失败边界',
+    capabilityReference: '查看 40 项能力的入口、输出、证据和失败边界',
     capabilityItemCount: '项可核验能力',
     capabilityGroups: [
       {
@@ -242,6 +242,16 @@ export const homeCopy: Record<Locale, LocalizedCopy> = {
             signal: 'WAIT · ASSERT',
             title: '有界等待与本地断言',
             body: '按 load、文本、URL 或可见性等待和断言，全部受场景或命令 deadline 约束，不用无限 sleep 推测页面已经完成。',
+          },
+          {
+            signal: 'IN_VIEWPORT · VISUAL VIEWPORT',
+            title: '视口正面积相交',
+            body: '从浏览器原子采集目标和 visual viewport 矩形，在 Rust 中重算相交比例；离屏或只有边界接触不会被可见边界盒误判为在视口内。',
+          },
+          {
+            signal: 'POINTER_REACHABLE · 3×3 HIT TEST',
+            title: '确定性指针命中可达',
+            body: '在可见交集上验证固定九点深层命中，可识别遮挡、pointer-events、子元素和开放 Shadow DOM，同时不冒充 enabled 或业务可点击性。',
           },
           {
             signal: 'UPLOAD · DOWNLOAD · ROUTE',
@@ -540,7 +550,7 @@ export const homeCopy: Record<Locale, LocalizedCopy> = {
     capabilityLedgerBody:
       'Expand a group to inspect collection signals, public refs, authority boundaries, and verification. This ledger describes implemented contracts without presenting optional models or unverified platforms as built-in support.',
     capabilityReference:
-      'Inspect all 38 entry points, outputs, evidence rules, and failure boundaries',
+      'Inspect all 40 entry points, outputs, evidence rules, and failure boundaries',
     capabilityItemCount: 'verifiable capabilities',
     capabilityGroups: [
       {
@@ -705,6 +715,16 @@ export const homeCopy: Record<Locale, LocalizedCopy> = {
             signal: 'WAIT · ASSERT',
             title: 'Bounded waits and local assertions',
             body: 'Wait or assert on load, text, URL, or visibility under scenario and command deadlines instead of inferring readiness from an unbounded sleep.',
+          },
+          {
+            signal: 'IN_VIEWPORT · VISUAL VIEWPORT',
+            title: 'Positive-area viewport intersection',
+            body: 'Capture target and visual-viewport rectangles atomically and recompute their ratio in Rust. Offscreen or boundary-only contact cannot masquerade as in-viewport merely because a rendered box exists.',
+          },
+          {
+            signal: 'POINTER_REACHABLE · 3×3 HIT TEST',
+            title: 'Deterministic pointer hit reachability',
+            body: 'Validate a fixed nine-point deep-hit grid over the visible intersection to expose occlusion, pointer-events, child hits, and open Shadow DOM without claiming enabled state or business clickability.',
           },
           {
             signal: 'UPLOAD · DOWNLOAD · ROUTE',

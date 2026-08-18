@@ -10,8 +10,12 @@ use serde_json::Value;
 
 use crate::{AgentBrowserConfig, CommandInvocation};
 
+mod interactability;
 mod layout;
 
+pub(crate) use interactability::{
+    interactability_probe_args, InteractabilityProbe, POINTER_SAMPLE_COUNT,
+};
 pub(crate) use layout::layout_probe_args;
 
 pub(crate) fn invocation(

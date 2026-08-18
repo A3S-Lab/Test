@@ -8,6 +8,7 @@
 - [Control-state expectations](#control-state-expectations)
 - [Rendered-output expectations](#rendered-output-expectations)
 - [Rendered-layout expectations](#rendered-layout-expectations)
+- [Visual-viewport and pointer-reachability expectations](#visual-viewport-and-pointer-reachability-expectations)
 - [Assertion stability](#assertion-stability)
 - [Tabs, frames, and dialogs](#tabs-frames-and-dialogs)
 - [Files and network](#files-and-network)
@@ -215,7 +216,7 @@ A wait accepts exactly one of `load`, `text`, `regex`, `url`, `visible`, or
 `hidden`. An expectation accepts exactly one of `text`, `url`, `visible`,
 `hidden`, `value`, `enabled`, `disabled`, `checked`, `unchecked`, `selected`,
 `unselected`, `selected_values`, `rendered_text`, `rendered_texts`,
-`visible_count`, or `layout`.
+`visible_count`, `layout`, `in_viewport`, or `pointer_reachable`.
 
 `expect hidden` immediately proves that a stable semantic or CSS locator has no
 visible match, including an absent element. A visible match fails as
@@ -228,8 +229,8 @@ then every 50 ms through the scenario deadline. It succeeds only on
 counter-evidence plus timing metrics. Both negative forms reject `ref()` and
 `visual_point()` because an unresolved observation-bound target is not proof
 of hidden product state. Driver, stale-target, and ambiguity errors remain
-errors. This is runner policy and adds no action variant; rendered-layout
-expectations advance the current action protocol to revision 11.
+errors. This is runner policy and adds no action variant; viewport and pointer
+expectations advance the current action protocol to revision 12.
 
 Focus, double-click, context-click, type, uncheck, select, drag, and
 target-scoped wheel require `ref()` or `css()` with the current browser
@@ -398,6 +399,45 @@ terminal cells are not equivalent browser geometry. Stability sampling retains
 the first and last dual-rectangle payloads; a later relation mismatch becomes
 `test.assert.unstable`, while a later target or geometry failure keeps driver
 ownership.
+
+## Visual-viewport and pointer-reachability expectations
+
+Revision 12 separates viewport intersection from pointer hit reachability:
+
+```acl
+expect "checkout-in-view" {
+    in_viewport = testid("checkout")
+}
+
+expect "checkout-pointer-hit" {
+    pointer_reachable = role("button", "Checkout")
+    stable_for_ms = 300
+    sample_interval_ms = 25
+}
+```
+
+`in_viewport` passes only when the rendered target rectangle has a
+positive-area intersection with the visual viewport. `pointer_reachable`
+samples a fixed 3 by 3 grid over that intersection and passes when at least one
+deep browser hit reaches the target or a composed-tree descendant. It does not
+prove enabled state, keyboard access, event handling, or business
+clickability.
+
+Both conditions require a stable semantic or CSS locator. ACL rejects
+`ref()` and `visual_point()`; a current Page Context ref may first resolve to a
+stable locator. Semantic targets traverse open Shadow DOM and exclude
+accessibility-hidden ancestry. CSS keeps visually rendered `aria-hidden`
+targets. Native hit testing makes pointer-receiving transparent overlays block
+the target and skips `pointer-events: none` overlays.
+
+A pass records the target and visual-viewport rectangles plus the independently
+validated intersection ratio. Pointer evidence also records all nine ordered
+sample coordinates, booleans, and reachable count. Missing, ambiguous,
+invalid, or malformed evidence remains `test.driver.web.*`; valid offscreen
+geometry is `test.assert.in_viewport`, and nine valid misses are
+`test.assert.pointer_reachable`. GUI and TUI fail closed. Stability sampling
+retains the first and last complete payloads, while later product mismatches
+become `test.assert.unstable`.
 
 ## Assertion stability
 

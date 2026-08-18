@@ -94,6 +94,8 @@ pub(super) fn parse_expectation(
         "url",
         "visible",
         "hidden",
+        "in_viewport",
+        "pointer_reachable",
         "rendered_text",
         "rendered_texts",
         "visible_count",
@@ -156,6 +158,19 @@ pub(super) fn parse_expectation(
         "visible" => Expectation::Visible(parse_target(
             &block.attributes[condition],
             &format!("{path}.visible"),
+        )?),
+        "in_viewport" => Expectation::InViewport(stable_interactability_target(
+            parse_target(&block.attributes[condition], &format!("{path}.in_viewport"))?,
+            path,
+            "in_viewport",
+        )?),
+        "pointer_reachable" => Expectation::PointerReachable(stable_interactability_target(
+            parse_target(
+                &block.attributes[condition],
+                &format!("{path}.pointer_reachable"),
+            )?,
+            path,
+            "pointer_reachable",
         )?),
         "hidden" => {
             let target = parse_target(&block.attributes[condition], &format!("{path}.hidden"))?;
@@ -271,6 +286,28 @@ fn stable_layout_target(target: Target, path: &str, name: &str) -> Result<Target
             "test.spec.layout_target_unstable",
             format!("{path}.{name}"),
             "layout assertions require stable locators for both elements, not observation-bound refs or visual points",
+        ));
+    }
+    Ok(target)
+}
+
+fn stable_interactability_target(
+    target: Target,
+    path: &str,
+    condition: &str,
+) -> Result<Target, SpecError> {
+    if matches!(target, Target::Ref { .. } | Target::VisualPoint { .. }) {
+        let code = match condition {
+            "in_viewport" => "test.spec.in_viewport_target_unstable",
+            "pointer_reachable" => "test.spec.pointer_reachable_target_unstable",
+            _ => unreachable!("bounded interactability condition"),
+        };
+        return Err(SpecError::new(
+            code,
+            format!("{path}.{condition}"),
+            format!(
+                "{condition} assertions require a stable semantic or CSS locator, not an observation-bound ref or visual point"
+            ),
         ));
     }
     Ok(target)

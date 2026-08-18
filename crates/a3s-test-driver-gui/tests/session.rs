@@ -760,6 +760,8 @@ async fn gui_value_assertions_use_cua_values_without_inventing_boolean_state() {
             target: value_target.clone(),
             count: 1,
         },
+        Expectation::InViewport(value_target.clone()),
+        Expectation::PointerReachable(value_target.clone()),
         Expectation::State {
             target: value_target.clone(),
             state: ElementState::Enabled,

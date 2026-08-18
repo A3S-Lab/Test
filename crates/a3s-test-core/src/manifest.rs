@@ -410,6 +410,8 @@ fn parse_step(block: &Block, scenario_path: &str) -> Result<TestStep, SpecError>
                     "url",
                     "visible",
                     "hidden",
+                    "in_viewport",
+                    "pointer_reachable",
                     "target",
                     "rendered_text",
                     "rendered_texts",

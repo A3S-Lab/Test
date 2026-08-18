@@ -241,7 +241,9 @@ impl ProvenanceRedactor {
         match expectation {
             Expectation::TextVisible(text) => self.redact_text(text),
             Expectation::Url(url) => self.redact_url(url),
-            Expectation::Visible(target) => self.redact_target(target),
+            Expectation::Visible(target)
+            | Expectation::InViewport(target)
+            | Expectation::PointerReachable(target) => self.redact_target(target),
             Expectation::RenderedText { target, value } => {
                 self.redact_target(target);
                 self.redact_text(value);

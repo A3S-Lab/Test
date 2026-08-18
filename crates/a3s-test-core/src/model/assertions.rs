@@ -126,6 +126,16 @@ impl LayoutRect {
             && bottom.abs() <= MAX_LAYOUT_COORDINATE_ABS
     }
 
+    #[must_use]
+    pub fn intersection_ratio(self, container: Self) -> Option<f64> {
+        if !self.is_valid() || !container.is_valid() {
+            return None;
+        }
+        let width = (self.right().min(container.right()) - self.x.max(container.x)).max(0.0);
+        let height = (self.bottom().min(container.bottom()) - self.y.max(container.y)).max(0.0);
+        Some(((width * height) / (self.width * self.height)).clamp(0.0, 1.0))
+    }
+
     fn right(self) -> f64 {
         self.x + self.width
     }
@@ -199,6 +209,8 @@ pub enum Expectation {
     TextVisible(String),
     Url(String),
     Visible(Target),
+    InViewport(Target),
+    PointerReachable(Target),
     RenderedText {
         target: Target,
         value: String,

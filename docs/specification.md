@@ -222,7 +222,7 @@ wait "dialog-closed" {
 This is `TestStep` wait policy, not a new `Action` or `WaitCondition` variant.
 Core stores `Action::Wait { condition: WaitCondition::Visible(target) }` plus
 `WaitMode::Hidden`; it reuses the visible condition introduced before the
-current action protocol revision 11 and does not change surface-driver command
+current action protocol revision 12 and does not change surface-driver command
 schemas. Runner admission requires `AssertionMode::Positive`,
 no assertion-stability policy, and a locator that is not `ref()` or
 `visual_point()`.
@@ -606,6 +606,117 @@ classifies 3,400/3,400 deterministic relation cases, accepts 100/100 sustained
 windows, rejects 100/100 transients, and covers every relation plus 15 negative
 or driver-error cases in standalone Chromium without leaking the fixture
 socket or a private runtime directory.
+
+### Visual-viewport and pointer-reachability expectations
+
+Action protocol revision 12 adds two orthogonal single-target expectations:
+
+```acl
+expect "checkout-in-view" {
+    in_viewport = testid("checkout")
+}
+
+expect "checkout-pointer-hit" {
+    pointer_reachable = role("button", "Checkout")
+    stable_for_ms = 300
+    sample_interval_ms = 25
+}
+```
+
+`in_viewport` requires a positive-area intersection between the target's
+rendered rectangle and the current visual viewport. A fully contained target
+has an intersection ratio of `1`; partial intersection has a ratio strictly
+between `0` and `1`; a fully offscreen target or boundary-only contact has
+ratio `0` and fails as `test.assert.in_viewport`.
+
+`pointer_reachable` first computes the same intersection rectangle. When it is
+positive, Web samples the Cartesian 3 by 3 grid formed by the `1/6`, `1/2`,
+and `5/6` fractions on both axes. Each point is passed through deep
+`elementFromPoint` hit testing. The expectation passes when at least one point
+hits the target or one of its composed-tree descendants. The rule observes
+browser hit reachability only. It does not claim that the target is enabled,
+keyboard accessible, backed by an event listener, or valid for a business
+workflow.
+
+Both forms accept role, text, test ID, label, placeholder, or CSS locators.
+ACL rejects `ref()` and `visual_point()` with
+`test.spec.in_viewport_target_unstable` or
+`test.spec.pointer_reachable_target_unstable`. A current Page Context `@cN`
+may be used only after Core resolves it to a stable locator before dispatch.
+
+Web performs target resolution, rectangle capture, viewport capture, and all
+requested hit tests in one page evaluation. Semantic locators traverse open
+Shadow DOM and exclude accessibility-hidden composed ancestry. CSS uses
+current-document query semantics and visual rendered visibility, so an
+otherwise rendered `aria-hidden` element remains eligible. Deep hit testing
+continues through open shadow roots, and composed ancestry makes a child hit a
+valid hit for its target. Native browser behavior means a transparent element
+that receives pointer events blocks the target, while a `pointer-events: none`
+overlay is skipped.
+
+Rust independently admits the response. It validates finite bounded target
+and viewport rectangles, recomputes the intersection ratio, requires exactly
+nine row-major samples for a positive intersection, recomputes every expected
+coordinate, and accepts only boolean hit results. An offscreen pointer probe
+must return an empty sample array. No JavaScript result can pass by supplying a
+different sample pattern or malformed geometry.
+
+Passing payloads have these stable shapes:
+
+```json
+{
+  "target": { "type": "test_id", "value": "checkout" },
+  "target_rect": { "x": 120.0, "y": 420.0, "width": 240.0, "height": 48.0 },
+  "viewport_rect": { "x": 0.0, "y": 0.0, "width": 1280.0, "height": 720.0 },
+  "intersection_ratio": 1.0,
+  "in_viewport": true
+}
+```
+
+```json
+{
+  "target": { "type": "test_id", "value": "checkout" },
+  "target_rect": { "x": 120.0, "y": 420.0, "width": 240.0, "height": 48.0 },
+  "viewport_rect": { "x": 0.0, "y": 0.0, "width": 1280.0, "height": 720.0 },
+  "intersection_ratio": 1.0,
+  "pointer_reachable": true,
+  "sample_count": 9,
+  "reachable_samples": 9,
+  "samples": [
+    { "x": 160.0, "y": 428.0, "reachable": true },
+    { "x": 240.0, "y": 428.0, "reachable": true },
+    { "x": 320.0, "y": 428.0, "reachable": true },
+    { "x": 160.0, "y": 444.0, "reachable": true },
+    { "x": 240.0, "y": 444.0, "reachable": true },
+    { "x": 320.0, "y": 444.0, "reachable": true },
+    { "x": 160.0, "y": 460.0, "reachable": true },
+    { "x": 240.0, "y": 460.0, "reachable": true },
+    { "x": 320.0, "y": 460.0, "reachable": true }
+  ]
+}
+```
+
+| Observation | Result ownership |
+| --- | --- |
+| Positive target/viewport intersection | `in_viewport` passes with both rectangles and the ratio |
+| Valid rectangles with no positive intersection | `test.assert.in_viewport` |
+| At least one of nine valid points reaches the target or a composed descendant | `pointer_reachable` passes with all points and hit counts |
+| No valid point reaches the target, including an offscreen target | `test.assert.pointer_reachable` |
+| Target is missing or ambiguous, or its CSS selector is invalid | `test.driver.web.target_not_found`, `.target_ambiguous`, or `.target_invalid` |
+| Rectangle, sample count, order, coordinates, types, or envelope is malformed | `test.driver.web.output_invalid` |
+| Required browser hit testing is unavailable | `test.driver.web.interactability_unsupported` |
+
+GUI returns `test.driver.gui.assertion_unsupported`; TUI returns its explicit
+unsupported-action error. Neither adapter estimates visual-viewport or deep
+pointer-hit evidence. Both expectations compose with assertion stability. A
+later valid assertion mismatch becomes `test.assert.unstable`; a later driver
+failure keeps driver ownership.
+
+Checked-in evidence classifies 1,000/1,000 Core geometry cases and 2,000/2,000
+Web protocol cases, accepts 200/200 sustained windows, rejects 200/200
+transients, and proves 20 positive assertions plus 15 negative or driver-error
+classifications in standalone Chromium with exact fixture and private-runtime
+cleanup.
 
 ## Browser context
 
@@ -1165,7 +1276,7 @@ code and path to repair manifests.
 ## Browser admission and runner bounds
 
 `a3s-test capabilities --json` probes the configured executable before any
-browser session launches. Action protocol revision 11 admits A3S Browser
+browser session launches. Action protocol revision 12 admits A3S Browser
 `>= 0.4.0, < 0.5.0` and standalone agent-browser `>= 0.26.0, < 0.27.0`.
 Unverified versions fail with `test.driver.web.version_unsupported`.
 

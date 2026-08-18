@@ -30,7 +30,7 @@
       <rect x="16" y="63" width="198" height="32" rx="6" fill="#eaf2ff"/>
       <text x="27" y="84" fill="#0a46ad" font-family="ui-monospace,SFMono-Regular,Menlo,monospace" font-size="14">@c12 · button</text>
       <text x="16" y="119" fill="#5f6d84" font-family="ui-monospace,SFMono-Regular,Menlo,monospace" font-size="13">x 812 · y 416</text>
-      <text x="16" y="144" fill="#56657b" font-family="ui-monospace,SFMono-Regular,Menlo,monospace" font-size="13">revision 11</text>
+      <text x="16" y="144" fill="#56657b" font-family="ui-monospace,SFMono-Regular,Menlo,monospace" font-size="13">revision 12</text>
     </g>
     <path d="M760 101h31" fill="none" stroke="#1264ff" stroke-width="3" stroke-linecap="round"/>
     <path d="m785 94 8 7-8 7" fill="none" stroke="#1264ff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>

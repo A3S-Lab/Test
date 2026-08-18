@@ -17,6 +17,9 @@
 - [x] Action protocol revision 11 deterministic rendered-layout relations
       between two stable targets with atomic geometry evidence and honest
       per-surface capability failures
+- [x] Action protocol revision 12 deterministic visual-viewport intersection
+      and pointer hit-reachability assertions with atomic browser evidence and
+      honest per-surface capability failures
 - [x] Surface driver and session contracts
 - [x] Cancellation-safe sequential runner
 - [x] Bounded sampled assertion stability with static duration/sample limits,
@@ -730,3 +733,40 @@ The completion work intentionally preserves these product boundaries:
       driver-error classifications in standalone Chromium, including semantic,
       CSS, open Shadow DOM, accessibility-hidden, tolerance, invalid geometry,
       exact fixture cleanup, and no private runtime leak
+
+## M24: Deterministic viewport and pointer-reachability depth
+
+- [x] Add separate `in_viewport` and `pointer_reachable` expectations under
+      action protocol revision 12 so rendered presence does not imply either
+      viewport intersection or pointer reachability
+- [x] Define viewport membership as positive-area rectangle intersection with
+      the current visual viewport and retain the target rectangle, viewport
+      rectangle, and independently recomputed intersection ratio
+- [x] Define pointer reachability as at least one target or composed-descendant
+      hit in a deterministic 3 by 3 grid over the clipped target rectangle,
+      without inferring enabled state, keyboard access, or business clickability
+- [x] Traverse open Shadow DOM for semantic resolution and deep hit testing,
+      preserve CSS visual versus semantic accessibility-hidden behavior, and
+      treat transparent blockers as blockers while ignoring pointer-transparent
+      overlays through native hit testing
+- [x] Admit only stable semantic or CSS locators, resolve current Page Context
+      refs before dispatch, and reject browser refs and visual points whose
+      identity belongs to one observation
+- [x] Validate all untrusted rectangles, the exact nine-sample count, sample
+      order, coordinates, and booleans in Rust; preserve target resolution and
+      malformed-output failures as driver errors
+- [x] Fail closed on GUI and TUI where current protocols cannot provide
+      equivalent visual-viewport and deep pointer-hit evidence; preserve Agent
+      provenance redaction and runner stability semantics
+- [x] Prove 1,000/1,000 Core geometry cases: 200 fully inside, 400 partially
+      intersecting, and 400 offscreen or boundary-touching rectangles
+- [x] Prove 2,000/2,000 Web protocol cases: 500 positive and 500 negative
+      viewport classifications plus 500 positive and 500 negative pointer
+      classifications
+- [x] Prove 200/200 sustained interactability windows pass and 200/200
+      transient windows fail as `test.assert.unstable`
+- [x] Prove 20 positive assertions and 15 negative or driver-error
+      classifications in standalone Chromium, including partial viewport,
+      complete and partial occlusion, transparent blockers,
+      `pointer-events: none`, child hits, open Shadow DOM, invalid geometry,
+      transient windows, exact fixture cleanup, and no private runtime leak

@@ -67,6 +67,59 @@ impl DriverSession for TransientSession {
                 json!({ "expected": count, "actual": count }),
                 "test.assert.visible_count",
             ),
+            Expectation::InViewport(target) => {
+                let offset = self.sample as f64;
+                (
+                    json!({
+                        "target": target,
+                        "target_rect": {
+                            "x": 950.0 + offset,
+                            "y": 100.0,
+                            "width": 100.0,
+                            "height": 50.0,
+                        },
+                        "viewport_rect": {
+                            "x": 0.0,
+                            "y": 0.0,
+                            "width": 1000.0,
+                            "height": 800.0,
+                        },
+                        "intersection_ratio": 0.5,
+                        "in_viewport": true,
+                    }),
+                    "test.assert.in_viewport",
+                )
+            }
+            Expectation::PointerReachable(target) => {
+                let offset = self.sample as f64;
+                (
+                    json!({
+                        "target": target,
+                        "target_rect": {
+                            "x": 100.0 + offset,
+                            "y": 100.0,
+                            "width": 90.0,
+                            "height": 90.0,
+                        },
+                        "viewport_rect": {
+                            "x": 0.0,
+                            "y": 0.0,
+                            "width": 1000.0,
+                            "height": 800.0,
+                        },
+                        "intersection_ratio": 1.0,
+                        "pointer_reachable": true,
+                        "sample_count": 9,
+                        "reachable_samples": 1,
+                        "samples": [{
+                            "x": 115.0 + offset,
+                            "y": 115.0,
+                            "reachable": true,
+                        }],
+                    }),
+                    "test.assert.pointer_reachable",
+                )
+            }
             Expectation::Layout {
                 target,
                 relative_to,
@@ -353,6 +406,84 @@ async fn stable_layout_assertions_accept_100_of_100_consistent_relations_with_du
 }
 
 #[tokio::test]
+async fn stable_interactability_assertions_reject_200_of_200_transient_signals() {
+    let executions = Arc::new(AtomicUsize::new(0));
+    let runner = scripted_runner(Arc::clone(&executions), false);
+    let stability = AssertionStability {
+        stable_for_ms: 20,
+        sample_interval_ms: 5,
+    };
+
+    let result = runner
+        .run(&interactability_suite(stability), CancellationToken::new())
+        .await;
+
+    assert_eq!(result.status, RunStatus::Failed);
+    assert_eq!(result.scenarios.len(), DATASET_SIZE * 2);
+    for scenario in &result.scenarios {
+        let step = &scenario.steps[0];
+        let data = &step
+            .output
+            .as_ref()
+            .expect("interactability stability evidence")
+            .data;
+        assert_eq!(scenario.status, RunStatus::Failed);
+        assert_eq!(step.attempts, 2);
+        assert_eq!(
+            step.error.as_ref().map(|error| error.code.as_str()),
+            Some("test.assert.unstable")
+        );
+        assert!(data["assertion"]["first"]["target_rect"].is_object());
+        assert!(data["assertion"]["first"]["viewport_rect"].is_object());
+        assert_eq!(data["stability"]["outcome"], "unstable");
+        assert_eq!(data["stability"]["samples"], 2);
+    }
+    assert_eq!(executions.load(Ordering::SeqCst), DATASET_SIZE * 4);
+}
+
+#[tokio::test]
+async fn stable_interactability_assertions_accept_200_of_200_sustained_signals() {
+    let executions = Arc::new(AtomicUsize::new(0));
+    let runner = scripted_runner(Arc::clone(&executions), true);
+    let stability = AssertionStability {
+        stable_for_ms: 20,
+        sample_interval_ms: 5,
+    };
+
+    let result = runner
+        .run(&interactability_suite(stability), CancellationToken::new())
+        .await;
+
+    assert_eq!(result.status, RunStatus::Passed);
+    assert_eq!(result.scenarios.len(), DATASET_SIZE * 2);
+    let mut measured_executions = 0_usize;
+    for scenario in &result.scenarios {
+        let step = &scenario.steps[0];
+        let data = &step
+            .output
+            .as_ref()
+            .expect("interactability stability evidence")
+            .data;
+        let first = &data["assertion"]["first"];
+        let last = &data["assertion"]["last"];
+        let samples = data["stability"]["samples"]
+            .as_u64()
+            .expect("interactability sample count");
+        assert_eq!(scenario.status, RunStatus::Passed);
+        assert!(first["in_viewport"] == true || first["pointer_reachable"] == true);
+        assert!(last["in_viewport"] == true || last["pointer_reachable"] == true);
+        assert!(first["target_rect"].is_object());
+        assert!(last["target_rect"].is_object());
+        assert_ne!(first["target_rect"]["x"], last["target_rect"]["x"]);
+        assert_eq!(data["stability"]["outcome"], "passed");
+        assert!((2..=stability.planned_samples()).contains(&samples));
+        measured_executions += usize::try_from(samples).expect("bounded samples");
+    }
+    assert_eq!(executions.load(Ordering::SeqCst), measured_executions);
+    assert!((DATASET_SIZE * 4..=DATASET_SIZE * 10).contains(&measured_executions));
+}
+
+#[tokio::test]
 async fn stable_rendered_assertions_reject_300_of_300_scalar_sequence_and_count_transients() {
     let executions = Arc::new(AtomicUsize::new(0));
     let runner = scripted_runner(Arc::clone(&executions), false);
@@ -565,6 +696,49 @@ fn layout_suite(stability: AssertionStability) -> TestSuite {
                 }],
             })
             .collect(),
+    }
+}
+
+fn interactability_suite(stability: AssertionStability) -> TestSuite {
+    let viewport = (0..DATASET_SIZE).map(|index| TestScenario {
+        id: format!("in-viewport-{index}"),
+        name: format!("In viewport {index}"),
+        surface: Surface::Web,
+        timeout_ms: 1_000,
+        steps: vec![TestStep {
+            id: "assert-in-viewport".to_string(),
+            action: Action::Assert {
+                expectation: Expectation::InViewport(Target::TestId {
+                    value: format!("viewport-{index}"),
+                }),
+            },
+            stability: Some(stability),
+            assertion_mode: Default::default(),
+            wait_mode: Default::default(),
+        }],
+    });
+    let pointer = (0..DATASET_SIZE).map(|index| TestScenario {
+        id: format!("pointer-reachable-{index}"),
+        name: format!("Pointer reachable {index}"),
+        surface: Surface::Web,
+        timeout_ms: 1_000,
+        steps: vec![TestStep {
+            id: "assert-pointer-reachable".to_string(),
+            action: Action::Assert {
+                expectation: Expectation::PointerReachable(Target::TestId {
+                    value: format!("pointer-{index}"),
+                }),
+            },
+            stability: Some(stability),
+            assertion_mode: Default::default(),
+            wait_mode: Default::default(),
+        }],
+    });
+
+    TestSuite {
+        name: "interactability-stability-dataset".to_string(),
+        version: 1,
+        scenarios: viewport.chain(pointer).collect(),
     }
 }
 

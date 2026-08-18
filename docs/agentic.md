@@ -104,7 +104,7 @@ profile and every later turn reconnects with it; legacy session metadata
 without the field defaults to `disabled`. The same option is available to
 deterministic `run`, direct `agent run`, and Web MCP hosts.
 
-Action protocol revision 11 is the current cross-surface schema. Revision 2
+Action protocol revision 12 is the current cross-surface schema. Revision 2
 introduced the browser interactions needed to inspect document-style
 applications: click, hover, focus, double-click, context-click,
 fill, incremental type, check/uncheck, multi-value select, drag, key press,
@@ -144,6 +144,13 @@ and samples both rectangles in one page evaluation, GUI requires both elements
 in one fresh CUA snapshot, and TUI fails closed. Browser refs and visual points
 are rejected because they cannot be re-resolved across stability samples;
 current Page Context refs remain usable after both resolve to stable locators.
+Revision 12 separates two interaction prerequisites that rendered visibility
+and layout geometry cannot prove. `in_viewport` requires a positive-area
+intersection with the visual viewport. `pointer_reachable` evaluates a fixed
+3 by 3 grid over that intersection and passes when deep hit testing reaches
+the target or a composed-tree descendant. Web acquires the rectangle,
+viewport, and hit evidence atomically. GUI and TUI fail closed because their
+current protocols do not expose equivalent evidence.
 
 Semantic role, text, test-ID, label, and placeholder targets are used whenever
 the underlying browser command supports the requested subaction. Focus,
@@ -172,7 +179,7 @@ tools:
 | `test_act` | Execute exactly one typed action |
 | `test_finish` | Record a result and close the exact owned surface |
 | `test_abort` | Abort and close the exact owned surface |
-| `test_schema` | Return action protocol revision 11 and its interactive JSON Schema |
+| `test_schema` | Return action protocol revision 12 and its interactive JSON Schema |
 
 The server serializes turns within each session, bounds active sessions and
 request size, advertises only registered surfaces, and closes independent

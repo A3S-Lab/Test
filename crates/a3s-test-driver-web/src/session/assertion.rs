@@ -8,8 +8,8 @@ use a3s_test_core::{
 use serde_json::{json, Value};
 
 use crate::protocol::{
-    assertion_probe_args, layout_probe_args, scalar_bool, scalar_string, visibility_args,
-    AssertionProbe,
+    assertion_probe_args, interactability_probe_args, layout_probe_args, scalar_bool,
+    scalar_string, visibility_args, AssertionProbe, InteractabilityProbe, POINTER_SAMPLE_COUNT,
 };
 
 use super::{browser_result, AgentBrowserSession};
@@ -58,6 +58,14 @@ impl AgentBrowserSession {
                     )),
                 }
             }
+            Expectation::InViewport(target) => {
+                self.assert_interactability(target, InteractabilityProbe::InViewport)
+                    .await
+            }
+            Expectation::PointerReachable(target) => {
+                self.assert_interactability(target, InteractabilityProbe::PointerReachable)
+                    .await
+            }
             Expectation::RenderedText { target, value } => {
                 self.assert_rendered_text(target, value).await
             }
@@ -84,6 +92,67 @@ impl AgentBrowserSession {
             } => {
                 self.assert_layout(target, relative_to, *relation, *tolerance_px)
                     .await
+            }
+        }
+    }
+
+    async fn assert_interactability(
+        &self,
+        target: &Target,
+        probe: InteractabilityProbe,
+    ) -> Result<StepOutput, DriverError> {
+        let data = self
+            .execute_command(interactability_probe_args(target, probe)?)
+            .await?;
+        let result = browser_result(data);
+        let (target_rect, viewport_rect) = interactability_rects(&result)?;
+        let intersection_ratio = target_rect
+            .intersection_ratio(viewport_rect)
+            .ok_or_else(|| output_invalid("interactability geometry"))?;
+        let common = json!({
+            "target": target,
+            "target_rect": rect_data(target_rect),
+            "viewport_rect": rect_data(viewport_rect),
+            "intersection_ratio": intersection_ratio,
+        });
+        match probe {
+            InteractabilityProbe::InViewport => {
+                if intersection_ratio <= 0.0 {
+                    return Err(DriverError::new(
+                        "test.assert.in_viewport",
+                        "the rendered target has no positive-area intersection with the visual viewport",
+                    ));
+                }
+                let mut data = common;
+                data["in_viewport"] = Value::Bool(true);
+                Ok(StepOutput::new("target intersects the visual viewport").with_data(data))
+            }
+            InteractabilityProbe::PointerReachable => {
+                let samples = pointer_samples(&result, target_rect, viewport_rect)?;
+                let reachable_samples = samples.iter().filter(|sample| sample.reachable).count();
+                if reachable_samples == 0 {
+                    return Err(DriverError::new(
+                        "test.assert.pointer_reachable",
+                        "no admitted pointer sample reached the target or a composed-tree descendant",
+                    ));
+                }
+                let mut data = common;
+                data["pointer_reachable"] = Value::Bool(true);
+                data["sample_count"] = Value::from(samples.len());
+                data["reachable_samples"] = Value::from(reachable_samples);
+                data["samples"] = Value::Array(
+                    samples
+                        .into_iter()
+                        .map(|sample| {
+                            json!({
+                                "x": sample.x,
+                                "y": sample.y,
+                                "reachable": sample.reachable,
+                            })
+                        })
+                        .collect(),
+                );
+                Ok(StepOutput::new("target accepts an admitted pointer hit").with_data(data))
             }
         }
     }
@@ -442,6 +511,115 @@ impl AgentBrowserSession {
             _ => Err(output_invalid("assertion probe envelope")),
         }
     }
+}
+
+fn interactability_rects(value: &Value) -> Result<(LayoutRect, LayoutRect), DriverError> {
+    match value.get("status").and_then(Value::as_str) {
+        Some("ok") => Ok((
+            layout_rect(value.get("target_rect"), "target")?,
+            layout_rect(value.get("viewport_rect"), "visual viewport")?,
+        )),
+        Some("not_found") => Err(DriverError::new(
+            "test.driver.web.target_not_found",
+            "no browser element matched the interactability target",
+        )),
+        Some("ambiguous") => Err(DriverError::new(
+            "test.driver.web.target_ambiguous",
+            format!(
+                "{} browser elements matched the interactability target",
+                value.get("count").and_then(Value::as_u64).unwrap_or(0)
+            ),
+        )),
+        Some("invalid_target") => Err(DriverError::new(
+            "test.driver.web.target_invalid",
+            value
+                .get("message")
+                .and_then(Value::as_str)
+                .unwrap_or("the browser rejected the interactability target"),
+        )),
+        Some("invalid_geometry") => {
+            let subject = match value.get("subject").and_then(Value::as_str) {
+                Some("target") => "target",
+                Some("viewport") => "visual viewport",
+                _ => return Err(output_invalid("interactability geometry subject")),
+            };
+            Err(output_invalid(&format!(
+                "{subject} interactability rectangle"
+            )))
+        }
+        Some("unsupported") => Err(DriverError::new(
+            "test.driver.web.interactability_unsupported",
+            "the browser does not expose the required pointer hit-testing primitive",
+        )),
+        _ => Err(output_invalid("interactability probe envelope")),
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
+struct PointerSample {
+    x: f64,
+    y: f64,
+    reachable: bool,
+}
+
+fn pointer_samples(
+    value: &Value,
+    target_rect: LayoutRect,
+    viewport_rect: LayoutRect,
+) -> Result<Vec<PointerSample>, DriverError> {
+    let values = value
+        .get("samples")
+        .and_then(Value::as_array)
+        .ok_or_else(|| output_invalid("pointer sample array"))?;
+    let ratio = target_rect
+        .intersection_ratio(viewport_rect)
+        .ok_or_else(|| output_invalid("pointer sample geometry"))?;
+    if ratio == 0.0 {
+        return if values.is_empty() {
+            Ok(Vec::new())
+        } else {
+            Err(output_invalid("empty offscreen pointer sample array"))
+        };
+    }
+    if values.len() != POINTER_SAMPLE_COUNT {
+        return Err(output_invalid(&format!(
+            "exactly {POINTER_SAMPLE_COUNT} pointer samples"
+        )));
+    }
+
+    let left = target_rect.x.max(viewport_rect.x);
+    let top = target_rect.y.max(viewport_rect.y);
+    let right = (target_rect.x + target_rect.width).min(viewport_rect.x + viewport_rect.width);
+    let bottom = (target_rect.y + target_rect.height).min(viewport_rect.y + viewport_rect.height);
+    let fractions = [1.0 / 6.0, 0.5, 5.0 / 6.0];
+    values
+        .iter()
+        .enumerate()
+        .map(|(index, value)| {
+            let x = value
+                .get("x")
+                .and_then(Value::as_f64)
+                .filter(|value| value.is_finite())
+                .ok_or_else(|| output_invalid("finite pointer sample x coordinate"))?;
+            let y = value
+                .get("y")
+                .and_then(Value::as_f64)
+                .filter(|value| value.is_finite())
+                .ok_or_else(|| output_invalid("finite pointer sample y coordinate"))?;
+            let reachable = value
+                .get("reachable")
+                .and_then(Value::as_bool)
+                .ok_or_else(|| output_invalid("pointer sample reachability boolean"))?;
+            let expected_x = left + (right - left) * fractions[index % 3];
+            let expected_y = top + (bottom - top) * fractions[index / 3];
+            let scale = expected_x.abs().max(expected_y.abs()).max(1.0);
+            let tolerance = scale * f64::EPSILON * 16.0;
+            if (x - expected_x).abs() > tolerance || (y - expected_y).abs() > tolerance {
+                return Err(output_invalid("deterministic 3 by 3 pointer sample grid"));
+            }
+            Ok(PointerSample { x, y, reachable })
+        })
+        .collect()
 }
 
 fn layout_rects(value: &Value) -> Result<(LayoutRect, LayoutRect), DriverError> {

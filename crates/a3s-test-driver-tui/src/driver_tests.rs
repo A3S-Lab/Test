@@ -112,6 +112,8 @@ async fn target_bound_rendered_assertions_fail_closed_on_terminal_surfaces() {
             target: target.clone(),
             count: 1,
         },
+        Expectation::InViewport(target.clone()),
+        Expectation::PointerReachable(target.clone()),
         Expectation::Layout {
             target,
             relative_to: Target::Css {

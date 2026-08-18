@@ -111,7 +111,7 @@ a3s-test agent act \
   --json
 ```
 
-Generate the complete revision-11 JSON Schema with `a3s-test agent schema`. Current action types are grouped below.
+Generate the complete revision-12 JSON Schema with `a3s-test agent schema`. Current action types are grouped below.
 
 | Category              | `type` values                                                                                                    |
 | --------------------- | ---------------------------------------------------------------------------------------------------------------- |
@@ -337,6 +337,41 @@ Web resolves both targets and captures both rectangles in one page evaluation. C
 
 GUI requires both frames in one fresh CUA snapshot. TUI returns an explicit unsupported error. Stability output retains the first and last complete dual-rectangle payloads; later resolution or geometry failure keeps driver ownership. The checked-in evidence covers 3,400/3,400 deterministic cases, 100/100 accepted sustained windows, 100/100 rejected transients, all 17 relations, 25 positive assertions, and 15 negative/error classifications in standalone Chromium with exact cleanup.
 
+### Visual-viewport and pointer-hit ACL expectations
+
+Action protocol revision 12 distinguishes a target that intersects the visual viewport from one that pointer hit testing can reach.
+
+```acl
+expect "checkout-in-view" {
+    in_viewport = testid("checkout")
+}
+
+expect "checkout-pointer-hit" {
+    pointer_reachable = role("button", "Checkout")
+    stable_for_ms = 300
+    sample_interval_ms = 25
+}
+```
+
+`in_viewport` requires positive-area intersection. A partial target passes with an `intersection_ratio` between zero and one; a fully offscreen target or boundary-only contact fails. `pointer_reachable` samples a deterministic 3 by 3 grid over the clipped target rectangle and passes when at least one deep hit reaches the target or a composed-tree descendant. It does not prove enabled state, keyboard access, event handling, or product intent.
+
+Both forms accept stable role, text, test ID, label, placeholder, or CSS locators. ACL rejects refs and visual points, while a current Page Context ref may resolve to a stable locator before dispatch. Semantic targets traverse open Shadow DOM and exclude accessibility-hidden ancestry. CSS keeps visually rendered `aria-hidden` targets. Native hit testing makes a pointer-receiving transparent overlay block and makes a `pointer-events: none` overlay pass through.
+
+| Code                                          | Boundary                                                                          |
+| --------------------------------------------- | --------------------------------------------------------------------------------- |
+| `test.spec.in_viewport_target_unstable`       | ACL target is a browser ref or visual point                                       |
+| `test.spec.pointer_reachable_target_unstable` | ACL target is a browser ref or visual point                                       |
+| `test.driver.web.target_not_found`            | Stable target has no eligible match                                               |
+| `test.driver.web.target_ambiguous`            | Stable target has multiple eligible matches                                       |
+| `test.driver.web.target_invalid`              | CSS selector is invalid                                                           |
+| `test.driver.web.output_invalid`              | Rectangle, sample count, sample order, coordinate, type, or envelope is malformed |
+| `test.driver.web.interactability_unsupported` | The browser does not expose the required hit-test primitive                       |
+| `test.assert.in_viewport`                     | Valid target rectangle has no positive-area visual-viewport intersection          |
+| `test.assert.pointer_reachable`               | No admitted sample reaches the target or a composed-tree descendant               |
+| `test.assert.unstable`                        | A later stability sample violates an assertion that initially passed              |
+
+A passing viewport payload carries both rectangles and the independently recomputed ratio. A passing pointer payload adds all nine ordered sample coordinates and booleans plus `sample_count` and `reachable_samples`. GUI and TUI fail closed because their current protocols do not provide equivalent evidence. Checked-in evidence covers 1,000/1,000 Core geometry cases, 2,000/2,000 Web protocol classifications, 200/200 sustained and 200/200 transient windows, and a standalone Chromium matrix with 20 positive assertions and 15 negative or driver-error classifications plus exact cleanup.
+
 ### Hidden ACL expectations
 
 `hidden` asserts that a stable target locator has no visible match at the current observation. Both an absent target and a matching element without a rendered visible box satisfy the condition.
@@ -347,7 +382,7 @@ expect "dialog-closed" {
 }
 ```
 
-The ACL compiler stores the existing `Action::Assert(Expectation::Visible(target))` plus a runner-owned hidden mode. This policy adds no action variant; the current protocol is revision 11 because of the typed expectations above. The runner dispatches a positive visibility probe and uses this contract.
+The ACL compiler stores the existing `Action::Assert(Expectation::Visible(target))` plus a runner-owned hidden mode. This policy adds no action variant; the current protocol is revision 12 because of the typed expectations above. The runner dispatches a positive visibility probe and uses this contract.
 
 | Probe result                       | Step result                                                                                  |
 | ---------------------------------- | -------------------------------------------------------------------------------------------- |
@@ -391,7 +426,7 @@ wait "dialog-closed" {
 }
 ```
 
-The compiler stores the existing visible-target wait condition plus `wait_mode = hidden`; under current revision 11 it still reuses the earlier visible-action variant. Runner sends immediate read-only positive visibility assertions and polls every 50 ms only while visible evidence continues.
+The compiler stores the existing visible-target wait condition plus `wait_mode = hidden`; under current revision 12 it still reuses the earlier visible-action variant. Runner sends immediate read-only positive visibility assertions and polls every 50 ms only while visible evidence continues.
 
 | Boundary                             | Result                                                                                 |
 | ------------------------------------ | -------------------------------------------------------------------------------------- |

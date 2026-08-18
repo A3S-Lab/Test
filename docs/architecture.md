@@ -738,6 +738,51 @@ admitted rectangles that violate the relation become `test.assert.layout`.
 Runner-owned stability then retains the first and last dual-rectangle payloads
 without changing deadline, retry, cancellation, or cleanup ownership.
 
+### Viewport and pointer-hit observation
+
+Revision 12 separates rendered presence, viewport intersection, and pointer
+hit reachability. These are different facts:
+
+```text
+rendered box
+    |
+    +--> positive-area visual-viewport intersection --> in_viewport
+    |
+    +--> deterministic deep hit reaches target --------> pointer_reachable
+```
+
+Web resolves one stable semantic or CSS locator, reads its rectangle and the
+visual viewport, and optionally performs all hit tests inside one JavaScript
+evaluation. `in_viewport` passes only when Core recomputes a positive
+intersection ratio from those two admitted rectangles. Boundary contact with
+zero area is offscreen. `pointer_reachable` samples the intersection rectangle
+at the Cartesian product of `1/6`, `1/2`, and `5/6` on both axes. At least one
+of the nine points must resolve through nested open shadow roots to the target
+or one of its composed-tree descendants.
+
+Native `elementFromPoint` owns paint-order and `pointer-events` behavior. An
+opaque or transparent element that receives pointer hits blocks the target;
+an overlay with `pointer-events: none` is skipped by the browser. A child or
+open-shadow descendant hit remains reachable. The assertion deliberately says
+nothing about disabled state, keyboard access, installed listeners, default
+activation, or whether the product should accept the click.
+
+The Web response is untrusted evidence. Rust validates both finite bounded
+rectangles, recomputes the intersection, requires either an empty offscreen
+sample set or exactly nine ordered samples, recomputes every expected
+coordinate, and admits only booleans for reachability. Resolution errors and
+malformed output remain `test.driver.web.*`; valid offscreen geometry becomes
+`test.assert.in_viewport`, and nine valid misses become
+`test.assert.pointer_reachable`. ACL rejects browser refs and visual points,
+while a current Page Context ref may first resolve to a stable locator. GUI and
+TUI return explicit unsupported errors because neither current protocol
+provides equivalent visual-viewport and deep hit-test evidence.
+
+Runner stability repeats the same immutable read-only action. Coverage proves
+1,000 Core geometry cases, 2,000 Web protocol classifications, 200 sustained
+and 200 transient windows, and a standalone Chromium matrix with 20 passing
+assertions and 15 negative or driver-error classifications.
+
 ### Typed control-state observation
 
 Revision 8 adds new `Expectation` wire variants because control state is part

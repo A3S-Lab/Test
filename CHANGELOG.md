@@ -4,6 +4,22 @@
 
 ### Added
 
+- Added action protocol revision 12 with orthogonal `in_viewport` and
+  `pointer_reachable` expectations. Web now distinguishes positive-area
+  visual-viewport intersection from pointer hit reachability instead of
+  treating a rendered box as proof of either. Pointer reachability samples a
+  deterministic 3 by 3 grid over the clipped target rectangle and accepts a
+  hit only when deep `elementFromPoint` reaches the target or a composed-tree
+  descendant, including open Shadow DOM. Stable semantic or CSS locators are
+  required; browser refs and visual points fail admission, while current Page
+  Context refs may resolve before dispatch. Missing, ambiguous, invalid, and
+  malformed evidence stays driver-owned; offscreen and fully blocked targets
+  become distinct assertion failures. GUI and TUI fail closed. Evidence covers
+  1,000/1,000 Core geometry cases, 2,000/2,000 Web protocol
+  classifications, 200/200 sustained and 200/200 transient stability windows,
+  and standalone Chromium coverage with 20 positive assertions, 15 negative
+  or driver-error classifications, exact fixture cleanup, and no private
+  runtime leak.
 - Added action protocol revision 11 with deterministic rendered-layout
   expectations between two stable targets. ACL now admits 17 explicit
   relations covering direction, containment, overlap, edge/center alignment,
