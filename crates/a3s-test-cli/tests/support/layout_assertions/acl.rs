@@ -1,19 +1,21 @@
+use std::fmt::Write as _;
+
 use super::RELATIONS;
 
 pub(super) fn layout_success_suite(origin: &str) -> String {
-    let relations = RELATIONS
-        .iter()
-        .map(|(fixture_name, relation)| {
-            format!(
-                r#"        expect "relation-{fixture_name}" {{
+    let mut relations = String::new();
+    for (fixture_name, relation) in RELATIONS {
+        write!(
+            relations,
+            r#"        expect "relation-{fixture_name}" {{
             target = testid("{fixture_name}-target")
             relative_to = testid("{fixture_name}-reference")
             layout = "{relation}"
         }}
 "#
-            )
-        })
-        .collect::<String>();
+        )
+        .expect("write layout relation expectation");
+    }
     format!(
         r##"suite "web-layout-assertions" {{
     version = 1

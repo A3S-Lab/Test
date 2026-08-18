@@ -1,4 +1,5 @@
 use std::collections::BTreeMap;
+use std::fmt::Write as _;
 
 use a3s_test_core::{
     action_uses_observation_target, action_uses_page_context_ref, resolve_page_context_refs,
@@ -28,12 +29,11 @@ fn acl_admits_every_layout_relation_with_explicit_geometry_policy() {
         ("same_height", LayoutRelation::SameHeight),
         ("same_size", LayoutRelation::SameSize),
     ];
-    let scenarios = relations
-        .iter()
-        .enumerate()
-        .map(|(index, (name, _))| {
-            format!(
-                r#"
+    let mut scenarios = String::new();
+    for (index, (name, _)) in relations.iter().enumerate() {
+        write!(
+            scenarios,
+            r#"
     scenario "layout-{index}" {{
         surface = "web"
         expect "relation" {{
@@ -46,9 +46,9 @@ fn acl_admits_every_layout_relation_with_explicit_geometry_policy() {
         }}
     }}
 "#
-            )
-        })
-        .collect::<String>();
+        )
+        .expect("write layout relation scenario");
+    }
     let acl = format!(
         r#"
 suite "layout-relations" {{
