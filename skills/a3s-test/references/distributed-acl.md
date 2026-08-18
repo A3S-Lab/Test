@@ -1,8 +1,9 @@
 # Distributed ACL
 
-Use distributed execution only for an already deterministic Web or TUI suite.
-The coordinator does not support GUI workers and does not turn a worker into a
-remote shell. Worker executables, browser policy, credentials, and network
+Use distributed execution only for an already deterministic Web, GUI, or TUI
+suite. A GUI worker represents one permission-bound exclusive desktop lane.
+The coordinator does not turn a worker into a remote shell. Worker
+executables, GUI applications, browser policy, credentials, and network
 authority are fixed by the deployment.
 
 ## Discover and plan
@@ -16,6 +17,9 @@ Review that every scenario appears exactly once and that each shard binds the
 expected worker instance, image digest, inventory digest, and concurrency.
 Planning contacts both authenticated worker endpoints; it is not an offline
 syntax check.
+
+For a GUI shard, also verify that `required_host_permission_digest` matches
+the live inventory and that concurrency is exactly one.
 
 ## Configuration
 
@@ -44,6 +48,20 @@ distributed_run "ci" {
 }
 ```
 
+A GUI worker block additionally pins the exact permission digest discovered
+from its live inventory and keeps one exclusive lane:
+
+```acl
+worker "desktop-primary" {
+  endpoint = "https://desktop-primary.example.test"
+  image_digest = "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+  inventory_digest = "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+  host_permission_digest = "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+  authorization_env = "A3S_TEST_WORKER_AUTHORIZATION_DESKTOP"
+  max_parallel_scenarios = 1
+}
+```
+
 Keep the config at or below the intended input root. Paths cannot contain
 parent traversal. Uploads, referenced Surface Contracts, and their provenance
 are bundled automatically; use `additional_inputs` only for other explicit
@@ -54,6 +72,12 @@ must start with `A3S_TEST_WORKER_AUTHORIZATION_`; their values are the complete
 Authorization header. Never put credentials in ACL, suite data, evidence, or
 committed output. `inventory_digest` is an optional additional pin. Live
 inspection always binds the actual inventory into the plan.
+
+GUI execution additionally requires a deployment-owned `gui_host` ACL
+profile on the worker. The remote request cannot change its CUA endpoint,
+policy, application identity, launch or attach mode, window selector, or
+perception profile. The worker rechecks the exact permission grant before the
+application opens.
 
 ## Run and interpret
 

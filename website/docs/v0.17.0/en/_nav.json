@@ -1,11 +1,23 @@
 [
   { "text": "Get started", "link": "/guide/", "activeMatch": "^/guide/" },
   {
+    "text": "Testing",
+    "items": [
+      { "text": "Exploration and regression", "link": "/guide/workflows" },
+      { "text": "Actions and evidence", "link": "/guide/actions-and-evidence" },
+      { "text": "Assertions and stability", "link": "/guide/assertions" },
+      { "text": "Web, GUI, TUI, and MCP", "link": "/guide/surfaces-and-mcp" },
+      { "text": "Model providers", "link": "/guide/providers" },
+      { "text": "Workers and distributed runs", "link": "/guide/distributed" }
+    ]
+  },
+  {
     "text": "Test Kit",
     "items": [
       { "text": "Integration guide", "link": "/guide/testkit" },
       { "text": "Page Context", "link": "/concepts/page-context" },
-      { "text": "Human review and repair", "link": "/guide/repairs" }
+      { "text": "Human review and repair", "link": "/guide/repairs" },
+      { "text": "Surface Contracts", "link": "/guide/contracts" }
     ]
   },
   {

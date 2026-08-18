@@ -31,7 +31,12 @@ import { useEffect, useRef } from 'react';
 const CURRENT_ONLY_ROUTES = new Set([
   'concepts/authority-and-safety',
   'concepts/page-context',
+  'guide/actions-and-evidence',
+  'guide/assertions',
+  'guide/distributed',
+  'guide/providers',
   'guide/repairs',
+  'guide/surfaces-and-mcp',
   'guide/troubleshooting',
   'reference/capabilities',
 ]);

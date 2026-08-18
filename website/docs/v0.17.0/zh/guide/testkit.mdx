@@ -183,6 +183,48 @@ Review Overlay 不会因为打开、查看建议或保存本地草稿而获得�
 
 安装级选项只设上限。单次 `snapshot()` 可以降低节点、字符串、编码、UI 节点、状态、时间和 UI 编码预算，不能提高。
 
+## 公开 Bridge API
+
+大多数 React 工程只需挂载组件。框架集成、测试夹具或自定义评审界面可以通过 `getPageContextBridge()` 取得同一份公开 bridge。采集与修改方法受 active runtime、当前页面修订和安装预算约束，读取方法返回存储状态的副本。
+
+| 方法                                                                                                                                            | 用途与返回值                                                                            | 状态与权限边界                                                     |
+| ----------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- | ------------------------------------------------------------------ |
+| `probe()`                                                                                                                                       | 返回协议、SDK 版本和能力名称                                                            | 只做同步能力发现，不采集页面快照                                   |
+| `snapshot(request?)`                                                                                                                            | 读取 summary、scoped、diff 或 forensic 快照，并支持 page、node、component、region scope | 结果可能截断；cursor、scope 和 revision 必须保持一致               |
+| `resolve(nodeId)`                                                                                                                               | 把当前私有 node ID 解析为仍然连接的 DOM `Element`                                       | 仅用于页面内集成；未知、已移除或过期节点返回 `null`                |
+| `waitForChange(revision, timeoutMs)`                                                                                                            | 等待更高修订号，立即变化时直接返回，超时返回 `null`                                     | timeout 会限制到 1 至 300,000 ms，不用于固定 sleep                 |
+| `subscribe(listener)`                                                                                                                           | 订阅 context、quality、design audit 和 repair 事件，返回取消订阅函数                    | listener 只观察事件，不获得动作或工作区权限                        |
+| `submitRepair({ findings, batchId? })`                                                                                                          | 校验 finding、捕获当前上下文并返回进入 `queued` 的记录                                  | 重复 finding ID 幂等返回旧记录；只有这一步代表明确发送             |
+| `peekRepairBatch(limit?)`、`takeRepairBatch(limit?)`                                                                                            | 查看或在页面侧保留最多 100 条 queued finding                                            | `take` 防止同一 bridge 重复提取，不替代 Agent 的 lease claim       |
+| `listRepairs()`、`listRepairBatches()`                                                                                                          | 读取按提交时间排序的记录和聚合批次状态                                                  | 返回结构化副本，调用方不能借修改返回对象改变状态                   |
+| `exportRepairs(findings)`、`exportRepairsMarkdown(findings)`                                                                                    | 导出最多 100 条 finding 的 JSON 协议或 Markdown                                         | 导出不发送、不领取，也不授权修复                                   |
+| `applyRepairEvent(event)`                                                                                                                       | 应用 Agent 或服务器返回的严格状态事件                                                   | 要求递增 sequence、合法迁移和幂等 request ID                       |
+| `submitRepairAction(action)`、`takeRepairActions(limit?)`                                                                                       | 排队并提取人工 reply、accept、dismiss 或 reopen                                         | 人工动作仍要由 session 端确认，不能绕过 Repair Ledger              |
+| `addRepairReply(reply)`、`listRepairReplies(findingId)`                                                                                         | 追加并读取有界讨论线程                                                                  | finding 必须存在，每项回复受 request ID 与长度限制                 |
+| `reportQuality(report)`、`listQualityReports()`、`dismissQualityFinding(reportId, findingId)`、`dismissQualityReport(reportId)`                 | 接收、读取或关闭确定性 Surface Contract 质量报告                                        | 严格校验协议、大小、finding ID 和 scope；报告 verdict 保持不变     |
+| `reportDesignAudit(report)`、`listDesignAuditReports()`、`dismissDesignAuditFinding(reportId, findingId)`、`dismissDesignAuditReport(reportId)` | 接收、读取或关闭建议性设计审计报告                                                      | 要求当前 revision、合法来源与仍存在的 node；关闭建议没有修复副作用 |
+| `setAnimationsPaused(paused)`、`animationsPaused()`                                                                                             | 暂停或恢复当前 Web Animations 和正在播放的媒体，读取当前暂停状态                        | 只用于评审稳定画面；dispose 会恢复由 Test Kit 暂停的内容           |
+| `dispose()`                                                                                                                                     | 断开 observer、waiter、listener、边界、报告和全局 bridge                                | 幂等；随后 active-runtime 操作会拒绝，修复历史副本仍可读取         |
+
+`TestKitRuntime` 还提供 `registerBoundary()`。顶层导出的同名函数会先查找已安装 bridge，未安装时直接报错。`installTestKit({ enabled: false })` 返回禁用 runtime，其中 `probe()` 与 `snapshot()` 明确拒绝调用，修复和报告方法返回空结果，不会偷偷启用页面采集。
+
+## Review Overlay 属性与回调
+
+`A3SReviewOverlay` 可以只使用内置 UI，也可以把草稿和发送事件交给宿主工程。回调只观察已经发生的界面事件。同步异常和 rejected Promise 会被隔离，不能破坏评审状态。
+
+| 属性或回调                                         | 默认值或触发时机                     | 用途                                                          |
+| -------------------------------------------------- | ------------------------------------ | ------------------------------------------------------------- |
+| `enabled`                                          | `false`                              | 只有严格为 true 且存在兼容 bridge 时才挂载 Shadow DOM overlay |
+| `defaultOpen`                                      | `false`                              | 设定首次挂载时面板是否展开，不把后续状态变成受控属性          |
+| `autoSend`                                         | `false`                              | 设定首次保存是否直接提交；评审者仍可在工具栏切换              |
+| `locale`                                           | `auto`                               | 选择英文或简体中文，并可跟随 `<html lang>`                    |
+| `messages`                                         | 无                                   | 覆盖已知显示文案，空值和超过 2,048 字符的值被忽略             |
+| `copyToClipboard`                                  | 使用 `navigator.clipboard.writeText` | 为受限 iframe、Electron 或自定义权限环境注入复制实现          |
+| `onCopied`                                         | JSON 或 Markdown 成功复制后          | 接收格式、最终文本和被复制草稿                                |
+| `onDraftAdded`、`onDraftUpdated`、`onDraftDeleted` | 对应本地草稿操作完成后               | 同步宿主界面的草稿统计或遥测，不代表 finding 已发送           |
+| `onDraftsCleared`                                  | 清空草稿或按偏好复制后清空时         | 接收实际移除的草稿副本                                        |
+| `onSubmitted`                                      | `submitRepair()` 返回后              | 接收真正进入 Repair Ledger 的 `SubmittedRepair[]`             |
+
 ## 中文界面与项目文案
 
 `A3SReviewOverlay` 支持 `locale="auto" | "en" | "zh-CN"`。默认值 `auto` 会在组件挂载期间观察页面的 `<html lang>`；任何 `zh-*` 语言标签都会使用简体中文，其余语言使用英文。中文站点建议像上面的示例一样显式传入 `locale="zh-CN"`，避免宿主页面语言配置错误时退回英文。

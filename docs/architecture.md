@@ -1411,8 +1411,10 @@ Once a path is understood, the coding agent can author ACL and use
 `check --json` and `run --json` for deterministic regression coverage.
 
 The MCP stdio server is a thin projection of the same session application
-layer. It exposes `test_session_start`, `test_observe`, `test_act`,
-`test_finish`, `test_abort`, and `test_schema`. It enforces the exact
+layer. It exposes `test_session_start`, `test_observe`, `test_inspect`,
+`test_act`, `test_finish`, `test_abort`, `test_schema`, and the bounded
+`test_repair_*` ledger transitions. The host may register Web, GUI, or both.
+It enforces the exact
 `initialize -> notifications/initialized -> operation` lifecycle and protocol
 version from the
 [MCP 2025-06-18 lifecycle](https://modelcontextprotocol.io/specification/2025-06-18/basic/lifecycle),

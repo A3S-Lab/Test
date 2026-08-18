@@ -7,7 +7,7 @@ and surface drivers:
 
 1. The primary **external-planner interface** lets A3S Code, Codex, Claude
    Code, or another coding agent drive `start -> observe -> act -> finish`
-   through the persistent Web CLI or the surface-neutral GUI MCP server. The
+   through the persistent Web CLI or the surface-neutral Web/GUI MCP server. The
    coding agent is already the LLM; A3S Test does not call a nested model.
 2. The optional **embedded planner SDK** in `a3s-test-agent` is for a host that
    intentionally injects its own `LlmProvider` and owns the surrounding
@@ -193,17 +193,22 @@ text without refocusing the page element.
 `a3s-test mcp` exposes the same typed session application layer over MCP stdio
 protocol `2025-06-18`. Clients must complete
 `initialize -> notifications/initialized` with that exact version before
-listing or calling tools. It currently hosts GUI sessions and publishes these
-tools:
+listing or calling tools. The host may register Web, GUI, or both and
+publishes these tools:
 
 | Tool | Application operation |
 | --- | --- |
 | `test_session_start` | Open the host-configured surface |
 | `test_observe` | Return a new observation and observation ID |
+| `test_inspect` | Read bounded current Test Kit page, node, component, or region context |
 | `test_act` | Execute exactly one typed action |
 | `test_finish` | Record a result and close the exact owned surface |
 | `test_abort` | Abort and close the exact owned surface |
 | `test_schema` | Return action protocol revision 15 and its interactive JSON Schema |
+| `test_repair_watch` | Drain and perform one bounded pickup of submitted Test Kit findings |
+| `test_repair_claim`, `test_repair_progress`, `test_repair_reply` | Own one lease-bound repair attempt and report progress or required input |
+| `test_repair_complete`, `test_repair_verify` | Hand completed editing to A3S Test-owned browser verification |
+| `test_repair_fail`, `test_repair_cancel` | Preserve a terminal failed or cancelled repair transition |
 
 The server serializes turns within each session, bounds active sessions and
 request size, advertises only registered surfaces, and closes independent

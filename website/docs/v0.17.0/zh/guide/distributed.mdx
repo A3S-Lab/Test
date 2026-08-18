@@ -1,0 +1,315 @@
+---
+title: Worker 与分布式执行
+description: 部署固定能力的远程 Worker，生成不可变 shard 计划，安全传输证据并分析分布式测试结果。
+---
+
+:::warning 发布候选
+v0.17.0 已在 main 上准备完成，但尚未正式发布。安装示例仍固定到 v0.16.2，直到发布门禁被明确推进。
+:::
+
+# Worker 与分布式执行
+
+分布式执行解决的是容量、平台和物理设备调度，不负责探索未知流程。先在本地把 suite 变成确定性 Web、GUI 或 TUI 测试，再交给 coordinator 分片。
+
+远程请求不会变成 shell command。Worker 在启动时固定 browser adapter、Web policy、GUI application、TUI executable、credentials 和资源边界。Coordinator 只能提交已经准入的 suite inputs 和精确 scenario 集合。
+
+## 四个独立协议
+
+| 协议                             | CLI 发现命令                        | 负责什么                                               |
+| -------------------------------- | ----------------------------------- | ------------------------------------------------------ |
+| `a3s.test.worker-capabilities/2` | `worker schema`、`worker inventory` | 描述 runtime、surface、driver、容量和平台限制          |
+| `a3s.test.remote-worker/3`       | `worker remote schema`              | inspect、submit、status、renew lease 和 cancel         |
+| `a3s.test.remote-artifacts/1`    | `worker artifacts schema`           | 查询报告索引、列出 artifact 和 digest-bound chunk read |
+| `a3s.test.distributed-run/2`     | `distributed schema`                | coordinator plan、dispatch、验证、历史和分析           |
+
+协议分开版本化，避免执行接口顺便获得任意文件读取能力，也避免 scheduler 根据一份未鉴权 inventory 就获得远程执行权限。
+
+## 1. 生成 Worker Inventory
+
+### 只读取本机编译能力
+
+```bash
+a3s-test worker inventory --max-parallel-scenarios 1
+```
+
+Inventory 至少包含 protocol、runtime、`max_parallel_scenarios` 和规范排序的非空 surfaces。顺序固定为 Web、GUI、TUI。并发范围是 1 到 64。
+
+### 显式探测 Web
+
+```bash
+a3s-test worker inventory \
+  --browser-driver standalone \
+  --browser-executable agent-browser \
+  --max-parallel-scenarios 4
+```
+
+Web capability 默认不出现。只有显式选择 typed integration 且 executable 的真实版本探测和 feature admission 全部通过，Inventory 才会声明 Web。探测失败会让整个命令失败，不会静默退化成 TUI-only。
+
+### 显式探测一个 GUI 桌面
+
+```bash
+a3s-test worker inventory \
+  --gui-host-profile /etc/a3s-test/gui-host.acl \
+  --max-parallel-scenarios 1
+```
+
+GUI Inventory 代表一个真实物理桌面，必须只有一条并发 lane。read-only CUA probe 会检查 locked protocol、tool vocabulary、Accessibility、Screen Recording、应用身份、policy digest 和 permission attribution，但不会在 inventory 阶段 launch 或 attach 应用。
+
+TUI capability 来自当前编译的 `unix_pty` 或 `windows_con_pty` backend，并声明 columns、rows、scrollback、output bytes 和 terminal cell 上限。没有 reviewed backend 的平台关闭失败。
+
+Inventory 只提供 self-reported scheduling evidence，不承担认证或授权。部署还必须提供外部 image digest，并自己控制 worker identity、网络、文件系统、credentials、CPU、内存和进程资源。
+
+## 2. 启动固定权限的 Worker
+
+下面的 TUI-only 示例把服务绑定在 loopback。外部 TLS 和 client identity 由部署层提供。
+
+```bash
+export A3S_TEST_WORKER_AUTHORIZATION='Bearer replace-with-a-secret'
+
+a3s-test worker serve \
+  --listen 127.0.0.1:9400 \
+  --state-root /var/lib/a3s-test-worker \
+  --instance-id runner-west-1 \
+  --image-digest sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa \
+  --authorization-env A3S_TEST_WORKER_AUTHORIZATION \
+  --tui-executable /opt/example-app/bin/test-console \
+  --max-queued-jobs 16 \
+  --compact
+```
+
+Web worker 还要固定 adapter 和允许 origin。
+
+```bash
+a3s-test worker serve \
+  --listen 127.0.0.1:9400 \
+  --state-root /var/lib/a3s-test-worker \
+  --instance-id web-west-1 \
+  --image-digest sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa \
+  --authorization-env A3S_TEST_WORKER_AUTHORIZATION \
+  --browser-driver standalone \
+  --browser-executable agent-browser \
+  --web-allow-origin https://preview.example.test \
+  --web-allow-domain cdn.example.test \
+  --max-parallel-scenarios 4
+```
+
+GUI worker 通过部署方 ACL 固定 CUA 和应用。
+
+```acl
+gui_host "desktop-primary" {
+    endpoint = "installed_daemon"
+    proxy_executable = "/opt/a3s/bin/cua-driver"
+    policy_file = "/etc/a3s-test/cua-policy.yaml"
+    macos_bundle_id = "com.example.Editor"
+    target = "launch"
+    arguments = ["--safe-mode"]
+    profile = "semantic"
+    permission_source = "driver_daemon"
+    permissions = ["accessibility", "screen_recording"]
+}
+```
+
+```bash
+a3s-test worker serve \
+  --listen 127.0.0.1:9400 \
+  --state-root /var/lib/a3s-test-gui-worker \
+  --instance-id desktop-primary-1 \
+  --image-digest sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc \
+  --authorization-env A3S_TEST_WORKER_AUTHORIZATION \
+  --gui-host-profile /etc/a3s-test/gui-host.acl \
+  --max-parallel-scenarios 1
+```
+
+远程 submission 不能覆盖任何 profile 字段。固定 TUI executable 仍然是权限边界。如果部署选择 shell 或支持 shell escape 的程序，鉴权 job 就拥有对应 shell 能力，必须由部署方明确承担。
+
+### 凭据不会进入子进程
+
+`--authorization-env` 提供完整的精确 Authorization header。值不会打印，也不会传给 browser probe、Web command、CUA proxy 或 TUI child。远程协议只监听 loopback 的 `/v1/worker` 与 `/v1/artifacts`。公网 TLS、rate limit 和 client authentication 不属于 reference host。
+
+## 3. 理解远程 Job 生命周期
+
+每个 submission 绑定以下不可变身份。
+
+- portable `job_id` 与全局不可变 `dispatch_id`
+- 精确 worker instance ID
+- 外部 image SHA-256
+- 完整 admitted Inventory SHA-256
+- issue time、absolute deadline 和 renewable lease expiry
+- scenario concurrency、required surfaces 和排序后的精确 scenario IDs
+- GUI job 专用的 exact host permission digest
+- 排序的 inline input bundle 与完整 request digest
+
+远程命令只有 `inspect`、`submit`、`status`、`renew_lease` 和 `cancel`。它们没有 executable、environment 或任意 command 字段。
+
+```text
+submit
+    -> queued
+    -> running
+    -> passed | failed | timed_out | cancelled | interrupted
+```
+
+完全相同的 job 和 dispatch replay 返回已有 snapshot。使用相同 ID 提交不同内容会关闭失败。Lease 只能单调延长非终态 claim，不能超过 job deadline。cancel 只作用于精确 job 和 dispatch。
+
+Worker 把状态变化写入 append-only event files。进程重启后，最后一个 durable 非终态会变成 `interrupted`，不会猜测为成功或自动续跑。一个 Worker 同时执行一个 job，后面使用 bounded queue；job 内 scenario 并发仍受部署上限控制。
+
+### Input bundle 先完整准入再落盘
+
+输入使用 portable relative path、canonical Base64 和逐文件 SHA-256。路径拒绝空组件、`.`、`..`、backslash、root、trailing dot、Windows reserved device 和 ASCII case-fold collision。完整 bundle 在内存中通过 count、单文件、总 byte、encoding 和 digest 校验后，才写入 private job directory。
+
+这使失败的 submission 不会留下部分 materialized inputs，也不能用 link 或路径差异覆盖 worker 文件。
+
+## 4. 只通过 Artifact 协议读取结果
+
+执行 response 只返回 terminal summary、scenario counts 和 report descriptor，不运输 report bytes。Coordinator 通过独立只读协议完成下面的读取过程。
+
+```text
+list terminal report
+    -> bind job_id + dispatch_id + request_digest
+    -> list indexed report and evidence descriptors
+    -> read bounded Base64 chunks by exact digest
+    -> verify complete length and SHA-256
+    -> parse and cross-check suite result
+```
+
+`list_reports` 每页最多 100 个记录，`list_artifacts` 每页最多 256 个 descriptor。cursor 绑定原始 query 或 immutable request digest，修改筛选字段会使 cursor 无效。单次 read 最多 1,048,576 bytes，并且只能选择索引中已有的 report 或 evidence path，不能传入任意服务器路径。
+
+返回 chunk 前，Worker 再次检查 regular file、link/reparse point、canonical containment、size 和完整 SHA-256。文件被替换或损坏时不会返回一段看似有效的 bytes。
+
+### 两层 Retention
+
+| 层级          | 默认保留               | 超限后发生什么                                                     |
+| ------------- | ---------------------- | ------------------------------------------------------------------ |
+| 完整 payload  | 256 jobs、20 GiB、7 天 | 删除 inputs、report bytes 和 evidence                              |
+| Compact index | 10,000 jobs、90 天     | 继续保留 terminal snapshot 和 descriptors，之后移除完整 job record |
+
+payload 被删除后，索引会显示 `payload_state = "pruned"`。Index 仍可用于历史和状态查询，但不能恢复已经删除的 bytes。Index 到期后，status lookup 和这些 job/dispatch ID 的 idempotent replay 也结束。
+
+Retention 在 job 完成后、worker restart 和下一次 idle age deadline 执行。durable index 先写 `pruning` 再删除，再写 `pruned`，restart 可以继续未完成的垃圾回收。unsafe evidence 会把原本成功的 executor 结果转成 durable failed job，不会跟随外部 link target。
+
+## 5. 编写 Distributed ACL
+
+```acl
+distributed_run "ci" {
+    input_root = "."
+    manifest = "tests/e2e/smoke.acl"
+    additional_inputs = ["tests/fixtures/account.json"]
+    history_root = ".a3s-test/distributed/ci"
+    history_window = 20
+    history_max_runs = 100
+    history_max_age_ms = 7776000000
+    job_timeout_ms = 600000
+    lease_ms = 60000
+    poll_interval_ms = 250
+    http_timeout_ms = 30000
+
+    worker "runner-west" {
+        endpoint = "https://runner-west.example.test"
+        image_digest = "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        inventory_digest = "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+        authorization_env = "A3S_TEST_WORKER_AUTHORIZATION_WEST"
+        max_parallel_scenarios = 4
+    }
+
+    quarantine "known-checkout-race" {
+        reason = "Known checkout state race"
+        owner = "checkout-team"
+        issue = "https://issues.example.test/123"
+        expires_at_ms = 4102444800000
+    }
+}
+```
+
+GUI worker block 还要绑定实时 Inventory 中的 permission digest，并保持一条独占 lane。
+
+```acl
+worker "desktop-primary" {
+    endpoint = "https://desktop-primary.example.test"
+    image_digest = "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+    inventory_digest = "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+    host_permission_digest = "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+    authorization_env = "A3S_TEST_WORKER_AUTHORIZATION_DESKTOP"
+    max_parallel_scenarios = 1
+}
+```
+
+`manifest` 相对 `input_root`。suite manifest、upload sources、Surface Contracts 和 provenance 自动加入 bundle，只有其他普通文件需要 `additional_inputs`。最多 1,024 个非空文件，单文件 16 MiB，解码总量 32 MiB。每个路径组件都拒绝 link 和 reparse point。
+
+Worker 数量范围是 1 到 64。endpoint 必须是 HTTPS origin 或显式 loopback HTTP origin，不能带 path、credentials、query 或 fragment。`authorization_env` 必须使用 `A3S_TEST_WORKER_AUTHORIZATION_` 前缀，值不会序列化。省略 `inventory_digest` 也不会放宽计划，live inspection 后的实际 digest 仍会写入 immutable plan。
+
+## 6. 先 Plan，再 Run
+
+```bash
+a3s-test distributed plan tests/distributed.acl --compact
+a3s-test distributed run tests/distributed.acl --json
+```
+
+Plan 会实际访问远程服务。Coordinator 并发检查每个 worker 的 execution 和 artifact endpoint，核对 instance、image、Inventory、limits 和 GUI permission，然后才匹配 scenario。
+
+确定性排序分三层。
+
+1. 能运行该 surface 的 Worker 越少，scenario 越先分配。
+2. 同一 suite digest 的最近成功或产品失败运行提供 duration median，最长的先分配。
+3. 没有历史时使用 scenario timeout，再通过稳定 worker 和 lane scoring 平衡完成时间。
+
+每个 scenario 必须出现且只出现一次。每个已用 Worker 生成一个 shard，绑定 instance、image、Inventory、surface、concurrency、predicted duration、scenario IDs 和可选 GUI permission digest。Plan digest 还覆盖 quarantine。
+
+Run 在 transport 前再次用 inspected limits 校验 submission。各 shard 并发执行，每个 shard 有独立 lease supervisor，慢 status poll 不会阻塞 renewal。第一次 Ctrl+C 停止未派发工作，并向每个已知 job/dispatch 发送精确 cancel，最后保留 cancelled analysis。
+
+## Coordinator 不信任 Worker 的一句 passed
+
+取得 report bytes 后，Coordinator 重新核对下面的绑定。
+
+- 每个 chunk 的 job、dispatch、request digest、offset 和 EOF
+- descriptor media type、byte length 和完整 SHA-256
+- suite digest、run ID 和 aggregate status
+- scenario counts、精确 ID 集合和 surface mapping
+- shard summary 与 report 内容是否一致
+
+任何缺失或冲突进入 `shard_issues`，归类为基础设施错误。远程 terminal summary 不能单独决定测试结果。
+
+## Quarantine 只能抑制产品失败
+
+Quarantine label 必须精确等于 scenario ID，并带 reason、owner、issue 和未来的 `expires_at_ms`。未知、重复或已过期目标会让 planning 失败。准入状态在 run start 时冻结并进入 plan digest。
+
+| 可以变成 quarantined failure   | 永远不能被抑制                                      |
+| ------------------------------ | --------------------------------------------------- |
+| `test.assert.*`                | driver、cleanup、transport、report 和 artifact 错误 |
+| `test.contract.mismatch`       | contract inconclusive                               |
+| `test.contract.state_mismatch` | timeout、cancelled、interrupted                     |
+
+一个被 quarantine 的 scenario 如果通过，会显示 `quarantined_pass`，提醒团队删除已经失效的例外。
+
+## History、Flake 与 Exit Code
+
+History root 使用独占锁并原子写入。
+
+```text
+.a3s-test/distributed/ci/
+├── runs/
+└── reports/
+    └── <run-id>.json
+```
+
+最新 retained run 是变更基线，即使 suite digest 已改变，也可以识别 added、removed、fixed 和 regressed scenario。Duration 与 flake 统计只使用完全相同 suite digest 的历史，避免把测试语义变化当作稳定性波动。
+
+| Exit code | 含义                                                      |
+| --------- | --------------------------------------------------------- |
+| `0`       | passed，允许只有已 quarantine 的产品失败                  |
+| `1`       | required assertion 或 Surface Contract failure            |
+| `2`       | coordinator、worker、transport、cleanup 或 report failure |
+| `124`     | timed out                                                 |
+| `130`     | cancelled                                                 |
+
+CI 应把 `shard_issues` 视为基础设施证据单独处理，不能把 exit 2 重跑成产品通过。
+
+## 上线前核对
+
+1. 本地 `check` 与 `run` 已经稳定，没有依赖固定 sleep。
+2. Worker image digest 来自实际部署 image，不能使用 inventory 自报值替代。
+3. Web executable、GUI host profile 或 TUI executable 已在启动时固定。
+4. GUI worker 通过真实 host probe，并保持单桌面单 lane。
+5. Authorization 只存在部署环境，子进程拿不到该变量。
+6. Plan 中每个 scenario 恰好一次，worker identity 和 digest 符合预期。
+7. Artifact retention 满足审计时长，pruned payload 的影响已经被接受。
+8. Quarantine 有 owner、issue 和短期 expiry，基础设施错误未被掩盖。
+9. 第一次取消后能够得到 retained cancelled analysis，worker 无残留 owned process。

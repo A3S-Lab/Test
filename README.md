@@ -156,7 +156,7 @@ and CI.
 
 | Workflow | Planner | Best for | Entry point |
 | --- | --- | --- | --- |
-| Agent session | Calling coding agent | Unknown paths, reproduction, UX review | Persistent Web CLI or GUI MCP |
+| Agent session | Calling coding agent | Unknown paths, reproduction, UX review | Persistent Web CLI or Web/GUI MCP |
 | ACL suite | Closed typed manifest | Regression, CI, cross-surface checks | `check` and `run` |
 | Embedded loop | Host-injected `LlmProvider` | Products embedding A3S Test | `a3s-test-agent` library |
 

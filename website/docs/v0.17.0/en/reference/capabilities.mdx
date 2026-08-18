@@ -32,6 +32,16 @@ Capabilities have three delivery states.
 | Supplied by a driver | Core defines the contract while a Web, GUI, or TUI driver acts  | Discover capabilities and respect platform verification                              |
 | Deployment provider  | A3S Test validates requests, responses, provenance, and budgets | Supply endpoint, identity, credentials, license, capacity, deadline, and cost limits |
 
+Use these guides when you need procedure and implementation detail beyond the tables.
+
+| Topic                                             | In-depth guide                                                    |
+| ------------------------------------------------- | ----------------------------------------------------------------- |
+| Every action, wait, network control, and artifact | [Actions, waits, and evidence](../guide/actions-and-evidence.mdx) |
+| Basic and advanced assertions                     | [Assertions and stability](../guide/assertions.mdx)               |
+| Web, GUI, TUI, and MCP lifecycle                  | [Web, GUI, TUI, and MCP](../guide/surfaces-and-mcp.mdx)           |
+| LLM, contract, grounding, and design models       | [LLM, grounding, and design providers](../guide/providers.mdx)    |
+| Inventory, workers, shards, and quarantine        | [Workers and distributed execution](../guide/distributed.mdx)     |
+
 ## Core sessions
 
 | Capability                     | Entry point                             | Required input                                                   | Output and failure boundary                                                               |

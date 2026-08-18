@@ -11,11 +11,11 @@ v0.17.0 is staged on main but not published. Installation examples remain pinned
 
 For an unfamiliar page, the coding agent starts from a fresh observation and chooses one action at a time. Once the path works and local evidence can prove its success condition, preserve the explicit actions, waits, and assertions as ACL for local development or CI. Both workflows use the same actions, drivers, evidence, and cleanup rules.
 
-| Workflow            | Planner                     | Best for                                            | Entry point                   |
-| ------------------- | --------------------------- | --------------------------------------------------- | ----------------------------- |
-| Agent session       | The calling coding agent    | Exploration, reproduction, unknown paths, UX review | Persistent Web CLI or GUI MCP |
-| ACL suite           | A closed typed manifest     | Stable regression, CI, cross-surface testing        | `check` and `run`             |
-| Embedded agent loop | Host-injected `LlmProvider` | Products embedding A3S Test                         | `a3s-test-agent` library      |
+| Workflow            | Planner                     | Best for                                            | Entry point                       |
+| ------------------- | --------------------------- | --------------------------------------------------- | --------------------------------- |
+| Agent session       | The calling coding agent    | Exploration, reproduction, unknown paths, UX review | Persistent Web CLI or Web/GUI MCP |
+| ACL suite           | A closed typed manifest     | Stable regression, CI, cross-surface testing        | `check` and `run`                 |
+| Embedded agent loop | Host-injected `LlmProvider` | Products embedding A3S Test                         | `a3s-test-agent` library          |
 
 ## Agent sessions
 

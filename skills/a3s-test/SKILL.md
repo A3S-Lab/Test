@@ -1,6 +1,6 @@
 ---
 name: a3s-test
-description: Drive interactive agentic Web or GUI tests and author or distribute deterministic Web, GUI, or TUI A3S Test ACL suites. Use when a coding agent needs to explore an application, reproduce a UI bug, make observe-decide-act testing decisions, capture bounded evidence, turn a discovered workflow into regression coverage, test a terminal application, coordinate remote Web/TUI workers, or diagnose a3s-test JSON result.
+description: Drive interactive agentic Web or GUI tests and author or distribute deterministic Web, GUI, or TUI A3S Test ACL suites. Use when a coding agent needs to explore an application, reproduce a UI bug, make observe-decide-act testing decisions, capture bounded evidence, turn a discovered workflow into regression coverage, test a terminal application, coordinate remote Web, GUI, or TUI workers, or diagnose a3s-test JSON result.
 ---
 
 # A3S Test
@@ -13,13 +13,14 @@ surface sessions, typed actions, assertions, evidence, reports, and cleanup.
 
 - Use an **agent session** for exploration, bug reproduction, UX review, and
   any workflow where the next action depends on the latest observation.
-- Use the persistent **agent CLI** for Web and the configured **MCP tools** for
-  GUI. Read [references/gui-mcp.md](references/gui-mcp.md) before driving a GUI
-  session.
+- Use the persistent **agent CLI** for Web or configured **MCP tools** for Web
+  and GUI. Read [references/gui-mcp.md](references/gui-mcp.md) before driving
+  a GUI session.
 - Use an **ACL suite** for a known Web, GUI, or TUI regression flow that should
   run deterministically in local development and CI.
 - Use a **distributed ACL config** only after the suite is deterministic and
-  the deployment provides authenticated, image-bound Web/TUI workers. Read
+  the deployment provides authenticated, image-bound Web, GUI, or TUI workers. A
+  GUI worker is one permission-bound exclusive desktop lane. Read
   [references/distributed-acl.md](references/distributed-acl.md) before
   planning or running remote shards.
 
