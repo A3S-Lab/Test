@@ -466,6 +466,56 @@ protocol classifications, 200/200 sustained and 200/200 transient stability
 windows, and a standalone Chromium run with 20 positive assertions and 15
 negative or driver-error classifications plus exact cleanup.
 
+## Prove exact and component-scoped focus ownership
+
+A keyboard action is not complete merely because a key was sent. Action
+protocol revision 13 can prove which element owns focus and which rendered
+component contains it:
+
+```acl
+expect "checkout-focused" {
+    focused = role("button", "Checkout")
+}
+
+expect "cancel-unfocused" {
+    unfocused = testid("cancel")
+}
+
+expect "dialog-owns-focus" {
+    focus_within = role("dialog", "Checkout")
+    stable_for_ms = 300
+    sample_interval_ms = 25
+}
+
+expect "page-does-not-own-focus" {
+    focus_outside = testid("page-shell")
+}
+```
+
+`focused` compares the target with the deepest active element observable from
+the current document through nested open shadow roots. `focus_within` accepts
+the target itself or a descendant in the rendered flat tree, including
+assigned slots. `unfocused` and `focus_outside` invert those observed states
+only after the target resolves successfully. A missing target therefore never
+passes either negative form.
+
+All four conditions require a repeatable semantic or CSS locator. ACL rejects
+browser refs and visual points as `test.spec.focus_target_unstable`; a current
+Page Context ref may first resolve to a stable locator. Semantic targets
+traverse open Shadow DOM and exclude accessibility-hidden composed ancestry.
+CSS retains current-document query semantics. Missing, ambiguous, invalid,
+and unsupported observations remain `test.driver.*`; only a resolved focus
+mismatch becomes `test.assert.focused`, `.unfocused`, `.focus_within`, or
+`.focus_outside`. GUI and TUI fail closed because their current protocols do
+not expose equivalent focus evidence.
+
+Checked-in evidence classifies 600/600 deterministic Web cases, accepts
+200/200 sustained focus windows, rejects 200/200 transient windows, and runs
+17 positive assertions plus 11 negative or driver-error classifications in
+standalone Chromium. The real browser fixture covers forward and reverse Tab,
+open Shadow DOM, assigned slots, accessibility-hidden ancestry, timed focus
+movement, exact socket cleanup, and no private-runtime leak.
+
 ## Embed rendered page context
 
 Development frontends can embed `@a3s-lab/testkit` so A3S Test can read the

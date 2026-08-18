@@ -440,6 +440,9 @@ impl AgentBrowserSession {
                 let aria_selected = self.ref_attribute(value, "aria-selected").await?;
                 aria_boolean(aria_selected.as_deref())?.ok_or_else(|| state_unsupported("selected"))
             }
+            ElementState::Focused | ElementState::FocusWithin => Err(state_unsupported(
+                "focus ownership through an observation-bound ref",
+            )),
         }
     }
 
@@ -767,6 +770,10 @@ fn state_expectation(state: ElementState, expected: bool) -> (&'static str, &'st
         (ElementState::Checked, false) => ("unchecked", "test.assert.unchecked"),
         (ElementState::Selected, true) => ("selected", "test.assert.selected"),
         (ElementState::Selected, false) => ("unselected", "test.assert.unselected"),
+        (ElementState::Focused, true) => ("focused", "test.assert.focused"),
+        (ElementState::Focused, false) => ("unfocused", "test.assert.unfocused"),
+        (ElementState::FocusWithin, true) => ("focus_within", "test.assert.focus_within"),
+        (ElementState::FocusWithin, false) => ("focus_outside", "test.assert.focus_outside"),
     }
 }
 
@@ -775,6 +782,8 @@ fn element_state_name(state: ElementState) -> &'static str {
         ElementState::Enabled => "enabled",
         ElementState::Checked => "checked",
         ElementState::Selected => "selected",
+        ElementState::Focused => "focused",
+        ElementState::FocusWithin => "focus_within",
     }
 }
 

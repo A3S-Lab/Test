@@ -51,10 +51,30 @@ impl DriverSession for TransientSession {
             panic!("scripted stability driver accepts assertions only");
         };
         let (data, mismatch_code) = match expectation {
-            Expectation::State { .. } => (
-                json!({ "state": "checked", "expected": true, "actual": true }),
-                "test.assert.checked",
-            ),
+            Expectation::State {
+                state, expected, ..
+            } => {
+                let (name, mismatch_code) = match (state, expected) {
+                    (ElementState::Enabled, true) => ("enabled", "test.assert.enabled"),
+                    (ElementState::Enabled, false) => ("enabled", "test.assert.disabled"),
+                    (ElementState::Checked, true) => ("checked", "test.assert.checked"),
+                    (ElementState::Checked, false) => ("checked", "test.assert.unchecked"),
+                    (ElementState::Selected, true) => ("selected", "test.assert.selected"),
+                    (ElementState::Selected, false) => ("selected", "test.assert.unselected"),
+                    (ElementState::Focused, true) => ("focused", "test.assert.focused"),
+                    (ElementState::Focused, false) => ("focused", "test.assert.unfocused"),
+                    (ElementState::FocusWithin, true) => {
+                        ("focus_within", "test.assert.focus_within")
+                    }
+                    (ElementState::FocusWithin, false) => {
+                        ("focus_within", "test.assert.focus_outside")
+                    }
+                };
+                (
+                    json!({ "state": name, "expected": expected, "actual": expected }),
+                    mismatch_code,
+                )
+            }
             Expectation::RenderedText { value, .. } => (
                 json!({ "expected": value, "actual": value }),
                 "test.assert.rendered_text",
@@ -318,6 +338,71 @@ async fn stable_control_state_assertions_accept_100_of_100_consistent_states() {
         assert_eq!(data["assertion"]["last"]["actual"], true);
         assert_eq!(data["stability"]["outcome"], "passed");
     }
+}
+
+#[tokio::test]
+async fn stable_focus_assertions_reject_200_of_200_transient_ownership_states() {
+    let executions = Arc::new(AtomicUsize::new(0));
+    let runner = scripted_runner(Arc::clone(&executions), false);
+    let stability = AssertionStability {
+        stable_for_ms: 20,
+        sample_interval_ms: 5,
+    };
+
+    let result = runner
+        .run(&focus_suite(stability), CancellationToken::new())
+        .await;
+
+    assert_eq!(result.status, RunStatus::Failed);
+    assert_eq!(result.scenarios.len(), DATASET_SIZE * 2);
+    for scenario in &result.scenarios {
+        let step = &scenario.steps[0];
+        let data = &step.output.as_ref().expect("focus stability evidence").data;
+        assert_eq!(step.attempts, 2);
+        assert_eq!(
+            step.error.as_ref().map(|error| error.code.as_str()),
+            Some("test.assert.unstable")
+        );
+        assert_eq!(data["assertion"]["first"]["actual"], true);
+        assert_eq!(data["stability"]["outcome"], "unstable");
+        assert_eq!(data["stability"]["samples"], 2);
+    }
+    assert_eq!(executions.load(Ordering::SeqCst), DATASET_SIZE * 4);
+}
+
+#[tokio::test]
+async fn stable_focus_assertions_accept_200_of_200_sustained_ownership_states() {
+    let executions = Arc::new(AtomicUsize::new(0));
+    let runner = scripted_runner(Arc::clone(&executions), true);
+    let stability = AssertionStability {
+        stable_for_ms: 20,
+        sample_interval_ms: 5,
+    };
+
+    let result = runner
+        .run(&focus_suite(stability), CancellationToken::new())
+        .await;
+
+    assert_eq!(result.status, RunStatus::Passed);
+    assert_eq!(result.scenarios.len(), DATASET_SIZE * 2);
+    let mut measured_executions = 0_usize;
+    for scenario in &result.scenarios {
+        let data = &scenario.steps[0]
+            .output
+            .as_ref()
+            .expect("focus stability evidence")
+            .data;
+        assert_eq!(data["assertion"]["first"]["actual"], true);
+        assert_eq!(data["assertion"]["last"]["actual"], true);
+        assert_eq!(data["stability"]["outcome"], "passed");
+        let samples = data["stability"]["samples"]
+            .as_u64()
+            .expect("focus sample count");
+        assert!((2..=stability.planned_samples()).contains(&samples));
+        measured_executions += usize::try_from(samples).expect("bounded focus samples");
+    }
+    assert_eq!(executions.load(Ordering::SeqCst), measured_executions);
+    assert!((DATASET_SIZE * 4..=DATASET_SIZE * 10).contains(&measured_executions));
 }
 
 #[tokio::test]
@@ -663,6 +748,57 @@ fn state_suite(stability: AssertionStability) -> TestSuite {
                 }],
             })
             .collect(),
+    }
+}
+
+fn focus_suite(stability: AssertionStability) -> TestSuite {
+    let focused = (0..DATASET_SIZE).map(|index| TestScenario {
+        id: format!("focused-{index}"),
+        name: format!("Focused {index}"),
+        surface: Surface::Web,
+        timeout_ms: 1_000,
+        steps: vec![TestStep {
+            id: "assert-focused".to_string(),
+            action: Action::Assert {
+                expectation: Expectation::State {
+                    target: Target::TestId {
+                        value: format!("focused-{index}"),
+                    },
+                    state: ElementState::Focused,
+                    expected: true,
+                },
+            },
+            stability: Some(stability),
+            assertion_mode: Default::default(),
+            wait_mode: Default::default(),
+        }],
+    });
+    let focus_within = (0..DATASET_SIZE).map(|index| TestScenario {
+        id: format!("focus-within-{index}"),
+        name: format!("Focus within {index}"),
+        surface: Surface::Web,
+        timeout_ms: 1_000,
+        steps: vec![TestStep {
+            id: "assert-focus-within".to_string(),
+            action: Action::Assert {
+                expectation: Expectation::State {
+                    target: Target::TestId {
+                        value: format!("focus-scope-{index}"),
+                    },
+                    state: ElementState::FocusWithin,
+                    expected: true,
+                },
+            },
+            stability: Some(stability),
+            assertion_mode: Default::default(),
+            wait_mode: Default::default(),
+        }],
+    });
+
+    TestSuite {
+        name: "focus-stability-dataset".to_string(),
+        version: 1,
+        scenarios: focused.chain(focus_within).collect(),
     }
 }
 

@@ -151,6 +151,15 @@ treats an observation-bound ref failure as disappearance.
 - `rendered_text = "..."` with a separate `target`
 - `rendered_texts = ["...", "..."]` with a separate `target`
 - `visible_count = <non-negative integer>` with a separate `target`
+- `value = "..."` or `selected_values = ["...", "..."]` with a separate
+  `target`
+- `enabled`, `disabled`, `checked`, `unchecked`, `selected`, or `unselected`
+  with an inline target
+- `focused`, `unfocused`, `focus_within`, or `focus_outside` with a stable
+  inline target
+- `layout = <relation>` with separate `target` and `relative_to` targets
+- `in_viewport = <stable target>`
+- `pointer_reachable = <stable target>`
 
 ### Negative visibility
 
@@ -222,7 +231,7 @@ wait "dialog-closed" {
 This is `TestStep` wait policy, not a new `Action` or `WaitCondition` variant.
 Core stores `Action::Wait { condition: WaitCondition::Visible(target) }` plus
 `WaitMode::Hidden`; it reuses the visible condition introduced before the
-current action protocol revision 12 and does not change surface-driver command
+current action protocol revision 13 and does not change surface-driver command
 schemas. Runner admission requires `AssertionMode::Positive`,
 no assertion-stability policy, and a locator that is not `ref()` or
 `visual_point()`.
@@ -717,6 +726,87 @@ Web protocol cases, accepts 200/200 sustained windows, rejects 200/200
 transients, and proves 20 positive assertions plus 15 negative or driver-error
 classifications in standalone Chromium with exact fixture and private-runtime
 cleanup.
+
+### Focus-ownership expectations
+
+Action protocol revision 13 adds four single-target focus expectations:
+
+```acl
+expect "checkout-focused" {
+    focused = role("button", "Checkout")
+}
+
+expect "cancel-unfocused" {
+    unfocused = testid("cancel")
+}
+
+expect "dialog-owns-focus" {
+    focus_within = role("dialog", "Checkout")
+    stable_for_ms = 300
+    sample_interval_ms = 25
+}
+
+expect "page-does-not-own-focus" {
+    focus_outside = testid("page-shell")
+}
+```
+
+`focused` is true only when the target is the deepest active element
+observable from the current document through nested open shadow roots.
+`focus_within` is true when that active element is the target itself or a
+descendant in the rendered flat tree. Flat-tree traversal follows assigned
+slots, DOM parents, and open-shadow hosts. `unfocused` and `focus_outside`
+compare the same observations with `expected = false`; they are not
+target-absence shortcuts.
+
+All four forms accept role, text, test ID, label, placeholder, or CSS locators.
+ACL rejects `ref()` and `visual_point()` with
+`test.spec.focus_target_unstable` because neither can be re-resolved through a
+stability window. A current Page Context `@cN` may be used only after Core
+resolves it to a stable locator before dispatch. A programmatic Web assertion
+that bypasses ACL with an observation-bound ref returns
+`test.driver.web.state_unsupported`.
+
+Web performs target resolution, deepest-active-element discovery, and exact or
+flat-tree containment comparison in one page evaluation. Semantic locators
+traverse open Shadow DOM and exclude accessibility-hidden composed ancestry,
+including ancestors reached through assigned slots. CSS retains
+current-document query semantics. Closed shadow roots remain opaque; the host
+is the deepest element observable from the document in that case.
+
+A successful result retains the target, normalized state name, `expected`, and
+`actual`:
+
+```json
+{
+  "target": { "type": "test_id", "value": "checkout" },
+  "state": "focused",
+  "expected": true,
+  "actual": true
+}
+```
+
+| Observation | Result ownership |
+| --- | --- |
+| Exactly one target and the observed focus state matches | The expectation passes with target and boolean evidence |
+| Exactly one target and exact ownership differs | `test.assert.focused` or `test.assert.unfocused` |
+| Exactly one target and flat-tree ownership differs | `test.assert.focus_within` or `test.assert.focus_outside` |
+| Target is missing or ambiguous, or its CSS selector is invalid | `test.driver.web.target_not_found`, `.target_ambiguous`, or `.target_invalid` |
+| An observation-bound browser ref requests focus ownership | `test.driver.web.state_unsupported` |
+| The surface cannot expose equivalent focus evidence | The surface's explicit unsupported assertion error |
+
+GUI and TUI do not infer focus from frames, labels, cursor cells, or recent
+actions. They fail closed until their protocols expose equivalent ownership
+evidence. All four conditions compose with bounded assertion stability. A
+later valid mismatch becomes `test.assert.unstable`; a later target or driver
+failure retains driver ownership.
+
+Checked-in evidence classifies 600/600 deterministic Web cases, accepts
+200/200 sustained ownership windows, rejects 200/200 transients, and verifies
+17 positive assertions plus 11 negative or driver-error classifications in
+standalone Chromium. The browser fixture covers forward and reverse Tab, open
+Shadow DOM, assigned slots, accessibility-hidden ancestry, timed focus
+movement, exact fixture cleanup, and no private-runtime leak.
 
 ## Browser context
 
@@ -1276,7 +1366,7 @@ code and path to repair manifests.
 ## Browser admission and runner bounds
 
 `a3s-test capabilities --json` probes the configured executable before any
-browser session launches. Action protocol revision 12 admits A3S Browser
+browser session launches. Action protocol revision 13 admits A3S Browser
 `>= 0.4.0, < 0.5.0` and standalone agent-browser `>= 0.26.0, < 0.27.0`.
 Unverified versions fail with `test.driver.web.version_unsupported`.
 

@@ -20,6 +20,9 @@
 - [x] Action protocol revision 12 deterministic visual-viewport intersection
       and pointer hit-reachability assertions with atomic browser evidence and
       honest per-surface capability failures
+- [x] Action protocol revision 13 deterministic exact and component-scoped
+      focus ownership with flat-tree evidence and honest per-surface
+      capability failures
 - [x] Surface driver and session contracts
 - [x] Cancellation-safe sequential runner
 - [x] Bounded sampled assertion stability with static duration/sample limits,
@@ -770,3 +773,37 @@ The completion work intentionally preserves these product boundaries:
       complete and partial occlusion, transparent blockers,
       `pointer-events: none`, child hits, open Shadow DOM, invalid geometry,
       transient windows, exact fixture cleanup, and no private runtime leak
+
+## M25: Deterministic focus-ownership depth
+
+- [x] Add `focused`, `unfocused`, `focus_within`, and `focus_outside`
+      expectations under action protocol revision 13 so sending a focus or key
+      action does not imply where keyboard focus ended
+- [x] Define exact ownership against the deepest active element observable
+      through nested open shadow roots, while keeping a closed root opaque at
+      its host
+- [x] Define component-scoped ownership through rendered flat-tree ancestry,
+      following assigned slots, DOM parents, and open-shadow hosts
+- [x] Require a successfully resolved target for both positive and negative
+      forms so missing elements cannot prove `unfocused` or `focus_outside`
+- [x] Admit only stable semantic or CSS locators, resolve current Page Context
+      refs before dispatch, reject browser refs and visual points in ACL, and
+      fail programmatic browser-ref ownership queries as unsupported
+- [x] Resolve semantic targets across open Shadow DOM while excluding
+      accessibility-hidden composed ancestry, including hidden slot wrappers;
+      preserve CSS current-document query semantics
+- [x] Capture target resolution and focus ownership in one Web page evaluation,
+      preserve missing, ambiguous, invalid, and unsupported evidence as driver
+      errors, and reserve four distinct `test.assert.*` codes for observed
+      mismatches
+- [x] Fail closed on GUI and TUI where current protocols cannot provide
+      equivalent deepest-active-element evidence; preserve Agent provenance
+      redaction and runner stability semantics
+- [x] Prove 600/600 deterministic Web classifications across exact and scoped
+      positive states, observed mismatches, and missing negative targets
+- [x] Prove 200/200 sustained focus windows pass and 200/200 transient windows
+      fail as `test.assert.unstable`
+- [x] Prove 17 positive assertions and 11 negative or driver-error
+      classifications in standalone Chromium, including forward and reverse
+      Tab, open Shadow DOM, assigned slots, accessibility-hidden slot ancestry,
+      timed focus movement, exact fixture cleanup, and no private runtime leak

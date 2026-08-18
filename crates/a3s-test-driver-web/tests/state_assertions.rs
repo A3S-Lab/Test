@@ -341,6 +341,162 @@ async fn current_refs_prioritize_native_checked_state_and_use_aria_for_custom_co
 }
 
 #[tokio::test]
+async fn exact_and_composed_focus_ownership_are_separate_live_states() {
+    let executor = Arc::new(QueueExecutor::new([
+        probe(json!({ "status": "ok", "actual": true, "count": 1 })),
+        probe(json!({ "status": "ok", "actual": true, "count": 1 })),
+        probe(json!({ "status": "ok", "actual": false, "count": 1 })),
+        probe(json!({ "status": "ok", "actual": true, "count": 1 })),
+    ]));
+    let (_temp, mut session) = connected(executor.clone()).await;
+    let target = Target::TestId {
+        value: "dialog".to_string(),
+    };
+
+    let focused = session
+        .execute_action(
+            "focused",
+            assert_state(target.clone(), ElementState::Focused, true),
+        )
+        .await
+        .expect("exact focus ownership");
+    assert_eq!(focused.data["state"], "focused");
+    assert_eq!(focused.data["actual"], true);
+
+    let within = session
+        .execute_action(
+            "focus-within",
+            assert_state(target.clone(), ElementState::FocusWithin, true),
+        )
+        .await
+        .expect("composed focus ownership");
+    assert_eq!(within.data["state"], "focus_within");
+
+    let exact_mismatch = session
+        .execute_action(
+            "not-exactly-focused",
+            assert_state(target.clone(), ElementState::Focused, true),
+        )
+        .await
+        .expect_err("a focused descendant is not exact target focus");
+    assert_eq!(exact_mismatch.code(), "test.assert.focused");
+
+    let outside_mismatch = session
+        .execute_action(
+            "not-outside",
+            assert_state(target, ElementState::FocusWithin, false),
+        )
+        .await
+        .expect_err("focus inside the target violates focus_outside");
+    assert_eq!(outside_mismatch.code(), "test.assert.focus_outside");
+    session.close_surface().await.expect("close");
+
+    let actions = executor.actions();
+    for action in &actions[..4] {
+        assert_eq!(action[0], "eval");
+        assert!(action[1].contains("deepestActiveElement"));
+    }
+    assert!(actions[1][1].contains("composedContains"));
+}
+
+#[tokio::test]
+async fn observation_refs_cannot_claim_live_focus_ownership() {
+    let executor = Arc::new(QueueExecutor::new([]));
+    let (_temp, mut session) = connected(executor.clone()).await;
+    for state in [ElementState::Focused, ElementState::FocusWithin] {
+        let error = session
+            .execute_action(
+                "unstable-focus-ref",
+                assert_state(
+                    Target::Ref {
+                        value: "@e4".to_string(),
+                    },
+                    state,
+                    true,
+                ),
+            )
+            .await
+            .expect_err("focus ownership requires a live stable locator");
+        assert_eq!(error.code(), "test.driver.web.state_unsupported");
+    }
+    session.close_surface().await.expect("close");
+    assert_eq!(executor.actions(), [vec!["close".to_string()]]);
+}
+
+#[tokio::test]
+async fn deterministic_focus_dataset_classifies_600_of_600_cases() {
+    let mut outputs = Vec::with_capacity(DATASET_SIZE * 6);
+    for actual in [true, false, true, false, false] {
+        outputs.extend(
+            (0..DATASET_SIZE)
+                .map(|_| probe(json!({ "status": "ok", "actual": actual, "count": 1 }))),
+        );
+    }
+    outputs.extend((0..DATASET_SIZE).map(|_| probe(json!({ "status": "not_found", "count": 0 }))));
+    let executor = Arc::new(QueueExecutor::new(outputs));
+    let (_temp, mut session) = connected(executor.clone()).await;
+
+    for (state, expected, prefix) in [
+        (ElementState::Focused, true, "focused"),
+        (ElementState::Focused, false, "unfocused"),
+        (ElementState::FocusWithin, true, "focus-within"),
+        (ElementState::FocusWithin, false, "focus-outside"),
+    ] {
+        for index in 0..DATASET_SIZE {
+            session
+                .execute_action(
+                    format!("{prefix}-{index}"),
+                    assert_state(
+                        Target::Css {
+                            selector: format!("#{prefix}-{index}"),
+                        },
+                        state,
+                        expected,
+                    ),
+                )
+                .await
+                .unwrap_or_else(|error| panic!("{prefix} case {index} failed: {error}"));
+        }
+    }
+
+    for index in 0..DATASET_SIZE {
+        let mismatch = session
+            .execute_action(
+                format!("focus-mismatch-{index}"),
+                assert_state(
+                    Target::Css {
+                        selector: format!("#focus-mismatch-{index}"),
+                    },
+                    ElementState::Focused,
+                    true,
+                ),
+            )
+            .await
+            .expect_err("false exact focus must not pass");
+        assert_eq!(mismatch.code(), "test.assert.focused");
+    }
+
+    for index in 0..DATASET_SIZE {
+        let missing = session
+            .execute_action(
+                format!("missing-focus-{index}"),
+                assert_state(
+                    Target::Css {
+                        selector: format!("#missing-focus-{index}"),
+                    },
+                    ElementState::Focused,
+                    false,
+                ),
+            )
+            .await
+            .expect_err("a missing target cannot prove unfocused state");
+        assert_eq!(missing.code(), "test.driver.web.target_not_found");
+    }
+    session.close_surface().await.expect("close");
+    assert_eq!(executor.actions().len(), DATASET_SIZE * 6 + 1);
+}
+
+#[tokio::test]
 async fn deterministic_state_dataset_classifies_400_of_400_cases() {
     let mut outputs = Vec::with_capacity(DATASET_SIZE * 4);
     for index in 0..DATASET_SIZE {

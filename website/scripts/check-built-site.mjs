@@ -184,7 +184,9 @@ if (
   !rootHtml.includes('data-testid="capability-group-repair"') ||
   !rootHtml.includes('data-testid="capability-group-execution"') ||
   !rootHtml.includes('data-testid="capability-group-contracts"') ||
-  !rootHtml.includes('查看 40 项能力的入口、输出、证据和失败边界') ||
+  !rootHtml.includes('查看 42 项能力的入口、输出、证据和失败边界') ||
+  !rootHtml.includes('精确焦点归属') ||
+  !rootHtml.includes('组件内焦点归属') ||
   !rootHtml.includes('视口正面积相交') ||
   !rootHtml.includes('确定性指针命中可达')
 ) {
@@ -198,8 +200,10 @@ if (
     'Inspect capabilities down to signals, evidence, and expiry rules',
   ) ||
   !englishHtml.includes(
-    'Inspect all 40 entry points, outputs, evidence rules, and failure boundaries',
+    'Inspect all 42 entry points, outputs, evidence rules, and failure boundaries',
   ) ||
+  !englishHtml.includes('Exact focus ownership') ||
+  !englishHtml.includes('Component-scoped focus ownership') ||
   !englishHtml.includes('Positive-area viewport intersection') ||
   !englishHtml.includes('Deterministic pointer hit reachability')
 ) {
@@ -210,6 +214,8 @@ if (
   !rootMarkdown.includes('观察绑定引用') ||
   !rootMarkdown.includes('新页面验证与人工验收') ||
   !rootMarkdown.includes('标签页、Frame 与对话框') ||
+  !rootMarkdown.includes('精确焦点归属') ||
+  !rootMarkdown.includes('组件内焦点归属') ||
   !rootMarkdown.includes('PRD 候选生成')
 ) {
   failures.push('homepage Markdown lacks the detailed capability ledger');

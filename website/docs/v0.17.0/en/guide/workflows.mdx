@@ -38,7 +38,7 @@ a3s-test agent click <ref> --session <name> --observation <id> --json
 a3s-test agent finish --session <name> --status passed --summary <text> --json
 ```
 
-`agent act --action-json` exposes the complete action schema. In v0.17.0, action protocol revision 12 includes the revision-7 selection-scoped `insert_text` action, revision-8 live control-state expectations, revision-9 target-bound rendered-output expectations, revision-10 ordered rendered-text collections, revision-11 two-target rendered-layout relations, and revision-12 visual-viewport and pointer-hit expectations. `insert_text` still acts only inside an editing context established by an earlier action and carries no target or locator authority of its own.
+`agent act --action-json` exposes the complete action schema. In v0.17.0, action protocol revision 13 includes the revision-7 selection-scoped `insert_text` action, revision-8 live control-state expectations, revision-9 target-bound rendered-output expectations, revision-10 ordered rendered-text collections, revision-11 two-target rendered-layout relations, revision-12 visual-viewport and pointer-hit expectations, and revision-13 exact or component-scoped focus ownership. `insert_text` still acts only inside an editing context established by an earlier action and carries no target or locator authority of its own.
 
 ## ACL suites
 
@@ -231,6 +231,36 @@ Browser refs and visual points fail ACL admission because they cannot be re-reso
 
 The checked-in evidence covers 1,000/1,000 Core geometry cases, 2,000/2,000 Web protocol classifications, 200/200 sustained and 200/200 transient windows, and a standalone Chromium matrix with 20 passing assertions and 15 negative or driver-error classifications plus exact cleanup.
 
+## Prove where keyboard focus landed
+
+Sending `Tab`, `Shift+Tab`, or a focus action proves only that input was dispatched. Revision 13 observes the resulting focus owner directly.
+
+```acl
+expect "checkout-focused" {
+    focused = role("button", "Checkout")
+}
+
+expect "cancel-unfocused" {
+    unfocused = testid("cancel")
+}
+
+expect "dialog-owns-focus" {
+    focus_within = role("dialog", "Checkout")
+    stable_for_ms = 300
+    sample_interval_ms = 25
+}
+
+expect "page-does-not-own-focus" {
+    focus_outside = testid("page-shell")
+}
+```
+
+Use `focused` when one exact element must own focus. Use `focus_within` when any control inside a component, dialog, or composite scope is valid. The scoped form follows the rendered flat tree through assigned slots, DOM parents, and open-shadow hosts. The two negative forms still require a real resolved target; absence cannot masquerade as correct focus behavior.
+
+Web resolves the stable locator and reads the deepest active element through nested open shadow roots in one page evaluation. Semantic locators cross open Shadow DOM and exclude accessibility-hidden composed ancestry. CSS retains current-document query semantics. Browser refs and visual points fail ACL admission, while a current Page Context ref may first resolve to a stable locator. GUI and TUI fail closed without equivalent evidence.
+
+Keep these assertions separate from visible focus styling, pointer reachability, enabled state, and business activation. A correct focus owner does not prove any of those facts. Checked-in coverage classifies 600/600 deterministic Web cases, accepts 200/200 sustained windows, rejects 200/200 transients, and verifies 17 positive assertions plus 11 negative or driver-error classifications in standalone Chromium. The browser flow includes forward and reverse Tab, open Shadow DOM, assigned slots, hidden slot ancestry, timed focus movement, and exact cleanup.
+
 ## Prove that UI has no visible match
 
 Use `hidden` when closing, dismissing, removing, or visually hiding a target is the product requirement. The assertion passes when the stable locator has no matching element or when every match has no rendered visible box.
@@ -241,7 +271,7 @@ expect "checkout-dialog-closed" {
 }
 ```
 
-`hidden` is runner policy around the existing positive visibility assertion. It does not add an action variant; the current protocol is revision 12 because of the typed expectations above. The runner sends a positive probe to the surface driver and classifies its result deterministically.
+`hidden` is runner policy around the existing positive visibility assertion. It does not add an action variant; the current protocol is revision 13 because of the typed expectations above. The runner sends a positive probe to the surface driver and classifies its result deterministically.
 
 | Positive probe result                  | Hidden assertion result                                                                |
 | -------------------------------------- | -------------------------------------------------------------------------------------- |
@@ -273,7 +303,7 @@ wait "checkout-dialog-closed" {
 }
 ```
 
-The ACL compiler keeps `Action::Wait(WaitCondition::Visible(target))` and adds runner-owned `WaitMode::Hidden`. This still reuses the earlier visible-action variant under current action protocol revision 12. Runner executes an immediate positive visibility assertion, then repeats it every 50 ms while the target remains visible.
+The ACL compiler keeps `Action::Wait(WaitCondition::Visible(target))` and adds runner-owned `WaitMode::Hidden`. This still reuses the earlier visible-action variant under current action protocol revision 13. Runner executes an immediate positive visibility assertion, then repeats it every 50 ms while the target remains visible.
 
 | Positive probe result                  | Hidden wait result                                                                               |
 | -------------------------------------- | ------------------------------------------------------------------------------------------------ |

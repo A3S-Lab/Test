@@ -300,7 +300,7 @@ const SEMANTIC_SHADOW_TARGET_QUERY: &str = r#"
       if (style.display === "none" || style.visibility === "hidden" || style.visibility === "collapse" || Number(style.opacity) === 0) return false;
       if (current.hasAttribute("hidden") || current.getAttribute("aria-hidden") === "true") return false;
       const root = current.getRootNode();
-      current = current.parentElement || (root instanceof ShadowRoot ? root.host : null);
+      current = current.assignedSlot || current.parentElement || (root instanceof ShadowRoot ? root.host : null);
     }
     const rect = element.getBoundingClientRect();
     return element.getClientRects().length > 0 && rect.width > 0 && rect.height > 0;
@@ -394,6 +394,8 @@ pub(crate) fn assertion_probe_args(
         AssertionProbe::State(ElementState::Enabled) => "enabled",
         AssertionProbe::State(ElementState::Checked) => "checked",
         AssertionProbe::State(ElementState::Selected) => "selected",
+        AssertionProbe::State(ElementState::Focused) => "focused",
+        AssertionProbe::State(ElementState::FocusWithin) => "focus_within",
         AssertionProbe::RenderedText => "rendered_text",
         AssertionProbe::RenderedTexts => "rendered_texts",
         AssertionProbe::VisibleCount => "visible_count",
@@ -421,6 +423,36 @@ pub(crate) fn assertion_probe_args(
   }}
   if (matchedElements.length === 0) return {{ status: "not_found", count: 0 }};
   if (matchedElements.length > 1) return {{ status: "ambiguous", count: matchedElements.length }};
+
+  if (A3S_ASSERTION_PROBE === "focused" || A3S_ASSERTION_PROBE === "focus_within") {{
+    const deepestActiveElement = () => {{
+      let active = document.activeElement;
+      const seen = new Set();
+      while (active && !seen.has(active)) {{
+        seen.add(active);
+        const shadowActive = active.shadowRoot?.activeElement;
+        if (!shadowActive) break;
+        active = shadowActive;
+      }}
+      return active;
+    }};
+    const composedContains = (ancestor, candidate) => {{
+      let current = candidate;
+      const seen = new Set();
+      while (current && !seen.has(current)) {{
+        if (current === ancestor) return true;
+        seen.add(current);
+        const root = current.getRootNode?.();
+        current = current.assignedSlot || current.parentElement || (root instanceof ShadowRoot ? root.host : null);
+      }}
+      return false;
+    }};
+    const active = deepestActiveElement();
+    const actual = A3S_ASSERTION_PROBE === "focused"
+      ? active === element
+      : composedContains(element, active);
+    return {{ status: "ok", count: 1, actual }};
+  }}
 
   const ariaBoolean = (name) => {{
     const value = element.getAttribute(name);

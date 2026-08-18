@@ -111,7 +111,7 @@ a3s-test agent act \
   --json
 ```
 
-Generate the complete revision-12 JSON Schema with `a3s-test agent schema`. Current action types are grouped below.
+Generate the complete revision-13 JSON Schema with `a3s-test agent schema`. Current action types are grouped below.
 
 | Category              | `type` values                                                                                                    |
 | --------------------- | ---------------------------------------------------------------------------------------------------------------- |
@@ -241,6 +241,30 @@ Value and selected-value outputs likewise contain `target`, `expected`, and `act
 | `test.assert.selected_values`                                                            | The observed exact selected set differed                                  |
 
 Web reads live DOM state and gives native checkbox/radio properties priority over ARIA. GUI supports exact values only when CUA returned one, then rejects boolean and multi-selection state as `test.driver.gui.assertion_unsupported`. TUI supports visible terminal text only. A Page Context ref is resolved before dispatch; direct standalone refs cannot expose native option selection or multi-select arrays.
+
+### Focus-ownership ACL expectations
+
+Action protocol revision 13 adds four stable-target conditions.
+
+```acl
+expect "checkout-focused" { focused = role("button", "Checkout") }
+expect "cancel-unfocused" { unfocused = testid("cancel") }
+expect "dialog-owns-focus" { focus_within = role("dialog", "Checkout") }
+expect "page-does-not-own-focus" { focus_outside = testid("page-shell") }
+```
+
+`focused` compares the target with the deepest active element observable through the current document and nested open shadow roots. `focus_within` additionally follows rendered flat-tree ancestry through assigned slots, DOM parents, and shadow hosts. The negative forms compare the same live evidence only after target resolution. A missing element never proves `unfocused` or `focus_outside`.
+
+| Code                                                                          | Boundary                                                           |
+| ----------------------------------------------------------------------------- | ------------------------------------------------------------------ |
+| `test.spec.focus_target_unstable`                                             | ACL target is a browser ref or visual point                        |
+| `test.driver.web.target_not_found`, `.target_ambiguous`, or `.target_invalid` | Focus cannot be compared because stable target resolution failed   |
+| `test.driver.web.state_unsupported`                                           | A programmatic standalone ref requested live focus ownership       |
+| `test.assert.focused` or `.unfocused`                                         | The exact resolved element ownership differed                      |
+| `test.assert.focus_within` or `.focus_outside`                                | The resolved flat-tree scope ownership differed                    |
+| `test.assert.unstable`                                                        | A later sample contradicted an initially passing focus expectation |
+
+Semantic locators traverse open Shadow DOM and exclude accessibility-hidden composed ancestry, including hidden slot wrappers. CSS retains current-document query semantics. GUI and TUI fail closed without equivalent ownership evidence. Checked-in coverage includes 600/600 deterministic Web classifications, 200/200 sustained and 200/200 transient windows, plus 17 positive assertions and 11 negative or driver-error classifications in standalone Chromium.
 
 ### Rendered-text, ordered-sequence, and visible-count ACL expectations
 
@@ -382,7 +406,7 @@ expect "dialog-closed" {
 }
 ```
 
-The ACL compiler stores the existing `Action::Assert(Expectation::Visible(target))` plus a runner-owned hidden mode. This policy adds no action variant; the current protocol is revision 12 because of the typed expectations above. The runner dispatches a positive visibility probe and uses this contract.
+The ACL compiler stores the existing `Action::Assert(Expectation::Visible(target))` plus a runner-owned hidden mode. This policy adds no action variant; the current protocol is revision 13 because of the typed expectations above. The runner dispatches a positive visibility probe and uses this contract.
 
 | Probe result                       | Step result                                                                                  |
 | ---------------------------------- | -------------------------------------------------------------------------------------------- |
@@ -426,7 +450,7 @@ wait "dialog-closed" {
 }
 ```
 
-The compiler stores the existing visible-target wait condition plus `wait_mode = hidden`; under current revision 12 it still reuses the earlier visible-action variant. Runner sends immediate read-only positive visibility assertions and polls every 50 ms only while visible evidence continues.
+The compiler stores the existing visible-target wait condition plus `wait_mode = hidden`; under current revision 13 it still reuses the earlier visible-action variant. Runner sends immediate read-only positive visibility assertions and polls every 50 ms only while visible evidence continues.
 
 | Boundary                             | Result                                                                                 |
 | ------------------------------------ | -------------------------------------------------------------------------------------- |
@@ -537,6 +561,6 @@ The first `Ctrl+C` requests cancellation and owned-surface cleanup. A second int
 
 ## Web capability summary
 
-The Web driver supports navigation, semantic snapshots, click, hover, focus, fill and type, selection-scoped text insertion, check, select, double and context click, drag, key press, modifier wheel, and viewport control. Synchronization covers load, text, URL, positive visibility, bounded disappearance waits, and positive or hidden expectations. Evidence includes screenshots, accessibility trees, console output, page errors, HAR, Chrome traces, WebM video, and contained downloads.
+The Web driver supports navigation, semantic snapshots, click, hover, focus, fill and type, selection-scoped text insertion, check, select, double and context click, drag, key press, modifier wheel, and viewport control. Synchronization covers load, text, URL, positive visibility, bounded disappearance waits, exact or scoped focus ownership, and positive or hidden expectations. Evidence includes screenshots, accessibility trees, console output, page errors, HAR, Chrome traces, WebM video, and contained downloads.
 
 Browser execution is headless by default. `--headed` is an explicit debugging option. Initial origin, `--allow-origin`, and explicit hostname exceptions constrain navigation and network access.

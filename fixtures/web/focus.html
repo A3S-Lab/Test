@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>A3S Test focus ownership fixture</title>
+    <style>
+      body {
+        font: 16px/1.5 system-ui, sans-serif;
+        margin: 24px;
+      }
+
+      main,
+      section {
+        display: grid;
+        gap: 12px;
+        max-width: 560px;
+      }
+
+      section {
+        border: 1px solid #c9d3e0;
+        margin-block: 16px;
+        padding: 16px;
+      }
+
+      button,
+      input {
+        font: inherit;
+        padding: 8px 10px;
+      }
+    </style>
+  </head>
+  <body>
+    <main data-testid="page-shell">
+      <h1>A3S Test focus ownership fixture</h1>
+
+      <section id="profile-panel" aria-label="Profile panel">
+        <label for="profile-name">Profile name</label>
+        <input id="profile-name" autocomplete="off" />
+      </section>
+
+      <section id="focus-lane" data-testid="focus-lane" aria-label="Focus lane">
+        <button id="focus-before" type="button">Before shadow</button>
+        <a3s-focus-host data-testid="shadow-focus-scope"></a3s-focus-host>
+        <button id="focus-after" type="button">After shadow</button>
+        <button id="transient-focus" type="button">Transient focus</button>
+        <button class="focus-duplicate" type="button">Duplicate focus one</button>
+        <button class="focus-duplicate" type="button">Duplicate focus two</button>
+        <a3s-slot-focus-host>
+          <button id="slotted-focus" type="button">Slotted focus target</button>
+        </a3s-slot-focus-host>
+        <a3s-hidden-slot-focus-host>
+          <button id="hidden-slotted-focus" type="button" tabindex="-1">
+            Hidden slotted focus
+          </button>
+        </a3s-hidden-slot-focus-host>
+        <button id="aria-hidden-focus" type="button" aria-hidden="true" tabindex="-1">
+          Hidden semantic focus
+        </button>
+      </section>
+
+      <section id="outside-scope" data-testid="outside-scope" aria-label="Outside scope">
+        <button id="outside-action" type="button">Outside action</button>
+      </section>
+    </main>
+
+    <script>
+      customElements.define(
+        "a3s-focus-host",
+        class extends HTMLElement {
+          constructor() {
+            super();
+            const root = this.attachShadow({ mode: "open" });
+            root.innerHTML = `
+              <style>button { font: inherit; padding: 8px 10px; }</style>
+              <button type="button" aria-label="Shadow focus target">Shadow focus target</button>
+            `;
+          }
+        },
+      );
+
+      customElements.define(
+        "a3s-slot-focus-host",
+        class extends HTMLElement {
+          constructor() {
+            super();
+            const root = this.attachShadow({ mode: "open" });
+            root.innerHTML = `<span data-testid="slotted-shadow-scope"><slot></slot></span>`;
+          }
+        },
+      );
+
+      customElements.define(
+        "a3s-hidden-slot-focus-host",
+        class extends HTMLElement {
+          constructor() {
+            super();
+            const root = this.attachShadow({ mode: "open" });
+            root.innerHTML = `<span aria-hidden="true"><slot></slot></span>`;
+          }
+        },
+      );
+
+      document.getElementById("transient-focus").addEventListener("click", () => {
+        window.setTimeout(() => {
+          document.getElementById("focus-after").focus();
+        }, 1000);
+      });
+    </script>
+  </body>
+</html>

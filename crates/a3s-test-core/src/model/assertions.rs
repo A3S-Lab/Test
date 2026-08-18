@@ -73,6 +73,8 @@ pub enum ElementState {
     Enabled,
     Checked,
     Selected,
+    Focused,
+    FocusWithin,
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]

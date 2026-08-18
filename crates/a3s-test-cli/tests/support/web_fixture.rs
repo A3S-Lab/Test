@@ -13,6 +13,7 @@ const IO_TIMEOUT: Duration = Duration::from_secs(2);
 
 const HERMETIC_HTML: &str = include_str!("../../../../fixtures/web/hermetic.html");
 const ADVANCED_HTML: &str = include_str!("../../../../fixtures/web/advanced.html");
+const FOCUS_HTML: &str = include_str!("../../../../fixtures/web/focus.html");
 const LAYOUT_HTML: &str = include_str!("../../../../fixtures/web/layout.html");
 const INTERACTABILITY_HTML: &str = include_str!("../../../../fixtures/web/interactability.html");
 const RENDERED_HTML: &str = include_str!("../../../../fixtures/web/rendered.html");
@@ -430,6 +431,7 @@ fn route_primary(path: &str, blocked_origin: &str) -> Response {
             HERMETIC_HTML.replace("__BLOCKED_ORIGIN__", blocked_origin),
         ),
         "/advanced.html" => Response::html(ADVANCED_HTML.to_string()),
+        "/focus.html" => Response::html(FOCUS_HTML.to_string()),
         "/layout.html" => Response::html(LAYOUT_HTML.to_string()),
         "/interactability.html" => Response::html(INTERACTABILITY_HTML.to_string()),
         "/rendered.html" => Response::html(RENDERED_HTML.to_string()),

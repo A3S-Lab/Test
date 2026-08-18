@@ -104,7 +104,7 @@ profile and every later turn reconnects with it; legacy session metadata
 without the field defaults to `disabled`. The same option is available to
 deterministic `run`, direct `agent run`, and Web MCP hosts.
 
-Action protocol revision 12 is the current cross-surface schema. Revision 2
+Action protocol revision 13 is the current cross-surface schema. Revision 2
 introduced the browser interactions needed to inspect document-style
 applications: click, hover, focus, double-click, context-click,
 fill, incremental type, check/uncheck, multi-value select, drag, key press,
@@ -151,6 +151,15 @@ intersection with the visual viewport. `pointer_reachable` evaluates a fixed
 the target or a composed-tree descendant. Web acquires the rectangle,
 viewport, and hit evidence atomically. GUI and TUI fail closed because their
 current protocols do not expose equivalent evidence.
+Revision 13 adds exact and component-scoped focus ownership. `focused` and
+`unfocused` compare one stable target with the deepest active element visible
+through nested open shadow roots. `focus_within` and `focus_outside` compare
+the same focus with the target's rendered flat-tree scope, including assigned
+slots. Missing targets never prove negative state. ACL rejects browser refs
+and visual points, semantic targets exclude accessibility-hidden composed
+ancestry, and Web captures target plus focus in one page evaluation. GUI and
+TUI fail closed because their current protocols do not expose equivalent
+ownership evidence.
 
 Semantic role, text, test-ID, label, and placeholder targets are used whenever
 the underlying browser command supports the requested subaction. Focus,
@@ -179,7 +188,7 @@ tools:
 | `test_act` | Execute exactly one typed action |
 | `test_finish` | Record a result and close the exact owned surface |
 | `test_abort` | Abort and close the exact owned surface |
-| `test_schema` | Return action protocol revision 12 and its interactive JSON Schema |
+| `test_schema` | Return action protocol revision 13 and its interactive JSON Schema |
 
 The server serializes turns within each session, bounds active sessions and
 request size, advertises only registered surfaces, and closes independent

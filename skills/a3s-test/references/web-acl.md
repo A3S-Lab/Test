@@ -9,6 +9,7 @@
 - [Rendered-output expectations](#rendered-output-expectations)
 - [Rendered-layout expectations](#rendered-layout-expectations)
 - [Visual-viewport and pointer-reachability expectations](#visual-viewport-and-pointer-reachability-expectations)
+- [Focus-ownership expectations](#focus-ownership-expectations)
 - [Assertion stability](#assertion-stability)
 - [Tabs, frames, and dialogs](#tabs-frames-and-dialogs)
 - [Files and network](#files-and-network)
@@ -185,6 +186,14 @@ expect "status" {
     selected_values = ["review", "published"]
 }
 
+expect "checkout-focused" {
+    focused = role("button", "Checkout")
+}
+
+expect "dialog-owns-focus" {
+    focus_within = role("dialog", "Checkout")
+}
+
 expect "total-copy" {
     target = testid("total")
     rendered_text = "Total $42.00"
@@ -216,7 +225,8 @@ A wait accepts exactly one of `load`, `text`, `regex`, `url`, `visible`, or
 `hidden`. An expectation accepts exactly one of `text`, `url`, `visible`,
 `hidden`, `value`, `enabled`, `disabled`, `checked`, `unchecked`, `selected`,
 `unselected`, `selected_values`, `rendered_text`, `rendered_texts`,
-`visible_count`, `layout`, `in_viewport`, or `pointer_reachable`.
+`visible_count`, `layout`, `in_viewport`, `pointer_reachable`, `focused`,
+`unfocused`, `focus_within`, or `focus_outside`.
 
 `expect hidden` immediately proves that a stable semantic or CSS locator has no
 visible match, including an absent element. A visible match fails as
@@ -229,8 +239,8 @@ then every 50 ms through the scenario deadline. It succeeds only on
 counter-evidence plus timing metrics. Both negative forms reject `ref()` and
 `visual_point()` because an unresolved observation-bound target is not proof
 of hidden product state. Driver, stale-target, and ambiguity errors remain
-errors. This is runner policy and adds no action variant; viewport and pointer
-expectations advance the current action protocol to revision 12.
+errors. This is runner policy and adds no action variant; focus ownership
+advances the current action protocol to revision 13.
 
 Focus, double-click, context-click, type, uncheck, select, drag, and
 target-scoped wheel require `ref()` or `css()` with the current browser
@@ -438,6 +448,62 @@ geometry is `test.assert.in_viewport`, and nine valid misses are
 `test.assert.pointer_reachable`. GUI and TUI fail closed. Stability sampling
 retains the first and last complete payloads, while later product mismatches
 become `test.assert.unstable`.
+
+## Focus-ownership expectations
+
+Revision 13 distinguishes exact focus from focus owned by a rendered scope:
+
+```acl
+expect "checkout-focused" {
+    focused = role("button", "Checkout")
+}
+
+expect "cancel-unfocused" {
+    unfocused = testid("cancel")
+}
+
+expect "dialog-owns-focus" {
+    focus_within = role("dialog", "Checkout")
+    stable_for_ms = 300
+    sample_interval_ms = 25
+}
+
+expect "page-does-not-own-focus" {
+    focus_outside = testid("page-shell")
+}
+```
+
+`focused` requires the target to equal the deepest active element observable
+through the current document and nested open shadow roots. `focus_within`
+accepts the target itself or a descendant in the rendered flat tree, including
+assigned slots. The negative forms compare the same live evidence only after
+the target resolves; a missing element never proves `unfocused` or
+`focus_outside`.
+
+Use a stable role, text, test ID, label, placeholder, or CSS locator. ACL
+rejects `ref()` and `visual_point()` as `test.spec.focus_target_unstable`. A
+current Page Context ref may first resolve to a stable locator. A typed Web
+action that bypasses ACL with a standalone browser ref returns
+`test.driver.web.state_unsupported` rather than reading snapshot metadata.
+
+Web resolves the target and reads focus in one page evaluation. Semantic
+locators traverse open Shadow DOM and exclude accessibility-hidden composed
+ancestry, including slot wrappers. CSS retains current-document query
+semantics. Missing, ambiguous, and invalid targets remain driver errors. A
+resolved mismatch uses `test.assert.focused`, `.unfocused`, `.focus_within`, or
+`.focus_outside`.
+
+GUI and TUI fail closed because their current protocols do not expose
+equivalent focus ownership. All four forms accept assertion stability. A later
+observed mismatch becomes `test.assert.unstable`, while a later driver error
+keeps its original code.
+
+Checked-in evidence covers 600/600 deterministic Web classifications, 200/200
+sustained and 200/200 transient windows, plus 17 positive assertions and 11
+negative or driver-error classifications in standalone Chromium. The browser
+fixture includes forward and reverse Tab, open Shadow DOM, assigned slots,
+accessibility-hidden ancestry, timed focus movement, exact cleanup, and no
+private runtime leak.
 
 ## Assertion stability
 

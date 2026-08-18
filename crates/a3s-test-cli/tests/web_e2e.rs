@@ -68,6 +68,12 @@ fn local_web_fixture_has_deterministic_routes_and_owned_lifecycle() {
         .expect("UTF-8 advanced fixture")
         .contains("A3S Test advanced interactions"));
 
+    let focus = get(&origin, "/focus.html").expect("focus ownership fixture");
+    assert_eq!(focus.status, 200);
+    assert!(String::from_utf8(focus.body)
+        .expect("UTF-8 focus ownership fixture")
+        .contains("data-testid=\"shadow-focus-scope\""));
+
     let transient = get(&origin, "/transient.html").expect("transient assertion fixture");
     assert_eq!(transient.status, 200);
     assert!(String::from_utf8(transient.body)
@@ -116,7 +122,7 @@ fn local_web_fixture_has_deterministic_routes_and_owned_lifecycle() {
     let missing = get(&origin, "/missing").expect("missing route");
     assert_eq!(missing.status, 404);
     assert!(fixture.blocked_requests().is_empty());
-    assert_eq!(fixture.primary_requests().len(), 11);
+    assert_eq!(fixture.primary_requests().len(), 12);
 
     drop(fixture);
     assert!(

@@ -4,6 +4,21 @@
 
 ### Added
 
+- Added action protocol revision 13 with four deterministic focus-ownership
+  expectations: `focused`, `unfocused`, `focus_within`, and `focus_outside`.
+  Web resolves one stable target and reads the deepest active element from the
+  current document and nested open shadow roots in one page evaluation. Exact
+  ownership stays separate from flat-tree containment, including assigned
+  slots. Semantic locators traverse open Shadow DOM and exclude
+  accessibility-hidden composed ancestry; CSS retains current-document query
+  semantics. ACL rejects browser refs and visual points, missing targets never
+  prove a negative state, and GUI/TUI fail closed without equivalent evidence.
+  Coverage classifies 600/600 deterministic Web cases, accepts 200/200
+  sustained focus windows, rejects 200/200 transient windows, and verifies 17
+  positive assertions plus 11 negative or driver-error classifications in
+  standalone Chromium. The browser matrix includes forward and reverse Tab,
+  open Shadow DOM, assigned slots, accessibility-hidden ancestry, timed focus
+  movement, exact fixture cleanup, and no private runtime leak.
 - Added action protocol revision 12 with orthogonal `in_viewport` and
   `pointer_reachable` expectations. Web now distinguishes positive-area
   visual-viewport intersection from pointer hit reachability instead of

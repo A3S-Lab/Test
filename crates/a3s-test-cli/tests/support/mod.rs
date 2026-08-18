@@ -7,6 +7,8 @@ pub mod browser_zoom;
 #[allow(dead_code)]
 pub mod control_state;
 #[allow(dead_code)]
+pub mod focus_ownership;
+#[allow(dead_code)]
 pub mod interactability_assertions;
 #[allow(dead_code)]
 pub mod layout_assertions;

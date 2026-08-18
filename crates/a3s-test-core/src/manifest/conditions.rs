@@ -106,6 +106,10 @@ pub(super) fn parse_expectation(
         "unchecked",
         "selected",
         "unselected",
+        "focused",
+        "unfocused",
+        "focus_within",
+        "focus_outside",
         "selected_values",
         "layout",
     ];
@@ -259,7 +263,8 @@ pub(super) fn parse_expectation(
                 tolerance_px,
             }
         }
-        "enabled" | "disabled" | "checked" | "unchecked" | "selected" | "unselected" => {
+        "enabled" | "disabled" | "checked" | "unchecked" | "selected" | "unselected"
+        | "focused" | "unfocused" | "focus_within" | "focus_outside" => {
             let (state, expected) = match condition {
                 "enabled" => (ElementState::Enabled, true),
                 "disabled" => (ElementState::Enabled, false),
@@ -267,10 +272,21 @@ pub(super) fn parse_expectation(
                 "unchecked" => (ElementState::Checked, false),
                 "selected" => (ElementState::Selected, true),
                 "unselected" => (ElementState::Selected, false),
+                "focused" => (ElementState::Focused, true),
+                "unfocused" => (ElementState::Focused, false),
+                "focus_within" => (ElementState::FocusWithin, true),
+                "focus_outside" => (ElementState::FocusWithin, false),
                 _ => unreachable!("bounded state condition"),
             };
+            let target =
+                parse_target(&block.attributes[condition], &format!("{path}.{condition}"))?;
+            let target = if matches!(state, ElementState::Focused | ElementState::FocusWithin) {
+                stable_focus_target(target, path, condition)?
+            } else {
+                target
+            };
             Expectation::State {
-                target: parse_target(&block.attributes[condition], &format!("{path}.{condition}"))?,
+                target,
                 state,
                 expected,
             }
@@ -278,6 +294,17 @@ pub(super) fn parse_expectation(
         _ => unreachable!("condition list and parser must remain aligned"),
     };
     Ok((positive, AssertionMode::Positive))
+}
+
+fn stable_focus_target(target: Target, path: &str, condition: &str) -> Result<Target, SpecError> {
+    if matches!(target, Target::Ref { .. } | Target::VisualPoint { .. }) {
+        return Err(SpecError::new(
+            "test.spec.focus_target_unstable",
+            format!("{path}.{condition}"),
+            "focus ownership assertions require a stable semantic or CSS locator, not an observation-bound ref or visual point",
+        ));
+    }
+    Ok(target)
 }
 
 fn stable_layout_target(target: Target, path: &str, name: &str) -> Result<Target, SpecError> {

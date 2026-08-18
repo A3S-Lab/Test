@@ -151,6 +151,15 @@ fn redacts_assertion_targets_text_values_and_selected_values() {
             },
         },
         Action::Assert {
+            expectation: Expectation::State {
+                target: Target::TestId {
+                    value: "state-secret-focus-scope".to_string(),
+                },
+                state: ElementState::FocusWithin,
+                expected: true,
+            },
+        },
+        Action::Assert {
             expectation: Expectation::Value {
                 target: Target::Label {
                     value: "state-secret field".to_string(),

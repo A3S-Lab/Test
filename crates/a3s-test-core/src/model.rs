@@ -11,7 +11,7 @@ pub use assertions::{
     MAX_RENDERED_TEXT_ITEMS, MIN_ASSERTION_STABILITY_MS,
 };
 
-pub const ACTION_PROTOCOL_REVISION: u32 = 12;
+pub const ACTION_PROTOCOL_REVISION: u32 = 13;
 pub const PAGE_CONTEXT_PROTOCOL: &str = "a3s.test.page-context/1";
 pub const REPAIR_PROTOCOL: &str = "a3s.test.repair/1";
 

@@ -88,7 +88,7 @@ a3s-test worker inventory
 | `terminal_resize`                  | columns 与 rows                           | 调整自有 PTY 或 ConPTY，随后终端语义会更新                  |
 | `terminal_recording`               | 相对 artifact 路径                        | 保存受约束终端记录，不写到工作区任意位置                    |
 
-动作协议修订为 12。完整可生成 Schema 以 `a3s-test agent schema` 输出为准。未知字段、缺少必填字段、非法枚举和 surface 不支持的动作会在执行前拒绝。
+动作协议修订为 13。完整可生成 Schema 以 `a3s-test agent schema` 输出为准。未知字段、缺少必填字段、非法枚举和 surface 不支持的动作会在执行前拒绝。
 
 ### 实时控件状态断言
 
@@ -100,6 +100,18 @@ a3s-test worker inventory
 | 稳定控件状态 | 上述任一写法加 `stable_for_ms` 与可选采样间隔                          | 首次与末次断言输出、有界样本数和实际观察窗口   | 后续出现反例时返回 `test.assert.unstable`，并保留初始证据和瞬态不匹配                            |
 
 Web 断言读取实时 DOM 属性。原生 checkbox 和 radio 的 `checked` 值优先于矛盾的 ARIA，自定义控件则可以通过合法 ARIA 暴露布尔状态。`selected_values = []` 是合法的精确空集合断言。GUI 只有在 CUA 确实提供值时才能比较精确值，其他情况关闭失败；布尔和多选状态目前不支持。TUI 不支持控件状态断言。Page Context ref 会在派发前解析为当前语义目标；standalone ref 无法暴露所需属性时返回驱动错误，不进行猜测。
+
+### 焦点归属断言
+
+| 能力           | ACL 写法                                     | 观察证据                                           | 失败边界                                                                                          |
+| -------------- | -------------------------------------------- | -------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| 精确焦点归属   | `focused` 或 `unfocused` 加一个目标          | 目标与最深层可观察 active element 的比较结果       | 目标缺失不能证明 `unfocused`；已解析不匹配使用 `test.assert.focused` 或 `.unfocused`              |
+| 组件内焦点归属 | `focus_within` 或 `focus_outside` 加一个目标 | 精确焦点及渲染扁平树祖先关系，包括 slot assignment | 目标缺失不能证明 `focus_outside`；已解析不匹配使用 `test.assert.focus_within` 或 `.focus_outside` |
+| 稳定焦点归属   | 上述任一组加 `stable_for_ms` 与采样间隔      | 首次与末次布尔状态，以及有界稳定性指标             | 后续合法不匹配返回 `test.assert.unstable`；目标或驱动失败保留原始归属                             |
+
+Web 在一次页面求值中解析一个稳定目标，并沿嵌套开放 Shadow DOM 读取最深层 `activeElement`。扁平树包含关系依次跟随 assigned slot、DOM 父级与 Shadow host。语义定位器穿透开放 Shadow DOM，并排除可访问性隐藏的 composed ancestry，包括隐藏的 slot wrapper。CSS 保持当前 document 查询语义。
+
+ACL 以 `test.spec.focus_target_unstable` 拒绝 browser ref 与 visual point；当前 Page Context ref 可先解析为稳定定位器。程序化 standalone browser ref 返回 `test.driver.web.state_unsupported`。GUI 与 TUI 的当前协议没有等价焦点证据，因此明确关闭失败。当前检入证据覆盖 600/600 个确定性 Web 分类、200/200 个持续窗口、200/200 个瞬态窗口，以及 standalone Chromium 中 17 个正向断言和 11 个负向或驱动错误分类，包含正向/反向 Tab、开放 Shadow DOM、assigned slot、定时焦点移动和精确清理。
 
 ### 渲染输出断言
 

@@ -78,7 +78,7 @@ export const homeCopy: Record<Locale, LocalizedCopy> = {
     capabilityLedgerTitle: '功能清单细到输入、证据和失效规则',
     capabilityLedgerBody:
       '展开任一组即可核对采集信号、公开引用、权限边界和验证方式。这里列的是当前实现契约，不把可选模型或待审核平台写成既有能力。',
-    capabilityReference: '查看 40 项能力的入口、输出、证据和失败边界',
+    capabilityReference: '查看 42 项能力的入口、输出、证据和失败边界',
     capabilityItemCount: '项可核验能力',
     capabilityGroups: [
       {
@@ -242,6 +242,16 @@ export const homeCopy: Record<Locale, LocalizedCopy> = {
             signal: 'WAIT · ASSERT',
             title: '有界等待与本地断言',
             body: '按 load、文本、URL 或可见性等待和断言，全部受场景或命令 deadline 约束，不用无限 sleep 推测页面已经完成。',
+          },
+          {
+            signal: 'FOCUSED · UNFOCUSED',
+            title: '精确焦点归属',
+            body: '把稳定目标与当前文档及开放 Shadow DOM 中最深的 activeElement 原子比较；目标缺失不能证明未聚焦。',
+          },
+          {
+            signal: 'FOCUS_WITHIN · FOCUS_OUTSIDE',
+            title: '组件内焦点归属',
+            body: '沿 assigned slot、DOM 父级与 Shadow host 验证焦点是否属于组件范围，可回归焦点陷阱、恢复和真实 Tab 顺序。',
           },
           {
             signal: 'IN_VIEWPORT · VISUAL VIEWPORT',
@@ -550,7 +560,7 @@ export const homeCopy: Record<Locale, LocalizedCopy> = {
     capabilityLedgerBody:
       'Expand a group to inspect collection signals, public refs, authority boundaries, and verification. This ledger describes implemented contracts without presenting optional models or unverified platforms as built-in support.',
     capabilityReference:
-      'Inspect all 40 entry points, outputs, evidence rules, and failure boundaries',
+      'Inspect all 42 entry points, outputs, evidence rules, and failure boundaries',
     capabilityItemCount: 'verifiable capabilities',
     capabilityGroups: [
       {
@@ -715,6 +725,16 @@ export const homeCopy: Record<Locale, LocalizedCopy> = {
             signal: 'WAIT · ASSERT',
             title: 'Bounded waits and local assertions',
             body: 'Wait or assert on load, text, URL, or visibility under scenario and command deadlines instead of inferring readiness from an unbounded sleep.',
+          },
+          {
+            signal: 'FOCUSED · UNFOCUSED',
+            title: 'Exact focus ownership',
+            body: 'Atomically compare a stable target with the deepest activeElement across the current document and open Shadow DOM. A missing target never proves unfocused state.',
+          },
+          {
+            signal: 'FOCUS_WITHIN · FOCUS_OUTSIDE',
+            title: 'Component-scoped focus ownership',
+            body: 'Follow assigned slots, DOM parents, and shadow hosts to verify component ownership for focus traps, restoration, and real Tab order.',
           },
           {
             signal: 'IN_VIEWPORT · VISUAL VIEWPORT',

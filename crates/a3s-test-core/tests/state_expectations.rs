@@ -5,6 +5,83 @@ use a3s_test_core::{
 };
 
 #[test]
+fn parses_exact_and_composed_focus_ownership_expectations() {
+    let suite = TestSuite::from_acl(
+        r#"
+suite "focus-ownership" {
+    scenario "keyboard" {
+        surface = "web"
+
+        expect "checkout-focused" {
+            focused = role("button", "Checkout")
+        }
+
+        expect "cancel-unfocused" {
+            unfocused = testid("cancel")
+        }
+
+        expect "dialog-owns-focus" {
+            focus_within = css("[role=dialog]")
+        }
+
+        expect "page-does-not-own-focus" {
+            focus_outside = testid("page-shell")
+        }
+    }
+}
+"#,
+    )
+    .expect("typed focus ownership suite");
+
+    let steps = &suite.scenarios[0].steps;
+    assert_eq!(steps.len(), 4);
+    for (index, state, expected) in [
+        (0, ElementState::Focused, true),
+        (1, ElementState::Focused, false),
+        (2, ElementState::FocusWithin, true),
+        (3, ElementState::FocusWithin, false),
+    ] {
+        let Action::Assert {
+            expectation:
+                Expectation::State {
+                    state: actual_state,
+                    expected: actual_expected,
+                    ..
+                },
+        } = &steps[index].action
+        else {
+            panic!("step {index} was not a focus ownership assertion");
+        };
+        assert_eq!(*actual_state, state);
+        assert_eq!(*actual_expected, expected);
+    }
+}
+
+#[test]
+fn focus_ownership_acl_rejects_observation_bound_targets() {
+    for condition in ["focused", "unfocused", "focus_within", "focus_outside"] {
+        for target in ["ref(\"@e1\")", "visual_point(\"@v1\", 10, 20)"] {
+            let acl = format!(
+                r#"
+suite "unstable-focus" {{
+    scenario "keyboard" {{
+        surface = "web"
+        expect "focus" {{ {condition} = {target} }}
+    }}
+}}
+"#
+            );
+            let error = TestSuite::from_acl(&acl).expect_err("unstable focus target");
+            assert_eq!(
+                error.code(),
+                "test.spec.focus_target_unstable",
+                "{condition}: {target}"
+            );
+        }
+    }
+}
+
+#[test]
 fn parses_typed_control_state_value_and_selection_expectations() {
     let suite = TestSuite::from_acl(
         r##"
@@ -164,7 +241,7 @@ suite "invalid-state" {{
 
 #[test]
 fn state_expectations_remain_wire_compatible_after_revision_nine() {
-    assert_eq!(ACTION_PROTOCOL_REVISION, 12);
+    assert_eq!(ACTION_PROTOCOL_REVISION, 13);
     let action = Action::Assert {
         expectation: Expectation::State {
             target: Target::Ref {
@@ -196,8 +273,39 @@ fn state_expectations_remain_wire_compatible_after_revision_nine() {
 }
 
 #[test]
+fn focus_ownership_states_have_stable_wire_names() {
+    for (state, expected_name) in [
+        (ElementState::Focused, "focused"),
+        (ElementState::FocusWithin, "focus_within"),
+    ] {
+        let action = Action::Assert {
+            expectation: Expectation::State {
+                target: Target::TestId {
+                    value: "focus-target".to_string(),
+                },
+                state,
+                expected: true,
+            },
+        };
+        let encoded = serde_json::to_value(&action).expect("focus state action JSON");
+        assert_eq!(encoded["expectation"]["value"]["state"], expected_name);
+        assert_eq!(
+            serde_json::from_value::<Action>(encoded).expect("decode focus state action"),
+            action
+        );
+    }
+}
+
+#[test]
 fn state_expectation_targets_keep_observation_and_page_context_binding() {
     for expectation in [
+        Expectation::State {
+            target: Target::Ref {
+                value: "@c1".to_string(),
+            },
+            state: ElementState::FocusWithin,
+            expected: true,
+        },
         Expectation::State {
             target: Target::Ref {
                 value: "@c1".to_string(),

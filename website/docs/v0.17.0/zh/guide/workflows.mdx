@@ -38,7 +38,7 @@ a3s-test agent click <ref> --session <name> --observation <id> --json
 a3s-test agent finish --session <name> --status passed --summary <text> --json
 ```
 
-`agent act --action-json` 暴露完整动作 Schema。v0.17.0 的动作协议修订为 12，其中包含修订 7 的选择范围 `insert_text`、修订 8 的实时控件状态断言、修订 9 的目标绑定渲染输出断言、修订 10 的有序渲染文本集合、修订 11 的双目标渲染布局关系，以及修订 12 的 visual viewport 和指针命中断言。`insert_text` 仍然只作用于先前已经建立的编辑上下文，不携带新的目标或定位权限。
+`agent act --action-json` 暴露完整动作 Schema。v0.17.0 的动作协议修订为 13，其中包含修订 7 的选择范围 `insert_text`、修订 8 的实时控件状态断言、修订 9 的目标绑定渲染输出断言、修订 10 的有序渲染文本集合、修订 11 的双目标渲染布局关系、修订 12 的 visual viewport 与指针命中断言，以及修订 13 的精确或组件范围焦点归属。`insert_text` 仍然只作用于先前已经建立的编辑上下文，不携带新的目标或定位权限。
 
 ## ACL 套件
 
@@ -231,6 +231,36 @@ Web 在一次页面求值中解析稳定定位器、采集两个矩形，并执�
 
 当前检入证据覆盖 1,000/1,000 个 Core 几何案例、2,000/2,000 个 Web 协议分类、200/200 个持续窗口与 200/200 个瞬态窗口，以及 standalone Chromium 中 20 个通过断言和 15 个负向或驱动错误分类，并完成精确清理。
 
+## 证明键盘焦点最终落在哪里
+
+发送 `Tab`、`Shift+Tab` 或 focus 动作，只能证明输入已经派发。修订 13 会直接观察动作后的焦点归属。
+
+```acl
+expect "checkout-focused" {
+    focused = role("button", "Checkout")
+}
+
+expect "cancel-unfocused" {
+    unfocused = testid("cancel")
+}
+
+expect "dialog-owns-focus" {
+    focus_within = role("dialog", "Checkout")
+    stable_for_ms = 300
+    sample_interval_ms = 25
+}
+
+expect "page-does-not-own-focus" {
+    focus_outside = testid("page-shell")
+}
+```
+
+一个明确元素必须持有焦点时使用 `focused`。组件、对话框或复合控件中的任意有效后代都可以持有焦点时，使用 `focus_within`。范围断言会沿 assigned slot、DOM 父级与开放 Shadow host 检查渲染扁平树。两种负向形式仍然要求解析到真实目标，元素缺失不能伪装成正确焦点行为。
+
+Web 在一次页面求值中解析稳定定位器，并沿嵌套开放 Shadow DOM 读取最深层 active element。语义定位器穿透开放 Shadow DOM，并排除可访问性隐藏的 composed ancestry。CSS 保持当前 document 查询语义。browser ref 与 visual point 无法跨稳定窗口重新解析，因此 ACL 会拒绝；当前 Page Context ref 可先解析成稳定定位器。GUI 与 TUI 缺乏等价证据时明确关闭失败。
+
+焦点归属不能替代可见焦点样式、指针可达、enabled 状态或业务激活结果。当前检入覆盖 600/600 个确定性 Web 案例、200/200 个持续窗口、200/200 个瞬态窗口，以及 standalone Chromium 中 17 个正向断言和 11 个负向或驱动错误分类。真实浏览器流程包含正向与反向 Tab、开放 Shadow DOM、assigned slot、隐藏 slot ancestry、定时焦点移动和精确清理。
+
 ## 证明界面已经没有可见匹配
 
 当产品要求是关闭、移除或隐藏某个目标时，使用 `hidden`。稳定定位器没有匹配元素，或所有匹配元素都没有渲染出的可见边界时，断言通过。
@@ -241,7 +271,7 @@ expect "checkout-dialog-closed" {
 }
 ```
 
-`hidden` 是 Runner 围绕现有正向可见性断言执行的步骤策略，不会增加 Action 变体。当前协议已推进到修订 12，是因为上面的类型化 expectation。Runner 向 surface 驱动发送正向探测，再确定性地分类结果。
+`hidden` 是 Runner 围绕现有正向可见性断言执行的步骤策略，不会增加 Action 变体。当前协议已推进到修订 13，是因为上面的类型化 expectation。Runner 向 surface 驱动发送正向探测，再确定性地分类结果。
 
 | 正向探测结果                      | `hidden` 断言结果                                                 |
 | --------------------------------- | ----------------------------------------------------------------- |
@@ -273,7 +303,7 @@ wait "checkout-dialog-closed" {
 }
 ```
 
-ACL 编译器仍保存 `Action::Wait(WaitCondition::Visible(target))`，只增加 Runner 负责的 `WaitMode::Hidden`。在当前 Action 协议修订 12 下，它仍然复用早先的可见性 Action 变体。Runner 先执行一次立即的正向可见性断言；目标仍可见时，每 50 ms 重复一次。
+ACL 编译器仍保存 `Action::Wait(WaitCondition::Visible(target))`，只增加 Runner 负责的 `WaitMode::Hidden`。在当前 Action 协议修订 13 下，它仍然复用早先的可见性 Action 变体。Runner 先执行一次立即的正向可见性断言；目标仍可见时，每 50 ms 重复一次。
 
 | 正向探测结果                      | 隐藏等待结果                                                            |
 | --------------------------------- | ----------------------------------------------------------------------- |

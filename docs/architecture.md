@@ -783,6 +783,65 @@ Runner stability repeats the same immutable read-only action. Coverage proves
 and 200 transient windows, and a standalone Chromium matrix with 20 passing
 assertions and 15 negative or driver-error classifications.
 
+### Focus-ownership observation
+
+Revision 13 separates sending keyboard input from proving where focus ended.
+It also separates exact element ownership from component-scoped ownership:
+
+```text
+current document activeElement
+        |
+        +--> nested open shadowRoot.activeElement --> deepest observable focus
+                                                        |
+                                                        +--> equals target --> focused
+                                                        |
+                                                        +--> target contains it
+                                                             in the flat tree --> focus_within
+```
+
+The Web adapter resolves one stable target and computes both facts inside one
+JavaScript evaluation. Active-element descent follows only open shadow roots;
+a closed root remains opaque and exposes its host as the deepest observable
+element. Flat-tree ancestry follows `assignedSlot`, DOM parents, and
+open-shadow hosts. This makes a component scope own focus placed in a slotted
+light-DOM control without confusing the host with the exact focused element.
+
+Semantic locator resolution uses the same open-shadow traversal and rejects
+hidden or accessibility-hidden composed ancestry, including ancestors reached
+through an assigned slot. CSS keeps current-document query semantics. Both
+planes still require exactly one target. Zero or multiple matches and invalid
+selectors remain driver errors before the focus comparison runs.
+
+The four ACL spellings map onto two typed states and one expected boolean:
+
+```text
+focused       -> State(Focused, expected=true)
+unfocused     -> State(Focused, expected=false)
+focus_within  -> State(FocusWithin, expected=true)
+focus_outside -> State(FocusWithin, expected=false)
+```
+
+This representation prevents target absence from proving either negative
+form. ACL also rejects browser refs and visual points because stability may
+repeat the assertion after their observation expires. A current Page Context
+ref can participate only after it resolves to a stable semantic or CSS
+locator. A programmatic standalone browser ref fails as unsupported instead of
+querying stale snapshot metadata.
+
+Core owns state names, expected values, mismatch codes, target admission,
+redaction, and the revision-13 wire contract. Web owns live focus evidence.
+GUI and TUI return explicit unsupported errors because neither current
+protocol provides an equivalent deepest-active-element fact. Runner stability
+repeats the same immutable assertion and preserves the first and last observed
+state without changing driver-error ownership.
+
+Coverage classifies 600 deterministic Web cases, accepts 200 sustained focus
+windows, rejects 200 transients, and runs 17 positive assertions plus 11
+negative or driver-error classifications in standalone Chromium. The real
+browser path includes forward and reverse Tab, open-shadow focus,
+assigned slots, accessibility-hidden slot ancestry, timed focus movement,
+exact socket cleanup, and a private-runtime leak check.
+
 ### Typed control-state observation
 
 Revision 8 adds new `Expectation` wire variants because control state is part
