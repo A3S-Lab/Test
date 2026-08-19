@@ -22,13 +22,19 @@ jobs:
         with:
           node-version: 22
           cache: npm
-          cache-dependency-path: website/package-lock.json
+          cache-dependency-path: |
+            website/package-lock.json
+            packages/testkit/package-lock.json
 
       - name: Test release metadata admission
         run: node --test tests/release-metadata.test.mjs
 
       - name: Verify tagged release metadata
         run: node scripts/check-release-metadata.mjs --tag "$GITHUB_REF_NAME"
+
+      - name: Install Test Kit dependencies
+        working-directory: packages/testkit
+        run: npm ci
 
       - name: Install documentation dependencies
         working-directory: website

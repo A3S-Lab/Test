@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import test from "node:test";
 import { validateReleaseMetadata } from "../scripts/release-metadata.mjs";
 
@@ -190,4 +191,36 @@ test("rejects duplicate and malformed version records", () => {
     "Archive v0.16.2 source tag v0.16.1 does not match its version.",
     "Archive 16.0 source commit must be a full lowercase Git commit SHA.",
   ]);
+});
+
+test("release preflight installs Test Kit build dependencies", async () => {
+  const workflow = await readFile(
+    new URL("../.github/workflows/release.yml", import.meta.url),
+    "utf8",
+  );
+  const setupIndex = workflow.indexOf("cache-dependency-path: |");
+  const testKitLockIndex = workflow.indexOf(
+    "packages/testkit/package-lock.json",
+    setupIndex,
+  );
+  const testKitInstallIndex = workflow.indexOf(
+    "- name: Install Test Kit dependencies",
+  );
+  const documentationInstallIndex = workflow.indexOf(
+    "- name: Install documentation dependencies",
+  );
+
+  assert.ok(setupIndex >= 0, "release preflight must configure the npm cache");
+  assert.ok(
+    testKitLockIndex > setupIndex,
+    "release preflight cache must include the Test Kit lockfile",
+  );
+  assert.ok(
+    testKitInstallIndex > testKitLockIndex,
+    "release preflight must install Test Kit dependencies",
+  );
+  assert.ok(
+    documentationInstallIndex > testKitInstallIndex,
+    "Test Kit dependencies must be installed before documentation checks",
+  );
 });
