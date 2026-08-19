@@ -67,16 +67,17 @@ For keyboard multi-selection, move focus to a host-page element and press `Enter
 
 Every draft has a stable ID, creation time, target, instruction, optional success criteria, intent, and severity.
 
-| Field             | Values or meaning                                               |
-| ----------------- | --------------------------------------------------------------- |
-| `instruction`     | Required human repair request                                   |
-| `successCriteria` | A result verifiable in the browser or by focused checks         |
-| `intent`          | `fix`, `change`, `question`, or `approve`                       |
-| `severity`        | `blocking`, `important`, or `suggestion`                        |
-| `target.kind`     | `node`, `text`, `region`, or `drawing`                          |
-| `target.nodeIds`  | Private targets still valid on the fresh revision at submission |
-| `target.region`   | Optional viewport CSS-pixel region                              |
-| `relations`       | Currently an explicit `conflicts_with` relation                 |
+| Field                 | Values or meaning                                               |
+| --------------------- | --------------------------------------------------------------- |
+| `instruction`         | Required human repair request                                   |
+| `successCriteria`     | A result verifiable in the browser or by focused checks         |
+| `intent`              | `fix`, `change`, `question`, or `approve`                       |
+| `severity`            | `blocking`, `important`, or `suggestion`                        |
+| `target.kind`         | `node`, `text`, `region`, or `drawing`                          |
+| `target.nodeIds`      | Private targets still valid on the fresh revision at submission |
+| `target.region`       | Optional viewport CSS-pixel region                              |
+| `target.regionScroll` | Optional page scroll offset captured with the viewport region   |
+| `relations`           | Currently an explicit `conflicts_with` relation                 |
 
 At submission, Test Kit reads the fresh revision and adds `contextRevision`, page, route, viewport, component and source hints, semantic locators, target and nearby nodes, facts, and bounded UI understanding. The complete `context` is marked `untrusted: true`.
 

@@ -267,11 +267,18 @@ function validDraft(value: unknown): value is RepairDraft {
 }
 
 function validTarget(value: unknown): value is RepairTarget {
-  if (!isObject(value) || !onlyKeys(value, ["kind", "nodeIds", "selectedText", "region", "drawing", "layout"])) return false;
+  if (!isObject(value) || !onlyKeys(value, ["kind", "nodeIds", "selectedText", "region", "regionScroll", "drawing", "layout"])) return false;
   if (!["node", "text", "region", "drawing"].includes(String(value.kind)) || !Array.isArray(value.nodeIds)) return false;
   if (value.nodeIds.length > 5_000 || value.nodeIds.some((id) => !boundedString(id, 1, 128))) return false;
   if (value.selectedText !== undefined && !boundedString(value.selectedText, 0, 4_096)) return false;
   if (value.region !== undefined && !validRect(value.region)) return false;
+  if (value.regionScroll !== undefined && (
+    value.region === undefined ||
+    !isObject(value.regionScroll) ||
+    !onlyKeys(value.regionScroll, ["x", "y"]) ||
+    !finite(value.regionScroll.x) ||
+    !finite(value.regionScroll.y)
+  )) return false;
   if (value.drawing !== undefined) {
     if (!Array.isArray(value.drawing) || value.drawing.length > 2_000) return false;
     if (value.drawing.some((point) => !isObject(point) || !onlyKeys(point, ["x", "y"]) || !finite(point.x) || !finite(point.y))) return false;

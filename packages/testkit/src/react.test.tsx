@@ -6,6 +6,9 @@ import { A3SReviewOverlay, A3STestBoundary, A3STestKit } from "./react";
 import { setRect } from "./test-setup";
 import type { DesignAuditReport, QualityReport } from "./types";
 
+const { domToJpeg } = vi.hoisted(() => ({ domToJpeg: vi.fn() }));
+vi.mock("modern-screenshot", () => ({ domToJpeg }));
+
 function shadowQuery(selector: string): HTMLElement {
   const host = document.querySelector<HTMLElement>("[data-a3s-testkit-overlay]");
   const element = host?.shadowRoot?.querySelector<HTMLElement>(selector);
@@ -118,7 +121,7 @@ describe("React adapter and review overlay", () => {
     expect(shadowButton("画笔").querySelector("svg")).toBeTruthy();
     expect(shadowButton("矩形").querySelector("svg")).toBeTruthy();
     expect(shadowButton("文字").querySelector("svg")).toBeTruthy();
-    expect(shadowButton("截取屏幕").querySelector("svg")).toBeTruthy();
+    expect(shadowButton("截取当前页面").querySelector("svg")).toBeTruthy();
     expect(shadowButton("上传截图").querySelector("svg")).toBeTruthy();
     expect(shadowQuery("[aria-label='设计画布']")).toBeTruthy();
 
@@ -258,6 +261,46 @@ describe("React adapter and review overlay", () => {
         image: { kind: "inline", mediaType: "image/jpeg" },
       },
     });
+  });
+
+  it("captures only browser content without requesting screen-sharing permission", async () => {
+    vi.spyOn(window, "Image").mockImplementation(() => {
+      const image = document.createElement("img");
+      Object.defineProperty(image, "naturalWidth", { value: 1000 });
+      Object.defineProperty(image, "naturalHeight", { value: 800 });
+      Object.defineProperty(image, "src", {
+        configurable: true,
+        set: () => queueMicrotask(() => image.onload?.(new Event("load"))),
+      });
+      return image;
+    });
+    domToJpeg.mockReset();
+    domToJpeg.mockResolvedValue("data:image/jpeg;base64,AQIDBA==");
+    const getDisplayMedia = vi.fn();
+    Object.defineProperty(navigator, "mediaDevices", {
+      configurable: true,
+      value: { getDisplayMedia },
+    });
+
+    render(<A3STestKit enabled page={{ id: "browser-content-capture" }} repairStorage="memory"><button id="browser-content-target">Old panel</button><A3SReviewOverlay enabled defaultOpen /></A3STestKit>);
+    await waitFor(() => expect(shadowQuery(".a3s-panel")).toBeTruthy());
+    const target = document.querySelector<HTMLElement>("#browser-content-target")!;
+    setRect(target, { x: 80, y: 90, width: 240, height: 120 });
+    fireEvent.click(shadowButton("Element"));
+    target.dispatchEvent(pointerEventWithPath(target, 120, 110));
+    fireEvent.click(await waitFor(() => shadowButton("Open design board")));
+
+    const capture = shadowButton("Capture current page");
+    expect(capture.title).toContain("without screen-sharing permission");
+    fireEvent.click(capture);
+    await waitFor(() => expect(domToJpeg).toHaveBeenCalledTimes(1));
+    const [captureRoot, options] = domToJpeg.mock.calls[0]!;
+    expect(captureRoot).toBe(document.documentElement);
+    expect(options).toMatchObject({ width: 1000, height: 800, quality: 0.9, scale: 1 });
+    expect(options.filter(document.querySelector("[data-a3s-testkit-overlay]")!)).toBe(false);
+    expect(options.filter(target)).toBe(true);
+    expect(getDisplayMedia).not.toHaveBeenCalled();
+    await waitFor(() => expect(shadowQuery(".a3s-design-status").textContent).toContain("Screenshot."));
   });
 
   it("mounts the dependency-free design tools inside the Test Kit shadow root", async () => {
@@ -487,6 +530,10 @@ describe("React adapter and review overlay", () => {
     expect(shadowQuery(".a3s-markers").querySelectorAll(".a3s-marker-action")).toHaveLength(1);
     expect((shadowQuery(".a3s-marker") as HTMLElement).style.cssText).toContain("width: 120px");
 
+    Object.defineProperty(window, "scrollY", { configurable: true, value: 80 });
+    fireEvent.scroll(window);
+    await waitFor(() => expect(shadowQuery(".a3s-marker").style.top).toBe("-80px"));
+
     fireEvent.click(shadowButton("Edit"));
     fireEvent.change(shadowQuery("textarea"), { target: { value: "Align both primary actions" } });
     fireEvent.click(shadowButton("Save changes"));
@@ -496,6 +543,41 @@ describe("React adapter and review overlay", () => {
     expect(shadowQuery(".a3s-markers").children).toHaveLength(0);
     fireEvent.click(shadowButton("Reopen marker"));
     await waitFor(() => expect(shadowQuery(".a3s-markers").children).toHaveLength(1));
+  });
+
+  it("hides markers while the review overlay is closed", async () => {
+    render(<A3STestKit enabled page={{ id: "closed-markers" }} repairStorage="memory"><button id="closed-marker-target">Target</button><A3SReviewOverlay enabled defaultOpen /></A3STestKit>);
+    await waitFor(() => expect(shadowQuery(".a3s-panel")).toBeTruthy());
+    const target = document.querySelector<HTMLElement>("#closed-marker-target")!;
+    setRect(target, { x: 20, y: 80, width: 120, height: 32 });
+
+    fireEvent.click(shadowButton("Element"));
+    target.dispatchEvent(pointerEventWithPath(target, 30, 90));
+    fireEvent.change(await waitFor(() => shadowQuery(".a3s-editor textarea")), { target: { value: "Keep the marker scoped to the open overlay" } });
+    fireEvent.click(shadowButton("Add draft"));
+    await waitFor(() => expect(shadowQuery(".a3s-markers").children).toHaveLength(1));
+
+    fireEvent.click(shadowQuery(".a3s-launch"));
+    await waitFor(() => expect(shadowQuery(".a3s-markers").children).toHaveLength(0));
+  });
+
+  it("refreshes marker geometry after the page scrolls", async () => {
+    render(<A3STestKit enabled page={{ id: "scrolling-markers" }} repairStorage="memory"><button id="scrolling-marker-target">Target</button><A3SReviewOverlay enabled defaultOpen /></A3STestKit>);
+    await waitFor(() => expect(shadowQuery(".a3s-panel")).toBeTruthy());
+    const target = document.querySelector<HTMLElement>("#scrolling-marker-target")!;
+    let rect = DOMRect.fromRect({ x: 24, y: 180, width: 140, height: 36 });
+    Object.defineProperty(target, "getBoundingClientRect", { configurable: true, value: () => rect });
+    Object.defineProperty(target, "getClientRects", { configurable: true, value: () => [rect] });
+
+    fireEvent.click(shadowButton("Element"));
+    target.dispatchEvent(pointerEventWithPath(target, 40, 190));
+    fireEvent.change(await waitFor(() => shadowQuery(".a3s-editor textarea")), { target: { value: "Keep this marker aligned while scrolling" } });
+    fireEvent.click(shadowButton("Add draft"));
+    await waitFor(() => expect(shadowQuery(".a3s-marker").style.top).toBe("180px"));
+
+    rect = DOMRect.fromRect({ x: 24, y: 60, width: 140, height: 36 });
+    fireEvent.scroll(window);
+    await waitFor(() => expect(shadowQuery(".a3s-marker").style.top).toBe("60px"));
   });
 
   it("restores page-local drafts and semantic targets after a React reload", async () => {

@@ -73,10 +73,17 @@ function validDraft(value: RepairDraft): boolean {
 }
 
 function validTarget(target: RepairDraft["target"]): boolean {
-  if (!onlyKeys(target, ["kind", "nodeIds", "selectedText", "region", "drawing", "layout"])) return false;
+  if (!onlyKeys(target, ["kind", "nodeIds", "selectedText", "region", "regionScroll", "drawing", "layout"])) return false;
   if (!(["node", "text", "region", "drawing"] as const).includes(target.kind)) return false;
   if (target.nodeIds.length > 5_000 || target.nodeIds.some((nodeId) => typeof nodeId !== "string" || nodeId.length === 0 || nodeId.length > 128)) return false;
   if (target.region !== undefined && !validRect(target.region)) return false;
+  if (target.regionScroll !== undefined && (
+    target.region === undefined ||
+    typeof target.regionScroll !== "object" ||
+    target.regionScroll === null ||
+    !finite(target.regionScroll.x) ||
+    !finite(target.regionScroll.y)
+  )) return false;
   if (target.selectedText !== undefined && (typeof target.selectedText !== "string" || target.selectedText.length > 4_096)) return false;
   if (target.drawing !== undefined && (!Array.isArray(target.drawing) || target.drawing.length > 2_000 || target.drawing.some((point) => !finite(point.x) || !finite(point.y)))) return false;
   const layout = target.layout;

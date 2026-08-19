@@ -21,7 +21,7 @@ export type { A3SReviewLocale, A3SReviewMessageKey, A3SReviewMessageOverrides } 
 import { DEFAULT_REVIEW_PREFERENCES, loadReviewPreferences, loadReviewTabHidden, saveReviewPreferences, saveReviewTabHidden, type ReviewPreferences } from "./review-preferences";
 import { type LayoutCanvas, type LayoutSource, type SelectionMode } from "./review-model";
 import { ReviewI18nProvider, reviewActorLabel, reviewModeHint, reviewRepairAnnouncement, reviewStatusLabel, reviewTargetSummary, useReviewI18nConfig } from "./review-locale";
-import { appendDrawingPoint, drawingBounds, normalizedArea, rectStyle, rectValue, removeDraft, repairId, validLayoutRect } from "./review-utils";
+import { appendDrawingPoint, drawingBounds, normalizedArea, rectStyle, rectValue, removeDraft, repairId, validLayoutRect, viewportScroll } from "./review-utils";
 import { ReviewMarkers } from "./review-markers";
 import type { DesignAuditFinding, DesignAuditReportRecord, PageContextBridge, QualityFinding, QualityReportRecord, RepairDraft, RepairIntent, RepairSeverity, RepairTarget, Rect, SubmittedRepair } from "./types";
 import { useLocalizedLayoutComponentType } from "./use-localized-layout-component-type";
@@ -104,6 +104,7 @@ export function A3SReviewOverlay({
   const [restoreReplyFocusId, setRestoreReplyFocusId] = useState<string | null>(null);
   const [replyMessage, setReplyMessage] = useState("");
   const [announcement, setAnnouncement] = useState("");
+  const [, setViewportRevision] = useState(0);
   const [keyboardNodeIds, setKeyboardNodeIds] = useState<string[]>([]);
   const [highlight, setHighlight] = useState<DOMRect | null>(null);
   const [area, setArea] = useState<{ startX: number; startY: number; currentX: number; currentY: number } | null>(null);
@@ -336,6 +337,30 @@ export function A3SReviewOverlay({
     return () => window.cancelAnimationFrame(frame);
   }, [mount, open]);
 
+  useEffect(() => {
+    if (!open) return;
+    let frame: number | null = null;
+    const refreshGeometry = () => {
+      if (frame !== null) return;
+      frame = window.requestAnimationFrame(() => {
+        frame = null;
+        setViewportRevision((current) => current + 1);
+      });
+    };
+    const visualViewport = window.visualViewport;
+    window.addEventListener("scroll", refreshGeometry, true);
+    window.addEventListener("resize", refreshGeometry);
+    visualViewport?.addEventListener("scroll", refreshGeometry);
+    visualViewport?.addEventListener("resize", refreshGeometry);
+    return () => {
+      window.removeEventListener("scroll", refreshGeometry, true);
+      window.removeEventListener("resize", refreshGeometry);
+      visualViewport?.removeEventListener("scroll", refreshGeometry);
+      visualViewport?.removeEventListener("resize", refreshGeometry);
+      if (frame !== null) window.cancelAnimationFrame(frame);
+    };
+  }, [open]);
+
   useBrowserLayoutEffect(() => {
     if (!restoreReplyFocusId || replyFindingId !== null) return;
     const trigger = replyTriggerRefs.current.get(restoreReplyFocusId);
@@ -416,7 +441,7 @@ export function A3SReviewOverlay({
         const points = appendDrawingPoint(drawingRef.current, event.clientX, event.clientY).slice(0, 2_000);
         const region = drawingBounds(points);
         const snapshot = bridge.snapshot({ detail: "summary", scope: { kind: "region", space: "viewport", ...region } });
-        stageCandidate({ kind: "drawing", nodeIds: snapshot.nodes.map((node) => node.id), region, drawing: points }, t("elementsNearDrawing", { count: snapshot.nodes.length }));
+        stageCandidate({ kind: "drawing", nodeIds: snapshot.nodes.map((node) => node.id), region, regionScroll: viewportScroll(), drawing: points }, t("elementsNearDrawing", { count: snapshot.nodes.length }));
         updateDrawing(null);
         updateArea(null);
         setHighlight(null);
@@ -455,6 +480,7 @@ export function A3SReviewOverlay({
             kind: "region",
             nodeIds: [],
             region,
+            regionScroll: viewportScroll(),
             layout: {
               kind: "placement",
               componentType,
@@ -480,8 +506,8 @@ export function A3SReviewOverlay({
         const snapshot = bridge.snapshot({ detail: "summary", scope: { kind: "region", space: "viewport", ...region } });
         stageCandidate(
           mode === "multi"
-            ? { kind: "node", nodeIds: snapshot.nodes.map((node) => node.id), region }
-            : { kind: "region", nodeIds: snapshot.nodes.map((node) => node.id), region },
+            ? { kind: "node", nodeIds: snapshot.nodes.map((node) => node.id), region, regionScroll: viewportScroll() }
+            : { kind: "region", nodeIds: snapshot.nodes.map((node) => node.id), region, regionScroll: viewportScroll() },
           t(mode === "multi" ? "elementsInSelection" : "elementsInArea", { count: snapshot.nodes.length }),
         );
         updateArea(null);
@@ -688,6 +714,7 @@ export function A3SReviewOverlay({
         kind: "node",
         nodeIds: [layoutSource.nodeId],
         region: layoutTarget,
+        regionScroll: viewportScroll(),
         layout: {
           kind: "rearrange",
           originalRegion: layoutSource.originalRegion,
@@ -919,12 +946,12 @@ export function A3SReviewOverlay({
   const content = (
     <ReviewI18nProvider value={reviewI18n}>
     <div className="a3s-root" data-a3s-testkit-overlay="" data-theme={preferences.theme} data-dock={preferences.dock} lang={reviewI18n.locale} style={rootStyle}>
-      {layoutMode && layoutCanvas === "wireframe" && <div className="a3s-wireframe" aria-hidden="true" />}
-      {(highlight || areaRect) && <div className="a3s-highlight" style={rectStyle(areaRect ?? highlight!)} aria-hidden="true"><span>01</span></div>}
+      {open && layoutMode && layoutCanvas === "wireframe" && <div className="a3s-wireframe" aria-hidden="true" />}
+      {open && (highlight || areaRect) && <div className="a3s-highlight" style={rectStyle(areaRect ?? highlight!)} aria-hidden="true"><span>01</span></div>}
       {editorPlacement && <div className="a3s-highlight is-candidate" style={rectStyle(editorPlacement.rect)} aria-hidden="true"><span>01</span></div>}
-      {layoutMode && layoutSource && !candidate && <div className="a3s-layout-target-preview" style={rectStyle(layoutTarget)} aria-hidden="true" />}
-      {drawingPath && <svg className="a3s-drawing" aria-hidden="true"><path d={drawingPath} /></svg>}
-      <ReviewMarkers visible={markersVisible} bridge={bridge} drafts={drafts} repairs={repairs} qualityReports={qualityReports} designAuditReports={designAuditReports} onEditDraft={editDraft} />
+      {open && layoutMode && layoutSource && !candidate && <div className="a3s-layout-target-preview" style={rectStyle(layoutTarget)} aria-hidden="true" />}
+      {open && drawingPath && <svg className="a3s-drawing" aria-hidden="true"><path d={drawingPath} /></svg>}
+      <ReviewMarkers visible={open && markersVisible} bridge={bridge} drafts={drafts} repairs={repairs} qualityReports={qualityReports} designAuditReports={designAuditReports} onEditDraft={editDraft} />
       <button ref={launchRef} className={`a3s-launch${marking ? " is-active" : ""}${open ? " is-open" : ""}`} type="button" title={t("toggleReviewOverlay")} onClick={() => open ? closeOverlayFromControl() : openOverlay(true)} aria-expanded={open} aria-controls={`${idPrefix}-review-panel`} aria-keyshortcuts={REVIEW_KEY_SHORTCUTS.toggle}>
         <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.4" /><path d="m7.3 16 3.9-9.2c.3-.8 1.4-.8 1.8 0l3.8 9.2M9.2 12.5h5.7" /><path d="M4.8 15.4c3-2.5 6.3-2.8 9.7-.9 1.7.9 3.4.3 5.2-1.3-1 4.7-4 7.1-8.5 7.1" /></svg>
         <span className="a3s-sr-only">{t("reviewLauncher")}</span>

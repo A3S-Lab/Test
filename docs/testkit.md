@@ -487,7 +487,9 @@ context, repair instructions, or hidden agent input.
 The optional overlay creates local draft findings from element click, selected
 text, explicit multi-select, a rectangular region, or freehand drawing. A
 draft includes a human instruction and may include success criteria, intent,
-and severity.
+and severity. Region, drawing, and layout targets retain the page scroll
+offset captured with their viewport rectangle so visible markers stay aligned
+as the page scrolls.
 
 The overlay is an operate-mode instrument panel, not a second application
 shell. Its header stays one line, explanatory copy truncates, findings use
@@ -512,10 +514,10 @@ multi-page documents, and infinite-canvas features that do not belong in a
 finding attachment.
 
 A reviewer may instead upload, paste, or drop a PNG/JPEG screenshot, then draw
-annotations over it. **Capture screen** uses
-`navigator.mediaDevices.getDisplayMedia` and the browser's own permissioned
-display picker. If capture is unsupported, denied, or cancelled, the capture
-control is disabled or the board reports the cancellation, while upload,
+annotations over it. **Capture current page** renders only the visible browser
+page and excludes the Test Kit overlay. It does not call a display-capture API
+or request screen-sharing permission. If DOM capture fails because a page
+asset cannot be reproduced, the board reports the failure while upload,
 paste, and drop remain available.
 
 The board runs entirely inside the Test Kit Shadow DOM and is part of the MIT

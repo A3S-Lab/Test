@@ -67,16 +67,17 @@ Overlay 打开后，`E`、`M`、`T`、`A`、`D` 分别进入元素、多选、�
 
 每个草稿都有稳定 ID、创建时间、目标、修改说明、可选成功条件、意图和严重程度。
 
-| 字段              | 允许值或含义                             |
-| ----------------- | ---------------------------------------- |
-| `instruction`     | 人写的修改要求，必填                     |
-| `successCriteria` | 可以在浏览器或聚焦检查中验证的结果       |
-| `intent`          | `fix`、`change`、`question` 或 `approve` |
-| `severity`        | `blocking`、`important` 或 `suggestion`  |
-| `target.kind`     | `node`、`text`、`region` 或 `drawing`    |
-| `target.nodeIds`  | 发送时仍属于最新页面修订的私有目标       |
-| `target.region`   | 可选视口 CSS 像素区域                    |
-| `relations`       | 当前只支持显式 `conflicts_with`          |
+| 字段                  | 允许值或含义                             |
+| --------------------- | ---------------------------------------- |
+| `instruction`         | 人写的修改要求，必填                     |
+| `successCriteria`     | 可以在浏览器或聚焦检查中验证的结果       |
+| `intent`              | `fix`、`change`、`question` 或 `approve` |
+| `severity`            | `blocking`、`important` 或 `suggestion`  |
+| `target.kind`         | `node`、`text`、`region` 或 `drawing`    |
+| `target.nodeIds`      | 发送时仍属于最新页面修订的私有目标       |
+| `target.region`       | 可选视口 CSS 像素区域                    |
+| `target.regionScroll` | 框选时记录的可选页面滚动偏移             |
+| `relations`           | 当前只支持显式 `conflicts_with`          |
 
 发送时，Test Kit 会重新读取当前修订并增加 `contextRevision`、页面、route、viewport、组件与 source 提示、语义定位器、目标与附近节点、facts 和有界 UI 理解。整个 `context` 标记为 `untrusted: true`。
 

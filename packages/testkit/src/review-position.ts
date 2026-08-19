@@ -1,3 +1,4 @@
+import { currentTargetRegion } from "./review-utils";
 import type { PageContextBridge, Rect, RepairTarget } from "./types";
 
 export type ReviewEditorPlacement = {
@@ -34,7 +35,8 @@ function targetRect(
   target: RepairTarget,
   bridge: PageContextBridge,
 ): Rect | null {
-  if (target.region) return target.region;
+  const region = currentTargetRegion(target);
+  if (region) return region;
   if (target.nodeIds.length === 0) return null;
   const selected = new Set(target.nodeIds);
   const rects = bridge

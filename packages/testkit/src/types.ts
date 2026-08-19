@@ -423,6 +423,7 @@ export type RepairTarget = {
   nodeIds: string[];
   selectedText?: string;
   region?: Rect;
+  regionScroll?: { x: number; y: number };
   drawing?: Array<{ x: number; y: number }>;
   layout?: RepairLayoutIntent;
 };

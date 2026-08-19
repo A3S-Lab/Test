@@ -70,8 +70,6 @@ export function DesignBoard({
   const titleId = `${idPrefix}-design-board-title`;
   const descriptionId = `${idPrefix}-design-board-description`;
   const statusId = `${idPrefix}-design-board-status`;
-  const screenCaptureAvailable = typeof navigator !== "undefined"
-    && typeof navigator.mediaDevices?.getDisplayMedia === "function";
   const busy = busyAction !== null;
   const summaryLabel = designSummaryLabel(t, summary);
 
@@ -142,29 +140,12 @@ export function DesignBoard({
     }
   }
 
-  async function captureScreen() {
-    if (!screenCaptureAvailable) {
-      setError(t("captureUnavailable"));
-      return;
-    }
+  async function capturePage() {
     setBusyAction("capture");
     setError("");
-    let stream: MediaStream | null = null;
     try {
-      stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: false });
-      const video = document.createElement("video");
-      video.muted = true;
-      video.srcObject = stream;
-      await waitForVideo(video);
-      await video.play();
-      const frame = document.createElement("canvas");
-      frame.width = Math.max(1, video.videoWidth);
-      frame.height = Math.max(1, video.videoHeight);
-      const context = frame.getContext("2d");
-      if (!context) throw new Error(t("captureCanvasUnavailable"));
-      context.drawImage(video, 0, 0, frame.width, frame.height);
       const image = await createImageElement(
-        frame.toDataURL("image/jpeg", 0.9),
+        await captureBrowserViewport(),
         "image/jpeg",
         "screenshot",
       );
@@ -177,13 +158,8 @@ export function DesignBoard({
       setSelectedId(image.id);
       setTool("select");
     } catch (cause) {
-      if (cause instanceof DOMException && cause.name === "NotAllowedError") {
-        setError(t("captureCancelled"));
-      } else {
-        setError(errorMessage(cause, t("captureFailed"), locale));
-      }
+      setError(errorMessage(cause, t("captureFailed"), locale));
     } finally {
-      stream?.getTracks().forEach((track) => track.stop());
       setBusyAction(null);
     }
   }
@@ -295,8 +271,8 @@ export function DesignBoard({
           </div>
           <span className="a3s-design-divider" aria-hidden="true" />
           <div className="a3s-design-tool-group a3s-design-media" aria-label={t("imageHelp")}>
-            <button type="button" disabled={busy || !screenCaptureAvailable} title={t("captureScreen")} onClick={() => void captureScreen()}>
-              <DesignGlyph name="capture" /><span>{busyAction === "capture" ? t("capturing") : t("captureScreen")}</span>
+            <button type="button" disabled={busy} aria-label={t("capturePage")} title={t("capturePageHelp")} onClick={() => void capturePage()}>
+              <DesignGlyph name="capture" /><span>{busyAction === "capture" ? t("capturingPage") : t("capturePage")}</span>
             </button>
             <button type="button" disabled={busy} title={t("uploadScreenshot")} onClick={() => fileInputRef.current?.click()}>
               <DesignGlyph name="upload" /><span>{busyAction === "import" ? t("importing") : t("uploadScreenshot")}</span>
@@ -444,19 +420,28 @@ function readFile(file: File): Promise<string> {
   });
 }
 
-function waitForVideo(video: HTMLVideoElement): Promise<void> {
-  if (video.readyState >= HTMLMediaElement.HAVE_METADATA && video.videoWidth > 0) return Promise.resolve();
-  return new Promise((resolve, reject) => {
-    const timer = window.setTimeout(() => reject(new Error("Screen capture did not become ready.")), 8_000);
-    video.onloadedmetadata = () => {
-      window.clearTimeout(timer);
-      resolve();
-    };
-    video.onerror = () => {
-      window.clearTimeout(timer);
-      reject(new Error("Screen capture could not be read."));
-    };
+async function captureBrowserViewport(): Promise<string> {
+  const { domToJpeg } = await import("modern-screenshot");
+  const viewport = window.visualViewport;
+  return domToJpeg(document.documentElement, {
+    width: Math.max(1, Math.round(viewport?.width ?? window.innerWidth)),
+    height: Math.max(1, Math.round(viewport?.height ?? window.innerHeight)),
+    quality: 0.9,
+    scale: 1,
+    backgroundColor: pageBackgroundColor(),
+    maximumCanvasSize: 4_096,
+    timeout: 10_000,
+    features: { restoreScrollPosition: true },
+    filter: (node) => !(node instanceof Element && node.hasAttribute("data-a3s-testkit-overlay")),
   });
+}
+
+function pageBackgroundColor(): string {
+  for (const element of [document.documentElement, document.body]) {
+    const color = window.getComputedStyle(element).backgroundColor;
+    if (color && color !== "transparent" && color !== "rgba(0, 0, 0, 0)") return color;
+  }
+  return "#ffffff";
 }
 
 function errorMessage(

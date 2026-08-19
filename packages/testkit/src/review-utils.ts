@@ -46,6 +46,21 @@ export function rectValue(rect: Pick<DOMRect, "x" | "y" | "width" | "height">): 
   return { x: rect.x, y: rect.y, width: rect.width, height: rect.height };
 }
 
+export function viewportScroll(): { x: number; y: number } {
+  if (typeof window === "undefined") return { x: 0, y: 0 };
+  return { x: window.scrollX, y: window.scrollY };
+}
+
+export function currentTargetRegion(target: RepairTarget): Rect | undefined {
+  if (!target.region || !target.regionScroll || typeof window === "undefined") return target.region;
+  const scroll = viewportScroll();
+  return {
+    ...target.region,
+    x: target.region.x + target.regionScroll.x - scroll.x,
+    y: target.region.y + target.regionScroll.y - scroll.y,
+  };
+}
+
 export function validLayoutRect(rect: Rect): boolean {
   return [rect.x, rect.y, rect.width, rect.height].every(Number.isFinite)
     && rect.width >= 8
@@ -54,15 +69,16 @@ export function validLayoutRect(rect: Rect): boolean {
 
 export function markerRects(target: RepairTarget, bridge: PageContextBridge | null): RectLike[] {
   if (!bridge) return [];
-  if (target.layout && target.region) return [target.region];
-  if (target.region && (target.kind === "region" || target.kind === "drawing" || target.nodeIds.length > 1)) {
-    return [target.region];
+  const region = currentTargetRegion(target);
+  if (target.layout && region) return [region];
+  if (region && (target.kind === "region" || target.kind === "drawing" || target.nodeIds.length > 1)) {
+    return [region];
   }
   const nodeRects = target.nodeIds.flatMap((nodeId) => {
     const element = bridge.resolve(nodeId);
     return element ? [element.getBoundingClientRect()] : [];
   });
-  if (nodeRects.length === 0) return target.region ? [target.region] : [];
+  if (nodeRects.length === 0) return region ? [region] : [];
   if (nodeRects.length === 1) return nodeRects;
   const left = Math.min(...nodeRects.map((rect) => rect.x));
   const top = Math.min(...nodeRects.map((rect) => rect.y));

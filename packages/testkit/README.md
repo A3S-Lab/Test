@@ -180,9 +180,9 @@ Mode. After selecting an element or region, a reviewer can open the design
 board. Its built-in, dependency-free SVG editor uses a constrained 960 × 600
 surface with freehand, rectangle, text, selection, movement, resize, styling,
 keyboard, and history tools, and admits at most 250 objects. It can also
-upload, paste, or drop a PNG/JPEG and request browser screen capture. Screen
-capture uses the browser's permissioned display picker; upload, paste, and drop
-remain available when it is unsupported or cancelled.
+capture the visible browser page directly, excluding the Test Kit overlay,
+without requesting screen-sharing permission. Upload, paste, and drop remain
+available for PNG/JPEG references.
 
 Keep the review overlay development-only in normal integrations. The board
 runs entirely inside the Test Kit Shadow DOM. It does not load a drawing SDK,
