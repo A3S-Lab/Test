@@ -47,7 +47,7 @@ export default defineConfig({
     },
   ],
   head: [
-    ['meta', { name: 'theme-color', content: '#f8fbff' }],
+    ['meta', { name: 'theme-color', content: '#f5f7fb' }],
     ['meta', { property: 'og:type', content: 'website' }],
     ['meta', { property: 'og:site_name', content: 'A3S Test' }],
     [
