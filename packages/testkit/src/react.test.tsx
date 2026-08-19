@@ -51,21 +51,13 @@ describe("React adapter and review overlay", () => {
     expect(shadowQuery(".a3s-panel-title").textContent).toBe("页面评审");
     expect(shadowButton("元素")).toBeTruthy();
     expect(shadowButton("元素").getAttribute("aria-label")).toBe("标记元素");
-    const workspaceToggle = shadowQuery("[aria-label='打开问题工作区']");
-    const moreTools = shadowButton("更多工具");
-    expect(shadowButton("主题 · 跟随系统").getAttribute("aria-label")).toBe("切换评审主题，当前为跟随系统");
-
-    fireEvent.click(workspaceToggle);
-    expect(workspaceToggle.getAttribute("aria-expanded")).toBe("true");
-    fireEvent.click(moreTools);
-    expect(moreTools.getAttribute("aria-expanded")).toBe("true");
-    expect(workspaceToggle.getAttribute("aria-expanded")).toBe("false");
-    fireEvent.click(workspaceToggle);
-    expect(workspaceToggle.getAttribute("aria-expanded")).toBe("true");
-    expect(moreTools.getAttribute("aria-expanded")).toBe("false");
-    fireEvent.click(workspaceToggle);
-
-    fireEvent.click(moreTools);
+    expect(shadowButton("新反馈").getAttribute("aria-selected")).toBe("true");
+    expect(shadowQuery(".a3s-panel").querySelector(".a3s-tool-tray")).toBeNull();
+    fireEvent.click(shadowButton("问题"));
+    expect(shadowButton("问题").getAttribute("aria-selected")).toBe("true");
+    fireEvent.click(shadowButton("偏好设置"));
+    expect(shadowQuery("[aria-label='评审主题']")).toBeTruthy();
+    fireEvent.click(shadowButton("新反馈"));
     fireEvent.click(shadowButton("布局"));
     const componentType = shadowQuery("[aria-label='布局组件类型']") as HTMLInputElement;
     expect(componentType.value).toBe("区块");
@@ -83,7 +75,6 @@ describe("React adapter and review overlay", () => {
     document.documentElement.lang = "zh-CN";
     await waitFor(() => expect(root.lang).toBe("zh-CN"));
     expect(componentType.value).toBe("Custom orbit panel");
-    fireEvent.click(moreTools);
     fireEvent.click(shadowButton("布局"));
 
     const target = document.querySelector<HTMLElement>("[data-testid=localized-target]")!;
@@ -114,8 +105,8 @@ describe("React adapter and review overlay", () => {
     const layer = await waitFor(() => shadowQuery(".a3s-design-layer"));
     const board = shadowQuery(".a3s-design-board");
     expect(layer.getAttribute("data-side")).toBe("right");
-    expect(board.getAttribute("role")).toBe("dialog");
-    expect(board.getAttribute("aria-modal")).toBe("false");
+    expect(board.getAttribute("role")).toBe("region");
+    expect(board.hasAttribute("aria-modal")).toBe(false);
     expect(board.textContent).toContain("设计参考");
     expect(shadowButton("选择").querySelector("svg")).toBeTruthy();
     expect(shadowButton("画笔").querySelector("svg")).toBeTruthy();
@@ -171,8 +162,8 @@ describe("React adapter and review overlay", () => {
 
     fireEvent.click(await waitFor(() => shadowButton("Open design board")));
     const board = await waitFor(() => shadowQuery(".a3s-design-board"));
-    expect(board.getAttribute("role")).toBe("dialog");
-    expect(board.getAttribute("aria-modal")).toBe("false");
+    expect(board.getAttribute("role")).toBe("region");
+    expect(board.hasAttribute("aria-modal")).toBe(false);
     const canvas = await waitFor(() => shadowQuery("[data-testid='design-canvas']"));
     expect(board.getAttribute("data-theme")).toBe("system");
     setRect(canvas, { x: 0, y: 0, width: 960, height: 600 });
@@ -432,13 +423,13 @@ describe("React adapter and review overlay", () => {
 
     expect(bridge.reportQuality(report)).toBe(true);
     await waitFor(() => expect(shadowQuery(".a3s-quality").textContent).toContain("Use the contracted role"));
-    fireEvent.click(shadowButton("Review finding"));
+    fireEvent.click(shadowQuery("[aria-label='Review contract finding: Use the contracted role']"));
     await waitFor(() => expect(shadowQuery(".a3s-editor").textContent).toContain("checkout-action"));
     expect(bridge.listQualityReports()[0]!.findings).toHaveLength(2);
     fireEvent.click(shadowButton("Cancel"));
     expect(bridge.listQualityReports()[0]!.findings).toHaveLength(2);
 
-    fireEvent.click(shadowButton("Review finding"));
+    fireEvent.click(shadowQuery("[aria-label='Review contract finding: Use the contracted role']"));
     fireEvent.click(shadowButton("Add draft"));
     await waitFor(() => expect(bridge.listQualityReports()[0]!.findings.map((finding) => finding.id)).toEqual(["finding:missing"]));
     expect(bridge.listRepairs()).toEqual([]);
@@ -496,13 +487,13 @@ describe("React adapter and review overlay", () => {
     expect(bridge.reportDesignAudit(report)).toBe(true);
     await waitFor(() => expect(shadowQuery(".a3s-design-audit").textContent).toContain("The primary action lacks emphasis"));
     expect(bridge.listRepairs()).toEqual([]);
-    fireEvent.click(shadowButton("Review suggestion"));
+    fireEvent.click(shadowQuery("[aria-label='Review design suggestion: The primary action lacks emphasis']"));
     await waitFor(() => expect((shadowQuery("textarea") as HTMLTextAreaElement).value).toContain("Increase the primary action contrast"));
     expect(bridge.listDesignAuditReports()).toHaveLength(1);
     fireEvent.click(shadowButton("Cancel"));
     expect(bridge.listDesignAuditReports()).toHaveLength(1);
 
-    fireEvent.click(shadowButton("Review suggestion"));
+    fireEvent.click(shadowQuery("[aria-label='Review design suggestion: The primary action lacks emphasis']"));
     fireEvent.click(shadowButton("Send and auto-fix"));
     await waitFor(() => expect(bridge.listDesignAuditReports()).toEqual([]));
     expect(bridge.listRepairs()).toHaveLength(1);
@@ -521,7 +512,8 @@ describe("React adapter and review overlay", () => {
     for (const [selector, instruction] of [["#one", "Fix one"], ["#two", "Fix two"]] as const) {
       const target = document.querySelector<HTMLElement>(selector)!;
       setRect(target, { x: 10, y: 10, width: 40, height: 20 });
-      fireEvent.click(shadowQuery(".a3s-tools button"));
+      fireEvent.click(shadowButton("New feedback"));
+      fireEvent.click(shadowButton("Element"));
       target.dispatchEvent(pointerEventWithPath(target, 20, 15));
       await waitFor(() => expect(shadowQuery("textarea")).toBeTruthy());
       fireEvent.change(shadowQuery("textarea"), { target: { value: instruction } });
@@ -658,7 +650,9 @@ describe("React adapter and review overlay", () => {
     await waitFor(() => expect(shadowQuery(".a3s-list").textContent).toContain("Profile-only draft"));
 
     window.history.pushState(null, "", "/security");
-    await waitFor(() => expect(shadowQuery(".a3s-list").textContent).not.toContain("Profile-only draft"));
+    await waitFor(() => expect(shadowButton("New feedback").getAttribute("aria-selected")).toBe("true"));
+    fireEvent.click(shadowButton("Findings"));
+    expect(shadowQuery(".a3s-list").textContent).not.toContain("Profile-only draft");
     window.history.pushState(null, "", "/profile");
     await waitFor(() => expect(shadowQuery(".a3s-list").textContent).toContain("Profile-only draft"));
   });
@@ -668,12 +662,13 @@ describe("React adapter and review overlay", () => {
     await waitFor(() => expect(shadowQuery(".a3s-panel")).toBeTruthy());
     setRect(document.querySelector("#target")!, { x: 20, y: 20, width: 80, height: 40 });
 
-    const theme = shadowButton("Theme · System");
-    fireEvent.click(theme);
+    fireEvent.click(shadowQuery("[aria-label='Review preferences']"));
+    fireEvent.change(shadowQuery("[aria-label='Overlay theme']"), { target: { value: "light" } });
     expect(shadowQuery(".a3s-root").dataset.theme).toBe("light");
-    fireEvent.click(shadowButton("Theme · Light"));
+    fireEvent.change(shadowQuery("[aria-label='Overlay theme']"), { target: { value: "dark" } });
     expect(shadowQuery(".a3s-root").dataset.theme).toBe("dark");
 
+    fireEvent.click(shadowButton("New feedback"));
     fireEvent.click(shadowButton("Draw"));
     document.body.dispatchEvent(pointerEvent("pointerdown", document.body, 10, 10));
     document.body.dispatchEvent(pointerEvent("pointermove", document.body, 50, 25));
@@ -712,6 +707,7 @@ describe("React adapter and review overlay", () => {
     fireEvent.click(shadowButton("Add draft"));
     await waitFor(() => expect(shadowQuery(".a3s-list").textContent).toContain("Place Pricing section"));
 
+    fireEvent.click(shadowButton("New feedback"));
     hero.focus();
     hero.dispatchEvent(new FocusEvent("focusin", { bubbles: true, composed: true }));
     fireEvent.click(shadowButton("Select section on page"));
@@ -826,22 +822,25 @@ describe("React adapter and review overlay", () => {
     for (const editable of editableTargets) {
       for (const key of ["e", "m", "t", "a", "d", "l", "p", "h", "c", "x"]) fireEvent.keyDown(editable, { key });
     }
+    expect(shadowQuery(".a3s-list").textContent).toContain("Shortcut draft");
+    fireEvent.click(shadowButton("New feedback"));
     expect(shadowButton("Layout").getAttribute("aria-pressed")).toBe("false");
     expect(getPageContextBridge()?.animationsPaused()).toBe(false);
     expect(shadowQuery(".a3s-markers").children).toHaveLength(1);
     expect(writeText).not.toHaveBeenCalled();
-    expect(shadowQuery(".a3s-list").textContent).toContain("Shortcut draft");
 
     fireEvent.keyDown(document, { key: "l" });
     expect(shadowButton("Layout").getAttribute("aria-pressed")).toBe("true");
     fireEvent.keyDown(document, { key: "p" });
     expect(getPageContextBridge()?.animationsPaused()).toBe(true);
     fireEvent.keyDown(document, { key: "h" });
+    fireEvent.click(shadowQuery("[aria-label='Review preferences']"));
     expect(shadowButton("Show markers").getAttribute("aria-pressed")).toBe("false");
     expect(shadowQuery(".a3s-markers").children).toHaveLength(0);
     fireEvent.keyDown(document, { key: "c" });
     await waitFor(() => expect(writeText).toHaveBeenCalledTimes(1));
     fireEvent.keyDown(document, { key: "x" });
+    fireEvent.click(shadowButton("Findings"));
     await waitFor(() => expect(shadowQuery(".a3s-list").textContent).not.toContain("Shortcut draft"));
     expect(window.localStorage.length).toBe(0);
     fireEvent.keyDown(document, { key: "Escape" });
@@ -947,11 +946,11 @@ describe("React adapter and review overlay", () => {
     const target = document.querySelector<HTMLElement>("#preference-target")!;
     setRect(target, { x: 30, y: 50, width: 150, height: 34 });
 
-    const preferencesToggle = shadowButton("Review preferences");
+    const preferencesToggle = shadowQuery("[aria-label='Review preferences']");
     expect(preferencesToggle.getAttribute("aria-label")).toBe("Review preferences");
-    expect(preferencesToggle.getAttribute("aria-expanded")).toBe("false");
+    expect(preferencesToggle.getAttribute("aria-selected")).toBe("false");
     fireEvent.click(preferencesToggle);
-    expect(preferencesToggle.getAttribute("aria-expanded")).toBe("true");
+    expect(preferencesToggle.getAttribute("aria-selected")).toBe("true");
     fireEvent.change(shadowQuery("[aria-label='Overlay theme']"), { target: { value: "dark" } });
     fireEvent.change(shadowQuery("[aria-label='Marker color']"), { target: { value: "#2563eb" } });
     fireEvent.click(shadowQuery("[aria-label='Clear drafts after copy']"));
@@ -974,7 +973,7 @@ describe("React adapter and review overlay", () => {
     render(<A3STestKit enabled page={{ id: "preferences" }} repairStorage="memory"><button>Reloaded</button><A3SReviewOverlay enabled defaultOpen /></A3STestKit>);
     await waitFor(() => expect(shadowQuery(".a3s-root").dataset.theme).toBe("dark"));
     expect(shadowQuery(".a3s-root").dataset.dock).toBe("left");
-    fireEvent.click(shadowButton("Review preferences"));
+    fireEvent.click(shadowQuery("[aria-label='Review preferences']"));
     expect((shadowQuery("[aria-label='Clear drafts after copy']") as HTMLInputElement).checked).toBe(true);
     expect(shadowButton("Auto-send · off")).toBeTruthy();
     expect(shadowButton("Pause")).toBeTruthy();
@@ -990,12 +989,14 @@ describe("React adapter and review overlay", () => {
     const restoredFocus = vi.spyOn(action, "focus");
     fireEvent.click(action);
     expect(hostClick).toHaveBeenCalledTimes(1);
-    fireEvent.click(shadowButton("Review preferences"));
+    fireEvent.click(shadowQuery("[aria-label='Review preferences']"));
     fireEvent.click(shadowQuery("[aria-label='Block page pointer input']"));
     fireEvent.click(action);
     expect(hostClick).toHaveBeenCalledTimes(1);
     fireEvent.click(shadowButton("Pause"));
+    fireEvent.click(shadowButton("New feedback"));
     fireEvent.click(shadowButton("Element"));
+    fireEvent.click(shadowQuery("[aria-label='Review preferences']"));
     const hideUntilRestart = shadowButton("Hide until tab restart");
     hideUntilRestart.focus();
     expect(document.querySelector<HTMLElement>("[data-a3s-testkit-overlay]")!.shadowRoot!.activeElement).toBe(hideUntilRestart);
@@ -1081,6 +1082,7 @@ describe("React adapter and review overlay", () => {
     target.dispatchEvent(new FocusEvent("focusin", { bubbles: true, composed: true }));
 
     fireEvent.click(shadowButton("Multi"));
+    expect(shadowQuery(".a3s-mobile-marking-bar")).toBeTruthy();
     fireEvent.keyDown(target, { key: "Enter" });
     fireEvent.keyDown(target, { key: "Escape" });
     await waitFor(() => expect(document.activeElement).toBe(target));
@@ -1092,9 +1094,11 @@ describe("React adapter and review overlay", () => {
     fireEvent.click(shadowButton("Multi"));
     target.dispatchEvent(pointerEventWithPath(target, 40, 30));
     await waitFor(() => expect(shadow.querySelector(".a3s-editor")).not.toBeNull());
-    fireEvent.click(shadowQuery(".a3s-tools .danger"));
+    fireEvent.click(shadowButton("Finish selection"));
+    await waitFor(() => expect(shadowQuery(".a3s-panel").classList.contains("is-marking")).toBe(false));
+    fireEvent.click(shadowButton("Cancel"));
 
-    await waitFor(() => expect(document.activeElement).toBe(target));
+    await waitFor(() => expect(shadow.activeElement).toBe(shadowQuery(".a3s-panel")));
     expect(shadow.querySelector(".a3s-editor")).toBeNull();
     expect(shadow.querySelector(".a3s-hint")).toBeNull();
 
@@ -1111,21 +1115,23 @@ describe("React adapter and review overlay", () => {
     expect(shadow.querySelector(".a3s-hint")).toBeNull();
   });
 
-  it("exposes a named dialog, stable control names, and focused status announcements", async () => {
+  it("exposes one named side region with stable controls and focused status announcements", async () => {
     render(<A3STestKit enabled page={{ id: "accessible-overlay" }} repairStorage="memory"><button id="accessible-target">Accessible target</button><A3SReviewOverlay enabled defaultOpen /></A3STestKit>);
     const panel = await waitFor(() => shadowQuery(".a3s-panel"));
     const title = shadowQuery(".a3s-panel-title");
     const description = shadowQuery(".a3s-panel-description");
-    expect(panel.getAttribute("role")).toBe("dialog");
+    expect(panel.getAttribute("role")).toBe("region");
     expect(panel.getAttribute("aria-labelledby")).toBe(title.id);
     expect(panel.getAttribute("aria-describedby")).toBe(description.id);
+    expect(panel.querySelector("[role='dialog']")).toBeNull();
+    expect(panel.querySelector(".a3s-tool-tray")).toBeNull();
+    expect(panel.querySelector(".a3s-editor-popover")).toBeNull();
     expect(shadowButton("Layout").getAttribute("aria-label")).toBe("Layout");
-    expect(shadowButton("Pause").getAttribute("aria-label")).toBe("Pause page animations");
-    expect(shadowButton("Auto-send · off").getAttribute("aria-label")).toBe("Turn auto-send on");
-    expect(shadowButton("Theme · System").getAttribute("aria-label")).toBe("Change overlay theme; current theme is system");
     expect(shadowQuery(".a3s-announcer").getAttribute("aria-atomic")).toBe("true");
+    fireEvent.click(shadowButton("Findings"));
     expect(shadowQuery(".a3s-list").hasAttribute("aria-live")).toBe(false);
     expect((shadowQuery(".a3s-list") as HTMLElement).tabIndex).toBe(0);
+    fireEvent.click(shadowButton("New feedback"));
 
     const launcher = shadowQuery(".a3s-launch");
     expect(launcher.getAttribute("aria-keyshortcuts")).toBe("Control+Shift+F Meta+Shift+F");
@@ -1137,9 +1143,12 @@ describe("React adapter and review overlay", () => {
     expect(shadowButton("Area").getAttribute("aria-keyshortcuts")).toBe("A");
     expect(shadowButton("Draw").getAttribute("aria-keyshortcuts")).toBe("D");
     expect(shadowButton("Layout").getAttribute("aria-keyshortcuts")).toBe("L");
+    fireEvent.click(shadowQuery("[aria-label='Review preferences']"));
+    expect(shadowButton("Pause").getAttribute("aria-label")).toBe("Pause page animations");
+    expect(shadowButton("Auto-send · off").getAttribute("aria-label")).toBe("Turn auto-send on");
+    expect(shadowQuery("[aria-label='Overlay theme']")).toBeTruthy();
     expect(shadowButton("Pause").getAttribute("aria-keyshortcuts")).toBe("P");
     expect(shadowButton("Hide markers").getAttribute("aria-keyshortcuts")).toBe("H");
-    fireEvent.click(shadowButton("Review preferences"));
     const shortcutHelp = shadowQuery(".a3s-shortcuts");
     expect(shortcutHelp.getAttribute("aria-labelledby")).toBe(shadowQuery(".a3s-shortcuts-title").id);
     expect(shortcutHelp.textContent).toContain("Toggle review");
@@ -1147,15 +1156,14 @@ describe("React adapter and review overlay", () => {
     expect(shortcutHelp.textContent).toContain("Letter shortcuts and panel toggle are ignored while typing");
     expect(shortcutHelp.textContent).toContain("Escape still cancels active marking or an open finding editor");
 
-    fireEvent.click(shadowButton("More tools"));
-    expect(shadowButton("More tools").getAttribute("aria-expanded")).toBe("true");
-    fireEvent.click(shadowQuery("header button"));
+    fireEvent.click(shadowQuery(".a3s-panel-header .a3s-close"));
     await waitFor(() => expect(document.querySelector<HTMLElement>("[data-a3s-testkit-overlay]")!.shadowRoot!.activeElement).toBe(launcher));
     fireEvent.click(launcher);
     await waitFor(() => expect(document.querySelector<HTMLElement>("[data-a3s-testkit-overlay]")!.shadowRoot!.activeElement).toBe(shadowQuery(".a3s-panel")));
 
     const target = document.querySelector<HTMLElement>("#accessible-target")!;
     setRect(target, { x: 20, y: 20, width: 120, height: 32 });
+    fireEvent.click(shadowButton("New feedback"));
     fireEvent.click(shadowButton("Element"));
     target.dispatchEvent(pointerEventWithPath(target, 40, 30));
     fireEvent.change(await waitFor(() => shadowQuery(".a3s-editor textarea")), { target: { value: "Name every finding action" } });
@@ -1274,6 +1282,7 @@ function capturePointerEvent(type: string, target: Element, clientX: number, cli
 }
 
 async function addElementDraft(target: HTMLElement, instruction: string): Promise<void> {
+  fireEvent.click(shadowButton("New feedback"));
   fireEvent.click(shadowButton("Element"));
   target.dispatchEvent(pointerEventWithPath(target, 50, 70));
   fireEvent.change(await waitFor(() => shadowQuery(".a3s-editor textarea")), { target: { value: instruction } });

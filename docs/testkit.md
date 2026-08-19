@@ -491,22 +491,32 @@ and severity. Region, drawing, and layout targets retain the page scroll
 offset captured with their viewport rectangle so visible markers stay aligned
 as the page scrolls.
 
-The overlay is an operate-mode instrument panel, not a second application
-shell. Its header stays one line, explanatory copy truncates, findings use
-compact separators instead of nested cards, and the host page remains the
-visual authority. Severity always has a text label. Quality markers use a
-distinct dashed treatment so color is not the sole distinction. Opening the
-secondary tool tray closes the findings workspace and opening the workspace
-closes the tray, so floating surfaces cannot obscure one another. Preferences
-remain scrollable within short desktop viewports. Mobile controls use
-44-CSS-pixel touch targets and 16-pixel form text to avoid accidental zoom.
+The overlay is one side panel, not a second application shell. Its primary flow
+is select a target, describe the change, then save or send. New feedback,
+findings, and preferences are peer views in the same panel. Marking tools are
+visible directly; after selection the editor replaces them in place, and
+saving switches to the findings view. The header stays one line, explanatory
+copy truncates, and findings use compact separators instead of nested cards.
+No target-attached editor, secondary tray, or nested modal is created. Severity
+always has a text label, and quality markers use a distinct dashed treatment so
+color is not the sole distinction. Preferences remain scrollable within short
+desktop viewports. On mobile, starting a marking mode temporarily hides the
+full-width panel, exposes the page for direct touch input, and retains a compact
+finish/cancel bar. Controls use 44-CSS-pixel touch targets and 16-pixel form
+text to avoid accidental zoom.
+
+Node and text markers are recomputed from live DOM rectangles after window or
+nested-container scrolling. Region markers retain the scroll origin captured
+with their viewport rectangle. All page markers are removed from the rendered
+overlay whenever the review panel closes.
 
 ### Desired-UI design references
 
 After selecting an element or rectangular area, the finding editor can open a
-right-side **Design reference** drawer. It enters with one bounded transition,
-does not add a page-blocking scrim, and keeps drawing, image, history, and style
-actions in one localized icon toolbar. The built-in SVG editor is constrained
+right-side **Design reference** drawer. It temporarily replaces the review
+panel, enters with one bounded transition, does not add a page-blocking scrim,
+and keeps drawing, image, history, and style actions in one localized icon
+toolbar. The built-in SVG editor is constrained
 to a 960 × 600 design surface and exposes freehand, rectangle, text, styling,
 selection, movement, lower-right resize, keyboard, and history controls. The
 board admits at most 250 objects and intentionally omits collaboration,
@@ -817,11 +827,11 @@ generates the bounded Markdown or JSON payload.
 
 ### Accessibility and audit boundary
 
-The review surface is a named, non-modal dialog inside an open Shadow DOM.
+The review surface is a named, non-modal region inside an open Shadow DOM.
 Every repeated draft and repair action includes the finding instruction in its
 accessible name. Pause, marker visibility, auto-send, and theme controls expose
 stable state-aware names, and keyboard focus returns to a durable control when
-closing the dialog, sending or deleting a draft, or completing a clarification
+closing the panel, sending or deleting a draft, or completing a clarification
 reply. Hiding the overlay until the tab restarts returns focus to the last
 connected application control before the Shadow DOM disappears. Repair state
 changes and submission results use one visually hidden polite live region so a

@@ -634,12 +634,19 @@ batch, attach repair intent, save a draft, and explicitly send it to the
 session-owning coding agent. A fresh browser run verifies admitted changes
 before acceptance.
 
+Visible review work stays in one side panel: choose a target, describe the
+change, then save or send. New feedback, findings, and preferences are peer
+views rather than stacked pop-ups. Markers follow live DOM geometry while the
+page or an internal container scrolls, and closing Test Kit hides every page
+marker.
+
 After selecting an element or rectangular area, the reviewer can also open a
 dependency-free SVG design board to sketch the intended UI or attach a
 PNG/JPEG screenshot by upload, paste, drop, or a rectangular selection over the
 visible browser page. The selection uses DOM capture and never requests screen
-sharing. The compact board slides in from the right without a page-blocking
-scrim and groups its localized, icon-led controls into one toolbar. It supports
+sharing. The compact board temporarily replaces the review panel, slides in
+from the right without a page-blocking scrim, and groups its localized,
+icon-led controls into one toolbar. It supports
 freehand, rectangle, text, selection, movement, resizing, styling, and history
 inside the Test Kit Shadow DOM. Attached references travel with the typed
 finding; Web sessions validate and materialize inline images as bounded

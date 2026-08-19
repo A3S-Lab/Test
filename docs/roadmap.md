@@ -421,9 +421,14 @@ The completion work intentionally preserves these product boundaries:
       clear-on-copy, interaction blocking, panel dock, wireframe fade, and
       hide-until-tab-restart; restore application focus when hiding the UI and
       keep auto-send and animation pause non-persistent
-- [x] Keep the secondary tool tray and findings workspace mutually exclusive,
-      bound preferences to short viewports, and preserve mobile touch-target
-      and form-text sizing without changing the headless bridge
+- [x] Replace the secondary tool tray and target-attached editor with one side
+      panel whose New feedback, Findings, and Preferences views share the same
+      surface; replace that panel while the design board is open, bound content
+      to short viewports, and preserve mobile touch-target and form-text sizing
+      without changing the headless bridge
+- [x] Recompute node markers from live DOM rectangles after page or nested
+      scrolling, preserve region scroll origins, and render no page markers
+      while the review panel is closed
 - [x] Add an independently defined, categorized, searchable catalog of at
       least 65 common Web component types while retaining an explicit
       free-form component field

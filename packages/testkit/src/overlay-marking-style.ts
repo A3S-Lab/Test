@@ -172,54 +172,10 @@ export const OVERLAY_MARKING_CSS = `
   filter: drop-shadow(0 1px 1px #ffffff);
 }
 
-.a3s-editor-popover {
-  position: fixed;
-  z-index: 8;
-  top: var(--a3s-editor-top, 80px);
-  left: var(--a3s-editor-left, 80px);
-  width: min(330px, calc(100vw - 24px));
-  max-height: min(540px, calc(100vh - var(--a3s-editor-top, 80px) - 12px));
-  overflow: hidden;
-  border: 0;
-  border-radius: 12px;
-  background: var(--a3s-panel);
-  box-shadow: 0 26px 72px rgb(36 76 137 / 22%), 0 4px 14px rgb(36 76 137 / 9%);
-  pointer-events: auto;
-  transform-origin: var(--a3s-editor-origin, left top);
-  animation: a3s-editor-enter 220ms cubic-bezier(.16, 1, .3, 1) both;
-}
-
-@keyframes a3s-editor-enter {
-  from {
-    opacity: 0;
-    transform: translateY(5px) scale(.97);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0) scale(1);
-  }
-}
-
-.a3s-editor-popover::before {
-  position: absolute;
-  top: 22px;
-  left: -6px;
-  width: 10px;
-  height: 10px;
-  background: var(--a3s-panel);
-  content: "";
-  transform: rotate(-45deg);
-}
-
-.a3s-editor-popover[data-side="left"]::before {
-  left: auto;
-  right: -6px;
-  transform: rotate(135deg);
-}
-
 .a3s-editor {
   display: grid;
-  max-height: inherit;
+  height: 100%;
+  min-height: 0;
   grid-template-rows: auto minmax(0, 1fr) auto;
 }
 

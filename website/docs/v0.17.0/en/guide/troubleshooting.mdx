@@ -196,9 +196,9 @@ The outer Page Context may remain valid when an incomplete UI graph is omitted. 
 
 ## Review Overlay does not appear
 
-Check `A3SReviewOverlay` `enabled`, the outer provider, page `<html lang>`, and the Shadow DOM host. The overlay mounts only when a live bridge exists. Its default surface is a compact dock; tools, editor, and findings workspace expand according to state.
+Check `A3SReviewOverlay` `enabled`, the outer provider, page `<html lang>`, and the Shadow DOM host. The overlay mounts only when a live bridge exists. Its default surface is one side panel with peer New feedback, Findings, and Preferences views; selecting a target replaces the marking tools with the editor in that same panel.
 
-When keyboard tools do not respond, confirm that focus is outside text fields and editors. Letter shortcuts deliberately yield to editable controls. On mobile, check whether the host uses a full-screen layer or higher z-index that covers the dock.
+When keyboard tools do not respond, confirm that focus is outside text fields and editors. Letter shortcuts deliberately yield to editable controls. On mobile, check whether the host uses a full-screen layer with a z-index above the Test Kit panel.
 
 ## A finding does not enter the repair queue
 

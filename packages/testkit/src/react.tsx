@@ -2,10 +2,10 @@ import { useEffect, useId, useRef, useState, type CSSProperties } from "react";
 import { createPortal } from "react-dom";
 import { useBrowserLayoutEffect } from "./react-effect";
 import { getPageContextBridge } from "./runtime";
-import { DesignAuditCandidates, resolveDesignAuditCandidate, type DesignAuditCandidate, type DesignAuditSelection } from "./design-audit-candidates";
-import { QualityCandidates, resolveQualityCandidate, type QualityCandidate, type QualitySelection } from "./quality-candidates";
+import { resolveDesignAuditCandidate, type DesignAuditCandidate, type DesignAuditSelection } from "./design-audit-candidates";
+import { resolveQualityCandidate, type QualityCandidate, type QualitySelection } from "./quality-candidates";
 import { loadReviewDrafts, reviewScope, saveReviewDrafts, type ReviewDraftItem } from "./review-storage";
-import { FindingEditor, LayoutComposer, ReviewMarkingToolbar } from "./review-components";
+import { FindingEditor, LayoutComposer, ReviewMarkingToolbar, ReviewPanelHeader, ToolGlyph, type ReviewPanelView } from "./review-components";
 import { ReviewDesignReferenceBoard, useReviewDesignReference } from "./review-design-reference";
 import { ReviewSettings } from "./review-settings";
 import { reviewEditorPlacement } from "./review-position";
@@ -15,14 +15,16 @@ import { invokeCallback, useLatest, writeClipboard } from "./review-integration"
 import { bridgeIsCompatible, deepActiveElement, isOverlayEvent, nodeForElement, selectionElement, targetElement } from "./review-dom";
 import { REVIEW_KEY_SHORTCUTS, useGlobalReviewShortcuts, useHostPointerBlocking, useLastApplicationFocus } from "./review-input-policy";
 import { useReviewOverlayHost } from "./review-overlay-host";
+import { useReviewGeometryRefresh, useReviewOverlayFocus } from "./review-overlay-effects";
 import type { A3SReviewOverlayProps } from "./review-overlay-types";
 export type { A3SReviewCopyEvent, A3SReviewOverlayProps } from "./review-overlay-types";
 export type { A3SReviewLocale, A3SReviewMessageKey, A3SReviewMessageOverrides } from "./review-locale";
 import { DEFAULT_REVIEW_PREFERENCES, loadReviewPreferences, loadReviewTabHidden, saveReviewPreferences, saveReviewTabHidden, type ReviewPreferences } from "./review-preferences";
 import { type LayoutCanvas, type LayoutSource, type SelectionMode } from "./review-model";
-import { ReviewI18nProvider, reviewActorLabel, reviewModeHint, reviewRepairAnnouncement, reviewStatusLabel, reviewTargetSummary, useReviewI18nConfig } from "./review-locale";
+import { ReviewI18nProvider, reviewModeHint, reviewRepairAnnouncement, reviewTargetSummary, useReviewI18nConfig } from "./review-locale";
 import { appendDrawingPoint, drawingBounds, normalizedArea, rectStyle, rectValue, removeDraft, repairId, validLayoutRect, viewportScroll } from "./review-utils";
 import { ReviewMarkers } from "./review-markers";
+import { ReviewWorkspace } from "./review-workspace";
 import type { DesignAuditFinding, DesignAuditReportRecord, PageContextBridge, QualityFinding, QualityReportRecord, RepairDraft, RepairIntent, RepairSeverity, RepairTarget, Rect, SubmittedRepair } from "./types";
 import { useLocalizedLayoutComponentType } from "./use-localized-layout-component-type";
 
@@ -61,7 +63,7 @@ export function A3SReviewOverlay({
     : getPageContextBridge();
   const bridge = bridgeIsCompatible(candidateBridge) ? candidateBridge : null;
   const [open, setOpen] = useState(defaultOpen);
-  const [workspaceOpen, setWorkspaceOpen] = useState(false);
+  const [panelView, setPanelView] = useState<ReviewPanelView>("compose");
   const [marking, setMarking] = useState(false);
   const [paused, setPaused] = useState(false);
   const [markersVisible, setMarkersVisible] = useState(true);
@@ -104,7 +106,6 @@ export function A3SReviewOverlay({
   const [restoreReplyFocusId, setRestoreReplyFocusId] = useState<string | null>(null);
   const [replyMessage, setReplyMessage] = useState("");
   const [announcement, setAnnouncement] = useState("");
-  const [, setViewportRevision] = useState(0);
   const [keyboardNodeIds, setKeyboardNodeIds] = useState<string[]>([]);
   const [highlight, setHighlight] = useState<DOMRect | null>(null);
   const [area, setArea] = useState<{ startX: number; startY: number; currentX: number; currentY: number } | null>(null);
@@ -123,6 +124,15 @@ export function A3SReviewOverlay({
   const lastApplicationFocusRef = useLastApplicationFocus(enabled, host);
   const idPrefix = useId().replace(/:/g, "");
 
+  useReviewOverlayFocus({
+    mount,
+    open,
+    panelRef,
+    launchRef,
+    focusPanelOnOpenRef,
+    focusLauncherOnCloseRef,
+  });
+  useReviewGeometryRefresh(open);
   areaRef.current = area;
   drawingRef.current = drawing;
 
@@ -147,6 +157,7 @@ export function A3SReviewOverlay({
 
   function startMarking(value: SelectionMode, source: CandidateSource | null = null) {
     restoreFocusRef.current = lastApplicationFocusRef.current;
+    setPanelView("compose");
     setPendingCandidateSource(source);
     setCandidateSource(null);
     setEditingDraftId(null);
@@ -169,7 +180,7 @@ export function A3SReviewOverlay({
     if (marking) cancelMarking(false);
     if (!next) setLayoutSource(null);
     setLayoutMode(next);
-    if (next) setWorkspaceOpen(true);
+    setPanelView("compose");
     announce(t(next ? "layoutModeEnabled" : "layoutModeDisabled"));
   }
 
@@ -191,13 +202,6 @@ export function A3SReviewOverlay({
     if (typeof window !== "undefined") {
       saveReviewPreferences(value);
     }
-  }
-
-  function cycleTheme() {
-    const theme = preferences.theme === "system"
-      ? "light"
-      : preferences.theme === "light" ? "dark" : "system";
-    changePreferences({ ...preferences, theme });
   }
 
   function hideUntilTabRestart() {
@@ -241,9 +245,19 @@ export function A3SReviewOverlay({
     setConflictingDraftIds([]);
   }
 
+  function cancelCandidate() {
+    const returnToFindings = candidateSource !== null || editingDraftId !== null;
+    if (marking) stopMarking(false);
+    clearCandidate();
+    if (returnToFindings) setPanelView("findings");
+    focusPanel();
+  }
+
   function cancelMarking(restoreFocus = true) {
+    const returnToFindings = pendingCandidateSource !== null;
     stopMarking(restoreFocus);
     clearCandidate();
+    if (returnToFindings) setPanelView("findings");
     if (marking) announce(t("markingCancelled"));
   }
 
@@ -255,7 +269,7 @@ export function A3SReviewOverlay({
     setRepairs(initialRepairs);
     setQualityReports(initialQualityReports);
     setDesignAuditReports(initialDesignAuditReports);
-    if (initialRepairs.length > 0 || initialQualityReports.length > 0 || initialDesignAuditReports.length > 0) setWorkspaceOpen(true);
+    if (initialRepairs.length > 0 || initialQualityReports.length > 0 || initialDesignAuditReports.length > 0) setPanelView("findings");
     return bridge.subscribe((event) => {
       if (event.type === "context.revision" && restoredScopeRef.current !== null) {
         const scope = reviewScope(bridge);
@@ -269,7 +283,7 @@ export function A3SReviewOverlay({
           setMarking(false);
           setHighlight(null);
           setDrafts(restored);
-          setWorkspaceOpen(restored.length > 0);
+          setPanelView(restored.length > 0 ? "findings" : "compose");
           announce(restored.length > 0
             ? t(restored.length === 1 ? "savedDraftRestoredForRouteOne" : "savedDraftRestoredForRouteMany", { count: restored.length })
             : t("draftsSwitchedRoute"));
@@ -277,11 +291,11 @@ export function A3SReviewOverlay({
       }
       if (event.type === "repair.submitted" || event.type === "repair.updated") {
         setRepairs(bridge.listRepairs());
-        setWorkspaceOpen(true);
+        setPanelView("findings");
       }
       if (event.type === "quality.reported") {
         setQualityReports(bridge.listQualityReports());
-        setWorkspaceOpen(true);
+        setPanelView("findings");
         announce(event.report.findings.length > 0
           ? t(event.report.findings.length === 1 ? "contractFindingAvailableOne" : "contractFindingAvailableMany", { count: event.report.findings.length })
           : t("contractPassedCleared", { contract: event.report.contract }));
@@ -291,7 +305,7 @@ export function A3SReviewOverlay({
       }
       if (event.type === "design_audit.reported") {
         setDesignAuditReports(bridge.listDesignAuditReports());
-        setWorkspaceOpen(true);
+        setPanelView("findings");
         announce(event.report.findings.length > 0
           ? t(event.report.findings.length === 1 ? "designSuggestionAvailableOne" : "designSuggestionAvailableMany", { count: event.report.findings.length })
           : t("designSuggestionsCleared"));
@@ -311,7 +325,7 @@ export function A3SReviewOverlay({
     restoredScopeRef.current = encodedScope;
     const restored = loadReviewDrafts(bridge);
     setDrafts(restored);
-    if (restored.length > 0) setWorkspaceOpen(true);
+    if (restored.length > 0) setPanelView("findings");
     if (restored.length > 0) {
       announce(t(restored.length === 1 ? "savedDraftRestoredOne" : "savedDraftRestoredMany", { count: restored.length }));
     }
@@ -321,45 +335,6 @@ export function A3SReviewOverlay({
     if (!enabled || !bridge || !mount || restoredScopeRef.current === null) return;
     saveReviewDrafts(bridge, drafts);
   }, [bridge, drafts, enabled, mount]);
-
-  useBrowserLayoutEffect(() => {
-    if (!open || !focusPanelOnOpenRef.current) return;
-    focusPanelOnOpenRef.current = false;
-    panelRef.current?.focus();
-  }, [mount, open]);
-
-  useBrowserLayoutEffect(() => {
-    if (open || !focusLauncherOnCloseRef.current) return;
-    focusLauncherOnCloseRef.current = false;
-    const focusLauncher = () => launchRef.current?.focus({ preventScroll: true });
-    focusLauncher();
-    const frame = window.requestAnimationFrame(focusLauncher);
-    return () => window.cancelAnimationFrame(frame);
-  }, [mount, open]);
-
-  useEffect(() => {
-    if (!open) return;
-    let frame: number | null = null;
-    const refreshGeometry = () => {
-      if (frame !== null) return;
-      frame = window.requestAnimationFrame(() => {
-        frame = null;
-        setViewportRevision((current) => current + 1);
-      });
-    };
-    const visualViewport = window.visualViewport;
-    window.addEventListener("scroll", refreshGeometry, true);
-    window.addEventListener("resize", refreshGeometry);
-    visualViewport?.addEventListener("scroll", refreshGeometry);
-    visualViewport?.addEventListener("resize", refreshGeometry);
-    return () => {
-      window.removeEventListener("scroll", refreshGeometry, true);
-      window.removeEventListener("resize", refreshGeometry);
-      visualViewport?.removeEventListener("scroll", refreshGeometry);
-      visualViewport?.removeEventListener("resize", refreshGeometry);
-      if (frame !== null) window.cancelAnimationFrame(frame);
-    };
-  }, [open]);
 
   useBrowserLayoutEffect(() => {
     if (!restoreReplyFocusId || replyFindingId !== null) return;
@@ -395,8 +370,7 @@ export function A3SReviewOverlay({
     onToggleOverlay: () => open ? closeOverlay() : openOverlay(true),
     onCancelMarking: cancelMarking,
     onCancelCandidate: () => {
-      clearCandidate();
-      focusPanel();
+      cancelCandidate();
     },
     onCloseOverlay: closeOverlay,
     onStartMarking: startMarking,
@@ -630,6 +604,7 @@ export function A3SReviewOverlay({
     setInstruction(defaults.instruction ?? "");
     setSuccessCriteria(defaults.successCriteria ?? "");
     if (defaults.intent) setIntent(defaults.intent);
+    setPanelView("compose");
     openOverlay();
   }
 
@@ -770,7 +745,7 @@ export function A3SReviewOverlay({
       const submitted = submit([draft]);
       if (submitted.some((repair) => repair.id === draft.id)) dismissCandidateSource(source);
     } else {
-      setWorkspaceOpen(true);
+      setPanelView("findings");
       setDrafts((current) => {
       const index = current.findIndex((item) => item.draft.id === draft.id);
       if (index < 0) return [...current, { draft, selected: true, hidden: false }];
@@ -793,6 +768,7 @@ export function A3SReviewOverlay({
     }
     invokeCallback(callbacks.current.onDraftDeleted, structuredClone(draft));
     announce(t("draftDeleted", { message: draft.instruction }));
+    setPanelView("findings");
     focusPanel();
   }
 
@@ -864,6 +840,7 @@ export function A3SReviewOverlay({
         ?.filter((relation) => relation.kind === "conflicts_with")
         .map((relation) => relation.findingId) ?? [],
     );
+    setPanelView("compose");
     openOverlay();
   }
 
@@ -875,7 +852,7 @@ export function A3SReviewOverlay({
     setRepairs(bridge.listRepairs());
     invokeCallback(callbacks.current.onSubmitted, structuredClone(submitted));
     if (submitted.length > 0) {
-      setWorkspaceOpen(true);
+      setPanelView("findings");
       announce(t(submitted.length === 1 ? "findingSentOne" : "findingSentMany", { count: submitted.length }));
       focusPanel();
     }
@@ -926,6 +903,11 @@ export function A3SReviewOverlay({
     if (preferences.clearOnCopy) clearCopiedDrafts(copied);
   }
 
+  function showPanelView(view: ReviewPanelView) {
+    if (marking && view !== "compose") stopMarking(false);
+    setPanelView(view);
+  }
+
   const rootStyle = {
     "--a3s-marker-color": preferences.markerColor,
     "--a3s-wireframe-fade": String(preferences.wireframeFade),
@@ -933,12 +915,6 @@ export function A3SReviewOverlay({
   const editorPlacement = candidate && open
     ? reviewEditorPlacement(candidate, bridge)
     : null;
-  const editorStyle = editorPlacement
-    ? {
-        "--a3s-editor-left": `${editorPlacement.left}px`,
-        "--a3s-editor-top": `${editorPlacement.top}px`,
-      } as CSSProperties
-    : undefined;
   const findingCount = drafts.length
     + repairs.length
     + qualityReports.reduce((count, report) => count + report.findings.length, 0)
@@ -959,36 +935,32 @@ export function A3SReviewOverlay({
       </button>
       <div className="a3s-announcer" role="status" aria-live="polite" aria-atomic="true">{announcement}</div>
       <ReviewDesignReferenceBoard active={candidate !== null} design={designReference} idPrefix={idPrefix} theme={preferences.theme} onAnnounce={announce} />
-      {open && !designReference.boardOpen && <>
-        {candidate && <div className="a3s-editor-popover" data-side={editorPlacement?.side ?? "right"} style={editorStyle}><FindingEditor
-          label={candidateLabel || t(candidate.nodeIds.length === 1 ? "selectedElementsOne" : "selectedElementsMany", { count: candidate.nodeIds.length })}
-          instruction={instruction} successCriteria={successCriteria} severity={severity}
-          intent={intent} designReference={designReference.reference}
-          conflictOptions={drafts
-            .filter((item) => item.draft.id !== editingDraftId)
-            .map((item) => ({ id: item.draft.id, label: item.draft.instruction, checked: conflictingDraftIds.includes(item.draft.id) }))}
-          onInstruction={setInstruction} onSuccessCriteria={setSuccessCriteria}
-          onSeverity={setSeverity} onIntent={setIntent}
-          onOpenDesignBoard={designReference.open}
-          onRemoveDesignReference={() => { designReference.remove(); announce(t("designReferenceRemoved")); }}
-          onConflict={(findingId, checked) => setConflictingDraftIds((current) => checked
-            ? [...new Set([...current, findingId])]
-            : current.filter((candidate) => candidate !== findingId))}
-          editing={Boolean(editingDraftId)}
-          onCancel={() => { clearCandidate(); focusPanel(); }}
-          {...(editingDraftId ? { onDelete: () => { const item = drafts.find((candidate) => candidate.draft.id === editingDraftId); if (item) deleteDraft(item.draft); } } : {})}
-          onSave={() => saveDraft(false)} onSend={() => saveDraft(true)}
-        /></div>}
-        <aside ref={panelRef} id={`${idPrefix}-review-panel`} className="a3s-panel" aria-labelledby={`${idPrefix}-review-title`} aria-describedby={`${idPrefix}-review-description`} aria-keyshortcuts={REVIEW_KEY_SHORTCUTS.escape} role="dialog" aria-modal="false" tabIndex={-1}>
-          <div className="a3s-command-bar">
-            <header><span className="a3s-panel-mark" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.4" /><path d="m7.3 16 3.9-9.2c.3-.8 1.4-.8 1.8 0l3.8 9.2M9.2 12.5h5.7" /><path d="M4.8 15.4c3-2.5 6.3-2.8 9.7-.9 1.7.9 3.4.3 5.2-1.3-1 4.7-4 7.1-8.5 7.1" /></svg></span><span><strong id={`${idPrefix}-review-title`} className="a3s-panel-title">{t("reviewTitle")}</strong><small id={`${idPrefix}-review-description`} className="a3s-panel-description">{t("reviewDescription")}</small></span><button type="button" className="a3s-close" onClick={closeOverlayFromControl} aria-label={t("closeReviewOverlay")}><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3.5 3.5 12.5 12.5M12.5 3.5 3.5 12.5" /></svg></button></header>
-            <ReviewMarkingToolbar marking={marking} mode={mode} layoutMode={layoutMode} paused={paused} markersVisible={markersVisible} autoSendEnabled={autoSendEnabled} theme={preferences.theme} findingCount={findingCount} workspaceOpen={workspaceOpen} settings={<ReviewSettings preferences={preferences} onChange={changePreferences} onHideUntilRestart={hideUntilTabRestart} />} onStartMarking={startMarking} onToggleLayout={toggleLayoutMode} onTogglePause={togglePause} onToggleMarkers={toggleMarkers} onToggleAutoSend={() => setAutoSendEnabled((current) => !current)} onCycleTheme={cycleTheme} onToggleWorkspace={() => setWorkspaceOpen((current) => !current)} onCancelMarking={cancelMarking} />
-          </div>
-          {marking && <p className="a3s-hint" role="status">{reviewModeHint(t, mode)} {t("pressEscapeToCancel")}</p>}
-          <section className="a3s-workspace" hidden={!workspaceOpen} aria-label={t("reviewWorkspace")}>
-            <header className="a3s-workspace-header"><span><strong>{t("reviewWorkspace")}</strong><small>{findingCount > 0 ? t("inThisPage", { count: findingCount }) : t("noSavedFindings")}</small></span><button type="button" className="a3s-close" aria-label={t("closeFindings")} onClick={() => setWorkspaceOpen(false)}><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3.5 3.5 12.5 12.5M12.5 3.5 3.5 12.5" /></svg></button></header>
-            <div className="a3s-workspace-scroll">
-              {layoutMode && <LayoutComposer idPrefix={idPrefix} purpose={layoutPurpose} canvas={layoutCanvas}
+      {open && !designReference.boardOpen && <aside ref={panelRef} id={`${idPrefix}-review-panel`} className={`a3s-panel${marking ? " is-marking" : ""}`} aria-labelledby={`${idPrefix}-review-title`} aria-describedby={`${idPrefix}-review-description`} aria-keyshortcuts={REVIEW_KEY_SHORTCUTS.escape} role="region" tabIndex={-1}>
+        <ReviewPanelHeader idPrefix={idPrefix} view={panelView} findingCount={findingCount} onClose={closeOverlayFromControl} onView={showPanelView} />
+        <div className="a3s-panel-body" role="tabpanel">
+          {panelView === "compose" && <section className="a3s-compose" aria-label={t("newFeedback")}>
+            {candidate ? <FindingEditor
+              label={candidateLabel || t(candidate.nodeIds.length === 1 ? "selectedElementsOne" : "selectedElementsMany", { count: candidate.nodeIds.length })}
+              instruction={instruction} successCriteria={successCriteria} severity={severity}
+              intent={intent} designReference={designReference.reference}
+              conflictOptions={drafts
+                .filter((item) => item.draft.id !== editingDraftId)
+                .map((item) => ({ id: item.draft.id, label: item.draft.instruction, checked: conflictingDraftIds.includes(item.draft.id) }))}
+              onInstruction={setInstruction} onSuccessCriteria={setSuccessCriteria}
+              onSeverity={setSeverity} onIntent={setIntent}
+              onOpenDesignBoard={designReference.open}
+              onRemoveDesignReference={() => { designReference.remove(); announce(t("designReferenceRemoved")); }}
+              onConflict={(findingId, checked) => setConflictingDraftIds((current) => checked
+                ? [...new Set([...current, findingId])]
+                : current.filter((candidate) => candidate !== findingId))}
+              editing={Boolean(editingDraftId)}
+              onCancel={cancelCandidate}
+              {...(editingDraftId ? { onDelete: () => { const item = drafts.find((candidate) => candidate.draft.id === editingDraftId); if (item) deleteDraft(item.draft); } } : {})}
+              onSave={() => saveDraft(false)} onSend={() => saveDraft(true)}
+            /> : <>
+              <ReviewMarkingToolbar marking={marking} mode={mode} layoutMode={layoutMode} onStartMarking={startMarking} onToggleLayout={toggleLayoutMode} onCancelMarking={cancelMarking} />
+              {marking && <p className="a3s-hint" role="status">{reviewModeHint(t, mode)} {t("pressEscapeToCancel")}</p>}
+              {layoutMode ? <LayoutComposer idPrefix={idPrefix} purpose={layoutPurpose} canvas={layoutCanvas}
                 componentType={layoutComponentType} source={layoutSource} target={layoutTarget}
                 markingMode={marking ? mode : null}
                 onPurpose={setLayoutPurpose} onCanvas={setLayoutCanvas} onComponentType={setLayoutComponentType}
@@ -997,28 +969,30 @@ export function A3SReviewOverlay({
                 onDrawDestination={() => startMarking("layout_destination")}
                 onTarget={(field, value) => setLayoutTarget((current) => ({ ...current, [field]: value }))}
                 onCreateRearrange={createRearrangeCandidate}
-              />}
-              <QualityCandidates reports={qualityReports} onReview={reviewQualityFinding} onDismiss={(reportId, findingId) => bridge.dismissQualityFinding(reportId, findingId)} />
-              <DesignAuditCandidates reports={designAuditReports} onReview={reviewDesignAuditFinding} onDismiss={(reportId, findingId) => bridge.dismissDesignAuditFinding(reportId, findingId)} />
-              <section className="a3s-list" aria-label={t("draftAndSubmittedFindings")} tabIndex={0}>
-          {drafts.map((item) => <article key={item.draft.id} className={`a3s-item${item.hidden ? " is-hidden" : ""}`}>
-            <label><input type="checkbox" aria-label={t("selectDraft", { message: item.draft.instruction })} checked={item.selected} onChange={(event) => setDrafts((current) => current.map((candidate) => candidate.draft.id === item.draft.id ? { ...candidate, selected: event.target.checked } : candidate))} /><span><strong>{item.draft.instruction}</strong><small>{reviewTargetSummary(t, item.draft.target)}{item.draft.designReference ? ` · ${t(item.draft.designReference.kind === "sketch" ? "sketchReference" : "screenshotReference")}` : ""} · {t("draft")}</small></span></label>
-            <div><button type="button" aria-label={t("sendDraftAutoFix", { message: item.draft.instruction })} onClick={() => submit([item.draft])}>{t("sendAndAutoFix")}</button><button type="button" className="quiet" aria-label={t("editDraftAction", { message: item.draft.instruction })} onClick={() => editDraft(item)}>{t("edit")}</button><button type="button" className="quiet" aria-label={t(item.hidden ? "reopenMarkerForDraft" : "hideMarkerForDraft", { message: item.draft.instruction })} onClick={() => setDrafts((current) => current.map((candidate) => candidate.draft.id === item.draft.id ? { ...candidate, hidden: !candidate.hidden } : candidate))}>{t(item.hidden ? "reopenMarker" : "hideMarker")}</button><button type="button" className="quiet" aria-label={t("deleteDraftAction", { message: item.draft.instruction })} onClick={() => deleteDraft(item.draft)}>{t("delete")}</button></div>
-          </article>)}
-          {repairs.map((repair) => {
-            const replies = bridge.listRepairReplies(repair.id);
-            return <article key={repair.id} className="a3s-item submitted"><span className={`a3s-status status-${repair.status}`}>{reviewStatusLabel(t, repair.status)}</span><strong>{repair.instruction}</strong><small>{reviewTargetSummary(t, repair.target)}{repair.designReference ? ` · ${repair.designReference.kind} reference` : ""} · {t("revision", { revision: repair.contextRevision })}</small>{replies.length > 0 && <ol className="a3s-thread" aria-label={t("repairConversation", { message: repair.instruction })}>{replies.map((reply) => <li key={reply.requestId}><span>{reviewActorLabel(t, reply.actor)}</span><p>{reply.message}</p></li>)}</ol>}{repair.status === "needs_input" && <div className="a3s-human-actions">{replyFindingId === repair.id ? <><label className="a3s-reply-label">{t("replyToCodingAgent")}<textarea aria-label={t("replyToCodingAgentAbout", { message: repair.instruction })} autoFocus maxLength={8192} value={replyMessage} onChange={(event) => setReplyMessage(event.target.value)} /></label><button type="button" disabled={!replyMessage.trim()} onClick={() => submitHumanAction(repair.id, "reply", replyMessage)}>{t("sendReply")}</button><button type="button" className="quiet" onClick={() => { setRestoreReplyFocusId(repair.id); setReplyFindingId(null); setReplyMessage(""); }}>{t("cancelReply")}</button></> : <button ref={(element) => { if (element) replyTriggerRefs.current.set(repair.id, element); else replyTriggerRefs.current.delete(repair.id); }} type="button" aria-label={t("replyAboutRepair", { message: repair.instruction })} onClick={() => setReplyFindingId(repair.id)}>{t("reply")}</button>}</div>}{repair.status === "review_ready" && <div className="a3s-human-actions" aria-label={t("reviewRepair", { message: repair.instruction })}><button type="button" aria-label={t("acceptRepairAction", { message: repair.instruction })} onClick={() => submitHumanAction(repair.id, "accept")}>{t("acceptRepair")}</button><button type="button" className="quiet" aria-label={t("rejectRepairAction", { message: repair.instruction })} onClick={() => submitHumanAction(repair.id, "dismiss")}>{t("reject")}</button><button type="button" className="quiet" aria-label={t("reopenRepairAction", { message: repair.instruction })} onClick={() => submitHumanAction(repair.id, "reopen")}>{t("reopen")}</button></div>}{["resolved", "dismissed", "cancelled", "failed", "verification_failed"].includes(repair.status) && <div className="a3s-human-actions"><button type="button" className="quiet" aria-label={t("reopenRepairAction", { message: repair.instruction })} onClick={() => submitHumanAction(repair.id, "reopen")}>{t("reopen")}</button></div>}</article>;
-          })}
-          {drafts.length === 0 && repairs.length === 0 && qualityReports.length === 0 && designAuditReports.length === 0 && !candidate && <p className="a3s-empty">{t("emptyWorkspace")}</p>}
-              </section>
-            </div>
-            {drafts.length > 0 && <footer>
-              <div className="a3s-workspace-secondary-actions"><button type="button" className="quiet" title={t("clearDraftsTitle")} aria-keyshortcuts={REVIEW_KEY_SHORTCUTS.clear} onClick={clearDrafts}>{t("clearDrafts")}</button><button type="button" className="quiet" title={t("copyMarkdownTitle")} aria-keyshortcuts={REVIEW_KEY_SHORTCUTS.copy} onClick={() => void copyDrafts("markdown")}>{t("copyMarkdown")}</button><button type="button" className="quiet" onClick={() => void copyDrafts()}>{t("copyJson")}</button></div>
-              <div className="a3s-workspace-send-actions"><button type="button" disabled={selectedCount === 0} onClick={() => submit(drafts.filter((item) => item.selected).map((item) => item.draft))}>{t("sendSelected", { count: selectedCount })}</button><button type="button" onClick={() => submit(drafts.map((item) => item.draft))}>{t("sendAll")}</button></div>
-            </footer>}
-          </section>
-        </aside>
-      </>}
+              /> : !marking && <div className="a3s-compose-empty"><span aria-hidden="true"><ToolGlyph name="element" /></span><strong>{t("simpleFlowTitle")}</strong><p>{t("simpleFlowHelp")}</p></div>}
+            </>}
+          </section>}
+          {panelView === "findings" && <ReviewWorkspace
+            bridge={bridge} drafts={drafts} repairs={repairs}
+            qualityReports={qualityReports} designAuditReports={designAuditReports}
+            findingCount={findingCount} selectedCount={selectedCount} candidatePresent={candidate !== null}
+            replyFindingId={replyFindingId} replyMessage={replyMessage}
+            replyTriggerRefs={replyTriggerRefs}
+            onReviewQuality={reviewQualityFinding} onDismissQuality={(reportId, findingId) => bridge.dismissQualityFinding(reportId, findingId)}
+            onReviewDesignAudit={reviewDesignAuditFinding} onDismissDesignAudit={(reportId, findingId) => bridge.dismissDesignAuditFinding(reportId, findingId)}
+            onSelectDraft={(findingId, selected) => setDrafts((current) => current.map((item) => item.draft.id === findingId ? { ...item, selected } : item))}
+            onSubmitDraft={(draft) => { submit([draft]); }} onEditDraft={editDraft}
+            onToggleDraftMarker={(findingId) => setDrafts((current) => current.map((item) => item.draft.id === findingId ? { ...item, hidden: !item.hidden } : item))}
+            onDeleteDraft={deleteDraft} onStartReply={setReplyFindingId} onReplyMessage={setReplyMessage}
+            onCancelReply={(findingId) => { setRestoreReplyFocusId(findingId); setReplyFindingId(null); setReplyMessage(""); }}
+            onHumanAction={submitHumanAction} onClearDrafts={clearDrafts}
+            onCopyDrafts={(format) => { void copyDrafts(format); }}
+            onSubmitSelected={() => { submit(drafts.filter((item) => item.selected).map((item) => item.draft)); }}
+          />}
+          {panelView === "settings" && <ReviewSettings preferences={preferences} paused={paused} markersVisible={markersVisible} autoSendEnabled={autoSendEnabled} onChange={changePreferences} onTogglePause={togglePause} onToggleMarkers={toggleMarkers} onToggleAutoSend={() => setAutoSendEnabled((current) => !current)} onHideUntilRestart={hideUntilTabRestart} />}
+        </div>
+      </aside>}
+      {open && marking && <div className="a3s-mobile-marking-bar" role="status"><span>{reviewModeHint(t, mode)}</span><div className="a3s-mobile-marking-actions">{mode === "multi" && candidate && <button type="button" onClick={() => { stopMarking(false); focusPanel(); }}>{t("finishSelection")}</button>}<button type="button" className="quiet danger" onClick={() => cancelMarking()}><ToolGlyph name="close" /><span>{t("cancel")}</span></button></div></div>}
     </div>
     </ReviewI18nProvider>
   );

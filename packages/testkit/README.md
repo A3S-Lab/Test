@@ -214,12 +214,20 @@ style application DOM itself.
 Submitted findings support human/agent replies, accept/reject/reopen review
 actions, and per-finding lifecycle projection.
 
-The compact review dock keeps marking controls available without covering the
-application. Target-attached editors preserve page context, while saved drafts
-move into a separate workspace with pinned single and batch send actions. The
-secondary tool tray and findings workspace are mutually exclusive, preventing
-stacked floating surfaces. Short viewports keep preferences internally
-scrollable, and mobile controls use touch-sized targets and 16-pixel form text.
+The review flow stays inside one fixed side panel: choose a target, describe
+the change, then save or send it. New feedback, findings, and preferences are
+three peer views in that panel. Marking tools are shown directly, the editor
+replaces them after selection, and saving switches to the findings view. No
+target-attached editor or secondary floating tray is opened. The design board
+temporarily replaces the panel and returns to the same editor when closed.
+Short viewports keep panel content internally scrollable. On mobile, starting
+a marking mode temporarily yields the page to direct touch input and keeps only
+a compact finish/cancel bar visible. Controls use touch-sized targets and
+16-pixel form text.
+
+Visible markers resolve live DOM rectangles after page or nested-container
+scrolling and disappear whenever the review panel is closed. This keeps page
+annotations aligned without leaving review chrome behind after Test Kit closes.
 
 Animation pause is ownership-safe: Test Kit freezes running and newly started
 page motion while pause is active, then resumes only animations and media it
@@ -240,7 +248,7 @@ dock, and wireframe page fade. Auto-send and animation pause reset on mount.
 context bridge. Activating it returns focus without scrolling to the last
 connected application control. Clipboard failure never clears local drafts.
 
-The overlay exposes a named non-modal dialog, finding-specific action names,
+The overlay exposes a named non-modal review region, finding-specific action names,
 one polite status announcer, visible keyboard focus, and focus restoration when
 controls disappear, including when tab-scoped hiding removes the Shadow DOM.
 Global review commands are published through `aria-keyshortcuts` and a

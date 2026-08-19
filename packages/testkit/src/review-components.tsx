@@ -1,6 +1,6 @@
-import { useState, type ReactNode } from "react";
+import { useState } from "react";
 import type { RepairDesignReference, RepairIntent, RepairSeverity, Rect } from "./types";
-import { type LayoutCanvas, type LayoutSource, type OverlayTheme, type SelectionMode } from "./review-model";
+import { type LayoutCanvas, type LayoutSource, type SelectionMode } from "./review-model";
 import { validLayoutRect } from "./review-utils";
 import { ComponentCatalogView } from "./component-catalog-view";
 import { useDesignBoardI18n } from "./design-board-i18n";
@@ -8,90 +8,84 @@ import { DesignGlyph } from "./design-icons";
 import { REVIEW_KEY_SHORTCUTS } from "./review-input-policy";
 import { reviewModeLabel, useReviewI18n } from "./review-locale";
 
+export type ReviewPanelView = "compose" | "findings" | "settings";
+
+export function ReviewPanelHeader({ idPrefix, view, findingCount, onClose, onView }: {
+  idPrefix: string;
+  view: ReviewPanelView;
+  findingCount: number;
+  onClose(): void;
+  onView(view: ReviewPanelView): void;
+}) {
+  const { t } = useReviewI18n();
+  return <>
+    <header className="a3s-panel-header">
+      <span className="a3s-panel-mark" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.4" /><path d="m7.3 16 3.9-9.2c.3-.8 1.4-.8 1.8 0l3.8 9.2M9.2 12.5h5.7" /><path d="M4.8 15.4c3-2.5 6.3-2.8 9.7-.9 1.7.9 3.4.3 5.2-1.3-1 4.7-4 7.1-8.5 7.1" /></svg></span>
+      <span><strong id={`${idPrefix}-review-title`} className="a3s-panel-title">{t("reviewTitle")}</strong><small id={`${idPrefix}-review-description`} className="a3s-panel-description">{t("reviewDescription")}</small></span>
+      <button type="button" className="a3s-close" onClick={onClose} aria-label={t("closeReviewOverlay")}><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3.5 3.5 12.5 12.5M12.5 3.5 3.5 12.5" /></svg></button>
+    </header>
+    <nav className="a3s-panel-tabs" aria-label={t("reviewViews")} role="tablist">
+      <button type="button" role="tab" aria-selected={view === "compose"} className={view === "compose" ? "selected" : ""} onClick={() => onView("compose")}><ToolGlyph name="element" /><span>{t("newFeedback")}</span></button>
+      <button type="button" role="tab" aria-selected={view === "findings"} className={view === "findings" ? "selected" : ""} onClick={() => onView("findings")}><ToolGlyph name="inbox" /><span>{t("findings")}</span>{findingCount > 0 && <b aria-label={t("inThisPage", { count: findingCount })}>{findingCount}</b>}</button>
+      <button type="button" role="tab" aria-selected={view === "settings"} aria-label={t("reviewPreferences")} className={view === "settings" ? "selected" : ""} onClick={() => onView("settings")}><ToolGlyph name="settings" /><span>{t("preferences")}</span></button>
+    </nav>
+  </>;
+}
+
 export type ReviewMarkingToolbarProps = {
   marking: boolean;
   mode: SelectionMode;
   layoutMode: boolean;
-  paused: boolean;
-  markersVisible: boolean;
-  autoSendEnabled: boolean;
-  theme: OverlayTheme;
-  findingCount: number;
-  workspaceOpen: boolean;
-  settings: ReactNode;
   onStartMarking(value: SelectionMode): void;
   onToggleLayout(): void;
-  onTogglePause(): void;
-  onToggleMarkers(): void;
-  onToggleAutoSend(): void;
-  onCycleTheme(): void;
-  onToggleWorkspace(): void;
   onCancelMarking(): void;
 };
 
 export function ReviewMarkingToolbar(props: ReviewMarkingToolbarProps) {
-  const [moreOpen, setMoreOpen] = useState(false);
   const { t } = useReviewI18n();
-  const themeLabel = t(
-    props.theme === "system"
-      ? "themeSystem"
-      : props.theme === "light"
-        ? "themeLight"
-        : "themeDark",
-  );
-  const themeActionLabel = themeLabel.toLocaleLowerCase("en-US");
-  const beginMarking = (value: SelectionMode) => {
-    setMoreOpen(false);
-    props.onStartMarking(value);
-  };
-  const toggleWorkspace = () => {
-    setMoreOpen(false);
-    props.onToggleWorkspace();
-  };
-  const toggleMore = () => {
-    const next = !moreOpen;
-    setMoreOpen(next);
-    if (next && props.workspaceOpen) props.onToggleWorkspace();
-  };
+  const modes = ["element", "area", "text", "multi", "draw"] as const;
 
   return <section className="a3s-tools" aria-label={t("markPage")}>
-    <div className="a3s-toolbar-core">
-      <div className="a3s-tool-group a3s-tool-group-primary">
-        {(["element", "multi", "text"] as const).map((value) => { const label = reviewModeLabel(t, value); const actionLabel = label.toLocaleLowerCase("en-US"); return <ToolButton key={value} label={label} ariaLabel={t("markAction", { mode: actionLabel })} icon={value} pressed={props.marking && props.mode === value} keyShortcut={REVIEW_KEY_SHORTCUTS[value]} title={t("markActionWithShortcut", { mode: actionLabel, shortcut: REVIEW_KEY_SHORTCUTS[value] })} onClick={() => beginMarking(value)} />; })}
-      </div>
-      <span className="a3s-tool-divider" aria-hidden="true" />
-      <button type="button" className="a3s-workspace-toggle" data-tooltip={t("findings")} aria-label={t(props.workspaceOpen ? "hideReviewWorkspace" : "openReviewWorkspace")} aria-expanded={props.workspaceOpen} onClick={toggleWorkspace}>
-        <ToolGlyph name="inbox" />
-        <span className="a3s-sr-only">{t("findings")}</span>
-        {props.findingCount > 0 && <span className="a3s-tool-count" aria-hidden="true">{props.findingCount}</span>}
-      </button>
-      <ToolButton label={t("moreTools")} ariaLabel={t("moreReviewTools")} icon="more" expanded={moreOpen} onClick={toggleMore} />
-      {props.marking && <ToolButton label={t("cancel")} ariaLabel={t("cancelMarking")} icon="close" className="danger" onClick={props.onCancelMarking} />}
+    <div className="a3s-tools-heading">
+      <span><strong>{t("chooseTarget")}</strong><small>{t("chooseTargetHelp")}</small></span>
+      {props.marking && <button type="button" className="quiet danger a3s-cancel-marking" onClick={props.onCancelMarking}><ToolGlyph name="close" /><span>{t("cancel")}</span></button>}
     </div>
-    <div className="a3s-tool-tray" hidden={!moreOpen} role="group" aria-label={t("moreReviewTools")}>
-      <div className="a3s-tool-tray-copy">
-        <strong>{t("reviewTools")}</strong>
-        <span>{props.marking ? t("modeActive", { mode: reviewModeLabel(t, props.mode) }) : t("markInspectSend")}</span>
-      </div>
-      <div className="a3s-tool-group">
-        {(["area", "draw"] as const).map((value) => { const label = reviewModeLabel(t, value); const actionLabel = label.toLocaleLowerCase("en-US"); return <ToolButton key={value} label={label} ariaLabel={t("markAction", { mode: actionLabel })} icon={value} pressed={props.marking && props.mode === value} keyShortcut={REVIEW_KEY_SHORTCUTS[value]} title={t("markActionWithShortcut", { mode: actionLabel, shortcut: REVIEW_KEY_SHORTCUTS[value] })} onClick={() => beginMarking(value)} />; })}
-        <ToolButton label={t("layout")} ariaLabel={t("layout")} icon="layout" pressed={props.layoutMode} title={t("toggleLayoutMode")} keyShortcut={REVIEW_KEY_SHORTCUTS.layout} onClick={() => { setMoreOpen(false); props.onToggleLayout(); }} />
-        <ToolButton label={t(props.paused ? "resume" : "pause")} ariaLabel={t(props.paused ? "resumePageAnimations" : "pausePageAnimations")} icon={props.paused ? "play" : "pause"} pressed={props.paused} title={t("pauseOrResumeMotion")} keyShortcut={REVIEW_KEY_SHORTCUTS.pause} onClick={props.onTogglePause} />
-        <ToolButton label={t(props.markersVisible ? "hideMarkers" : "showMarkers")} ariaLabel={t(props.markersVisible ? "hideMarkers" : "showMarkers")} icon={props.markersVisible ? "eye" : "eye-off"} pressed={props.markersVisible} title={t("showOrHideMarkers")} keyShortcut={REVIEW_KEY_SHORTCUTS.markers} onClick={props.onToggleMarkers} />
-        <ToolButton label={t(props.autoSendEnabled ? "autoSendOn" : "autoSendOff")} ariaLabel={t(props.autoSendEnabled ? "turnAutoSendOff" : "turnAutoSendOn")} icon="send" pressed={props.autoSendEnabled} onClick={props.onToggleAutoSend} />
-        <ToolButton label={t("themeCurrent", { theme: themeLabel })} ariaLabel={t("changeTheme", { theme: themeActionLabel })} icon="theme" onClick={props.onCycleTheme} />
-        {props.settings}
-      </div>
+    <div className="a3s-selection-grid">
+      {modes.map((value) => {
+        const label = reviewModeLabel(t, value);
+        const actionLabel = label.toLocaleLowerCase("en-US");
+        return <ToolButton
+          key={value}
+          label={label}
+          ariaLabel={t("markAction", { mode: actionLabel })}
+          icon={value}
+          pressed={props.marking && props.mode === value}
+          keyShortcut={REVIEW_KEY_SHORTCUTS[value]}
+          title={t("markActionWithShortcut", { mode: actionLabel, shortcut: REVIEW_KEY_SHORTCUTS[value] })}
+          showLabel
+          onClick={() => props.onStartMarking(value)}
+        />;
+      })}
+      <ToolButton
+        label={t("layout")}
+        ariaLabel={t("layout")}
+        icon="layout"
+        pressed={props.layoutMode}
+        title={t("toggleLayoutMode")}
+        keyShortcut={REVIEW_KEY_SHORTCUTS.layout}
+        showLabel
+        onClick={props.onToggleLayout}
+      />
     </div>
   </section>;
 }
 
 type ToolIcon = SelectionMode | "layout" | "play" | "pause" | "eye" | "eye-off" | "send" | "theme" | "inbox" | "close" | "settings" | "more";
 
-function ToolButton({ label, ariaLabel, icon, pressed, expanded, title, keyShortcut, className = "", onClick }: { label: string; ariaLabel: string; icon: ToolIcon; pressed?: boolean; expanded?: boolean; title?: string; keyShortcut?: string; className?: string; onClick(): void }) {
-  return <button type="button" className={`${pressed || expanded ? "selected " : ""}${className}`.trim()} data-tooltip={label} title={title ?? label} aria-label={ariaLabel} {...(pressed === undefined ? {} : { "aria-pressed": pressed })} {...(expanded === undefined ? {} : { "aria-expanded": expanded })} {...(keyShortcut ? { "aria-keyshortcuts": keyShortcut } : {})} onClick={onClick}>
+function ToolButton({ label, ariaLabel, icon, pressed, title, keyShortcut, className = "", showLabel = false, onClick }: { label: string; ariaLabel: string; icon: ToolIcon; pressed?: boolean; title?: string; keyShortcut?: string; className?: string; showLabel?: boolean; onClick(): void }) {
+  return <button type="button" className={`${pressed ? "selected " : ""}${showLabel ? "with-label " : ""}${className}`.trim()} title={title ?? label} aria-label={ariaLabel} {...(pressed === undefined ? {} : { "aria-pressed": pressed })} {...(keyShortcut ? { "aria-keyshortcuts": keyShortcut } : {})} onClick={onClick}>
     <ToolGlyph name={icon} />
-    <span className="a3s-sr-only">{label}</span>
+    <span className={showLabel ? undefined : "a3s-sr-only"}>{label}</span>
   </button>;
 }
 

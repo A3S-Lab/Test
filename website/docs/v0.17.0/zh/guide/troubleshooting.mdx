@@ -196,9 +196,9 @@ UI 记录因图不完整而被整体省略时，外层 Page Context 仍可能有
 
 ## Review Overlay 没有出现
 
-检查 `A3SReviewOverlay` 的 `enabled`、外层 provider、页面 `<html lang>` 和 Shadow DOM host。Overlay 只有在 live bridge 存在时挂载。它默认是紧凑 Dock，工具、编辑器和问题工作区会按当前状态展开。
+检查 `A3SReviewOverlay` 的 `enabled`、外层 provider、页面 `<html lang>` 和 Shadow DOM host。Overlay 只有在 live bridge 存在时挂载。默认界面是一个侧栏，其中“新反馈”“问题”“偏好设置”是并列视图；选中目标后，编辑器会在同一侧栏内替换标记工具。
 
-键盘操作无响应时，先确认焦点没有停在输入框或编辑器。字母快捷键在可编辑控件中会主动让路。移动端还要检查宿主页面是否用全屏层或更高 z-index 遮住了 Dock。
+键盘操作无响应时，先确认焦点没有停在输入框或编辑器。字母快捷键在可编辑控件中会主动让路。移动端还要检查宿主页面是否使用了 z-index 高于 Test Kit 侧栏的全屏层。
 
 ## Finding 没有进入修复队列
 

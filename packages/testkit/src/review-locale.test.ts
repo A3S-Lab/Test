@@ -22,7 +22,7 @@ describe("review localization", () => {
       emptyWorkspace: "x".repeat(2_049),
     });
     expect(i18n.t("reviewTitle")).toBe("页面评审");
-    expect(i18n.t("reviewDescription")).toBe("发送前仅保存在本页");
+    expect(i18n.t("reviewDescription")).toBe("选择目标，描述修改，然后发送");
     expect(i18n.t("emptyWorkspace")).toContain("先标记一个元素");
   });
 

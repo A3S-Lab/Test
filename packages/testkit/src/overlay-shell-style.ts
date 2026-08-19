@@ -226,66 +226,57 @@ button.danger {
 
 .a3s-panel {
   position: fixed;
-  right: 16px;
-  bottom: 16px;
-  width: min(364px, calc(100vw - 32px));
-  overflow: visible;
-  border: 0;
-  background: transparent;
-  pointer-events: none;
-  transform-origin: right bottom;
+  z-index: 16;
+  top: 12px;
+  right: 12px;
+  bottom: 12px;
+  display: grid;
+  width: min(390px, calc(100vw - 24px));
+  min-height: 0;
+  overflow: hidden;
+  border: 1px solid var(--a3s-line-strong);
+  border-radius: 14px;
+  background: var(--a3s-panel);
+  box-shadow: 0 26px 68px rgb(5 10 20 / 26%), 0 4px 16px rgb(5 10 20 / 12%);
+  pointer-events: auto;
+  grid-template-rows: auto auto minmax(0, 1fr);
+  transform-origin: right center;
   animation: a3s-panel-enter 260ms cubic-bezier(.16, 1, .3, 1);
 }
 
 @keyframes a3s-panel-enter {
   from {
-    opacity: 0;
-    transform: translateY(8px) scale(.94);
+    opacity: .72;
+    clip-path: inset(0 0 0 10% round 14px);
+    transform: translateX(32px);
   }
   to {
     opacity: 1;
-    transform: translateY(0) scale(1);
+    clip-path: inset(0 round 14px);
+    transform: translateX(0);
   }
 }
 
-.a3s-command-bar {
-  display: flex;
-  min-width: 0;
-  height: 50px;
-  padding: 4px;
-  border: 1px solid var(--a3s-toolbar-line);
-  border-radius: 14px;
-  background: color-mix(in srgb, var(--a3s-toolbar) 97%, transparent);
-  box-shadow: 0 20px 52px rgb(5 10 20 / 26%), 0 2px 8px rgb(5 10 20 / 18%);
-  color: var(--a3s-toolbar-text);
-  pointer-events: auto;
-  align-items: center;
-  gap: 5px;
-  backdrop-filter: blur(14px);
-}
-
-.a3s-command-bar > header {
+.a3s-panel-header {
   display: grid;
-  min-width: 104px;
-  height: 42px;
-  padding: 0 4px 0 0;
-  border-right: 1px solid var(--a3s-toolbar-line);
-  grid-template-columns: 28px minmax(42px, 1fr) 26px;
+  min-width: 0;
+  min-height: 58px;
+  padding: 9px 10px 9px 12px;
+  border-bottom: 1px solid var(--a3s-line);
+  background: var(--a3s-panel-raised);
+  grid-template-columns: 32px minmax(0, 1fr) 32px;
   align-items: center;
-  gap: 3px;
+  gap: 9px;
 }
 
 .a3s-panel-mark {
   display: grid;
-  width: 26px;
-  height: 26px;
-  border-radius: 8px;
+  width: 32px;
+  height: 32px;
+  border-radius: 9px;
   background: #1264ff;
   color: #ffffff;
-  font: 780 8px/1 ui-sans-serif, sans-serif;
-  letter-spacing: -.03em;
   place-items: center;
-  box-shadow: inset 0 1px 0 rgb(255 255 255 / 26%), 0 5px 12px rgb(18 100 255 / 22%);
 }
 
 .a3s-panel-mark > svg {
@@ -298,7 +289,7 @@ button.danger {
   stroke-linejoin: round;
 }
 
-.a3s-command-bar > header > span:nth-child(2) {
+.a3s-panel-header > span:nth-child(2) {
   min-width: 0;
   overflow: hidden;
 }
@@ -312,22 +303,16 @@ button.danger {
 }
 
 .a3s-panel-title {
-  color: var(--a3s-toolbar-text);
-  font-size: 11px;
-  line-height: 1.2;
+  color: var(--a3s-text);
+  font-size: 14px;
+  line-height: 1.3;
+  letter-spacing: -.01em;
 }
 
-.a3s-command-bar .a3s-panel-description {
-  position: fixed;
-  width: 1px;
-  height: 1px;
-  padding: 0;
-  margin: -1px;
-  overflow: hidden;
-  border: 0;
-  clip: rect(0 0 0 0);
-  clip-path: inset(50%);
-  white-space: nowrap;
+.a3s-panel-description {
+  margin-top: 1px;
+  color: var(--a3s-muted);
+  font-size: 10px;
 }
 
 .a3s-close {
@@ -342,14 +327,10 @@ button.danger {
   place-items: center;
 }
 
-.a3s-command-bar .a3s-close {
-  color: var(--a3s-toolbar-muted);
-}
-
-.a3s-command-bar .a3s-close:hover {
-  border-color: var(--a3s-toolbar-line);
-  background: rgb(255 255 255 / 8%);
-  color: var(--a3s-toolbar-text);
+.a3s-close:hover {
+  border-color: var(--a3s-line);
+  background: var(--a3s-soft);
+  color: var(--a3s-text);
 }
 
 .a3s-close svg {
@@ -361,80 +342,45 @@ button.danger {
   stroke-linecap: round;
 }
 
-.a3s-tools {
-  position: relative;
-  display: block;
-  min-width: 0;
-  flex: 1 1 auto;
-}
-
-.a3s-toolbar-core {
-  display: flex;
-  min-width: 0;
-  align-items: center;
-  justify-content: flex-start;
-  gap: 3px;
-}
-
-.a3s-tool-group {
-  display: flex;
-  flex: 0 0 auto;
-  align-items: center;
-  gap: 2px;
-}
-
-.a3s-tool-group-primary {
-  padding: 1px;
-  border: 1px solid rgb(255 255 255 / 7%);
-  border-radius: 9px;
-  background: rgb(255 255 255 / 5%);
-}
-
-.a3s-tool-divider {
-  width: 1px;
-  height: 20px;
-  flex: 0 0 auto;
-  background: var(--a3s-toolbar-line);
-}
-
-.a3s-tools button,
-.a3s-settings > .a3s-disclosure {
-  position: relative;
+.a3s-panel-tabs {
   display: grid;
-  width: 34px;
-  height: 34px;
+  min-height: 45px;
+  padding: 5px 8px;
+  border-bottom: 1px solid var(--a3s-line);
+  background: var(--a3s-bg);
+  grid-template-columns: repeat(3, 1fr);
+  gap: 4px;
+}
+
+.a3s-panel-tabs button {
+  position: relative;
+  display: inline-flex;
+  min-width: 0;
   min-height: 34px;
-  padding: 0;
+  padding: 0 8px;
   border-color: transparent;
-  border-radius: 8px;
   background: transparent;
-  color: var(--a3s-toolbar-muted);
-  place-items: center;
+  color: var(--a3s-muted);
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  font-size: 11px;
 }
 
-.a3s-tools button:hover,
-.a3s-tools button.selected,
-.a3s-settings > .a3s-disclosure:hover,
-.a3s-settings > .a3s-disclosure[aria-expanded="true"] {
-  border-color: rgb(255 255 255 / 9%);
-  background: var(--a3s-toolbar-raised);
-  color: var(--a3s-toolbar-text);
+.a3s-panel-tabs button:hover {
+  background: var(--a3s-soft);
+  color: var(--a3s-text);
 }
 
-.a3s-tool-group-primary button.selected {
-  border-color: rgb(255 255 255 / 19%);
-  background: #7157c9;
-  color: #ffffff;
-  box-shadow: inset 0 1px 0 rgb(255 255 255 / 18%);
+.a3s-panel-tabs button.selected {
+  border-color: var(--a3s-line);
+  background: var(--a3s-panel-raised);
+  color: var(--a3s-blue-ink);
 }
 
-.a3s-tools button.danger {
-  background: rgb(255 107 118 / 15%);
-  color: #ff9ba3;
-}
-
+.a3s-panel-tabs svg,
 .a3s-tools button svg,
-.a3s-settings > .a3s-disclosure svg {
+.a3s-compose-empty svg {
   width: 16px;
   height: 16px;
   fill: none;
@@ -444,113 +390,137 @@ button.danger {
   stroke-linejoin: round;
 }
 
-.a3s-tools button[data-tooltip]::after,
-.a3s-settings > .a3s-disclosure[data-tooltip]::after {
-  position: absolute;
-  bottom: calc(100% + 9px);
-  left: 50%;
-  z-index: 12;
-  max-width: min(260px, calc(100vw - 24px));
-  padding: 6px 8px;
-  border-radius: 6px;
-  border: 1px solid rgb(255 255 255 / 9%);
-  background: #0e1015;
-  color: #f7f8fb;
-  content: attr(data-tooltip);
-  font-size: 10.5px;
-  font-weight: 650;
-  opacity: 0;
-  pointer-events: none;
-  transform: translate(-50%, 3px);
-  transition: opacity 120ms ease, transform 120ms ease;
-  text-align: center;
-  white-space: nowrap;
-}
-
-.a3s-tools button[data-tooltip]:hover::after,
-.a3s-tools button[data-tooltip]:focus-visible::after,
-.a3s-settings > .a3s-disclosure[data-tooltip]:hover::after,
-.a3s-settings > .a3s-disclosure[data-tooltip]:focus-visible::after {
-  opacity: 1;
-  transform: translate(-50%, 0);
-}
-
-.a3s-workspace-toggle {
-  overflow: visible;
-}
-
-.a3s-tool-tray {
-  position: absolute;
-  right: 0;
-  bottom: calc(100% + 8px);
-  display: grid;
-  width: min(380px, calc(100vw - 32px));
-  min-height: 50px;
-  padding: 6px;
-  border: 1px solid var(--a3s-toolbar-line);
-  border-radius: 12px;
-  background: color-mix(in srgb, var(--a3s-toolbar) 97%, transparent);
-  box-shadow: 0 18px 48px rgb(5 10 20 / 30%);
-  color: var(--a3s-toolbar-text);
-  grid-template-columns: minmax(112px, 1fr) auto;
-  align-items: center;
-  gap: 8px;
-  animation: a3s-tool-tray-enter 180ms cubic-bezier(.16, 1, .3, 1);
-}
-
-.a3s-tool-tray[hidden] {
-  display: none;
-}
-
-@keyframes a3s-tool-tray-enter {
-  from {
-    opacity: 0;
-    transform: translateY(6px) scale(.97);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0) scale(1);
-  }
-}
-
-.a3s-tool-tray-copy {
-  min-width: 0;
-  padding-left: 6px;
-}
-
-.a3s-tool-tray-copy strong,
-.a3s-tool-tray-copy span {
-  display: block;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.a3s-tool-tray-copy strong {
-  color: var(--a3s-toolbar-text);
-  font-size: 11px;
-}
-
-.a3s-tool-tray-copy span {
-  margin-top: 2px;
-  color: var(--a3s-toolbar-muted);
-  font-size: 9px;
-}
-
-.a3s-tool-count {
-  position: absolute;
-  top: -4px;
-  right: -4px;
+.a3s-panel-tabs b {
   display: grid;
   min-width: 17px;
   height: 17px;
   padding: 0 4px;
-  border: 2px solid var(--a3s-toolbar);
   border-radius: 999px;
-  background: var(--a3s-violet);
-  color: #ffffff;
-  font: 750 8px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+  background: var(--a3s-violet-soft);
+  color: var(--a3s-violet);
+  font-size: 9px;
+  line-height: 1;
   place-items: center;
+}
+
+.a3s-panel-body {
+  min-height: 0;
+  overflow: hidden;
+}
+
+.a3s-compose {
+  display: flex;
+  height: 100%;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  flex-direction: column;
+}
+
+.a3s-tools {
+  padding: 14px;
+  border-bottom: 1px solid var(--a3s-line);
+}
+
+.a3s-tools-heading {
+  display: flex;
+  margin-bottom: 10px;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.a3s-tools-heading strong,
+.a3s-tools-heading small {
+  display: block;
+}
+
+.a3s-tools-heading strong {
+  color: var(--a3s-text);
+  font-size: 12px;
+}
+
+.a3s-tools-heading small {
+  margin-top: 2px;
+  color: var(--a3s-muted);
+  font-size: 10px;
+}
+
+.a3s-selection-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.a3s-tools .a3s-selection-grid button {
+  display: inline-flex;
+  min-width: 0;
+  min-height: 38px;
+  padding: 0 10px;
+  border-color: var(--a3s-line);
+  background: var(--a3s-panel-raised);
+  color: var(--a3s-muted);
+  align-items: center;
+  justify-content: flex-start;
+  gap: 7px;
+  font-size: 11px;
+}
+
+.a3s-tools .a3s-selection-grid button:hover {
+  border-color: var(--a3s-blue);
+  color: var(--a3s-text);
+}
+
+.a3s-tools .a3s-selection-grid button.selected {
+  border-color: var(--a3s-blue);
+  background: var(--a3s-blue-soft);
+  color: var(--a3s-blue-ink);
+}
+
+.a3s-cancel-marking {
+  display: inline-flex;
+  min-height: 30px;
+  padding: 0 7px;
+  align-items: center;
+  gap: 4px;
+  font-size: 10px;
+}
+
+.a3s-compose-empty {
+  display: flex;
+  min-height: 180px;
+  padding: 28px 24px;
+  color: var(--a3s-muted);
+  text-align: center;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+}
+
+.a3s-compose-empty > span {
+  display: grid;
+  width: 40px;
+  height: 40px;
+  margin-bottom: 10px;
+  border-radius: 11px;
+  background: var(--a3s-blue-soft);
+  color: var(--a3s-blue-ink);
+  place-items: center;
+}
+
+.a3s-compose-empty strong {
+  color: var(--a3s-text);
+  font-size: 13px;
+}
+
+.a3s-compose-empty p {
+  max-width: 32ch;
+  margin: 4px 0 0;
+  font-size: 11px;
+}
+
+.a3s-mobile-marking-bar {
+  display: none;
 }
 
 .a3s-root[data-dock="left"] .a3s-launch {
@@ -560,12 +530,67 @@ button.danger {
 
 .a3s-root[data-dock="left"] .a3s-panel {
   right: auto;
-  left: 16px;
-  transform-origin: left bottom;
+  left: 12px;
+  transform-origin: left center;
 }
 
-.a3s-root[data-dock="left"] .a3s-tool-tray {
-  right: auto;
-  left: 0;
+@media (max-width: 720px) {
+  .a3s-panel.is-marking,
+  .a3s-root[data-dock="left"] .a3s-panel.is-marking {
+    display: none;
+  }
+
+  .a3s-mobile-marking-bar {
+    position: fixed;
+    z-index: 18;
+    top: max(8px, env(safe-area-inset-top));
+    right: 8px;
+    left: 8px;
+    display: flex;
+    min-height: 48px;
+    padding: 7px 8px 7px 12px;
+    border: 1px solid var(--a3s-line-strong);
+    border-radius: 12px;
+    background: var(--a3s-panel-raised);
+    box-shadow: 0 16px 42px rgb(5 10 20 / 24%);
+    pointer-events: auto;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+
+  .a3s-mobile-marking-bar > span {
+    overflow: hidden;
+    color: var(--a3s-text);
+    font-size: 12px;
+    font-weight: 650;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .a3s-mobile-marking-actions {
+    display: flex;
+    flex: 0 0 auto;
+    align-items: center;
+    gap: 5px;
+  }
+
+  .a3s-mobile-marking-actions button {
+    display: inline-flex;
+    min-height: 34px;
+    flex: 0 0 auto;
+    align-items: center;
+    gap: 5px;
+  }
+
+  .a3s-mobile-marking-bar svg {
+    width: 15px;
+    height: 15px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.55;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
 }
 `;

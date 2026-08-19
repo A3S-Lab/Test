@@ -162,9 +162,10 @@ Opening the Review Overlay, viewing advice, or saving a local draft never grants
 ## Sketch or attach the intended UI
 
 After selecting an element or rectangular area, open **Design reference** from
-the finding editor. The board slides in from the right with one lightweight
-transition, without a page-blocking scrim or a second stacked pop-up. Drawing,
-image, history, and style actions share one localized icon toolbar.
+the finding editor. The board replaces the review panel and slides in from the
+right with one lightweight transition, without a page-blocking scrim or a
+second stacked pop-up. Drawing, image, history, and style actions share one
+localized icon toolbar.
 
 The built-in SVG board supports freehand strokes, rectangles, text, selection,
 movement, resizing, styling, undo, and redo on a bounded 960 × 600 surface. A
@@ -316,21 +317,29 @@ The record has its own `observationId` because focus, hover, or a running animat
 
 Default limits are 200 sampled nodes, 200 state candidates, 32 ms, and 256 KiB. Installation options `maxUiNodes`, `maxUiStateSamples`, `maxUiDurationMs`, and `maxUiEncodedBytes` can lower those ceilings, and each `snapshot()` request may lower them again. Use `snapshot({ ui: false })` for one request or `uiUnderstanding={false}` for an installation that does not need this projection.
 
-Screenshots remain A3S Test evidence and are not duplicated inside Test Kit. When a reviewer explicitly sends a finding, the same bounded UI record accompanies its `untrusted: true` repair context so the workspace-owning agent can correlate a selected node with the page's visual system.
+Verification screenshots remain A3S Test evidence. A screenshot deliberately attached as a design reference is part of the finding instead. When a reviewer explicitly sends a finding, the same bounded UI record accompanies its `untrusted: true` repair context so the workspace-owning agent can correlate a selected node with the page's visual system.
 
 ## Human marking and batch repair
 
-Test Kit 0.4.0 presents review work as a compact floating dock. The primary
-controls stay available without covering the page, while marking tools,
-preferences, the focused editor, and the findings workspace open only when
-needed. The secondary tool tray and findings workspace are mutually exclusive,
-so opening one automatically closes the other instead of stacking surfaces.
+Test Kit 0.4.0 keeps review work in one fixed side panel. The shortest path is
+select a target, describe the change, then save or send. New feedback,
+findings, and preferences are three peer views. Marking tools are visible
+directly; selecting a target replaces them with the editor in the same panel,
+and saving moves directly to the findings view. There is no target-attached
+editor, secondary tool tray, or nested modal.
 
-The editor stays attached to the selected target so the page remains visible.
-Saved drafts move into a separate findings workspace with pinned single and
-batch send controls. Preferences scroll inside short desktop viewports. On
-mobile, primary controls provide at least 44-CSS-pixel touch targets and form
-text remains 16 pixels to prevent browser zoom.
+The design board temporarily replaces the review panel and returns to the same
+editor when closed. Preferences and findings scroll inside short desktop
+viewports. On mobile, the panel becomes a single full-width surface, primary
+controls provide at least 44-CSS-pixel touch targets, and form text remains 16
+pixels to prevent browser zoom. Starting a marking mode yields that surface to
+the page and leaves only a compact finish/cancel bar, so direct touch selection
+remains possible. Page markers stay below the panel when it returns.
+
+Visible node and text markers are recomputed from live DOM rectangles after
+page or nested-container scrolling. Region markers retain their captured scroll
+origin. Closing Test Kit removes every rendered page marker until the panel is
+opened again.
 
 The overlay supports element, text, click or drag multi-selection, rectangular findings, and freehand findings. A reviewer can:
 

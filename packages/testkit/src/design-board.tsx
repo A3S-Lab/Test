@@ -267,8 +267,7 @@ export function DesignBoard({
       ref={dialogRef}
       className="a3s-design-board"
       data-theme={theme}
-      role="dialog"
-      aria-modal="false"
+      role="region"
       aria-labelledby={titleId}
       aria-describedby={descriptionId}
       onKeyDownCapture={onDialogKeyDownCapture}
