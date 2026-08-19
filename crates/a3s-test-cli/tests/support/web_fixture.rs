@@ -187,7 +187,7 @@ impl FixtureServer {
         let worker_requests = Arc::clone(&requests);
         let worker_stop = Arc::clone(&stop);
         let worker = thread::Builder::new()
-            .name(format!("a3s-web-fixture-{}", address.port()))
+            .name(format!("a3s-test-http-fixture-{}", address.port()))
             .spawn(move || serve(listener, site, &worker_requests, &worker_stop))?;
 
         Ok(Self {
