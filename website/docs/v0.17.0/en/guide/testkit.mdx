@@ -332,9 +332,10 @@ The design board temporarily replaces the review panel and returns to the same
 editor when closed. Preferences and findings scroll inside short desktop
 viewports. On mobile, the panel becomes a single full-width surface, primary
 controls provide at least 44-CSS-pixel touch targets, and form text remains 16
-pixels to prevent browser zoom. Starting a marking mode yields that surface to
-the page and leaves only a compact finish/cancel bar, so direct touch selection
-remains possible. Page markers stay below the panel when it returns.
+pixels to prevent browser zoom. At every viewport size, starting a marking mode
+slides the panel aside and leaves only a compact finish/cancel bar, so content
+previously covered by the panel remains directly selectable. Page markers stay
+below the panel when it returns.
 
 Visible node and text markers are recomputed from live DOM rectangles after
 page or nested-container scrolling. Region markers retain their captured scroll

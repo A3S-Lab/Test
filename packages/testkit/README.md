@@ -221,9 +221,10 @@ replaces them after selection, and saving switches to the findings view. No
 target-attached editor or secondary floating tray is opened. The design board
 temporarily replaces the panel and returns to the same editor when closed.
 Short viewports keep panel content internally scrollable. On mobile, starting
-a marking mode temporarily yields the page to direct touch input and keeps only
-a compact finish/cancel bar visible. Controls use touch-sized targets and
-16-pixel form text.
+a marking mode uses the same compact finish/cancel bar as desktop. At every
+viewport size, the side panel temporarily yields the page so covered targets
+remain visible and directly selectable. Mobile controls use touch-sized targets
+and 16-pixel form text.
 
 Visible markers resolve live DOM rectangles after page or nested-container
 scrolling and disappear whenever the review panel is closed. This keeps page

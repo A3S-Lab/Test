@@ -242,6 +242,7 @@ button.danger {
   grid-template-rows: auto auto minmax(0, 1fr);
   transform-origin: right center;
   animation: a3s-panel-enter 260ms cubic-bezier(.16, 1, .3, 1);
+  transition: opacity 160ms ease, transform 220ms cubic-bezier(.16, 1, .3, 1), visibility 0s;
 }
 
 @keyframes a3s-panel-enter {
@@ -519,8 +520,72 @@ button.danger {
   font-size: 11px;
 }
 
+.a3s-panel.is-marking {
+  visibility: hidden;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateX(calc(100% + 24px));
+  animation: none;
+  transition: opacity 160ms ease, transform 220ms cubic-bezier(.16, 1, .3, 1), visibility 0s linear 220ms;
+}
+
+.a3s-root[data-dock="left"] .a3s-panel.is-marking {
+  transform: translateX(calc(-100% - 24px));
+}
+
 .a3s-mobile-marking-bar {
-  display: none;
+  position: fixed;
+  z-index: 18;
+  top: max(8px, env(safe-area-inset-top));
+  left: 50%;
+  display: flex;
+  width: min(560px, calc(100vw - 16px));
+  min-height: 48px;
+  padding: 7px 8px 7px 12px;
+  border: 1px solid var(--a3s-line-strong);
+  border-radius: 12px;
+  background: var(--a3s-panel-raised);
+  box-shadow: 0 16px 42px rgb(5 10 20 / 24%);
+  pointer-events: none;
+  transform: translateX(-50%);
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.a3s-mobile-marking-bar > span {
+  overflow: hidden;
+  color: var(--a3s-text);
+  font-size: 12px;
+  font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.a3s-mobile-marking-actions {
+  display: flex;
+  flex: 0 0 auto;
+  pointer-events: auto;
+  align-items: center;
+  gap: 5px;
+}
+
+.a3s-mobile-marking-actions button {
+  display: inline-flex;
+  min-height: 34px;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 5px;
+}
+
+.a3s-mobile-marking-bar svg {
+  width: 15px;
+  height: 15px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.55;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 .a3s-root[data-dock="left"] .a3s-launch {
@@ -541,56 +606,10 @@ button.danger {
   }
 
   .a3s-mobile-marking-bar {
-    position: fixed;
-    z-index: 18;
-    top: max(8px, env(safe-area-inset-top));
     right: 8px;
     left: 8px;
-    display: flex;
-    min-height: 48px;
-    padding: 7px 8px 7px 12px;
-    border: 1px solid var(--a3s-line-strong);
-    border-radius: 12px;
-    background: var(--a3s-panel-raised);
-    box-shadow: 0 16px 42px rgb(5 10 20 / 24%);
-    pointer-events: auto;
-    align-items: center;
-    justify-content: space-between;
-    gap: 12px;
-  }
-
-  .a3s-mobile-marking-bar > span {
-    overflow: hidden;
-    color: var(--a3s-text);
-    font-size: 12px;
-    font-weight: 650;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .a3s-mobile-marking-actions {
-    display: flex;
-    flex: 0 0 auto;
-    align-items: center;
-    gap: 5px;
-  }
-
-  .a3s-mobile-marking-actions button {
-    display: inline-flex;
-    min-height: 34px;
-    flex: 0 0 auto;
-    align-items: center;
-    gap: 5px;
-  }
-
-  .a3s-mobile-marking-bar svg {
-    width: 15px;
-    height: 15px;
-    fill: none;
-    stroke: currentColor;
-    stroke-width: 1.55;
-    stroke-linecap: round;
-    stroke-linejoin: round;
+    width: auto;
+    transform: none;
   }
 }
 `;

@@ -41,11 +41,12 @@ pub fn assert_wcag_accessibility_across_themes(command: &impl Fn(&[&str]) -> Out
             ),
         );
         assert_wcag_accessibility(command, &format!("audit the {theme} review theme"));
-        click_accessible(
+        select_accessible(
             command,
-            &format!("cycle the {theme} review theme"),
-            "button",
-            &format!("Change overlay theme; current theme is {theme}"),
+            &format!("select the {next_theme} review theme"),
+            "combobox",
+            "Overlay theme",
+            next_theme,
         );
         wait_for(
             command,
@@ -56,6 +57,7 @@ pub fn assert_wcag_accessibility_across_themes(command: &impl Fn(&[&str]) -> Out
             ),
         );
     }
+    open_new_feedback(command, "return to new feedback after theme audits");
 }
 
 fn exercise_keyboard_multi_selection(command: &impl Fn(&[&str]) -> Output) {
@@ -176,29 +178,31 @@ fn exercise_keyboard_multi_selection(command: &impl Fn(&[&str]) -> Output) {
 }
 
 fn verify_shortcut_discoverability(command: &impl Fn(&[&str]) -> Output) {
-    let attributes = encoded_eval(
+    let compose_attributes = encoded_eval(
         command,
-        "inspect review shortcut attributes",
-        "(()=>{const shadow=document.querySelector('[data-a3s-testkit-overlay]').shadowRoot;const button=(name)=>[...shadow.querySelectorAll('button')].find(candidate=>candidate.textContent.trim()===name||candidate.getAttribute('aria-label')===name);return JSON.stringify({launcher:shadow.querySelector('.a3s-launch')?.getAttribute('aria-keyshortcuts'),panel:shadow.querySelector('.a3s-panel')?.getAttribute('aria-keyshortcuts'),layout:button('Layout')?.getAttribute('aria-keyshortcuts'),pause:button('Pause page animations')?.getAttribute('aria-keyshortcuts'),markers:button('Hide markers')?.getAttribute('aria-keyshortcuts')})})()",
+        "inspect new-feedback shortcut attributes",
+        "(()=>{const shadow=document.querySelector('[data-a3s-testkit-overlay]').shadowRoot;const button=(name)=>[...shadow.querySelectorAll('button')].find(candidate=>candidate.textContent.trim()===name||candidate.getAttribute('aria-label')===name);return JSON.stringify({launcher:shadow.querySelector('.a3s-launch')?.getAttribute('aria-keyshortcuts'),panel:shadow.querySelector('.a3s-panel')?.getAttribute('aria-keyshortcuts'),layout:button('Layout')?.getAttribute('aria-keyshortcuts')})})()",
     );
-    assert_eq!(attributes["launcher"], "Control+Shift+F Meta+Shift+F");
-    assert_eq!(attributes["panel"], "Escape");
-    assert_eq!(attributes["layout"], "L");
-    assert_eq!(attributes["pause"], "P");
-    assert_eq!(attributes["markers"], "H");
+    assert_eq!(
+        compose_attributes["launcher"],
+        "Control+Shift+F Meta+Shift+F"
+    );
+    assert_eq!(compose_attributes["panel"], "Escape");
+    assert_eq!(compose_attributes["layout"], "L");
 
     run(
         command,
         "set a compact viewport for shortcut help",
         &["set", "viewport", "390", "667", "1"],
     );
-    open_review_tool_tray(command, "open review tools for shortcut help");
-    activate_accessible_with_enter(
+    open_review_preferences(command, "open shortcut help through review preferences");
+    let preference_attributes = encoded_eval(
         command,
-        "open shortcut help through review preferences",
-        "button",
-        "Review preferences",
+        "inspect preference shortcut attributes",
+        "(()=>{const shadow=document.querySelector('[data-a3s-testkit-overlay]').shadowRoot;const button=(name)=>[...shadow.querySelectorAll('button')].find(candidate=>candidate.getAttribute('aria-label')===name);return JSON.stringify({pause:button('Pause page animations')?.getAttribute('aria-keyshortcuts'),markers:button('Hide markers')?.getAttribute('aria-keyshortcuts')})})()",
     );
+    assert_eq!(preference_attributes["pause"], "P");
+    assert_eq!(preference_attributes["markers"], "H");
     let snapshot = run(
         command,
         "capture shortcut help accessibility",
@@ -248,17 +252,7 @@ fn verify_shortcut_discoverability(command: &impl Fn(&[&str]) -> Output) {
         compact_layout["reachable"], true,
         "the final review preference was clipped on a compact viewport: {compact_layout}"
     );
-    activate_accessible_with_enter(
-        command,
-        "close shortcut help after inspection",
-        "button",
-        "Review preferences",
-    );
-    wait_for(
-        command,
-        "wait for compact shortcut help to close",
-        "document.querySelector('[data-a3s-testkit-overlay]').shadowRoot.querySelector('[aria-label=\"Review preferences\"]')?.getAttribute('aria-expanded')==='false'",
-    );
+    open_new_feedback(command, "close shortcut help after inspection");
     run(
         command,
         "restore the Test Kit browser viewport after shortcut help",
@@ -507,18 +501,7 @@ fn exercise_host_interaction_blocking(command: &impl Fn(&[&str]) -> Output) {
         "observe the unblocked host click",
         "window.testkitHostClicks===1",
     );
-    open_review_tool_tray(command, "open review tools for interaction preferences");
-    activate_accessible_with_enter(
-        command,
-        "open review preferences",
-        "button",
-        "Review preferences",
-    );
-    wait_for(
-        command,
-        "wait for review preferences to open",
-        "document.querySelector('[data-a3s-testkit-overlay]').shadowRoot.querySelector('[aria-label=\"Review preferences\"]')?.getAttribute('aria-expanded')==='true'",
-    );
+    open_review_preferences(command, "open review preferences for interaction controls");
     set_checkbox_accessible(
         command,
         "enable host pointer blocking",
@@ -555,30 +538,26 @@ fn exercise_host_interaction_blocking(command: &impl Fn(&[&str]) -> Output) {
         "observe the second unblocked host click",
         "window.testkitHostClicks===2",
     );
-    activate_accessible_with_enter(
+    open_new_feedback(
         command,
         "close review preferences after interaction blocking",
-        "button",
-        "Review preferences",
-    );
-    wait_for(
-        command,
-        "wait for closed review preferences",
-        "document.querySelector('[data-a3s-testkit-overlay]').shadowRoot.querySelector('[aria-label=\"Review preferences\"]')?.getAttribute('aria-expanded')==='false'",
     );
 }
 
 fn author_searchable_layout_placement(command: &impl Fn(&[&str]) -> Output) {
-    click_accessible(
+    open_new_feedback(command, "open new feedback for Layout placement");
+    let layout_open = eval(
         command,
-        "switch from review tools to the findings workspace",
-        "button",
-        "Open review workspace",
+        "inspect the Layout composer before placement",
+        "Boolean(document.querySelector('[data-a3s-testkit-overlay]').shadowRoot.querySelector('.a3s-layout'))",
     );
+    if layout_open != true {
+        click_accessible(command, "open the Layout composer", "button", "Layout");
+    }
     wait_for(
         command,
-        "wait for the mutually exclusive findings workspace",
-        "(()=>{const shadow=document.querySelector('[data-a3s-testkit-overlay]').shadowRoot;return !shadow.querySelector('.a3s-workspace')?.hidden&&shadow.querySelector('[aria-label=\"More review tools\"]')?.getAttribute('aria-expanded')==='false'})()",
+        "wait for the Layout composer",
+        "document.querySelector('[data-a3s-testkit-overlay]').shadowRoot.querySelector('.a3s-layout')",
     );
     click_accessible(
         command,
@@ -727,18 +706,7 @@ pub fn verify_hide_until_restart_focus(command: &impl Fn(&[&str]) -> Output) {
         "focus the host application before hiding review",
         &["focus", "#host-probe"],
     );
-    open_review_tool_tray(command, "open review tools before hiding review");
-    activate_accessible_with_enter(
-        command,
-        "open review preferences before hiding review",
-        "button",
-        "Review preferences",
-    );
-    wait_for(
-        command,
-        "wait for review preferences before hiding review",
-        "document.querySelector('[data-a3s-testkit-overlay]').shadowRoot.querySelector('[aria-label=\"Review preferences\"]')?.getAttribute('aria-expanded')==='true'",
-    );
+    open_review_preferences(command, "open review preferences before hiding review");
     activate_accessible_with_enter(
         command,
         "hide review until the tab restarts",
@@ -765,20 +733,37 @@ fn click_host_probe(command: &impl Fn(&[&str]) -> Output, context: &str) {
     click_accessible(command, context, "button", "Host interaction probe");
 }
 
-fn open_review_tool_tray(command: &impl Fn(&[&str]) -> Output, context: &str) {
-    let expanded = eval(
+fn open_review_preferences(command: &impl Fn(&[&str]) -> Output, context: &str) {
+    let selected = eval(
         command,
         &format!("inspect before {context}"),
-        "document.querySelector('[data-a3s-testkit-overlay]').shadowRoot.querySelector('[aria-label=\"More review tools\"]')?.getAttribute('aria-expanded')==='true'",
+        "document.querySelector('[data-a3s-testkit-overlay]').shadowRoot.querySelector('[role=\"tab\"][aria-label=\"Review preferences\"]')?.getAttribute('aria-selected')==='true'",
     );
-    if expanded == true {
+    if selected == true {
         return;
     }
-    activate_accessible_with_enter(command, context, "button", "More review tools");
+    activate_accessible_with_enter(command, context, "tab", "Review preferences");
     wait_for(
         command,
         &format!("wait after {context}"),
-        "document.querySelector('[data-a3s-testkit-overlay]').shadowRoot.querySelector('[aria-label=\"More review tools\"]')?.getAttribute('aria-expanded')==='true'",
+        "(()=>{const shadow=document.querySelector('[data-a3s-testkit-overlay]').shadowRoot;return shadow.querySelector('[role=\"tab\"][aria-label=\"Review preferences\"]')?.getAttribute('aria-selected')==='true'&&Boolean(shadow.querySelector('.a3s-settings-content'))})()",
+    );
+}
+
+fn open_new_feedback(command: &impl Fn(&[&str]) -> Output, context: &str) {
+    let selected = eval(
+        command,
+        &format!("inspect before {context}"),
+        "document.querySelector('[data-a3s-testkit-overlay]').shadowRoot.querySelector('[role=\"tab\"]')?.getAttribute('aria-selected')==='true'",
+    );
+    if selected == true {
+        return;
+    }
+    activate_accessible_with_enter(command, context, "tab", "New feedback");
+    wait_for(
+        command,
+        &format!("wait after {context}"),
+        "(()=>{const shadow=document.querySelector('[data-a3s-testkit-overlay]').shadowRoot;const tab=[...shadow.querySelectorAll('[role=\"tab\"]')].find(candidate=>candidate.textContent.trim()==='New feedback');return tab?.getAttribute('aria-selected')==='true'&&Boolean(shadow.querySelector('.a3s-compose'))})()",
     );
 }
 

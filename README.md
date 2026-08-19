@@ -638,7 +638,8 @@ Visible review work stays in one side panel: choose a target, describe the
 change, then save or send. New feedback, findings, and preferences are peer
 views rather than stacked pop-ups. Markers follow live DOM geometry while the
 page or an internal container scrolls, and closing Test Kit hides every page
-marker.
+marker. Starting a marking mode slides the panel aside and leaves one compact
+finish/cancel bar, so the panel never blocks the page target being selected.
 
 After selecting an element or rectangular area, the reviewer can also open a
 dependency-free SVG design board to sketch the intended UI or attach a

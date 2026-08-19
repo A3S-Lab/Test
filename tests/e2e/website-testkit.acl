@@ -149,8 +149,12 @@ suite "website-testkit-experience" {
             interactive = true
         }
 
-        press "mark-first-batch-item" {
-            key = "e"
+        click "open-first-batch-feedback" {
+            target = role("tab", "新反馈")
+        }
+
+        click "mark-first-batch-item" {
+            target = role("button", "标记元素")
         }
 
         snapshot "first-batch-marking-state" {
@@ -182,8 +186,12 @@ suite "website-testkit-experience" {
             interactive = true
         }
 
-        press "mark-second-batch-item" {
-            key = "e"
+        click "open-second-batch-feedback" {
+            target = role("tab", "新反馈")
+        }
+
+        click "mark-second-batch-item" {
+            target = role("button", "标记元素")
         }
 
         snapshot "second-batch-marking-state" {

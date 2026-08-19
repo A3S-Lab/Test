@@ -534,12 +534,14 @@ fn real_agent_browser_runs_the_embedded_testkit_suite() {
     assert_process_success("capture TestKit accessibility tree", &accessibility);
     let accessibility = String::from_utf8_lossy(&accessibility.stdout);
     for expected in [
-        "dialog \"Review\"",
+        "region \"Review\"",
+        "tab \"New feedback\"",
+        "tab \"Findings\"",
+        "tab \"Review preferences\"",
         "button \"Mark element\"",
         "button \"Mark multi\"",
         "button \"Mark text\"",
-        "button \"Open review workspace\"",
-        "button \"More review tools\"",
+        "button \"Layout\"",
         "button \"Close review overlay\"",
         "heading \"Screen-reader audit controls\"",
         "button \"Seed contract and design candidates\"",
@@ -556,25 +558,26 @@ fn real_agent_browser_runs_the_embedded_testkit_suite() {
 
     click_accessible(
         &command,
-        "open the TestKit review tool tray",
-        "button",
-        "More review tools",
+        "open the TestKit review preferences",
+        "tab",
+        "Review preferences",
     );
     let tool_accessibility = command(&["snapshot"]);
     assert_process_success(
-        "capture the expanded TestKit review tool tray",
+        "capture the TestKit review preferences",
         &tool_accessibility,
     );
     let tool_accessibility = String::from_utf8_lossy(&tool_accessibility.stdout);
     for expected in [
         "button \"Pause page animations\"",
         "button \"Turn auto-send on\"",
-        "button \"Change overlay theme; current theme is system\"",
-        "button \"Layout\"",
+        "combobox \"Overlay theme\"",
+        "combobox \"Panel dock\"",
+        "button \"Hide until tab restart\"",
     ] {
         assert!(
             tool_accessibility.contains(expected),
-            "expanded TestKit review tool tray missing {expected:?}: {tool_accessibility}"
+            "TestKit review preferences missing {expected:?}: {tool_accessibility}"
         );
     }
 
@@ -702,13 +705,17 @@ fn real_agent_browser_runs_the_embedded_testkit_suite() {
     run_review_workflow(&command);
     exercise_review_candidate_accessibility(&command);
 
-    let select_keyboard_marking = command(&[
-        "eval",
-        "(()=>{const host=document.querySelector('[data-a3s-testkit-overlay]'); [...host.shadowRoot.querySelectorAll('button')].find(button=>button.textContent==='Element').click(); return true})()",
-    ]);
-    assert_process_success(
+    click_accessible(
+        &command,
+        "return to new feedback for keyboard marking",
+        "tab",
+        "New feedback",
+    );
+    click_accessible(
+        &command,
         "select TestKit keyboard marking mode",
-        &select_keyboard_marking,
+        "button",
+        "Mark element",
     );
     let marking_ready = command(&[
         "wait",
