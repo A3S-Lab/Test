@@ -193,6 +193,22 @@
   line-height: 1.5;
 }
 
+.test-installer-testkit-link {
+  display: inline-flex;
+  margin-top: 9px;
+  color: var(--test-accent-strong) !important;
+  font-size: 12px;
+  font-weight: 680;
+  line-height: 1.4;
+  align-items: center;
+  gap: 5px;
+}
+
+.test-installer-testkit-link:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
 .test-installer-rail .test-install {
   display: grid;
   overflow: hidden;

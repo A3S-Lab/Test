@@ -580,36 +580,34 @@ Development frontends can embed `@a3s-lab/testkit` so A3S Test can read the
 rendered page without relying on pixels alone:
 
 ```bash
-npm install https://github.com/A3S-Lab/Test/releases/latest/download/a3s-testkit.tgz
+npm install --save-dev https://github.com/A3S-Lab/Test/releases/latest/download/a3s-testkit.tgz
 ```
 
+The package is not published to the npm Registry yet. npm installs the
+GitHub Release asset under the expected `@a3s-lab/testkit` package name and
+records its integrity in the project lockfile. Confirm the dependency with
+`npm ls @a3s-lab/testkit`.
+
 ```tsx
-import {
-  A3SReviewOverlay,
-  A3STestBoundary,
-  A3STestKit,
-} from "@a3s-lab/testkit/react";
+import { A3SReviewOverlay, A3STestKit } from "@a3s-lab/testkit/react";
 
 export function App() {
+  const testKitEnabled = import.meta.env.DEV;
+
   return (
-    <A3STestKit
-      enabled={import.meta.env.DEV}
-      page={{ id: "checkout" }}
-      repairEndpoint="/__a3s-test/repairs"
-      redact={["[data-payment-field]"]}
-    >
-      <A3STestBoundary
-        id="checkout-form"
-        name="Checkout form"
-        source={{ file: "src/Checkout.tsx" }}
-      >
-        <Checkout />
-      </A3STestBoundary>
-      <A3SReviewOverlay enabled={import.meta.env.DEV} locale="auto" />
+    <A3STestKit enabled={testKitEnabled} page={{ id: "app" }}>
+      <Product />
+      <A3SReviewOverlay enabled={testKitEnabled} locale="auto" />
     </A3STestKit>
   );
 }
 ```
+
+This provider-plus-overlay pair is enough to start the Review Overlay. The
+v0.17.0 line adds the design board and page-region capture shown below. Add
+`A3STestBoundary` only when page context needs component ownership or bounded
+source hints. For headless CI context, keep the provider and omit the visible
+overlay.
 
 After rendering, Test Kit publishes bounded, revisioned context:
 

@@ -9,13 +9,19 @@ const repositoryRoot = path.resolve(websiteRoot, '..');
 const docsRoot = path.join(websiteRoot, 'docs');
 const failures = [];
 
-const [websiteReadme, websiteRegressionSuite] = await Promise.all([
-  readFile(path.join(websiteRoot, 'README.md'), 'utf8'),
-  readFile(
-    path.join(repositoryRoot, 'tests', 'e2e', 'website-testkit.acl'),
-    'utf8',
-  ),
-]);
+const [websiteReadme, websiteRegressionSuite, repositoryReadme, testKitReadme] =
+  await Promise.all([
+    readFile(path.join(websiteRoot, 'README.md'), 'utf8'),
+    readFile(
+      path.join(repositoryRoot, 'tests', 'e2e', 'website-testkit.acl'),
+      'utf8',
+    ),
+    readFile(path.join(repositoryRoot, 'README.md'), 'utf8'),
+    readFile(
+      path.join(repositoryRoot, 'packages', 'testkit', 'README.md'),
+      'utf8',
+    ),
+  ]);
 const normalizedWebsiteReadme = websiteReadme.replace(/\s+/g, ' ');
 
 const requiredRegressionActions = [
@@ -49,6 +55,23 @@ for (const claim of [
 ]) {
   if (!normalizedWebsiteReadme.includes(claim)) {
     failures.push(`Website README lacks the evidence claim: ${claim}.`);
+  }
+}
+
+for (const [label, contents] of [
+  ['repository README', repositoryReadme],
+  ['Test Kit README', testKitReadme],
+]) {
+  for (const installDetail of [
+    'npm install --save-dev',
+    'npm ls @a3s-lab/testkit',
+    'npm Registry',
+  ]) {
+    if (!contents.includes(installDetail)) {
+      failures.push(
+        `${label} lacks Test Kit install detail: ${installDetail}.`,
+      );
+    }
   }
 }
 
@@ -187,16 +210,39 @@ for (const version of versions) {
         `${version} ${locale} installation guide does not pin published install version ${installVersion}.`,
       );
     }
+    const versionedPackageUrl =
+      `https://github.com/A3S-Lab/Test/releases/download/${installVersion}/` +
+      'a3s-testkit.tgz';
+    if (
+      version === defaultVersion &&
+      (!installationGuide.includes(
+        `npm install --save-dev ${versionedPackageUrl}`,
+      ) ||
+        !installationGuide.includes('./testkit.mdx'))
+    ) {
+      failures.push(
+        `${version} ${locale} installation guide lacks the current Test Kit install path.`,
+      );
+    }
     const testKitGuide = await readFile(
       path.join(docsRoot, version, locale, 'guide', 'testkit.mdx'),
       'utf8',
     );
-    const versionedPackageUrl =
-      `https://github.com/A3S-Lab/Test/releases/download/${installVersion}/` +
-      'a3s-testkit.tgz';
     if (!testKitGuide.includes(versionedPackageUrl)) {
       failures.push(
         `${version} ${locale} Test Kit guide does not pin ${versionedPackageUrl}.`,
+      );
+    }
+    if (
+      version === defaultVersion &&
+      (!testKitGuide.includes(
+        `npm install --save-dev ${versionedPackageUrl}`,
+      ) ||
+        !testKitGuide.includes('npm ls @a3s-lab/testkit') ||
+        !testKitGuide.includes('npm Registry'))
+    ) {
+      failures.push(
+        `${version} ${locale} Test Kit guide lacks the install, verification, or distribution explanation.`,
       );
     }
     if (

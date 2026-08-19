@@ -4,56 +4,93 @@ description: 在页面渲染后发布带修订的语义、组件、定位器、�
 ---
 
 :::warning 发布候选
-v0.17.0 已在 main 上准备完成，但尚未正式发布。安装示例仍固定到 v0.16.2，直到发布门禁被明确推进。
+本页描述 v0.17.0；安装命令仍使用已发布的稳定版 v0.16.2。
 :::
 
 # 接入 Web Test Kit
 
-把 `@a3s-lab/testkit` 接入开发环境后，Context Runtime 会在页面渲染完成后提供有界、带修订的 Page Context，其中包含当前 DOM、可访问语义、组件归属、稳定定位器、真实坐标和浏览器计算出的 UI 证据。可选的 Review Overlay 允许评审者点选或框选问题，再把一条或一批任务明确发送给拥有工作区的编码 Agent。CI 可以只启用无界面的 Context Runtime；SDK 不会给业务 DOM 写入测试属性。
+如果目标是在开发页面中点选元素、框选区域、画出期望的 UI 或附上页面截图，只需安装 Test Kit，并在应用根节点挂载两个组件。完成下面三步后，页面会出现 **A3S 页面评审** 入口。
+
+## 三步完成 React 接入
+
+### 1. 安装开发依赖
+
+在前端工程目录执行固定版本的安装命令：
+
+```bash
+npm install --save-dev https://github.com/A3S-Lab/Test/releases/download/v0.16.2/a3s-testkit.tgz
+```
+
+当前包尚未发布到 npm Registry，所以这里安装的是 GitHub Release 附带的 `.tgz`。npm 仍会把依赖记录为 `@a3s-lab/testkit`。上面的命令安装已发布的 v0.16.2 稳定包；本页新增的画板和页面区域截图会随 v0.17.0 正式发布，不需要额外安装绘图或截图模块。
+
+确认依赖已经进入当前工程：
+
+```bash
+npm ls @a3s-lab/testkit
+```
+
+### 2. 在应用根节点挂载
+
+下面是可工作的最小 React 接入。Test Kit 仅在开发环境启用，业务应用继续作为普通子节点渲染。
+
+```tsx
+import { StrictMode } from 'react';
+import { createRoot } from 'react-dom/client';
+import { A3SReviewOverlay, A3STestKit } from '@a3s-lab/testkit/react';
+import { App } from './App';
+
+const testKitEnabled = import.meta.env.DEV;
+
+createRoot(document.getElementById('root')!).render(
+  <StrictMode>
+    <A3STestKit enabled={testKitEnabled} page={{ id: 'app' }}>
+      <App />
+      <A3SReviewOverlay enabled={testKitEnabled} locale="zh-CN" />
+    </A3STestKit>
+  </StrictMode>,
+);
+```
+
+`enabled` 必须明确为 `true` 才会安装浏览器 bridge。不要依赖 tree shaking 判断环境，也不要在正常生产页面中启用可见的 Review Overlay。
+
+### 3. 打开页面并验证
+
+启动原有开发服务器并打开页面。右下角出现 **A3S 页面评审** 按钮即表示接入成功；也可以按 `Ctrl/Command+Shift+F` 打开侧栏。按钮没有出现时，先确认以下三点。
+
+- `A3STestKit` 与 `A3SReviewOverlay` 位于同一棵 React 树中。
+- 两个组件的 `enabled` 在浏览器中都为 `true`。
+- 代码从客户端入口挂载，而不是只在服务端渲染。
+
+Test Kit 是前端 SDK，不会增加一个名为 `a3s-testkit` 的终端命令。需要从终端运行测试或让 Agent 接收修复任务时，再安装 [A3S Test CLI 与 Agent Skill](./installation.mdx#安装-cli-与-agent-skill)。
+
+## 大多数项目到这里就够了
+
+继续配置前，先按实际目标选择所需能力。
+
+- **页面点选、框选、画板和截图：** 使用 `A3STestKit` 与 `A3SReviewOverlay`。
+- **CI 只读取 Page Context：** 保留 `A3STestKit`，省略可见的 `A3SReviewOverlay`。
+- **标注组件归属和源码提示：** 再增加 `A3STestBoundary`。
+- **把 finding 发送到自建服务：** 再配置同源 `repairEndpoint` 或 `onSubmitted`。
 
 :::info Test Kit 是增强项，不是运行前提
 不接入 Test Kit，A3S Test 仍可通过浏览器可访问语义执行类型化动作、断言和证据采集。需要组件归属、源码提示、多坐标空间几何、渲染态 UI 证据或人工点选时，再接入 Test Kit。
 :::
 
-## 安装
+## 按需增加组件边界
 
-每个 GitHub Release 都发布匹配的包。
-
-```bash
-npm install https://github.com/A3S-Lab/Test/releases/download/v0.16.2/a3s-testkit.tgz
-```
-
-## React 接入
+`A3STestBoundary` 不是启动 Review Overlay 的前提。只有需要让 A3S Test 识别组件归属或源码提示时，才包住对应区域。
 
 ```tsx
-import {
-  A3SReviewOverlay,
-  A3STestBoundary,
-  A3STestKit,
-} from '@a3s-lab/testkit/react';
+import { A3STestBoundary } from '@a3s-lab/testkit/react';
 
-export function App() {
-  return (
-    <A3STestKit
-      enabled={import.meta.env.DEV}
-      page={{ id: 'checkout' }}
-      repairEndpoint="/__a3s-test/repairs"
-      redact={['[data-payment-field]']}
-    >
-      <A3STestBoundary
-        id="checkout-form"
-        name="Checkout form"
-        source={{ file: 'src/Checkout.tsx' }}
-      >
-        <Checkout />
-      </A3STestBoundary>
-      <A3SReviewOverlay enabled={import.meta.env.DEV} locale="zh-CN" />
-    </A3STestKit>
-  );
-}
+<A3STestBoundary
+  id="checkout-form"
+  name="Checkout form"
+  source={{ file: 'src/Checkout.tsx' }}
+>
+  <Checkout />
+</A3STestBoundary>;
 ```
-
-框架无关入口导出 `installTestKit`、`getPageContextBridge` 和协议类型。React 入口增加 provider、组件边界与可选的 Shadow DOM overlay。`enabled` 必须明确为 `true`，否则运行时关闭并拒绝工作。
 
 ## 框架无关接入
 

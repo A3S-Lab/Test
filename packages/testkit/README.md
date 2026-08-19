@@ -2,37 +2,68 @@
 
 Development-only page context and human review SDK for A3S Test.
 
+## Install
+
 ```bash
-npm install https://github.com/A3S-Lab/Test/releases/latest/download/a3s-testkit.tgz
+npm install --save-dev https://github.com/A3S-Lab/Test/releases/latest/download/a3s-testkit.tgz
 ```
+
+`@a3s-lab/testkit` is not published to the npm Registry yet. The command above
+installs the package attached to the latest GitHub Release, records it under
+the expected package name, and locks its integrity in the project lockfile.
+Use a versioned Release URL instead of `latest` when builds must be
+reproducible. The latest Release can lag the package on `main`; use the
+versioned documentation to distinguish published and staged features.
+
+Verify that the current project can resolve the package:
+
+```bash
+npm ls @a3s-lab/testkit
+```
+
+## React quick start
 
 ```tsx
-import { A3SReviewOverlay, A3STestBoundary, A3STestKit } from "@a3s-lab/testkit/react";
+import { StrictMode } from "react";
+import { createRoot } from "react-dom/client";
+import { A3SReviewOverlay, A3STestKit } from "@a3s-lab/testkit/react";
+import { App } from "./App";
 
-export function App() {
-  return (
-    <A3STestKit
-      enabled={import.meta.env.DEV}
-      page={{ id: "checkout" }}
-      repairEndpoint="/__a3s-test/repairs"
-      redact={["[data-payment-field]"]}
-    >
-      <A3STestBoundary
-        id="checkout-form"
-        name="Checkout form"
-        source={{ file: "src/Checkout.tsx" }}
-      >
-        <Checkout />
-      </A3STestBoundary>
-      <A3SReviewOverlay enabled={import.meta.env.DEV} locale="auto" />
+const testKitEnabled = import.meta.env.DEV;
+
+createRoot(document.getElementById("root")!).render(
+  <StrictMode>
+    <A3STestKit enabled={testKitEnabled} page={{ id: "app" }}>
+      <App />
+      <A3SReviewOverlay enabled={testKitEnabled} locale="auto" />
     </A3STestKit>
-  );
-}
+  </StrictMode>,
+);
 ```
 
-The framework-neutral entry point exports `installTestKit`,
-`getPageContextBridge`, and all protocol types. The React entry point exports
-the provider, component boundary, and optional Shadow DOM review overlay.
+Start the existing development server. An **A3S Review** launcher in the
+lower-right corner confirms that the visible overlay is ready. The same panel
+opens with `Ctrl/Command+Shift+F`. Test Kit is a frontend SDK and does not add
+an `a3s-testkit` terminal command.
+
+`A3STestBoundary` is optional. Add it only when page context needs component
+ownership or a bounded source hint:
+
+```tsx
+import { A3STestBoundary } from "@a3s-lab/testkit/react";
+
+<A3STestBoundary
+  id="checkout-form"
+  name="Checkout form"
+  source={{ file: "src/Checkout.tsx" }}
+>
+  <Checkout />
+</A3STestBoundary>;
+```
+
+For headless CI context, keep `A3STestKit` enabled and omit
+`A3SReviewOverlay`. The framework-neutral entry point exports
+`installTestKit`, `getPageContextBridge`, and all protocol types.
 `installTestKit` also requires `enabled: true`; omitted or false-like runtime
 configuration fails closed.
 

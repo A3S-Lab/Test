@@ -84,6 +84,7 @@ export type LocalizedCopy = {
   readDocs: string;
   installTitle: string;
   installBody: string;
+  testkitInstallLink: string;
   installTabs: string;
   installPackage: string;
   installNote: string;

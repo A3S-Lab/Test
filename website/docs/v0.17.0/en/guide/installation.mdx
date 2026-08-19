@@ -1,17 +1,43 @@
 ---
-title: Installation and upgrades
-description: Install matching A3S Test CLI and Agent Skill versions, with optional version, agent, and destination controls.
+title: Install A3S Test
+description: Choose the CLI, Agent Skill, or Web Test Kit for your task, then install and verify only what you need.
 ---
 
 :::warning Release candidate
-v0.17.0 is staged on main but not published. Installation examples remain pinned to v0.16.2 until the release gate is intentionally advanced.
+This page documents v0.17.0. Install commands still use the published v0.16.2 stable release.
 :::
 
-# Installation and upgrades
+# Install A3S Test
 
-Run the command below to install both the A3S Test CLI and a matching Agent Skill. The installer detects the current platform, downloads the prebuilt archive, and verifies its SHA-256. Run the same command again to upgrade.
+A3S Test installs terminal testing and in-page review separately. Choose the path that matches the current task:
 
-## macOS and Linux
+- **Only mark, select, or sketch on a development page:** [Install Web Test Kit](#install-web-test-kit).
+- **Explore a page or run ACL tests from the terminal:** [Install the CLI and Agent Skill](#install-the-cli-and-agent-skill).
+- **Send page findings to an agent for repair:** Install both.
+
+## Install Web Test Kit
+
+Run this command in the frontend project:
+
+```bash
+npm install --save-dev https://github.com/A3S-Lab/Test/releases/download/v0.16.2/a3s-testkit.tgz
+```
+
+`@a3s-lab/testkit` is not published to the npm Registry yet, so the current command installs the `.tgz` attached to the GitHub Release. npm still records it as a development dependency named `@a3s-lab/testkit` and stores integrity data in the lockfile. Do not run `npm install @a3s-lab/testkit` by itself until Registry publishing is available.
+
+Verify the installed dependency:
+
+```bash
+npm ls @a3s-lab/testkit
+```
+
+The Test Kit package version advances independently from the A3S Test Release tag, so the two version numbers do not need to match. Continue with the [three-step Web Test Kit setup](./testkit.mdx#three-step-react-setup). The design board and page-region capture documented here belong to the v0.17.0 release candidate. They will ship inside Test Kit with that Release, without a separate drawing library or screenshot plugin.
+
+## Install the CLI and Agent Skill
+
+The installer detects the current platform, downloads the prebuilt CLI, verifies its SHA-256, and installs a matching Agent Skill. Run the same command again to upgrade.
+
+### macOS and Linux
 
 ```bash
 curl -fsSL https://github.com/A3S-Lab/Test/releases/latest/download/install.sh | sh
@@ -31,7 +57,7 @@ curl -fsSL https://github.com/A3S-Lab/Test/releases/latest/download/install.sh |
   sh -s -- --version v0.16.2
 ```
 
-## Windows PowerShell
+### Windows PowerShell
 
 ```powershell
 & ([scriptblock]::Create((irm 'https://github.com/A3S-Lab/Test/releases/latest/download/install.ps1')))
@@ -44,7 +70,7 @@ Select an agent or version:
 & ([scriptblock]::Create((irm 'https://github.com/A3S-Lab/Test/releases/latest/download/install.ps1'))) -Version v0.16.2
 ```
 
-## Supported agent targets
+### Supported agent targets
 
 | Tool                          | Target           | Default user directory       |
 | ----------------------------- | ---------------- | ---------------------------- |
@@ -62,7 +88,7 @@ Select an agent or version:
 
 `auto` installs only for detected tools and falls back to the universal directory. `all` targets every supported directory. The installers also accept `--skill-only`, `--cli-only`, `--install-dir`, and `--skill-dir`, with corresponding PascalCase PowerShell parameters.
 
-## Other installation paths
+## Other CLI installation paths
 
 Build the CLI from a Git tag:
 

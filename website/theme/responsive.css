@@ -80,7 +80,13 @@
     display: grid;
     padding: 4px 6px 0;
     grid-template-columns: 220px minmax(0, 1fr);
-    gap: 20px;
+    column-gap: 20px;
+    row-gap: 4px;
+  }
+
+  .test-installer-testkit-link {
+    margin-top: 0;
+    grid-column: 2;
   }
 
   .test-installer-rail .test-install {

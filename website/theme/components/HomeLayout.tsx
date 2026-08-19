@@ -35,6 +35,7 @@ function MarkdownHome({
       <p>{copy.heroBody}</p>
       <h2>{copy.installTitle}</h2>
       {version !== installVersion && <p>{copy.installCandidateNote}</p>}
+      <p>{copy.testkitInstallLink}</p>
       <h3>macOS / Linux</h3>
       <pre>
         <code>{unixInstall}</code>
@@ -178,6 +179,13 @@ export function HomeLayout() {
         <header>
           <h2>{copy.installTitle}</h2>
           <p>{copy.installBody}</p>
+          <a
+            className="test-installer-testkit-link"
+            href={route('/guide/testkit.html')}
+          >
+            {copy.testkitInstallLink}
+            <ArrowRight aria-hidden="true" size={14} weight="bold" />
+          </a>
         </header>
         <div>
           <InstallSwitcher

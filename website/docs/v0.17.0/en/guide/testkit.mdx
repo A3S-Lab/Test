@@ -4,56 +4,93 @@ description: Publish revisioned semantics, components, locators, geometry, and U
 ---
 
 :::warning Release candidate
-v0.17.0 is staged on main but not published. Installation examples remain pinned to v0.16.2 until the release gate is intentionally advanced.
+This page documents v0.17.0. Install commands still use the published v0.16.2 stable release.
 :::
 
 # Add Web Test Kit
 
-Add `@a3s-lab/testkit` in development and its Context Runtime makes bounded, revisioned Page Context available after the page renders. That context includes current DOM, accessible semantics, component ownership, stable locators, real geometry, and browser-computed UI evidence. The optional Review Overlay lets a person mark one problem or a batch and explicitly send it to the coding agent that owns the workspace. CI can run the headless Context Runtime without the overlay, and the SDK does not write test attributes onto product elements.
+If the goal is to select an element, drag over a region, sketch the intended UI, or attach a page capture during development, install Test Kit and mount two components at the application root. After the three steps below, the page shows an **A3S Review** launcher.
+
+## Three-step React setup
+
+### 1. Install the development dependency
+
+Run the version-pinned command in the frontend project:
+
+```bash
+npm install --save-dev https://github.com/A3S-Lab/Test/releases/download/v0.16.2/a3s-testkit.tgz
+```
+
+The package is not published to the npm Registry yet, so this installs the `.tgz` attached to the GitHub Release. npm still records the dependency as `@a3s-lab/testkit`. The command above installs the published v0.16.2 stable package. The design board and page-region capture added on this page ship with v0.17.0, without a separate drawing or screenshot package.
+
+Verify that the dependency belongs to the current project:
+
+```bash
+npm ls @a3s-lab/testkit
+```
+
+### 2. Mount at the application root
+
+This is the smallest working React integration. Test Kit is enabled only during development, while the product application remains a normal child.
+
+```tsx
+import { StrictMode } from 'react';
+import { createRoot } from 'react-dom/client';
+import { A3SReviewOverlay, A3STestKit } from '@a3s-lab/testkit/react';
+import { App } from './App';
+
+const testKitEnabled = import.meta.env.DEV;
+
+createRoot(document.getElementById('root')!).render(
+  <StrictMode>
+    <A3STestKit enabled={testKitEnabled} page={{ id: 'app' }}>
+      <App />
+      <A3SReviewOverlay enabled={testKitEnabled} locale="en" />
+    </A3STestKit>
+  </StrictMode>,
+);
+```
+
+`enabled` must explicitly be `true` before the browser bridge is installed. Do not rely on tree shaking to infer the environment, and do not enable the visible Review Overlay on a normal production page.
+
+### 3. Open the page and verify
+
+Start the existing development server and open the page. The integration is ready when an **A3S Review** button appears in the lower-right corner. `Ctrl/Command+Shift+F` opens the same side panel. If the launcher is absent, check these three conditions first.
+
+- `A3STestKit` and `A3SReviewOverlay` belong to the same React tree.
+- Both `enabled` props evaluate to `true` in the browser.
+- The integration mounts from a client entry rather than rendering only on the server.
+
+Test Kit is a frontend SDK and does not add an `a3s-testkit` terminal command. Install the [A3S Test CLI and Agent Skill](./installation.mdx#install-the-cli-and-agent-skill) only when tests must run from the terminal or an agent must receive repair work.
+
+## Most projects can stop here
+
+Choose additional configuration only when the workflow needs it.
+
+- **Element marking, area selection, board, and capture:** Use `A3STestKit` with `A3SReviewOverlay`.
+- **Headless Page Context in CI:** Keep `A3STestKit` and omit the visible `A3SReviewOverlay`.
+- **Component ownership and source hints:** Add `A3STestBoundary`.
+- **Send findings to a custom service:** Add a same-origin `repairEndpoint` or `onSubmitted`.
 
 :::info Test Kit is an enhancement, not a prerequisite
 A3S Test can still use browser accessibility semantics for typed actions, assertions, and evidence without Test Kit. Add Test Kit when you need component ownership, bounded source hints, multi-space geometry, rendered UI evidence, or human marking.
 :::
 
-## Install
+## Add component boundaries when needed
 
-Every GitHub Release publishes the matching package:
-
-```bash
-npm install https://github.com/A3S-Lab/Test/releases/download/v0.16.2/a3s-testkit.tgz
-```
-
-## React integration
+`A3STestBoundary` is not required to start the Review Overlay. Wrap a region only when A3S Test needs component ownership or a bounded source hint.
 
 ```tsx
-import {
-  A3SReviewOverlay,
-  A3STestBoundary,
-  A3STestKit,
-} from '@a3s-lab/testkit/react';
+import { A3STestBoundary } from '@a3s-lab/testkit/react';
 
-export function App() {
-  return (
-    <A3STestKit
-      enabled={import.meta.env.DEV}
-      page={{ id: 'checkout' }}
-      repairEndpoint="/__a3s-test/repairs"
-      redact={['[data-payment-field]']}
-    >
-      <A3STestBoundary
-        id="checkout-form"
-        name="Checkout form"
-        source={{ file: 'src/Checkout.tsx' }}
-      >
-        <Checkout />
-      </A3STestBoundary>
-      <A3SReviewOverlay enabled={import.meta.env.DEV} locale="en" />
-    </A3STestKit>
-  );
-}
+<A3STestBoundary
+  id="checkout-form"
+  name="Checkout form"
+  source={{ file: 'src/Checkout.tsx' }}
+>
+  <Checkout />
+</A3STestBoundary>;
 ```
-
-The framework-neutral entry exports `installTestKit`, `getPageContextBridge`, and protocol types. The React entry adds the provider, component boundary, and optional Shadow DOM overlay. `enabled` must explicitly be `true`; otherwise the runtime stays closed and rejects work.
 
 ## Framework-neutral integration
 

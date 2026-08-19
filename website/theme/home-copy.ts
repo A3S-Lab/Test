@@ -14,9 +14,10 @@ export const homeCopy: Record<Locale, LocalizedCopy> = {
       'A3S Test 让编码 Agent 依据最新页面观察执行受限动作，并在同一次运行中保存断言、截图和页面证据。需要组件归属、稳定定位器、真实坐标或人工标记时，再按需接入 Test Kit。',
     startExperience: '在本页标记一个问题',
     readDocs: '运行第一个测试',
-    installTitle: '一条命令，安装 CLI 与 Agent Skill',
+    installTitle: '选择要安装的部分',
     installBody:
-      '选择 macOS、Linux 或 Windows，复制命令后即可安装相同版本的 CLI 与 Agent Skill。',
+      '运行测试请安装 CLI 与 Agent Skill；在网页中点选、框选和画草图请安装 Test Kit。',
+    testkitInstallLink: '安装 Web Test Kit',
     installTabs: '选择安装平台',
     installPackage: 'CLI + Agent Skill',
     installNote: '安装器校验发布归档的 SHA-256，并保持 CLI 与 Skill 版本一致。',
@@ -488,9 +489,10 @@ export const homeCopy: Record<Locale, LocalizedCopy> = {
       'A3S Test lets a coding agent act from a fresh page observation and keeps assertions, screenshots, and page evidence within the same run. Add Test Kit when a workflow needs component ownership, stable locators, rendered geometry, or human marking.',
     startExperience: 'Mark an issue on this page',
     readDocs: 'Run your first test',
-    installTitle: 'Install the CLI and Agent Skill with one command',
+    installTitle: 'Choose what to install',
     installBody:
-      'Choose macOS, Linux, or Windows and copy one command to install matching CLI and Agent Skill versions.',
+      'Install the CLI and Agent Skill to run tests. Add Test Kit for page marking, area selection, and sketches.',
+    testkitInstallLink: 'Install Web Test Kit',
     installTabs: 'Choose an installation platform',
     installPackage: 'CLI + Agent Skill',
     installNote:
