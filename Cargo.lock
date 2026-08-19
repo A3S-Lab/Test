@@ -120,6 +120,7 @@ version = "0.17.0"
 dependencies = [
  "a3s-test-core",
  "async-trait",
+ "base64",
  "nix 0.30.1",
  "schemars",
  "semver",

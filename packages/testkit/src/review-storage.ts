@@ -5,6 +5,7 @@ import type {
   RepairDraft,
   RepairTarget,
 } from "./types";
+import { validDesignReference } from "./design-reference";
 
 const STORAGE_PREFIX = "a3s-test.review-drafts/1/";
 const STORAGE_VERSION = 1;
@@ -241,7 +242,7 @@ function validStoredDraft(value: unknown): value is RepairDraft {
 }
 
 function validDraft(value: unknown): value is RepairDraft {
-  if (!isObject(value) || !onlyKeys(value, ["id", "instruction", "successCriteria", "intent", "severity", "relations", "target", "createdAt"])) return false;
+  if (!isObject(value) || !onlyKeys(value, ["id", "instruction", "successCriteria", "intent", "severity", "relations", "designReference", "target", "createdAt"])) return false;
   if (
     !boundedString(value.id, 1, 128) ||
     !boundedString(value.instruction, 1, 8_192, true) ||
@@ -249,6 +250,9 @@ function validDraft(value: unknown): value is RepairDraft {
     !["fix", "change", "question", "approve"].includes(String(value.intent)) ||
     !["blocking", "important", "suggestion"].includes(String(value.severity)) ||
     !boundedString(value.createdAt, 1, 64) ||
+    (value.designReference !== undefined && (
+      !validDesignReference(value.designReference) || value.designReference.image.kind !== "inline"
+    )) ||
     !validTarget(value.target)
   ) return false;
   if (value.relations === undefined) return true;

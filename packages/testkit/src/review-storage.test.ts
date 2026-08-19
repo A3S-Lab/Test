@@ -18,6 +18,12 @@ describe("review draft storage", () => {
     const first = runtime("persisted-review");
     const firstNode = targetNode(first);
     const item = reviewItem(draft("persisted", firstNode.id));
+    item.draft.designReference = {
+      kind: "sketch",
+      width: 960,
+      height: 600,
+      image: { kind: "inline", mediaType: "image/png", dataUrl: "data:image/png;base64,AAAA" },
+    };
 
     saveReviewDrafts(first, [item], window.localStorage, NOW);
     first.dispose();

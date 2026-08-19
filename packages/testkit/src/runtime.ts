@@ -132,6 +132,7 @@ class Runtime implements TestKitRuntime, NodeIdentity {
         "bounded_snapshot",
         "component_boundaries",
         "design_audit_reports",
+        "design_references",
         "diff",
         "geometry",
         "layout_intents",
@@ -332,6 +333,9 @@ class Runtime implements TestKitRuntime, NodeIdentity {
           severity: finding.severity,
           ...(finding.relations?.length
             ? { relations: structuredClone(finding.relations) }
+            : {}),
+          ...(finding.designReference
+            ? { designReference: structuredClone(finding.designReference) }
             : {}),
           target: structuredClone(finding.target),
           context: captured.context,

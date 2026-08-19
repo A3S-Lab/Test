@@ -712,6 +712,47 @@ describe("page context runtime", () => {
     expect(bridge.submitRepair({ findings: [unknownLayoutField] })).toEqual([]);
   });
 
+  it("admits bounded design references and exports them with their selected target", () => {
+    document.body.innerHTML = "<button data-testid='reference-target'>Old card</button>";
+    const bridge = installTestKit({ enabled: true, page: { id: "design-reference" }, repairStorage: "memory" });
+    expect(bridge.probe().capabilities).toContain("design_references");
+    const nodeId = bridge.snapshot().nodes.find((node) => node.testId === "reference-target")!.id;
+    const draft: RepairDraft = {
+      id: "finding-design-reference",
+      instruction: "Replace the card with this sketch",
+      intent: "change",
+      severity: "important",
+      designReference: {
+        kind: "sketch",
+        width: 960,
+        height: 600,
+        image: { kind: "inline", mediaType: "image/png", dataUrl: "data:image/png;base64,AAAA" },
+      },
+      target: { kind: "node", nodeIds: [nodeId] },
+      createdAt: new Date(0).toISOString(),
+    };
+
+    expect(bridge.submitRepair({ findings: [draft] })[0]?.designReference).toEqual(draft.designReference);
+    expect(bridge.exportRepairs([draft]).findings[0]?.designReference).toEqual(draft.designReference);
+    expect(bridge.exportRepairsMarkdown([draft])).toContain("Design reference: sketch; 960 × 600; embedded in the JSON export");
+
+    const oversized = structuredClone(draft);
+    oversized.id = "finding-oversized-design-reference";
+    if (oversized.designReference?.image.kind === "inline") {
+      oversized.designReference.image.dataUrl = `data:image/png;base64,${"A".repeat(384 * 1_024)}`;
+    }
+    expect(bridge.submitRepair({ findings: [oversized] })).toEqual([]);
+
+    const forgedArtifact = structuredClone(draft);
+    forgedArtifact.id = "finding-forged-design-artifact";
+    forgedArtifact.designReference!.image = {
+      kind: "artifact",
+      evidence: { name: "forged", path: "/tmp/untrusted.png", media_type: "image/png" },
+      sha256: "0".repeat(64),
+    };
+    expect(bridge.submitRepair({ findings: [forgedArtifact] })).toEqual([]);
+  });
+
   it("queues human clarification and review actions exactly once", () => {
     document.body.innerHTML = "<button>Fix me</button>";
     const button = document.querySelector("button")!;

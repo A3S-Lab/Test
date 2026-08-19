@@ -434,6 +434,9 @@ pub(super) fn validate_finding(finding: &RepairFinding) -> Result<(), SessionErr
             "submitted repair must be queued",
         ));
     }
+    if let Some(reference) = finding.design_reference.as_ref() {
+        validate_design_reference(reference)?;
+    }
     validate_target(&finding.target)?;
     if finding.relations.len() > 100 {
         return Err(SessionError::new(
@@ -453,6 +456,51 @@ pub(super) fn validate_finding(finding: &RepairFinding) -> Result<(), SessionErr
         }
     }
     Ok(())
+}
+
+fn validate_design_reference(
+    reference: &a3s_test_core::RepairDesignReference,
+) -> Result<(), SessionError> {
+    const MAX_INLINE_BYTES: usize = 384 * 1_024;
+    let dimensions_valid = reference.width > 0
+        && reference.width <= 1_600
+        && reference.height > 0
+        && reference.height <= 1_200
+        && u64::from(reference.width) * u64::from(reference.height) <= 1_920_000;
+    let image_valid = match &reference.image {
+        a3s_test_core::RepairDesignReferenceImage::Inline {
+            media_type,
+            data_url,
+        } => {
+            let prefix = format!("data:{media_type};base64,");
+            let encoded = data_url.strip_prefix(&prefix);
+            matches!(media_type.as_str(), "image/png" | "image/jpeg")
+                && data_url.len() <= MAX_INLINE_BYTES
+                && encoded.is_some_and(|encoded| {
+                    !encoded.is_empty()
+                        && encoded.bytes().all(|byte| {
+                            byte.is_ascii_alphanumeric() || matches!(byte, b'+' | b'/' | b'=')
+                        })
+                })
+        }
+        a3s_test_core::RepairDesignReferenceImage::Artifact { evidence, sha256 } => {
+            matches!(evidence.media_type.as_str(), "image/png" | "image/jpeg")
+                && !evidence.name.is_empty()
+                && evidence.name.len() <= 256
+                && !evidence.path.is_empty()
+                && evidence.path.len() <= 4_096
+                && sha256.len() == 64
+                && sha256.bytes().all(|byte| byte.is_ascii_hexdigit())
+        }
+    };
+    if dimensions_valid && image_valid {
+        Ok(())
+    } else {
+        Err(SessionError::new(
+            "test.session.repair_invalid",
+            "repair design reference is unbounded or invalid",
+        ))
+    }
 }
 
 fn validate_target(target: &a3s_test_core::RepairTarget) -> Result<(), SessionError> {

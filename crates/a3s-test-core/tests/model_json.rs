@@ -1,4 +1,7 @@
-use a3s_test_core::{Action, ModifierKey, RepairActor, Target};
+use a3s_test_core::{
+    Action, ModifierKey, RepairActor, RepairDesignReference, RepairDesignReferenceImage,
+    RepairDesignReferenceKind, Target,
+};
 
 #[test]
 fn semantic_target_values_round_trip_through_agent_action_json() {
@@ -163,6 +166,52 @@ fn repair_conflict_relation_has_a_typed_non_keyword_wire_contract() {
         "instructionKeywords": ["black", "white"]
     }))
     .is_err());
+}
+
+#[test]
+fn repair_design_reference_has_a_typed_strict_wire_contract() {
+    let reference = RepairDesignReference {
+        kind: RepairDesignReferenceKind::Sketch,
+        width: 960,
+        height: 600,
+        image: RepairDesignReferenceImage::Inline {
+            media_type: "image/png".to_string(),
+            data_url: "data:image/png;base64,AAAA".to_string(),
+        },
+    };
+    let encoded = serde_json::to_value(&reference).expect("serialize design reference");
+    assert_eq!(
+        encoded,
+        serde_json::json!({
+            "kind": "sketch",
+            "width": 960,
+            "height": 600,
+            "image": {
+                "kind": "inline",
+                "mediaType": "image/png",
+                "dataUrl": "data:image/png;base64,AAAA"
+            }
+        })
+    );
+    assert_eq!(
+        serde_json::from_value::<RepairDesignReference>(encoded)
+            .expect("deserialize design reference"),
+        reference
+    );
+    assert!(
+        serde_json::from_value::<RepairDesignReference>(serde_json::json!({
+            "kind": "sketch",
+            "width": 960,
+            "height": 600,
+            "image": {
+                "kind": "inline",
+                "mediaType": "image/png",
+                "dataUrl": "data:image/png;base64,AAAA",
+                "path": "/tmp/untrusted.png"
+            }
+        }))
+        .is_err()
+    );
 }
 
 #[test]

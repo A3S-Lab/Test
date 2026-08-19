@@ -445,6 +445,27 @@ export type RepairRelation = {
   findingId: string;
 };
 
+export type RepairDesignReference = {
+  kind: "sketch" | "screenshot";
+  width: number;
+  height: number;
+  image:
+    | {
+        kind: "inline";
+        mediaType: "image/png" | "image/jpeg";
+        dataUrl: string;
+      }
+    | {
+        kind: "artifact";
+        evidence: {
+          name: string;
+          path: string;
+          media_type: "image/png" | "image/jpeg";
+        };
+        sha256: string;
+      };
+};
+
 export type StructuredRepairExport = {
   protocol: "a3s.test.repair/1";
   page: {
@@ -461,6 +482,7 @@ export type StructuredRepairExport = {
     intent: RepairIntent;
     severity: RepairSeverity;
     relations?: RepairRelation[];
+    designReference?: RepairDesignReference;
     target: RepairTarget;
     context: RepairContext;
   }>;
@@ -485,6 +507,7 @@ export type RepairDraft = {
   intent: RepairIntent;
   severity: RepairSeverity;
   relations?: RepairRelation[];
+  designReference?: RepairDesignReference;
   target: RepairTarget;
   createdAt: string;
 };

@@ -1,7 +1,8 @@
 use super::*;
 use crate::RepairWorkspace;
 use a3s_test_core::{
-    Evidence, PageContextRect, PageContextSnapshot, RepairIntent, RepairLayoutCanvas,
+    Evidence, PageContextRect, PageContextSnapshot, RepairDesignReference,
+    RepairDesignReferenceImage, RepairDesignReferenceKind, RepairIntent, RepairLayoutCanvas,
     RepairLayoutIntent, RepairRelation, RepairSeverity, RepairTarget, RepairTargetKind,
 };
 use serde_json::json;
@@ -15,6 +16,7 @@ fn finding(id: &str) -> RepairFinding {
         intent: RepairIntent::Fix,
         severity: RepairSeverity::Important,
         relations: Vec::new(),
+        design_reference: None,
         target: RepairTarget {
             kind: RepairTargetKind::Node,
             node_ids: vec!["n1".to_string()],
@@ -757,6 +759,47 @@ async fn rejects_inconsistent_or_unbounded_layout_intents() {
             .expect_err("invalid layout target");
         assert_eq!(error.code(), "test.session.repair_invalid");
     }
+}
+
+#[tokio::test]
+async fn admits_bounded_design_references_and_rejects_oversized_inline_images() {
+    let temp = tempfile::tempdir().expect("tempdir");
+    let mut valid = finding("finding-design-reference");
+    valid.design_reference = Some(RepairDesignReference {
+        kind: RepairDesignReferenceKind::Sketch,
+        width: 960,
+        height: 600,
+        image: RepairDesignReferenceImage::Inline {
+            media_type: "image/png".to_string(),
+            data_url: "data:image/png;base64,AAAA".to_string(),
+        },
+    });
+    let mut ledger = RepairLedger::load(temp.path().join("valid.jsonl"))
+        .await
+        .expect("load valid ledger");
+    ledger
+        .ingest("repair-session", vec![valid], 1)
+        .await
+        .expect("bounded design reference is admitted");
+
+    let mut oversized = finding("finding-oversized-reference");
+    oversized.design_reference = Some(RepairDesignReference {
+        kind: RepairDesignReferenceKind::Screenshot,
+        width: 960,
+        height: 600,
+        image: RepairDesignReferenceImage::Inline {
+            media_type: "image/jpeg".to_string(),
+            data_url: format!("data:image/jpeg;base64,{}", "A".repeat(384 * 1_024)),
+        },
+    });
+    let mut ledger = RepairLedger::load(temp.path().join("oversized.jsonl"))
+        .await
+        .expect("load oversized ledger");
+    let error = ledger
+        .ingest("repair-session", vec![oversized], 1)
+        .await
+        .expect_err("oversized inline image is rejected");
+    assert_eq!(error.code(), "test.session.repair_invalid");
 }
 
 #[tokio::test]

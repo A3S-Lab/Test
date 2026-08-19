@@ -31,6 +31,7 @@ use crate::protocol::{
     bounded, compact_component, direct_selector, invocation, semantic_target_action_args,
     target_action, validate_component, wait_args,
 };
+use crate::repair_reference::materialize_design_references;
 use crate::runtime::RuntimeDirectory;
 use crate::{AgentBrowserConfig, BrowserCapabilities, CommandExecutor, TokioCommandExecutor};
 

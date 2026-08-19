@@ -126,6 +126,164 @@ describe("React adapter and review overlay", () => {
     expect(hostAction).not.toHaveBeenCalled();
   });
 
+  it("attaches a drawn design reference to a selected element", async () => {
+    const onSubmitted = vi.fn();
+    render(<A3STestKit enabled page={{ id: "design-reference" }} repairStorage="memory"><button id="design-target">Old card</button><A3SReviewOverlay enabled defaultOpen onSubmitted={onSubmitted} /></A3STestKit>);
+    await waitFor(() => expect(shadowQuery(".a3s-panel")).toBeTruthy());
+    const target = document.querySelector<HTMLElement>("#design-target")!;
+    setRect(target, { x: 80, y: 90, width: 240, height: 120 });
+    fireEvent.click(shadowButton("Element"));
+    target.dispatchEvent(pointerEventWithPath(target, 120, 110));
+
+    fireEvent.click(await waitFor(() => shadowButton("Open design board")));
+    const board = await waitFor(() => shadowQuery(".a3s-design-board"));
+    expect(board.getAttribute("role")).toBe("dialog");
+    expect(board.getAttribute("aria-modal")).toBe("true");
+    const canvas = await waitFor(() => shadowQuery("[data-testid='design-canvas']"));
+    expect(board.getAttribute("data-theme")).toBe("system");
+    setRect(canvas, { x: 0, y: 0, width: 960, height: 600 });
+    fireEvent.click(shadowQuery("[data-testid='design-tool-draw']"));
+    canvas.dispatchEvent(pointerEvent("pointerdown", canvas, 40, 50));
+    canvas.dispatchEvent(pointerEvent("pointermove", canvas, 160, 120));
+    canvas.dispatchEvent(pointerEvent("pointerup", canvas, 240, 180));
+    const attach = await waitFor(() => {
+      const button = shadowButton("Attach to finding");
+      expect(button.disabled).toBe(false);
+      return button;
+    });
+    fireEvent.click(attach);
+
+    await waitFor(() => expect(shadowQuery(".a3s-design-reference").textContent).toContain("Sketch attached"));
+    fireEvent.change(shadowQuery(".a3s-editor textarea"), { target: { value: "Replace this card with the attached sketch" } });
+    fireEvent.click(shadowButton("Send and auto-fix"));
+    await waitFor(() => expect(onSubmitted).toHaveBeenCalledTimes(1));
+    expect(onSubmitted.mock.calls[0]![0][0]).toMatchObject({
+      designReference: {
+        kind: "sketch",
+        width: 960,
+        height: 600,
+        image: { kind: "inline", mediaType: "image/png" },
+      },
+    });
+  });
+
+  it("lets the active canvas tool consume Escape before closing the design board", async () => {
+    render(<A3STestKit enabled page={{ id: "design-reference-escape" }} repairStorage="memory"><button id="escape-target">Old card</button><A3SReviewOverlay enabled defaultOpen /></A3STestKit>);
+    await waitFor(() => expect(shadowQuery(".a3s-panel")).toBeTruthy());
+    const target = document.querySelector<HTMLElement>("#escape-target")!;
+    setRect(target, { x: 80, y: 90, width: 240, height: 120 });
+    fireEvent.click(shadowButton("Element"));
+    target.dispatchEvent(pointerEventWithPath(target, 120, 110));
+    fireEvent.click(await waitFor(() => shadowButton("Open design board")));
+
+    const canvas = await waitFor(() => shadowQuery("[data-testid='design-canvas']"));
+    fireEvent.click(shadowQuery("[data-testid='design-tool-draw']"));
+    fireEvent.keyDown(canvas, { key: "Escape" });
+    expect(shadowQuery(".a3s-design-board")).toBeTruthy();
+    fireEvent.keyDown(canvas, { key: "Escape" });
+    await waitFor(() => expect(shadowQuery(".a3s-panel")).toBeTruthy());
+  });
+
+  it("uploads a screenshot design reference to a selected element", async () => {
+    vi.spyOn(window, "Image").mockImplementation(() => {
+      const image = document.createElement("img");
+      Object.defineProperty(image, "naturalWidth", { value: 800 });
+      Object.defineProperty(image, "naturalHeight", { value: 500 });
+      Object.defineProperty(image, "src", {
+        configurable: true,
+        set: () => queueMicrotask(() => image.onload?.(new Event("load"))),
+      });
+      return image;
+    });
+
+    const onSubmitted = vi.fn();
+    render(<A3STestKit enabled page={{ id: "screenshot-design-reference" }} repairStorage="memory"><button id="screenshot-target">Old panel</button><A3SReviewOverlay enabled defaultOpen onSubmitted={onSubmitted} /></A3STestKit>);
+    await waitFor(() => expect(shadowQuery(".a3s-panel")).toBeTruthy());
+    const target = document.querySelector<HTMLElement>("#screenshot-target")!;
+    setRect(target, { x: 80, y: 90, width: 240, height: 120 });
+    fireEvent.click(shadowButton("Element"));
+    target.dispatchEvent(pointerEventWithPath(target, 120, 110));
+
+    fireEvent.click(await waitFor(() => shadowButton("Open design board")));
+    const input = await waitFor(() => shadowQuery("input[type=file]"));
+    fireEvent.change(input, {
+      target: {
+        files: [new File([new Uint8Array([1, 2, 3])], "desired-ui.png", { type: "image/png" })],
+      },
+    });
+    await waitFor(() => expect(shadowQuery(".a3s-design-status").textContent).toContain("Screenshot."));
+    expect(shadowButton("Undo").disabled).toBe(false);
+    fireEvent.click(shadowButton("Attach to finding"));
+
+    await waitFor(() => expect(shadowQuery(".a3s-design-reference").textContent).toContain("Screenshot attached"));
+    fireEvent.change(shadowQuery(".a3s-editor textarea"), { target: { value: "Match the attached screenshot" } });
+    fireEvent.click(shadowButton("Send and auto-fix"));
+    await waitFor(() => expect(onSubmitted).toHaveBeenCalledTimes(1));
+    expect(onSubmitted.mock.calls[0]![0][0]).toMatchObject({
+      designReference: {
+        kind: "screenshot",
+        width: 960,
+        height: 600,
+        image: { kind: "inline", mediaType: "image/jpeg" },
+      },
+    });
+  });
+
+  it("mounts the dependency-free design tools inside the Test Kit shadow root", async () => {
+    render(<A3STestKit enabled page={{ id: "native-design-tools" }} repairStorage="memory"><button id="native-design-target">Old panel</button><A3SReviewOverlay enabled defaultOpen /></A3STestKit>);
+    await waitFor(() => expect(shadowQuery(".a3s-panel")).toBeTruthy());
+    const target = document.querySelector<HTMLElement>("#native-design-target")!;
+    setRect(target, { x: 80, y: 90, width: 240, height: 120 });
+    fireEvent.click(shadowButton("Element"));
+    target.dispatchEvent(pointerEventWithPath(target, 120, 110));
+    fireEvent.click(await waitFor(() => shadowButton("Open design board")));
+    expect(await waitFor(() => shadowQuery("[data-testid='design-canvas']"))).toBeTruthy();
+    expect(shadowQuery("[data-testid='design-tool-draw']")).toBeTruthy();
+    expect(shadowQuery("[data-testid='design-tool-rectangle']")).toBeTruthy();
+    expect(shadowQuery("[data-testid='design-tool-text']")).toBeTruthy();
+    expect(document.querySelector<HTMLElement>("[data-a3s-testkit-overlay]")!.shadowRoot!.querySelector("style")!.textContent).toContain(".a3s-design-canvas-surface");
+  });
+
+  it("creates, moves, resizes, and deletes native design objects", async () => {
+    render(<A3STestKit enabled page={{ id: "native-design-objects" }} repairStorage="memory"><button id="native-object-target">Old panel</button><A3SReviewOverlay enabled defaultOpen /></A3STestKit>);
+    await waitFor(() => expect(shadowQuery(".a3s-panel")).toBeTruthy());
+    const target = document.querySelector<HTMLElement>("#native-object-target")!;
+    setRect(target, { x: 80, y: 90, width: 240, height: 120 });
+    fireEvent.click(shadowButton("Element"));
+    target.dispatchEvent(pointerEventWithPath(target, 120, 110));
+    fireEvent.click(await waitFor(() => shadowButton("Open design board")));
+    const canvas = await waitFor(() => shadowQuery("[data-testid='design-canvas']"));
+    setRect(canvas, { x: 0, y: 0, width: 960, height: 600 });
+
+    fireEvent.click(shadowQuery("[data-testid='design-tool-rectangle']"));
+    canvas.dispatchEvent(pointerEvent("pointerdown", canvas, 100, 100));
+    canvas.dispatchEvent(pointerEvent("pointerup", canvas, 300, 220));
+    await waitFor(() => expect(shadowQuery("[aria-label='Design object count']").textContent).toBe("1/250"));
+
+    fireEvent.click(shadowQuery("[data-testid='design-tool-select']"));
+    const rectangle = shadowQuery(".a3s-design-element.is-rectangle");
+    rectangle.dispatchEvent(pointerEvent("pointerdown", rectangle, 150, 150));
+    canvas.dispatchEvent(pointerEvent("pointermove", canvas, 250, 250));
+    canvas.dispatchEvent(pointerEvent("pointerup", canvas, 250, 250));
+    await waitFor(() => expect(Number(shadowQuery(".a3s-design-element.is-rectangle > rect").getAttribute("x"))).toBeCloseTo(200));
+
+    const resize = shadowQuery("[data-resize-id]");
+    resize.dispatchEvent(pointerEvent("pointerdown", resize, 404, 324));
+    canvas.dispatchEvent(pointerEvent("pointerup", canvas, 500, 400));
+    await waitFor(() => expect(Number(shadowQuery(".a3s-design-element.is-rectangle > rect").getAttribute("width"))).toBeCloseTo(300));
+
+    fireEvent.click(shadowQuery("[data-testid='design-tool-text']"));
+    canvas.dispatchEvent(pointerEvent("pointerdown", canvas, 420, 80));
+    const textInput = await waitFor(() => shadowQuery("[aria-label='Design text']"));
+    fireEvent.change(textInput, { target: { value: "New card" } });
+    fireEvent.keyDown(textInput, { key: "Enter" });
+    await waitFor(() => expect(shadowQuery(".a3s-design-element.is-text").textContent).toContain("New card"));
+    expect(shadowQuery("[aria-label='Design object count']").textContent).toBe("2/250");
+
+    fireEvent.keyDown(canvas, { key: "Delete" });
+    await waitFor(() => expect(shadowQuery("[aria-label='Design object count']").textContent).toBe("1/250"));
+  });
+
   it("requires an explicit save or send before removing each contract finding", async () => {
     render(<A3STestKit enabled page={{ id: "quality-review" }} repairStorage="memory"><button data-testid="quality-target">Checkout action</button><A3SReviewOverlay enabled defaultOpen /></A3STestKit>);
     await waitFor(() => expect(shadowQuery(".a3s-panel")).toBeTruthy());

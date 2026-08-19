@@ -29,6 +29,7 @@ fn test_repair_finding() -> RepairFinding {
         intent: RepairIntent::Fix,
         severity: RepairSeverity::Important,
         relations: Vec::new(),
+        design_reference: None,
         target: RepairTarget {
             kind: RepairTargetKind::Node,
             node_ids: vec!["n1".to_string()],

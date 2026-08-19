@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from "react";
-import type { RepairIntent, RepairSeverity, Rect } from "./types";
+import type { RepairDesignReference, RepairIntent, RepairSeverity, Rect } from "./types";
 import { type LayoutCanvas, type LayoutSource, type OverlayTheme, type SelectionMode } from "./review-model";
 import { validLayoutRect } from "./review-utils";
 import { ComponentCatalogView } from "./component-catalog-view";
@@ -118,12 +118,15 @@ export type FindingEditorProps = {
   successCriteria: string;
   severity: RepairSeverity;
   intent: RepairIntent;
+  designReference: RepairDesignReference | null;
   conflictOptions: Array<{ id: string; label: string; checked: boolean }>;
   editing: boolean;
   onInstruction(value: string): void;
   onSuccessCriteria(value: string): void;
   onSeverity(value: RepairSeverity): void;
   onIntent(value: RepairIntent): void;
+  onOpenDesignBoard(): void;
+  onRemoveDesignReference(): void;
   onConflict(findingId: string, checked: boolean): void;
   onCancel(): void;
   onDelete?(): void;
@@ -146,6 +149,17 @@ export function FindingEditor(props: FindingEditorProps) {
       <span><strong>{t(props.editing ? "editFinding" : "newFinding")}</strong><small className="a3s-editor-target" title={props.label}>{props.label}</small></span>
     </header>
     <div className="a3s-editor-scroll">
+      <div className={`a3s-design-reference${props.designReference ? " has-reference" : ""}`}>
+        {props.designReference ? <>
+          {props.designReference.image.kind === "inline" && <img src={props.designReference.image.dataUrl} alt={`${props.designReference.kind === "sketch" ? "Sketch" : "Screenshot"} of the desired UI`} />}
+          <div><strong>{props.designReference.kind === "sketch" ? "Sketch attached" : "Screenshot attached"}</strong><small>{props.designReference.width} × {props.designReference.height} · kept with this finding</small></div>
+          <button type="button" className="quiet" onClick={props.onOpenDesignBoard}>Edit</button>
+          <button type="button" className="quiet danger" onClick={props.onRemoveDesignReference}>Remove</button>
+        </> : <>
+          <div><strong>Show the intended UI</strong><small>Draw a sketch or attach a screenshot after selecting this target.</small></div>
+          <button type="button" onClick={props.onOpenDesignBoard}>Open design board</button>
+        </>}
+      </div>
       <label className="a3s-editor-request">{t("requestedFix")}<textarea autoFocus maxLength={8192} value={props.instruction} onChange={(event) => props.onInstruction(event.target.value)} placeholder={t("describeChange")} /></label>
       <button type="button" className="a3s-editor-details" aria-expanded={detailsOpen} onClick={() => setDetailsOpen((current) => !current)}><span>{t("details")}</span><small>{t("detailsSummary")}</small><i aria-hidden="true" /></button>
       {detailsOpen && <div className="a3s-editor-options">

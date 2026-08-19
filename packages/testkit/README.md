@@ -175,16 +175,38 @@ the server, while direct enabled installation reports that it requires a
 browser. The overlay supports element, text,
 click/drag multi-selection, rectangular and freehand findings, persistent
 markers, draft editing/hiding, animation pause, system/light/dark themes,
-bounded structured copy, and typed Layout Mode. Layout Mode can draw the
-viewport region for a new component or select an existing section and describe
-its destination. Its searchable catalog contains 90 component types across ten
-categories, with complete English and Simplified Chinese labels and search.
-Known catalog selections follow a live locale change, while the component
-field preserves project-specific free-form values. It emits `placement` or
-`rearrange` intent for A3S Test and does not move or style application DOM
-itself. Submitted findings support human/agent
-replies, accept/reject/reopen review actions, and per-finding lifecycle
-projection.
+bounded structured copy, finding-level design references, and typed Layout
+Mode. After selecting an element or region, a reviewer can open the design
+board. Its built-in, dependency-free SVG editor uses a constrained 960 × 600
+surface with freehand, rectangle, text, selection, movement, resize, styling,
+keyboard, and history tools, and admits at most 250 objects. It can also
+upload, paste, or drop a PNG/JPEG and request browser screen capture. Screen
+capture uses the browser's permissioned display picker; upload, paste, and drop
+remain available when it is unsupported or cancelled.
+
+Keep the review overlay development-only in normal integrations. The board
+runs entirely inside the Test Kit Shadow DOM. It does not load a drawing SDK,
+remote fonts, icons, translations, or other canvas assets, and it has no
+license-key or watermark requirement. The overlay should still remain
+development-only because it exposes review authoring controls.
+
+The board exports a bounded `designReference` with the finding. Imported files
+may be at most 8 MiB; inline PNG/JPEG data URLs are limited to 384 KiB, and the
+general contract admits at most 1,600 × 1,200 pixels and 1,920,000 pixels total.
+The Web driver validates the encoded header and declared dimensions, writes
+`repairs/<finding-id>/design-reference.png|jpg` under its artifact root, and
+replaces inline bytes with viewable evidence metadata and a SHA-256 digest
+before the repair reaches a coding agent.
+
+Layout Mode can draw the viewport region for a new component or select an
+existing section and describe its destination. Its searchable catalog contains
+90 component types across ten categories, with complete English and Simplified
+Chinese labels and search. Known catalog selections follow a live locale
+change, while the component field preserves project-specific free-form values.
+It emits `placement` or `rearrange` intent for A3S Test and does not move or
+style application DOM itself.
+Submitted findings support human/agent replies, accept/reject/reopen review
+actions, and per-finding lifecycle projection.
 
 The compact review dock keeps marking controls available without covering the
 application. Target-attached editors preserve page context, while saved drafts

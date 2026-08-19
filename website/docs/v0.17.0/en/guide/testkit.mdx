@@ -159,6 +159,28 @@ If the bridge is absent, ready stays false, or the UI record is omitted, use [Tr
 
 Opening the Review Overlay, viewing advice, or saving a local draft never grants source-editing authority. Only a finding the reviewer explicitly sends enters the session-owned repair flow.
 
+## Sketch or attach the intended UI
+
+After selecting an element or rectangular area, open **Design reference** from
+the finding editor. The built-in SVG board supports freehand strokes,
+rectangles, text, selection, movement, resizing, styling, undo, and redo on a
+bounded 960 × 600 surface. A reviewer may also upload, paste, or drop a PNG or
+JPEG screenshot, or request the browser's permissioned screen-capture picker,
+then annotate it before attaching it to the finding.
+
+The board runs inside the Test Kit Shadow DOM and does not load a drawing SDK,
+license key, watermark, remote font, or CDN asset. It admits no more than 250
+objects. Source images are limited to 8 MiB; inline references are limited to
+384 KiB, 1,600 × 1,200, and 1,920,000 pixels. When a Web session receives the
+finding, the driver validates the image header and dimensions, writes
+`repairs/<finding-id>/design-reference.png|jpg` under the session artifact
+root, calculates its SHA-256 digest, and replaces the inline bytes with typed
+artifact metadata.
+
+A design reference is reviewer evidence, not an instruction boundary or a
+verification result. It neither grants workspace authority nor replaces the
+before-and-after evidence owned by A3S Test.
+
 ## Provider configuration reference
 
 | Prop                    | Default or requirement | Purpose                                                      |

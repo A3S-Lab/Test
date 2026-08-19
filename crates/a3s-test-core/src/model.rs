@@ -570,6 +570,12 @@ pub struct RepairFinding {
     pub severity: RepairSeverity,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub relations: Vec<RepairRelation>,
+    #[serde(
+        rename = "designReference",
+        default,
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub design_reference: Option<RepairDesignReference>,
     pub target: RepairTarget,
     #[serde(rename = "createdAt")]
     pub created_at: String,
@@ -590,6 +596,37 @@ pub enum RepairRelation {
     ConflictsWith {
         #[serde(rename = "findingId")]
         finding_id: String,
+    },
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct RepairDesignReference {
+    pub kind: RepairDesignReferenceKind,
+    pub width: u32,
+    pub height: u32,
+    pub image: RepairDesignReferenceImage,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum RepairDesignReferenceKind {
+    Sketch,
+    Screenshot,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
+pub enum RepairDesignReferenceImage {
+    Inline {
+        #[serde(rename = "mediaType")]
+        media_type: String,
+        #[serde(rename = "dataUrl")]
+        data_url: String,
+    },
+    Artifact {
+        evidence: Evidence,
+        sha256: String,
     },
 }
 

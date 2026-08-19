@@ -177,6 +177,28 @@
   across agent-session turns, injects only Chromium's fake-device and
   fake-permission flags, never captures a real microphone, and defaults to
   `disabled` for new and legacy session metadata.
+- Added a finding-level, dependency-free SVG design board after element or
+  rectangular-area selection. Reviewers can draw, add rectangles and text,
+  select, move and resize objects, style the canvas, use history, upload,
+  paste, or drop PNG/JPEG screenshots, request permissioned browser screen
+  capture, annotate screenshots, and attach the result to the repair sent to a
+  coding agent. The bounded editor runs entirely inside the Test Kit Shadow
+  DOM without a drawing SDK, license key, watermark, or CDN dependency.
+- Added the optional typed `designReference` repair field across the Test Kit,
+  core model, session ledger, CLI/MCP handoff, structured export, and repair
+  summaries. Web sessions materialize inline references as viewable
+  `repairs/<finding-id>/design-reference.png|jpg` artifacts with SHA-256
+  metadata before consumers receive them.
+
+### Safety
+
+- Design-reference uploads are limited to 8 MiB and PNG/JPEG. Inline data URLs
+  are limited to 384 KiB; dimensions are capped at 1,600 × 1,200 and 1,920,000
+  pixels. The Web driver verifies decoded headers, declared dimensions,
+  contained artifact paths, and hashes before admitting the repair.
+- Design references remain scoped reviewer evidence. They do not broaden
+  workspace authority, replace A3S Test-owned before/after evidence, or turn
+  captured page content into hidden instructions or a verification verdict.
 
 ### Changed
 

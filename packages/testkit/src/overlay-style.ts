@@ -1,5 +1,6 @@
 import { OVERLAY_SHELL_CSS } from "./overlay-shell-style";
 import { OVERLAY_MARKING_CSS } from "./overlay-marking-style";
+import { DESIGN_BOARD_CSS } from "./design-board-style";
 
 export const OVERLAY_CSS = `
 ${OVERLAY_SHELL_CSS}
@@ -835,6 +836,8 @@ ${OVERLAY_MARKING_CSS}
     width: auto;
   }
 }
+
+${DESIGN_BOARD_CSS}
 
 @media (prefers-reduced-motion: reduce) {
   .a3s-root *,

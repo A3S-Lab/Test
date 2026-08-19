@@ -499,6 +499,69 @@ closes the tray, so floating surfaces cannot obscure one another. Preferences
 remain scrollable within short desktop viewports. Mobile controls use
 44-CSS-pixel touch targets and 16-pixel form text to avoid accidental zoom.
 
+### Desired-UI design references
+
+After selecting an element or rectangular area, the finding editor can open a
+modal **Design reference** board. The built-in SVG editor is constrained to a
+960 × 600 design surface and exposes freehand, rectangle, text, styling,
+selection, movement, lower-right resize, keyboard, and history controls. The
+board admits at most 250 objects and intentionally omits collaboration,
+multi-page documents, and infinite-canvas features that do not belong in a
+finding attachment.
+
+A reviewer may instead upload, paste, or drop a PNG/JPEG screenshot, then draw
+annotations over it. **Capture screen** uses
+`navigator.mediaDevices.getDisplayMedia` and the browser's own permissioned
+display picker. If capture is unsupported, denied, or cancelled, the capture
+control is disabled or the board reports the cancellation, while upload,
+paste, and drop remain available.
+
+The board runs entirely inside the Test Kit Shadow DOM and is part of the MIT
+licensed Test Kit implementation. It has no external drawing runtime, license
+key, watermark, or CDN dependency. A restrictive CSP or offline development
+environment therefore does not need canvas-specific asset overrides. The
+overlay should still normally be enabled only during development because it
+exposes review authoring controls.
+
+Attaching the board adds one optional `designReference` to the same finding;
+it does not create a second finding or change the selected target:
+
+```json
+{
+  "designReference": {
+    "kind": "sketch",
+    "width": 960,
+    "height": 600,
+    "image": {
+      "kind": "inline",
+      "mediaType": "image/png",
+      "dataUrl": "data:image/png;base64,..."
+    }
+  }
+}
+```
+
+The browser board is 960 × 600 and downscales or compresses its export when
+needed. Source uploads are limited to 8 MiB. The repair contract accepts only
+PNG or JPEG, dimensions no greater than 1,600 × 1,200, at most 1,920,000 total
+pixels, and an inline data URL no larger than 384 KiB. These limits are checked
+again when a repair enters the authoritative session ledger.
+
+Before a browser repair reaches MCP or CLI consumers, the Web driver decodes
+the inline URL, validates the real image header and dimensions, and writes it
+under the session artifact root as
+`repairs/<finding-id>/design-reference.png|jpg`. It then replaces the inline
+image with an artifact `Evidence` record and the lowercase SHA-256 digest of
+the decoded bytes. Browser-originated artifact paths or hashes are rejected;
+only the Web driver may create that trusted metadata. Coding agents therefore
+receive a directly viewable file reference without carrying a large Base64
+string through the repair ledger.
+
+The attachment is explicit reviewer input, but page text or application data
+visible inside a captured image remains untrusted evidence. A design reference
+does not broaden workspace authority, select extra files, prove success, or
+replace A3S Test-owned before/after screenshots and deterministic verification.
+
 ### Deterministic quality candidates
 
 A closed ACL suite can reconcile an admitted Expected Surface Contract against
@@ -961,13 +1024,21 @@ restoration and semantic rebinding, rendered box-model and overflow/clipping
 metrics, scroll/view animation timelines, spatial marker editing,
 keyboard-only review controls and multi-selection, explicit host-interaction
 blocking, searchable component selection, pointer-authored Layout placement,
-and the
-accessibility-tree and focus contracts:
+and the accessibility-tree and focus contracts. A focused companion test
+proves the design-board dialog, pointer drawing, bounded attachment, and
+submitted repair payload:
 
 ```bash
 A3S_TEST_AGENT_BROWSER="$(command -v agent-browser)" \
   cargo test -p a3s-test-cli --test web_e2e \
   real_agent_browser_runs_the_embedded_testkit_suite --locked -- \
+  --ignored --exact --nocapture
+```
+
+```bash
+A3S_TEST_AGENT_BROWSER="$(command -v agent-browser)" \
+  cargo test -p a3s-test-cli --test web_e2e \
+  real_agent_browser_attaches_testkit_design_reference --locked -- \
   --ignored --exact --nocapture
 ```
 
@@ -1002,8 +1073,10 @@ no existing target node retain their typed viewport region.
 
 Local storage contains only unsent reviewer drafts. It never becomes a repair
 ledger, and applications must not put secrets or production data in review
-instructions. Submitted repair state is authoritative only in the owning A3S
-Test agent-session directory:
+instructions or design-reference screenshots. A bounded inline design
+reference is part of its owning local draft and remains subject to the 512 KiB
+per-route storage cap. Submitted repair state is authoritative only in the
+owning A3S Test agent-session directory:
 
 ```text
 .a3s-test/agent-sessions/<session>/

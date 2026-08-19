@@ -791,6 +791,196 @@ fn real_agent_browser_runs_the_embedded_testkit_suite() {
     assert_process_success("close TestKit browser session", &closed);
 }
 
+#[test]
+#[ignore = "requires Node esbuild and the exact standalone agent-browser 0.26.x runtime"]
+fn real_agent_browser_attaches_testkit_design_reference() {
+    let Some(browser) = std::env::var_os("A3S_TEST_AGENT_BROWSER").map(PathBuf::from) else {
+        eprintln!("A3S_TEST_AGENT_BROWSER is not set; skipping TestKit design reference E2E");
+        return;
+    };
+    assert!(
+        browser.is_file(),
+        "browser executable does not exist: {browser:?}"
+    );
+    let version = Command::new(&browser)
+        .arg("--version")
+        .output()
+        .expect("probe standalone browser version");
+    assert_process_success("probe standalone browser version", &version);
+    assert!(
+        String::from_utf8_lossy(&version.stdout).contains("0.26."),
+        "real E2E requires the admitted 0.26.x protocol: {}",
+        String::from_utf8_lossy(&version.stdout)
+    );
+
+    let (_bundle_workspace, bundle) = bundle_browser_fixture("bundle TestKit fixture");
+    let fixture = start_testkit_fixture(bundle).expect("start TestKit fixture");
+    let evidence_workspace = tempfile::tempdir().expect("temporary design reference evidence");
+    let board_screenshot = evidence_workspace.path().join("design-reference-board.png");
+    let session = format!("a3s-testkit-design-e2e-{}", std::process::id());
+    let mut cleanup = StandaloneBrowserSessionCleanup::new(&browser, &session);
+    let command = |arguments: &[&str]| {
+        let mut command = Command::new(&browser);
+        command.arg("--session").arg(&session).args(arguments);
+        bounded_output(&mut command, "run standalone browser command")
+    };
+
+    let opened = command(&["open", &fixture.origin()]);
+    cleanup.arm();
+    assert_process_success("open TestKit fixture", &opened);
+    assert_process_success(
+        "set TestKit design reference viewport",
+        &command(&["set", "viewport", "1280", "800", "2"]),
+    );
+    let overlay_ready = command(&[
+        "wait",
+        "--fn",
+        "Boolean(window[Symbol.for('a3s.test.page-context')]&&document.querySelector('[data-a3s-testkit-overlay]')?.shadowRoot)",
+    ]);
+    assert_process_success("wait for TestKit bridge and overlay", &overlay_ready);
+
+    let select_element = command(&[
+        "eval",
+        "(()=>{const shadow=document.querySelector('[data-a3s-testkit-overlay]').shadowRoot;[...shadow.querySelectorAll('button')].find(button=>button.textContent==='Element').click();return true})()",
+    ]);
+    assert_process_success("select TestKit element marking mode", &select_element);
+    let marking_ready = command(&[
+        "wait",
+        "--fn",
+        "Boolean(document.querySelector('[data-a3s-testkit-overlay]')?.shadowRoot?.querySelector('.a3s-hint'))",
+    ]);
+    assert_process_success("wait for TestKit element marking mode", &marking_ready);
+    let keyboard_mark = command(&[
+        "eval",
+        "(()=>{const target=document.querySelector('#sticky');target.focus();target.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',bubbles:true}));return true})()",
+    ]);
+    assert_process_success("mark TestKit target by keyboard", &keyboard_mark);
+    let editor_ready = command(&[
+        "wait",
+        "--fn",
+        "Boolean(document.querySelector('[data-a3s-testkit-overlay]')?.shadowRoot?.querySelector('.a3s-editor'))",
+    ]);
+    assert_process_success("wait for TestKit finding editor", &editor_ready);
+
+    let open_design_board = command(&[
+        "eval",
+        "(()=>{const shadow=document.querySelector('[data-a3s-testkit-overlay]').shadowRoot;[...shadow.querySelectorAll('button')].find(button=>button.textContent==='Open design board').click();return true})()",
+    ]);
+    assert_process_success("open TestKit design board", &open_design_board);
+    let design_board_ready = command(&[
+        "wait",
+        "--fn",
+        "document.querySelector('[data-a3s-testkit-overlay]')?.shadowRoot?.querySelector('[data-testid=\"design-canvas\"]')?.getAttribute('aria-label')==='Desired UI design canvas'",
+    ]);
+    assert_process_success("wait for TestKit design board", &design_board_ready);
+    let design_accessibility = command(&["snapshot"]);
+    assert_process_success(
+        "capture TestKit design board accessibility tree",
+        &design_accessibility,
+    );
+    let design_accessibility = String::from_utf8_lossy(&design_accessibility.stdout);
+    for expected in [
+        "dialog \"Design reference\"",
+        "button \"Draw\"",
+        "button \"Upload screenshot\"",
+        "button \"Attach to finding\"",
+    ] {
+        assert!(
+            design_accessibility.contains(expected),
+            "TestKit design board accessibility tree missing {expected:?}: {design_accessibility}"
+        );
+    }
+
+    let select_draw_tool = command(&[
+        "eval",
+        "(()=>{const shadow=document.querySelector('[data-a3s-testkit-overlay]').shadowRoot;const draw=shadow.querySelector('[data-testid=\"design-tool-draw\"]');if(!(draw instanceof HTMLButtonElement))throw new Error('design board Draw tool is unavailable');draw.click();return draw.getAttribute('aria-pressed')})()",
+    ]);
+    assert_process_success("select design board Pen tool", &select_draw_tool);
+    let draw_design_reference = command(&[
+        "eval",
+        "(()=>{const canvas=document.querySelector('[data-a3s-testkit-overlay]').shadowRoot.querySelector('.a3s-design-canvas-surface');if(!(canvas instanceof SVGSVGElement))throw new Error('design canvas is unavailable');const rect=canvas.getBoundingClientRect();const dispatch=(type,x,y,buttons)=>canvas.dispatchEvent(new PointerEvent(type,{bubbles:true,composed:true,pointerId:1,pointerType:'mouse',isPrimary:true,button:0,buttons,clientX:rect.left+x,clientY:rect.top+y}));dispatch('pointerdown',180,150,1);dispatch('pointermove',340,220,1);dispatch('pointerup',460,300,0);return true})()",
+    ]);
+    assert_process_success("draw TestKit design reference", &draw_design_reference);
+    let design_attach_ready = command(&[
+        "wait",
+        "--fn",
+        "[...document.querySelector('[data-a3s-testkit-overlay]').shadowRoot.querySelectorAll('button')].some(button=>button.textContent==='Attach to finding'&&!button.disabled)",
+    ]);
+    assert_process_success(
+        "wait for TestKit design reference attachment",
+        &design_attach_ready,
+    );
+    let board_screenshot_path = board_screenshot
+        .to_str()
+        .expect("UTF-8 design reference screenshot path");
+    let screenshot = command(&["screenshot", board_screenshot_path]);
+    assert_process_success("capture TestKit design board screenshot", &screenshot);
+    assert_nonempty_artifact(evidence_workspace.path(), &board_screenshot);
+
+    let attach_design_reference = command(&[
+        "eval",
+        "(()=>{const shadow=document.querySelector('[data-a3s-testkit-overlay]').shadowRoot;[...shadow.querySelectorAll('button')].find(button=>button.textContent==='Attach to finding'&&!button.disabled).click();return true})()",
+    ]);
+    assert_process_success("attach TestKit design reference", &attach_design_reference);
+    let design_reference_ready = command(&[
+        "wait",
+        "--fn",
+        "document.querySelector('[data-a3s-testkit-overlay]')?.shadowRoot?.querySelector('.a3s-design-reference strong')?.textContent==='Sketch attached'",
+    ]);
+    assert_process_success(
+        "wait for attached TestKit design reference",
+        &design_reference_ready,
+    );
+
+    let fill_instruction = command(&[
+        "eval",
+        "(()=>{const textarea=document.querySelector('[data-a3s-testkit-overlay]').shadowRoot.querySelector('.a3s-editor textarea');const setter=Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,'value').set;setter.call(textarea,'Match the attached design reference');textarea.dispatchEvent(new Event('input',{bubbles:true,composed:true}));return true})()",
+    ]);
+    assert_process_success("fill TestKit repair instruction", &fill_instruction);
+    let submission_ready = command(&[
+        "wait",
+        "--fn",
+        "[...document.querySelector('[data-a3s-testkit-overlay]').shadowRoot.querySelectorAll('button')].some(button=>button.textContent==='Send and auto-fix'&&!button.disabled)",
+    ]);
+    assert_process_success("wait for TestKit finding submission", &submission_ready);
+    let submit = command(&[
+        "eval",
+        "(()=>{const shadow=document.querySelector('[data-a3s-testkit-overlay]').shadowRoot;[...shadow.querySelectorAll('button')].find(button=>button.textContent==='Send and auto-fix'&&!button.disabled).click();return true})()",
+    ]);
+    assert_process_success("submit TestKit design reference finding", &submit);
+    let submitted = command(&[
+        "wait",
+        "--fn",
+        "window[Symbol.for('a3s.test.page-context')].listRepairs().length===1",
+    ]);
+    assert_process_success("wait for TestKit design reference finding", &submitted);
+    let submitted_reference = command(&[
+        "eval",
+        "JSON.stringify(window[Symbol.for('a3s.test.page-context')].listRepairs()[0].designReference)",
+    ]);
+    assert_process_success(
+        "read submitted TestKit design reference",
+        &submitted_reference,
+    );
+    let submitted_reference: String = serde_json::from_slice(&submitted_reference.stdout)
+        .expect("submitted TestKit design reference JSON string");
+    let submitted_reference: serde_json::Value = serde_json::from_str(&submitted_reference)
+        .expect("submitted TestKit design reference JSON");
+    assert_eq!(submitted_reference["kind"], "sketch");
+    assert_eq!(submitted_reference["width"], 960);
+    assert_eq!(submitted_reference["height"], 600);
+    assert_eq!(submitted_reference["image"]["kind"], "inline");
+    assert_eq!(submitted_reference["image"]["mediaType"], "image/png");
+    assert!(submitted_reference["image"]["dataUrl"]
+        .as_str()
+        .is_some_and(
+            |value| value.starts_with("data:image/png;base64,") && value.len() < 384 * 1_024
+        ));
+
+    let closed = cleanup.close();
+    assert_process_success("close TestKit design reference browser session", &closed);
+}
+
 fn run_agent_domain_containment(browser: &Path, fixture: &WebFixture, workspace: &Path) {
     let mut cleanup = AgentSessionCleanup::new(workspace, "domain-containment");
     let fixture_url = format!("{}/origin-policy.html", fixture.origin());

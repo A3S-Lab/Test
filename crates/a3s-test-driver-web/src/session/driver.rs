@@ -190,12 +190,15 @@ impl DriverSession for AgentBrowserSession {
         let value = self
             .execute_command(vec!["eval".into(), script.into()])
             .await?;
-        serde_json::from_value(browser_result(value)).map_err(|error| {
-            DriverError::new(
-                "test.driver.web.repair_queue_invalid",
-                format!("Test Kit repair queue returned invalid findings: {error}"),
-            )
-        })
+        let mut findings: Vec<RepairFinding> = serde_json::from_value(browser_result(value))
+            .map_err(|error| {
+                DriverError::new(
+                    "test.driver.web.repair_queue_invalid",
+                    format!("Test Kit repair queue returned invalid findings: {error}"),
+                )
+            })?;
+        materialize_design_references(&self.artifacts_dir, &mut findings).await?;
+        Ok(findings)
     }
 
     async fn wait_for_repairs(
@@ -222,12 +225,15 @@ impl DriverSession for AgentBrowserSession {
         let value = self
             .execute_command(vec!["eval".into(), script.into()])
             .await?;
-        serde_json::from_value(browser_result(value)).map_err(|error| {
-            DriverError::new(
-                "test.driver.web.repair_queue_invalid",
-                format!("Test Kit repair watch returned invalid findings: {error}"),
-            )
-        })
+        let mut findings: Vec<RepairFinding> = serde_json::from_value(browser_result(value))
+            .map_err(|error| {
+                DriverError::new(
+                    "test.driver.web.repair_queue_invalid",
+                    format!("Test Kit repair watch returned invalid findings: {error}"),
+                )
+            })?;
+        materialize_design_references(&self.artifacts_dir, &mut findings).await?;
+        Ok(findings)
     }
 
     async fn apply_repair_event(&mut self, event: &RepairStatusEvent) -> Result<(), DriverError> {

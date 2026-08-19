@@ -10,6 +10,7 @@ description = "A3S Browser surface driver for A3S Test"
 [dependencies]
 a3s-test-core = { path = "../a3s-test-core" }
 async-trait.workspace = true
+base64.workspace = true
 schemars.workspace = true
 semver.workspace = true
 serde.workspace = true

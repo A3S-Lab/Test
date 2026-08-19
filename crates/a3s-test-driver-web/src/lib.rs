@@ -9,6 +9,7 @@ mod path_security;
 mod process;
 mod process_tree;
 mod protocol;
+mod repair_reference;
 mod runtime;
 mod session;
 

@@ -16,6 +16,7 @@ class ResizeObserverStub implements ResizeObserver {
 }
 
 beforeEach(() => {
+  vi.restoreAllMocks();
   if (typeof window === "undefined") return;
   Object.defineProperty(globalThis, "ResizeObserver", { value: ResizeObserverStub, configurable: true });
   Object.defineProperty(window, "innerWidth", { value: 1000, configurable: true });
@@ -25,9 +26,34 @@ beforeEach(() => {
   Object.defineProperty(window, "scrollX", { value: 0, configurable: true });
   Object.defineProperty(window, "scrollY", { value: 0, configurable: true });
   Object.defineProperty(document, "elementsFromPoint", { value: () => [], configurable: true });
+  Object.defineProperty(HTMLCanvasElement.prototype, "getContext", {
+    configurable: true,
+    value: () => ({
+      beginPath() {},
+      drawImage() {},
+      fillRect() {},
+      fillText() {},
+      lineTo() {},
+      moveTo() {},
+      restore() {},
+      save() {},
+      scale() {},
+      stroke() {},
+      strokeRect() {},
+    }) as unknown as CanvasRenderingContext2D,
+  });
+  Object.defineProperty(HTMLCanvasElement.prototype, "toBlob", {
+    configurable: true,
+    value: (callback: BlobCallback, mediaType = "image/png") => {
+      callback(new Blob([new Uint8Array([1, 2, 3, 4])], { type: mediaType }));
+    },
+  });
+  Object.defineProperty(HTMLCanvasElement.prototype, "toDataURL", {
+    configurable: true,
+    value: (mediaType = "image/png") => `data:${mediaType};base64,AQIDBA==`,
+  });
   document.documentElement.innerHTML = "<head><title>Test page</title></head><body></body>";
   window.history.replaceState(null, "", "/test");
-  vi.restoreAllMocks();
 });
 
 afterEach(() => {

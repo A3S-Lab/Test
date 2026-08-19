@@ -33,6 +33,12 @@ export function structuredRepairMarkdown(
       );
     for (const relation of finding.relations ?? [])
       lines.push(`- Conflicts with: \`${markdownCode(relation.findingId)}\``);
+    if (finding.designReference) {
+      const image = finding.designReference.image;
+      lines.push(
+        `- Design reference: ${finding.designReference.kind}; ${finding.designReference.width} × ${finding.designReference.height}; ${image.kind === "inline" ? "embedded in the JSON export" : `artifact \`${markdownCode(image.evidence.path)}\``}`,
+      );
+    }
     if (component) {
       lines.push(
         `- Component: ${markdownText(component.name)} (\`${markdownCode(component.id)}\`)`,

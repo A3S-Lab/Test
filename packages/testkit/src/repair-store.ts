@@ -11,6 +11,7 @@ import type {
   SubmittedRepair,
   TestKitEvent,
 } from "./types";
+import { validDesignReference } from "./design-reference";
 
 const VALID_TRANSITIONS: Record<RepairStatus, ReadonlySet<RepairStatus>> = {
   draft: new Set(["queued", "cancelled"]),
@@ -64,6 +65,9 @@ function validDraft(value: RepairDraft): boolean {
       value.target &&
       Array.isArray(value.target.nodeIds) &&
       validTarget(value.target) &&
+      (value.designReference === undefined || (
+        validDesignReference(value.designReference) && value.designReference.image.kind === "inline"
+      )) &&
       validRelations(value),
   );
 }

@@ -256,6 +256,9 @@ snapshot. Pages without the SDK retain the existing Web behavior.
 - [x] Add a non-mutating Layout Mode for typed component placement and section
       rearrangement, with page/wireframe canvases, viewport CSS-pixel regions,
       purpose metadata, pointer drawing, and keyboard source selection
+- [x] Let element and rectangular-area findings attach a bounded desired-UI
+      sketch or screenshot through a responsive design board, and materialize
+      browser-inline images as hash-bound Web artifacts before agent handoff
 - [x] Let reviewers create, edit, delete, hide, and reopen local draft findings
       with instruction, optional success criteria, severity, and intent
 - [x] Support single `Send and auto-fix`, `Send selected (N)`, and `Send all`
@@ -391,9 +394,11 @@ The completion work intentionally preserves these product boundaries:
 - Framework internals are not traversed automatically. Applications declare
   stable component and source ownership with `A3STestBoundary`; undeclared
   props and state remain private.
-- The overlay does not own screenshots, a model loop, a second repair
-  database, or a generic remote-control webhook. A3S Test owns evidence,
-  sessions, policy, MCP/CLI transport, and repair history.
+- The overlay does not own observation or verification screenshots, a model
+  loop, a second repair database, or a generic remote-control webhook. It may
+  attach one bounded reviewer-authored design reference to a finding; A3S Test
+  still owns evidence materialization, sessions, policy, MCP/CLI transport,
+  and repair history.
 - Structured repair export stays deterministic and bounded. Agents request
   `summary`, `scoped`, `diff`, or `forensic` page context explicitly instead
   of changing the wire contract through a presentation setting.
@@ -437,6 +442,10 @@ The completion work intentionally preserves these product boundaries:
       blocking, searchable Layout authoring, and accessible spatial marker
       editing, including Escape cancellation from a completed multi-select
       editor with panel-focus restoration
+- [x] Add a finding-level, dependency-free SVG design board with freehand,
+      rectangles, text, object transforms and history, upload/paste/drop/capture
+      screenshot paths, responsive light/dark UI, bounded raster attachment,
+      no license or remote-asset requirement, and a focused real-Chromium test
 - [x] Re-run Test Kit typecheck/tests/build, Rust formatting/tests/clippy, the
       real Chromium Test Kit suite, and the complete repair lifecycle matrix
 
