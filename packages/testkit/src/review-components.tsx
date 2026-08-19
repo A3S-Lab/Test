@@ -3,6 +3,8 @@ import type { RepairDesignReference, RepairIntent, RepairSeverity, Rect } from "
 import { type LayoutCanvas, type LayoutSource, type OverlayTheme, type SelectionMode } from "./review-model";
 import { validLayoutRect } from "./review-utils";
 import { ComponentCatalogView } from "./component-catalog-view";
+import { useDesignBoardI18n } from "./design-board-i18n";
+import { DesignGlyph } from "./design-icons";
 import { REVIEW_KEY_SHORTCUTS } from "./review-input-policy";
 import { reviewModeLabel, useReviewI18n } from "./review-locale";
 
@@ -136,6 +138,7 @@ export type FindingEditorProps = {
 
 export function FindingEditor(props: FindingEditorProps) {
   const { t } = useReviewI18n();
+  const { t: designT } = useDesignBoardI18n();
   const [detailsOpen, setDetailsOpen] = useState(() => Boolean(
     props.successCriteria.trim()
       || props.intent !== "fix"
@@ -151,13 +154,14 @@ export function FindingEditor(props: FindingEditorProps) {
     <div className="a3s-editor-scroll">
       <div className={`a3s-design-reference${props.designReference ? " has-reference" : ""}`}>
         {props.designReference ? <>
-          {props.designReference.image.kind === "inline" && <img src={props.designReference.image.dataUrl} alt={`${props.designReference.kind === "sketch" ? "Sketch" : "Screenshot"} of the desired UI`} />}
-          <div><strong>{props.designReference.kind === "sketch" ? "Sketch attached" : "Screenshot attached"}</strong><small>{props.designReference.width} × {props.designReference.height} · kept with this finding</small></div>
-          <button type="button" className="quiet" onClick={props.onOpenDesignBoard}>Edit</button>
-          <button type="button" className="quiet danger" onClick={props.onRemoveDesignReference}>Remove</button>
+          {props.designReference.image.kind === "inline" && <img src={props.designReference.image.dataUrl} alt={designT(props.designReference.kind === "sketch" ? "referenceSketchAlt" : "referenceScreenshotAlt")} />}
+          <div><strong>{designT(props.designReference.kind === "sketch" ? "referenceSketchAttached" : "referenceScreenshotAttached")}</strong><small>{props.designReference.width} × {props.designReference.height} · {designT("referenceStored")}</small></div>
+          <button type="button" className="quiet a3s-design-reference-action" onClick={props.onOpenDesignBoard}><DesignGlyph name="draw" /><span>{designT("editReference")}</span></button>
+          <button type="button" className="quiet danger a3s-design-reference-action" onClick={props.onRemoveDesignReference}><DesignGlyph name="trash" /><span>{designT("removeReference")}</span></button>
         </> : <>
-          <div><strong>Show the intended UI</strong><small>Draw a sketch or attach a screenshot after selecting this target.</small></div>
-          <button type="button" onClick={props.onOpenDesignBoard}>Open design board</button>
+          <span className="a3s-design-reference-icon" aria-hidden="true"><DesignGlyph name="image" /></span>
+          <div><strong>{designT("referencePromptTitle")}</strong><small>{designT("referencePromptDescription")}</small></div>
+          <button type="button" className="a3s-design-reference-open" onClick={props.onOpenDesignBoard}><DesignGlyph name="draw" /><span>{designT("openBoard")}</span></button>
         </>}
       </div>
       <label className="a3s-editor-request">{t("requestedFix")}<textarea autoFocus maxLength={8192} value={props.instruction} onChange={(event) => props.onInstruction(event.target.value)} placeholder={t("describeChange")} /></label>

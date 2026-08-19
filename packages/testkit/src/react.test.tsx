@@ -95,6 +95,37 @@ describe("React adapter and review overlay", () => {
     document.documentElement.lang = previousLanguage;
   });
 
+  it("opens a localized design board as a simple right-side drawer", async () => {
+    const previousLanguage = document.documentElement.lang;
+    document.documentElement.lang = "zh-CN";
+    const view = render(<A3STestKit enabled page={{ id: "localized-design-board" }} repairStorage="memory"><button data-testid="localized-design-target">旧卡片</button><A3SReviewOverlay enabled defaultOpen /></A3STestKit>);
+    await waitFor(() => expect(shadowQuery(".a3s-panel")).toBeTruthy());
+    const target = document.querySelector<HTMLElement>("[data-testid=localized-design-target]")!;
+    setRect(target, { x: 80, y: 90, width: 240, height: 120 });
+    fireEvent.click(shadowButton("元素"));
+    target.dispatchEvent(pointerEventWithPath(target, 120, 110));
+
+    await waitFor(() => expect(shadowQuery(".a3s-design-reference").textContent).toContain("补充设计参考"));
+    fireEvent.click(shadowButton("打开画板"));
+
+    const layer = await waitFor(() => shadowQuery(".a3s-design-layer"));
+    const board = shadowQuery(".a3s-design-board");
+    expect(layer.getAttribute("data-side")).toBe("right");
+    expect(board.getAttribute("role")).toBe("dialog");
+    expect(board.getAttribute("aria-modal")).toBe("false");
+    expect(board.textContent).toContain("设计参考");
+    expect(shadowButton("选择").querySelector("svg")).toBeTruthy();
+    expect(shadowButton("画笔").querySelector("svg")).toBeTruthy();
+    expect(shadowButton("矩形").querySelector("svg")).toBeTruthy();
+    expect(shadowButton("文字").querySelector("svg")).toBeTruthy();
+    expect(shadowButton("截取屏幕").querySelector("svg")).toBeTruthy();
+    expect(shadowButton("上传截图").querySelector("svg")).toBeTruthy();
+    expect(shadowQuery("[aria-label='设计画布']")).toBeTruthy();
+
+    view.unmount();
+    document.documentElement.lang = previousLanguage;
+  });
+
   it("creates an element draft and sends one bounded repair", async () => {
     const onSubmitted = vi.fn();
     render(<A3STestKit enabled page={{ id: "review" }} repairStorage="memory"><main><button data-testid="target">Broken action</button></main><A3SReviewOverlay enabled defaultOpen onSubmitted={onSubmitted} /></A3STestKit>);
@@ -138,7 +169,7 @@ describe("React adapter and review overlay", () => {
     fireEvent.click(await waitFor(() => shadowButton("Open design board")));
     const board = await waitFor(() => shadowQuery(".a3s-design-board"));
     expect(board.getAttribute("role")).toBe("dialog");
-    expect(board.getAttribute("aria-modal")).toBe("true");
+    expect(board.getAttribute("aria-modal")).toBe("false");
     const canvas = await waitFor(() => shadowQuery("[data-testid='design-canvas']"));
     expect(board.getAttribute("data-theme")).toBe("system");
     setRect(canvas, { x: 0, y: 0, width: 960, height: 600 });

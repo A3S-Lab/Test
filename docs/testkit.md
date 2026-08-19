@@ -502,8 +502,10 @@ remain scrollable within short desktop viewports. Mobile controls use
 ### Desired-UI design references
 
 After selecting an element or rectangular area, the finding editor can open a
-modal **Design reference** board. The built-in SVG editor is constrained to a
-960 × 600 design surface and exposes freehand, rectangle, text, styling,
+right-side **Design reference** drawer. It enters with one bounded transition,
+does not add a page-blocking scrim, and keeps drawing, image, history, and style
+actions in one localized icon toolbar. The built-in SVG editor is constrained
+to a 960 × 600 design surface and exposes freehand, rectangle, text, styling,
 selection, movement, lower-right resize, keyboard, and history controls. The
 board admits at most 250 objects and intentionally omits collaboration,
 multi-page documents, and infinite-canvas features that do not belong in a

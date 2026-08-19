@@ -637,10 +637,12 @@ before acceptance.
 After selecting an element or rectangular area, the reviewer can also open a
 dependency-free SVG design board to sketch the intended UI or attach a
 PNG/JPEG screenshot by upload, paste, drop, or permissioned browser capture.
-The board supports freehand, rectangle, text, selection, movement, resizing,
-styling, and history inside the Test Kit Shadow DOM. Attached references travel
-with the typed finding; Web sessions validate and materialize inline images as
-bounded SHA-256-addressed artifacts before a coding agent receives them.
+The compact board slides in from the right without a page-blocking scrim and
+groups its localized, icon-led controls into one toolbar. It supports freehand,
+rectangle, text, selection, movement, resizing, styling, and history inside the
+Test Kit Shadow DOM. Attached references travel with the typed finding; Web
+sessions validate and materialize inline images as bounded SHA-256-addressed
+artifacts before a coding agent receives them.
 
 UI understanding is an additive `a3s.test.ui-understanding/1` evidence block
 inside Page Context. Its observation ID binds transient computed state without

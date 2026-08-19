@@ -943,7 +943,7 @@ export function A3SReviewOverlay({
           onInstruction={setInstruction} onSuccessCriteria={setSuccessCriteria}
           onSeverity={setSeverity} onIntent={setIntent}
           onOpenDesignBoard={designReference.open}
-          onRemoveDesignReference={() => { designReference.remove(); announce("Design reference removed"); }}
+          onRemoveDesignReference={() => { designReference.remove(); announce(t("designReferenceRemoved")); }}
           onConflict={(findingId, checked) => setConflictingDraftIds((current) => checked
             ? [...new Set([...current, findingId])]
             : current.filter((candidate) => candidate !== findingId))}
@@ -975,7 +975,7 @@ export function A3SReviewOverlay({
               <DesignAuditCandidates reports={designAuditReports} onReview={reviewDesignAuditFinding} onDismiss={(reportId, findingId) => bridge.dismissDesignAuditFinding(reportId, findingId)} />
               <section className="a3s-list" aria-label={t("draftAndSubmittedFindings")} tabIndex={0}>
           {drafts.map((item) => <article key={item.draft.id} className={`a3s-item${item.hidden ? " is-hidden" : ""}`}>
-            <label><input type="checkbox" aria-label={t("selectDraft", { message: item.draft.instruction })} checked={item.selected} onChange={(event) => setDrafts((current) => current.map((candidate) => candidate.draft.id === item.draft.id ? { ...candidate, selected: event.target.checked } : candidate))} /><span><strong>{item.draft.instruction}</strong><small>{reviewTargetSummary(t, item.draft.target)}{item.draft.designReference ? ` · ${item.draft.designReference.kind} reference` : ""} · {t("draft")}</small></span></label>
+            <label><input type="checkbox" aria-label={t("selectDraft", { message: item.draft.instruction })} checked={item.selected} onChange={(event) => setDrafts((current) => current.map((candidate) => candidate.draft.id === item.draft.id ? { ...candidate, selected: event.target.checked } : candidate))} /><span><strong>{item.draft.instruction}</strong><small>{reviewTargetSummary(t, item.draft.target)}{item.draft.designReference ? ` · ${t(item.draft.designReference.kind === "sketch" ? "sketchReference" : "screenshotReference")}` : ""} · {t("draft")}</small></span></label>
             <div><button type="button" aria-label={t("sendDraftAutoFix", { message: item.draft.instruction })} onClick={() => submit([item.draft])}>{t("sendAndAutoFix")}</button><button type="button" className="quiet" aria-label={t("editDraftAction", { message: item.draft.instruction })} onClick={() => editDraft(item)}>{t("edit")}</button><button type="button" className="quiet" aria-label={t(item.hidden ? "reopenMarkerForDraft" : "hideMarkerForDraft", { message: item.draft.instruction })} onClick={() => setDrafts((current) => current.map((candidate) => candidate.draft.id === item.draft.id ? { ...candidate, hidden: !candidate.hidden } : candidate))}>{t(item.hidden ? "reopenMarker" : "hideMarker")}</button><button type="button" className="quiet" aria-label={t("deleteDraftAction", { message: item.draft.instruction })} onClick={() => deleteDraft(item.draft)}>{t("delete")}</button></div>
           </article>)}
           {repairs.map((repair) => {

@@ -26,6 +26,7 @@ import {
   DESIGN_BOARD_HEIGHT,
   DESIGN_BOARD_WIDTH,
 } from "./design-reference";
+import { useDesignBoardI18n } from "./design-board-i18n";
 
 type CanvasInteraction =
   | { kind: "draw"; pointerId: number; points: DesignPoint[] }
@@ -91,6 +92,7 @@ export function DesignCanvas({
   onImportFile,
   onLimit,
 }: DesignCanvasProps) {
+  const { t } = useDesignBoardI18n();
   const inputRef = useRef<HTMLInputElement | null>(null);
   const interactionRef = useRef<CanvasInteraction | null>(null);
   const [interaction, setInteraction] = useState<CanvasInteraction | null>(null);
@@ -314,7 +316,7 @@ export function DesignCanvas({
     data-tool={tool}
     viewBox={`0 0 ${DESIGN_BOARD_WIDTH} ${DESIGN_BOARD_HEIGHT}`}
     role="application"
-    aria-label="Desired UI design canvas"
+    aria-label={t("canvas")}
     aria-describedby={describedBy}
     tabIndex={0}
     onPointerDown={pointerDown}
@@ -338,7 +340,7 @@ export function DesignCanvas({
     >
       <input
         ref={inputRef}
-        aria-label="Design text"
+        aria-label={t("textInput")}
         maxLength={240}
         value={textDraft.value}
         onChange={(event) => setTextDraft((current) => current ? { ...current, value: event.target.value } : current)}

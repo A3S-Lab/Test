@@ -444,8 +444,9 @@ The completion work intentionally preserves these product boundaries:
       editor with panel-focus restoration
 - [x] Add a finding-level, dependency-free SVG design board with freehand,
       rectangles, text, object transforms and history, upload/paste/drop/capture
-      screenshot paths, responsive light/dark UI, bounded raster attachment,
-      no license or remote-asset requirement, and a focused real-Chromium test
+      screenshot paths, a localized icon toolbar, a responsive right-side
+      drawer, bounded raster attachment, no license or remote-asset requirement,
+      and a focused real-Chromium test
 - [x] Re-run Test Kit typecheck/tests/build, Rust formatting/tests/clippy, the
       real Chromium Test Kit suite, and the complete repair lifecycle matrix
 

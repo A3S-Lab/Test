@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { DesignBoard } from "./design-board";
+import { useDesignBoardI18n } from "./design-board-i18n";
 import type { OverlayTheme } from "./review-model";
 import type { RepairDesignReference } from "./types";
 
@@ -52,6 +53,7 @@ export function ReviewDesignReferenceBoard({
   theme: OverlayTheme;
   onAnnounce(message: string): void;
 }) {
+  const { t } = useDesignBoardI18n();
   if (!active || !design.boardOpen) return null;
   return <DesignBoard
     idPrefix={idPrefix}
@@ -59,7 +61,9 @@ export function ReviewDesignReferenceBoard({
     theme={theme}
     onAttach={(reference) => {
       design.attach(reference);
-      onAnnounce(`${reference.kind === "sketch" ? "Sketch" : "Screenshot"} attached to finding`);
+      onAnnounce(t("attachedAnnouncement", {
+        kind: t(reference.kind === "sketch" ? "sketch" : "screenshot"),
+      }));
     }}
     onCancel={design.close}
   />;

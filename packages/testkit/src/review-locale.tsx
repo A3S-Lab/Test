@@ -305,6 +305,9 @@ const EN_REVIEW_MESSAGES = {
   actionReopen: "reopen",
   contractCriteria: "Contract {rule} matches the expected value {expected}",
   designCriteria: "The reviewed design concern “{summary}” is addressed while preserving semantics, accessibility, and behavior",
+  designReferenceRemoved: "Design reference removed",
+  sketchReference: "sketch reference",
+  screenshotReference: "screenshot reference",
 } as const;
 
 type ReviewMessageCatalog = typeof EN_REVIEW_MESSAGES;
@@ -620,6 +623,9 @@ const ZH_CN_REVIEW_MESSAGES: Record<A3SReviewMessageKey, string> = {
   actionReopen: "重新打开",
   contractCriteria: "契约 {rule} 与期望值 {expected} 一致",
   designCriteria: "设计问题“{summary}”已解决，并保留原有语义、可访问性与行为",
+  designReferenceRemoved: "已移除设计参考",
+  sketchReference: "草图参考",
+  screenshotReference: "截图参考",
 };
 
 const MODE_LABEL_KEYS: Record<SelectionMode, A3SReviewMessageKey> = {

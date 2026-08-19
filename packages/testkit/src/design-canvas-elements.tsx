@@ -3,6 +3,7 @@ import {
   elementBounds,
   type DesignElement,
 } from "./design-board-model";
+import { useDesignBoardI18n, type DesignBoardTranslator } from "./design-board-i18n";
 
 export function DesignCanvasElements({
   elements,
@@ -11,16 +12,17 @@ export function DesignCanvasElements({
   elements: DesignElement[];
   selectedId: string | null;
 }) {
+  const { t } = useDesignBoardI18n();
   const selected = selectedId
     ? elements.find((element) => element.id === selectedId) ?? null
     : null;
   return <>
-    {elements.map((element) => <DesignCanvasElement key={element.id} element={element} />)}
+    {elements.map((element) => <DesignCanvasElement key={element.id} element={element} t={t} />)}
     {selected && <SelectionOutline element={selected} />}
   </>;
 }
 
-function DesignCanvasElement({ element }: { element: DesignElement }) {
+function DesignCanvasElement({ element, t }: { element: DesignElement; t: DesignBoardTranslator }) {
   let content: ReactNode;
   if (element.kind === "draw") {
     content = <path
@@ -71,9 +73,9 @@ function DesignCanvasElement({ element }: { element: DesignElement }) {
     className={`a3s-design-element is-${element.kind}`}
     data-element-id={element.id}
     role="img"
-    aria-label={elementLabel(element)}
+    aria-label={elementLabel(element, t)}
   >
-    <title>{elementLabel(element)}</title>
+    <title>{elementLabel(element, t)}</title>
     {content}
   </g>;
 }
@@ -97,11 +99,11 @@ function SelectionOutline({ element }: { element: DesignElement }) {
   </g>;
 }
 
-function elementLabel(element: DesignElement): string {
-  if (element.kind === "draw") return "Freehand stroke";
-  if (element.kind === "rectangle") return "Rectangle";
-  if (element.kind === "text") return `Text: ${element.text}`;
-  return element.referenceKind === "sketch" ? "Existing design sketch" : "Screenshot";
+function elementLabel(element: DesignElement, t: DesignBoardTranslator): string {
+  if (element.kind === "draw") return t("freehandStroke");
+  if (element.kind === "rectangle") return t("rectangleElement");
+  if (element.kind === "text") return t("textElement", { text: element.text });
+  return t(element.referenceKind === "sketch" ? "existingDesignSketch" : "screenshotElement");
 }
 
 function drawPath(points: Array<{ x: number; y: number }>): string {

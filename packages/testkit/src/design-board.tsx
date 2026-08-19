@@ -8,6 +8,12 @@ import {
 import { DesignCanvas } from "./design-canvas";
 import { exportDesignBoard } from "./design-board-export";
 import {
+  designSummaryLabel,
+  designToolLabel,
+  useDesignBoardI18n,
+} from "./design-board-i18n";
+import { DesignGlyph, type DesignGlyphName } from "./design-icons";
+import {
   commitDesignHistory,
   createDesignElementId,
   createDesignHistory,
@@ -51,6 +57,7 @@ export function DesignBoard({
 }: DesignBoardProps) {
   const dialogRef = useRef<HTMLElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const { locale, t } = useDesignBoardI18n();
   const [history, setHistory] = useState<DesignHistory>(() => createDesignHistory());
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [tool, setTool] = useState<DesignTool>("select");
@@ -66,9 +73,10 @@ export function DesignBoard({
   const screenCaptureAvailable = typeof navigator !== "undefined"
     && typeof navigator.mediaDevices?.getDisplayMedia === "function";
   const busy = busyAction !== null;
+  const summaryLabel = designSummaryLabel(t, summary);
 
   useEffect(() => {
-    dialogRef.current?.querySelector<SVGSVGElement>("[data-testid='design-canvas']")?.focus();
+    dialogRef.current?.querySelector<HTMLButtonElement>("[data-testid='design-tool-select']")?.focus();
   }, []);
 
   useEffect(() => {
@@ -79,7 +87,7 @@ export function DesignBoard({
     setError("");
     if (!initialReference) return () => { cancelled = true; };
     if (initialReference.image.kind !== "inline") {
-      setError("This stored artifact cannot be edited in the browser. Import its PNG or JPEG copy instead.");
+      setError(t("storedArtifactUnavailable"));
       return () => { cancelled = true; };
     }
     setBusyAction("import");
@@ -90,12 +98,12 @@ export function DesignBoard({
     ).then((image) => {
       if (!cancelled) setHistory(createDesignHistory([image]));
     }).catch((cause: unknown) => {
-      if (!cancelled) setError(errorMessage(cause, "The existing design reference could not be opened."));
+      if (!cancelled) setError(errorMessage(cause, t("existingReferenceOpenFailed"), locale));
     }).finally(() => {
       if (!cancelled) setBusyAction(null);
     });
     return () => { cancelled = true; };
-  }, [initialReference]);
+  }, [initialReference, locale, t]);
 
   const commitElements = useCallback((elements: DesignElement[], nextSelectedId?: string | null) => {
     setHistory((current) => commitDesignHistory(current, elements));
@@ -106,11 +114,11 @@ export function DesignBoard({
   async function importFile(file: File | null | undefined) {
     if (!file) return;
     if (!(ACCEPTED_IMAGE_TYPES as readonly string[]).includes(file.type)) {
-      setError("Choose a PNG or JPEG screenshot.");
+      setError(t("invalidImageType"));
       return;
     }
     if (file.size === 0 || file.size > MAX_DESIGN_REFERENCE_SOURCE_BYTES) {
-      setError("The screenshot must be between 1 byte and 8 MiB.");
+      setError(t("invalidImageSize"));
       return;
     }
     setBusyAction("import");
@@ -120,14 +128,14 @@ export function DesignBoard({
       const image = await createImageElement(await readFile(file), mediaType, "screenshot");
       const elements = replaceBackgroundImage(history.present, image);
       if (!elements) {
-        setError(`Remove an object before adding a screenshot; the board limit is ${MAX_DESIGN_ELEMENTS}.`);
+        setError(t("removeObjectBeforeScreenshot", { limit: MAX_DESIGN_ELEMENTS }));
         return;
       }
       setHistory((current) => commitDesignHistory(current, elements));
       setSelectedId(image.id);
       setTool("select");
     } catch (cause) {
-      setError(errorMessage(cause, "The screenshot could not be opened."));
+      setError(errorMessage(cause, t("screenshotOpenFailed"), locale));
     } finally {
       setBusyAction(null);
       if (fileInputRef.current) fileInputRef.current.value = "";
@@ -136,7 +144,7 @@ export function DesignBoard({
 
   async function captureScreen() {
     if (!screenCaptureAvailable) {
-      setError("Screen capture is unavailable in this browser. Upload or paste a screenshot instead.");
+      setError(t("captureUnavailable"));
       return;
     }
     setBusyAction("capture");
@@ -153,7 +161,7 @@ export function DesignBoard({
       frame.width = Math.max(1, video.videoWidth);
       frame.height = Math.max(1, video.videoHeight);
       const context = frame.getContext("2d");
-      if (!context) throw new Error("The browser could not create a screenshot canvas.");
+      if (!context) throw new Error(t("captureCanvasUnavailable"));
       context.drawImage(video, 0, 0, frame.width, frame.height);
       const image = await createImageElement(
         frame.toDataURL("image/jpeg", 0.9),
@@ -162,7 +170,7 @@ export function DesignBoard({
       );
       const elements = replaceBackgroundImage(history.present, image);
       if (!elements) {
-        setError(`Remove an object before adding a screenshot; the board limit is ${MAX_DESIGN_ELEMENTS}.`);
+        setError(t("removeObjectBeforeScreenshot", { limit: MAX_DESIGN_ELEMENTS }));
         return;
       }
       setHistory((current) => commitDesignHistory(current, elements));
@@ -170,9 +178,9 @@ export function DesignBoard({
       setTool("select");
     } catch (cause) {
       if (cause instanceof DOMException && cause.name === "NotAllowedError") {
-        setError("Screen capture was cancelled. Upload or paste a screenshot instead.");
+        setError(t("captureCancelled"));
       } else {
-        setError(errorMessage(cause, "Screen capture failed."));
+        setError(errorMessage(cause, t("captureFailed"), locale));
       }
     } finally {
       stream?.getTracks().forEach((track) => track.stop());
@@ -207,7 +215,7 @@ export function DesignBoard({
     try {
       const exported = await exportDesignBoard(history.present, current.hasImage);
       if (!exported) {
-        setError("The design reference is still too large. Remove detail or use a smaller screenshot.");
+        setError(t("referenceTooLarge"));
         return;
       }
       const reference: RepairDesignReference = {
@@ -221,12 +229,12 @@ export function DesignBoard({
         },
       };
       if (!validDesignReference(reference)) {
-        setError("The browser produced an invalid design reference. Try a smaller screenshot.");
+        setError(t("referenceInvalid"));
         return;
       }
       onAttach(reference);
     } catch (cause) {
-      setError(errorMessage(cause, "The design reference could not be exported."));
+      setError(errorMessage(cause, t("exportFailed"), locale));
     } finally {
       setBusyAction(null);
     }
@@ -243,88 +251,88 @@ export function DesignBoard({
     onCancel();
   }
 
-  function onDialogKeyDown(event: React.KeyboardEvent<HTMLElement>) {
-    if (event.key !== "Tab") return;
-    const focusable = Array.from(dialogRef.current?.querySelectorAll<HTMLElement>(
-      "button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [href], [tabindex]:not([tabindex='-1']), [contenteditable='true']",
-    ) ?? []).filter((element) => {
-      if (element.hidden || element.closest("[hidden], [aria-hidden='true']")) return false;
-      const style = getComputedStyle(element);
-      return style.display !== "none" && style.visibility !== "hidden";
-    });
-    if (focusable.length === 0) return;
-    const first = focusable[0]!;
-    const last = focusable.at(-1)!;
-    const root = dialogRef.current?.getRootNode();
-    const active = root instanceof ShadowRoot ? root.activeElement : document.activeElement;
-    if (event.shiftKey && active === first) {
-      event.preventDefault();
-      last.focus();
-    } else if (!event.shiftKey && active === last) {
-      event.preventDefault();
-      first.focus();
-    }
-  }
+  const tools = (["select", "draw", "rectangle", "text"] as const);
 
-  return <div className="a3s-design-scrim">
+  return <div className="a3s-design-layer" data-side="right">
     <section
       ref={dialogRef}
       className="a3s-design-board"
       data-theme={theme}
       role="dialog"
-      aria-modal="true"
+      aria-modal="false"
       aria-labelledby={titleId}
       aria-describedby={descriptionId}
       onKeyDownCapture={onDialogKeyDownCapture}
-      onKeyDown={onDialogKeyDown}
     >
       <div className="a3s-design-header">
-        <div>
-          <strong id={titleId}>Design reference</strong>
-          <small id={descriptionId}>Sketch the desired UI or add a screenshot.</small>
+        <span className="a3s-design-header-icon" aria-hidden="true"><DesignGlyph name="board" /></span>
+        <div className="a3s-design-heading">
+          <strong id={titleId}>{t("referenceTitle")}</strong>
+          <small id={descriptionId}>{t("referenceDescription")}</small>
         </div>
-        <button type="button" className="a3s-close" aria-label="Close design board" onClick={onCancel}>
-          <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3.5 3.5 12.5 12.5M12.5 3.5 3.5 12.5" /></svg>
+        <button type="button" className="a3s-close" aria-label={t("closeBoard")} title={t("closeBoard")} onClick={onCancel}>
+          <DesignGlyph name="close" />
+          <span className="a3s-sr-only">{t("closeBoard")}</span>
         </button>
       </div>
       <div className="a3s-design-body">
-        <div className="a3s-design-import" aria-label="Design board actions">
-          <button type="button" disabled={busy || !screenCaptureAvailable} onClick={() => void captureScreen()}>{busyAction === "capture" ? "Capturing…" : "Capture screen"}</button>
-          <button type="button" disabled={busy} onClick={() => fileInputRef.current?.click()}>{busyAction === "import" ? "Importing…" : "Upload screenshot"}</button>
-          <input ref={fileInputRef} hidden type="file" accept="image/png,image/jpeg" onChange={(event) => void importFile(event.target.files?.[0])} />
-          <span className="a3s-design-history" aria-label="Canvas history">
-            <button type="button" disabled={busy || history.past.length === 0} onClick={undo}>Undo</button>
-            <button type="button" disabled={busy || history.future.length === 0} onClick={redo}>Redo</button>
-            <button type="button" className="quiet" disabled={busy || !summary.kind} onClick={clearBoard}>Clear board</button>
-          </span>
-          <small>PNG or JPEG, up to 8 MiB. Paste or drop one onto the canvas.</small>
-        </div>
-        <div className="a3s-design-stage" data-content={summary.label}>
-          <div className="a3s-design-toolbar" role="toolbar" aria-label="Design tools">
-            {(["select", "draw", "rectangle", "text"] as const).map((value) => <button
+        <div className="a3s-design-toolbar" role="toolbar" aria-label={t("boardActions")}>
+          <div className="a3s-design-tool-group" aria-label={t("tools")}>
+            {tools.map((value) => {
+              const label = designToolLabel(t, value);
+              return <button
               key={value}
               type="button"
               data-testid={`design-tool-${value}`}
-              aria-label={toolLabel(value)}
+              aria-label={label}
               aria-pressed={tool === value}
-              className={tool === value ? "selected" : ""}
+              className={`a3s-design-tool${tool === value ? " selected" : ""}`}
               disabled={busy}
+              title={label}
               onClick={() => setTool(value)}
-            >{toolLabel(value)}</button>)}
-            <label>Stroke <input aria-label="Stroke color" type="color" value={color} disabled={busy} onChange={(event) => setColor(event.target.value)} /></label>
-            <label>Fill <select aria-label="Shape fill" value={fill} disabled={busy} onChange={(event) => setFill(event.target.value)}>
-              <option value="transparent">None</option>
-              <option value="#e0f2fe">Blue</option>
-              <option value="#fef3c7">Amber</option>
-              <option value="#dcfce7">Green</option>
-              <option value="#fce7f3">Pink</option>
-            </select></label>
-            <label>Width <select aria-label="Stroke width" value={strokeWidth} disabled={busy} onChange={(event) => setStrokeWidth(Number(event.target.value))}>
-              <option value="2">S</option><option value="4">M</option><option value="8">L</option>
-            </select></label>
-            <output aria-label="Design object count">{history.present.length}/{MAX_DESIGN_ELEMENTS}</output>
+              ><DesignGlyph name={value as DesignGlyphName} /><span>{label}</span></button>;
+            })}
           </div>
+          <span className="a3s-design-divider" aria-hidden="true" />
+          <div className="a3s-design-tool-group a3s-design-media" aria-label={t("imageHelp")}>
+            <button type="button" disabled={busy || !screenCaptureAvailable} title={t("captureScreen")} onClick={() => void captureScreen()}>
+              <DesignGlyph name="capture" /><span>{busyAction === "capture" ? t("capturing") : t("captureScreen")}</span>
+            </button>
+            <button type="button" disabled={busy} title={t("uploadScreenshot")} onClick={() => fileInputRef.current?.click()}>
+              <DesignGlyph name="upload" /><span>{busyAction === "import" ? t("importing") : t("uploadScreenshot")}</span>
+            </button>
+            <input ref={fileInputRef} aria-label={t("screenshotInput")} hidden type="file" accept="image/png,image/jpeg" onChange={(event) => void importFile(event.target.files?.[0])} />
+          </div>
+          <span className="a3s-design-divider" aria-hidden="true" />
+          <div className="a3s-design-history" aria-label={t("history")}>
+            <IconButton icon="undo" label={t("undo")} disabled={busy || history.past.length === 0} onClick={undo} />
+            <IconButton icon="redo" label={t("redo")} disabled={busy || history.future.length === 0} onClick={redo} />
+            <IconButton icon="trash" label={t("clearBoard")} disabled={busy || !summary.kind} onClick={clearBoard} />
+          </div>
+          <div className="a3s-design-style" aria-label={t("styles")}>
+            <label className="a3s-design-color" title={t("strokeColor")}>
+              <span className="a3s-sr-only">{t("strokeColor")}</span>
+              <input aria-label={t("strokeColor")} type="color" value={color} disabled={busy} onChange={(event) => setColor(event.target.value)} />
+            </label>
+            <label><span>{t("shapeFill")}</span><select aria-label={t("shapeFill")} value={fill} disabled={busy || tool !== "rectangle"} onChange={(event) => setFill(event.target.value)}>
+              <option value="transparent">{t("fillNone")}</option>
+              <option value="#e0f2fe">{t("fillBlue")}</option>
+              <option value="#fef3c7">{t("fillAmber")}</option>
+              <option value="#dcfce7">{t("fillGreen")}</option>
+              <option value="#fce7f3">{t("fillPink")}</option>
+            </select></label>
+            <label><span>{t("strokeWidth")}</span><select aria-label={t("strokeWidth")} value={strokeWidth} disabled={busy || tool === "select" || tool === "text"} onChange={(event) => setStrokeWidth(Number(event.target.value))}>
+              <option value="2">{t("widthSmall")}</option><option value="4">{t("widthMedium")}</option><option value="8">{t("widthLarge")}</option>
+            </select></label>
+          </div>
+        </div>
+        <div className="a3s-design-stage" data-content={summaryLabel}>
           <div className="a3s-design-canvas">
+            {!summary.kind && <div className="a3s-design-empty" aria-hidden="true">
+              <span><DesignGlyph name="draw" /></span>
+              <strong>{t("emptyTitle")}</strong>
+              <small>{t("emptyDescription")}</small>
+            </div>}
             <DesignCanvas
               elements={history.present}
               selectedId={selectedId}
@@ -342,20 +350,42 @@ export function DesignBoard({
               onUndo={undo}
               onRedo={redo}
               onImportFile={(file) => void importFile(file)}
-              onLimit={() => setError(`The design board is limited to ${MAX_DESIGN_ELEMENTS} objects.`)}
+              onLimit={() => setError(t("objectLimit", { limit: MAX_DESIGN_ELEMENTS }))}
             />
           </div>
         </div>
-        <p id={statusId} className={`a3s-design-status${error ? " is-error" : ""}`} role={error ? "alert" : "status"}>
-          {error || `${summary.label}. Draw, add rectangles or text, then use Select to move and resize objects.`}
-        </p>
       </div>
-      <div className="a3s-design-actions">
-        <button type="button" className="quiet" onClick={onCancel}>Cancel</button>
-        <button type="button" disabled={!summary.kind || busy} onClick={() => void attachReference()}>{busyAction === "export" ? "Exporting…" : "Attach to finding"}</button>
+      <div className="a3s-design-footer">
+        <output className="a3s-sr-only" aria-label={t("objectCount")}>{history.present.length}/{MAX_DESIGN_ELEMENTS}</output>
+        <p id={statusId} className={`a3s-design-status${error ? " is-error" : ""}`} role={error ? "alert" : "status"}>
+          {error || t("status", { summary: summaryLabel, help: t("canvasHelp") })}
+        </p>
+        <div className="a3s-design-actions">
+          <button type="button" className="quiet" onClick={onCancel}>{t("cancel")}</button>
+          <button type="button" className="a3s-design-attach" disabled={!summary.kind || busy} onClick={() => void attachReference()}>
+            <DesignGlyph name="check" /><span>{busyAction === "export" ? t("exporting") : t("attach")}</span>
+          </button>
+        </div>
       </div>
     </section>
   </div>;
+}
+
+function IconButton({
+  icon,
+  label,
+  disabled,
+  onClick,
+}: {
+  icon: DesignGlyphName;
+  label: string;
+  disabled: boolean;
+  onClick(): void;
+}) {
+  return <button type="button" aria-label={label} title={label} disabled={disabled} onClick={onClick}>
+    <DesignGlyph name={icon} />
+    <span className="a3s-sr-only">{label}</span>
+  </button>;
 }
 
 async function createImageElement(
@@ -384,10 +414,6 @@ async function createImageElement(
     referenceKind,
     background: true,
   };
-}
-
-function toolLabel(tool: DesignTool): string {
-  return ({ select: "Select", draw: "Draw", rectangle: "Rectangle", text: "Text" } as const)[tool];
 }
 
 function replaceBackgroundImage(
@@ -433,6 +459,12 @@ function waitForVideo(video: HTMLVideoElement): Promise<void> {
   });
 }
 
-function errorMessage(cause: unknown, fallback: string): string {
-  return cause instanceof Error && cause.message ? cause.message : fallback;
+function errorMessage(
+  cause: unknown,
+  fallback: string,
+  locale: "en" | "zh-CN",
+): string {
+  return locale === "en" && cause instanceof Error && cause.message
+    ? cause.message
+    : fallback;
 }
