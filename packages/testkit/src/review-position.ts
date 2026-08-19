@@ -1,4 +1,4 @@
-import { currentTargetRegion } from "./review-utils";
+import { markerRects } from "./review-utils";
 import type { PageContextBridge, Rect, RepairTarget } from "./types";
 
 export type ReviewEditorPlacement = {
@@ -35,15 +35,7 @@ function targetRect(
   target: RepairTarget,
   bridge: PageContextBridge,
 ): Rect | null {
-  const region = currentTargetRegion(target);
-  if (region) return region;
-  if (target.nodeIds.length === 0) return null;
-  const selected = new Set(target.nodeIds);
-  const rects = bridge
-    .snapshot({ detail: "summary" })
-    .nodes
-    .filter((node) => selected.has(node.id) && node.geometry)
-    .map((node) => node.geometry!.viewport);
+  const rects = markerRects(target, bridge);
   if (rects.length === 0) return null;
   const left = Math.min(...rects.map((rect) => rect.x));
   const top = Math.min(...rects.map((rect) => rect.y));

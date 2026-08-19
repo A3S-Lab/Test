@@ -79,6 +79,12 @@ Overlay 打开后，`E`、`M`、`T`、`A`、`D` 分别进入元素、多选、�
 | `target.regionScroll` | 框选时记录的可选页面滚动偏移             |
 | `relations`           | 当前只支持显式 `conflicts_with`          |
 
+节点和文本标记会根据当前仍可解析的真实 DOM 元素定位。页面滚动、内部滚动容器、
+可视视口移动和窗口缩放会触发一次有界刷新，重新读取
+`getBoundingClientRect()`。区域、手绘和 Layout 目标仍通过
+`target.regionScroll` 与页面内容保持对齐；节点已无法解析时，保存的区域才作为
+兜底。
+
 发送时，Test Kit 会重新读取当前修订并增加 `contextRevision`、页面、route、viewport、组件与 source 提示、语义定位器、目标与附近节点、facts 和有界 UI 理解。整个 `context` 标记为 `untrusted: true`。
 
 页面文本、DOM 属性、facts 和 instruction 不会被拼进隐藏系统指令。编码 Agent 可以读取这些证据，但必须依据自己的权限和仓库规则决定允许的代码操作。

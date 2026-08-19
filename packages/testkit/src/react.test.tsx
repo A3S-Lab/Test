@@ -121,7 +121,7 @@ describe("React adapter and review overlay", () => {
     expect(shadowButton("画笔").querySelector("svg")).toBeTruthy();
     expect(shadowButton("矩形").querySelector("svg")).toBeTruthy();
     expect(shadowButton("文字").querySelector("svg")).toBeTruthy();
-    expect(shadowButton("截取当前页面").querySelector("svg")).toBeTruthy();
+    expect(shadowButton("框选页面截图").querySelector("svg")).toBeTruthy();
     expect(shadowButton("上传截图").querySelector("svg")).toBeTruthy();
     expect(shadowQuery("[aria-label='设计画布']")).toBeTruthy();
 
@@ -263,17 +263,21 @@ describe("React adapter and review overlay", () => {
     });
   });
 
-  it("captures only browser content without requesting screen-sharing permission", async () => {
+  it("captures a selected browser region without requesting screen-sharing permission", async () => {
+    let decodedImages = 0;
     vi.spyOn(window, "Image").mockImplementation(() => {
       const image = document.createElement("img");
-      Object.defineProperty(image, "naturalWidth", { value: 1000 });
-      Object.defineProperty(image, "naturalHeight", { value: 800 });
+      const viewportImage = decodedImages++ === 0;
+      Object.defineProperty(image, "naturalWidth", { value: viewportImage ? 1000 : 320 });
+      Object.defineProperty(image, "naturalHeight", { value: viewportImage ? 800 : 300 });
       Object.defineProperty(image, "src", {
         configurable: true,
         set: () => queueMicrotask(() => image.onload?.(new Event("load"))),
       });
       return image;
     });
+    const drawImage = vi.fn();
+    vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue({ drawImage } as unknown as CanvasRenderingContext2D);
     domToJpeg.mockReset();
     domToJpeg.mockResolvedValue("data:image/jpeg;base64,AQIDBA==");
     const getDisplayMedia = vi.fn();
@@ -290,15 +294,42 @@ describe("React adapter and review overlay", () => {
     target.dispatchEvent(pointerEventWithPath(target, 120, 110));
     fireEvent.click(await waitFor(() => shadowButton("Open design board")));
 
-    const capture = shadowButton("Capture current page");
+    const capture = shadowButton("Select screenshot area");
     expect(capture.title).toContain("without screen-sharing permission");
     fireEvent.click(capture);
+    const selector = await waitFor(() => shadowQuery(".a3s-page-capture"));
+    expect(selector.getAttribute("role")).toBe("dialog");
+    expect(selector.textContent).toContain("Drag to select a screenshot area");
+    expect(domToJpeg).not.toHaveBeenCalled();
+
+    fireEvent.keyDown(selector, { key: "Escape" });
+    await waitFor(() => expect(document.querySelector<HTMLElement>("[data-a3s-testkit-overlay]")!.shadowRoot!.querySelector(".a3s-page-capture")).toBeNull());
+    expect(domToJpeg).not.toHaveBeenCalled();
+
+    fireEvent.click(shadowButton("Select screenshot area"));
+    const activeSelector = await waitFor(() => shadowQuery(".a3s-page-capture"));
+    fireEvent(activeSelector, capturePointerEvent("pointerdown", activeSelector, 100, 150, 1));
+    fireEvent(activeSelector, capturePointerEvent("pointermove", activeSelector, 420, 450, 1));
+    expect(shadowQuery(".a3s-page-capture-size").textContent).toBe("320 × 300");
+    fireEvent(activeSelector, capturePointerEvent("pointerup", activeSelector, 420, 450, 1));
+
     await waitFor(() => expect(domToJpeg).toHaveBeenCalledTimes(1));
     const [captureRoot, options] = domToJpeg.mock.calls[0]!;
     expect(captureRoot).toBe(document.documentElement);
     expect(options).toMatchObject({ width: 1000, height: 800, quality: 0.9, scale: 1 });
     expect(options.filter(document.querySelector("[data-a3s-testkit-overlay]")!)).toBe(false);
     expect(options.filter(target)).toBe(true);
+    await waitFor(() => expect(drawImage).toHaveBeenCalledWith(
+      expect.any(HTMLImageElement),
+      100,
+      150,
+      320,
+      300,
+      0,
+      0,
+      320,
+      300,
+    ));
     expect(getDisplayMedia).not.toHaveBeenCalled();
     await waitFor(() => expect(shadowQuery(".a3s-design-status").textContent).toContain("Screenshot."));
   });
@@ -513,26 +544,41 @@ describe("React adapter and review overlay", () => {
     ]);
   });
 
-  it("supports drag multi-select, persistent markers, draft editing, hide, and reopen", async () => {
-    render(<A3STestKit enabled page={{ id: "multi" }} repairStorage="memory"><button id="one">One</button><button id="two">Two</button><A3SReviewOverlay enabled defaultOpen /></A3STestKit>);
+  it("repositions multi-selected nodes from their live DOM rectangles while scrolling", async () => {
+    render(<A3STestKit enabled page={{ id: "multi" }} repairStorage="memory"><div id="scroll-container"><button id="one">One</button><button id="two">Two</button></div><A3SReviewOverlay enabled defaultOpen /></A3STestKit>);
     await waitFor(() => expect(shadowQuery(".a3s-panel")).toBeTruthy());
-    setRect(document.querySelector("#one")!, { x: 10, y: 10, width: 40, height: 20 });
-    setRect(document.querySelector("#two")!, { x: 70, y: 10, width: 40, height: 20 });
+    const first = document.querySelector<HTMLElement>("#one")!;
+    const second = document.querySelector<HTMLElement>("#two")!;
+    let firstRect = DOMRect.fromRect({ x: 10, y: 10, width: 40, height: 20 });
+    let secondRect = DOMRect.fromRect({ x: 70, y: 10, width: 40, height: 20 });
+    Object.defineProperty(first, "getBoundingClientRect", { configurable: true, value: () => firstRect });
+    Object.defineProperty(first, "getClientRects", { configurable: true, value: () => [firstRect] });
+    Object.defineProperty(second, "getBoundingClientRect", { configurable: true, value: () => secondRect });
+    Object.defineProperty(second, "getClientRects", { configurable: true, value: () => [secondRect] });
 
     fireEvent.click(shadowButton("Multi"));
     document.body.dispatchEvent(pointerEvent("pointerdown", document.body, 0, 0));
     document.body.dispatchEvent(pointerEvent("pointermove", document.body, 120, 40));
     document.body.dispatchEvent(pointerEvent("pointerup", document.body, 120, 40));
     await waitFor(() => expect(shadowQuery(".a3s-editor").textContent).toContain("2 elements"));
+    expect(shadowQuery(".a3s-highlight.is-candidate").style.cssText).toContain("left: 10px");
+    expect(shadowQuery(".a3s-highlight.is-candidate").style.cssText).toContain("width: 100px");
+
+    firstRect = DOMRect.fromRect({ x: 10, y: -70, width: 40, height: 20 });
+    secondRect = DOMRect.fromRect({ x: 70, y: -70, width: 40, height: 20 });
+    fireEvent.scroll(document.querySelector("#scroll-container")!);
+    await waitFor(() => expect(shadowQuery(".a3s-highlight.is-candidate").style.top).toBe("-70px"));
+
     fireEvent.change(shadowQuery("textarea"), { target: { value: "Align both actions" } });
     fireEvent.click(shadowButton("Add draft"));
     await waitFor(() => expect(shadowQuery(".a3s-markers").children).toHaveLength(1));
     expect(shadowQuery(".a3s-markers").querySelectorAll(".a3s-marker-action")).toHaveLength(1);
-    expect((shadowQuery(".a3s-marker") as HTMLElement).style.cssText).toContain("width: 120px");
+    expect((shadowQuery(".a3s-marker") as HTMLElement).style.cssText).toContain("width: 100px");
 
-    Object.defineProperty(window, "scrollY", { configurable: true, value: 80 });
-    fireEvent.scroll(window);
-    await waitFor(() => expect(shadowQuery(".a3s-marker").style.top).toBe("-80px"));
+    firstRect = DOMRect.fromRect({ x: 10, y: -130, width: 40, height: 20 });
+    secondRect = DOMRect.fromRect({ x: 70, y: -130, width: 40, height: 20 });
+    fireEvent.scroll(document.querySelector("#scroll-container")!);
+    await waitFor(() => expect(shadowQuery(".a3s-marker").style.top).toBe("-130px"));
 
     fireEvent.click(shadowButton("Edit"));
     fireEvent.change(shadowQuery("textarea"), { target: { value: "Align both primary actions" } });
@@ -1218,6 +1264,12 @@ function pointerEventWithPath(target: Element, clientX: number, clientY: number)
 function pointerEvent(type: string, target: Element, clientX: number, clientY: number): Event {
   const event = new MouseEvent(type, { bubbles: true, composed: true, button: 0, clientX, clientY });
   Object.defineProperty(event, "composedPath", { value: () => [target, document.body, document.documentElement, document, window] });
+  return event;
+}
+
+function capturePointerEvent(type: string, target: Element, clientX: number, clientY: number, pointerId: number): Event {
+  const event = pointerEvent(type, target, clientX, clientY);
+  Object.defineProperty(event, "pointerId", { value: pointerId });
   return event;
 }
 

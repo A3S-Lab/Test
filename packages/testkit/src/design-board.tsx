@@ -7,6 +7,7 @@ import {
 } from "react";
 import { DesignCanvas } from "./design-canvas";
 import { exportDesignBoard } from "./design-board-export";
+import { captureBrowserRegion, PageCaptureOverlay } from "./design-page-capture";
 import {
   designSummaryLabel,
   designToolLabel,
@@ -33,7 +34,7 @@ import {
   validDesignReference,
 } from "./design-reference";
 import type { OverlayTheme } from "./review-model";
-import type { RepairDesignReference } from "./types";
+import type { Rect, RepairDesignReference } from "./types";
 
 export type DesignBoardProps = {
   idPrefix: string;
@@ -56,6 +57,7 @@ export function DesignBoard({
   onCancel,
 }: DesignBoardProps) {
   const dialogRef = useRef<HTMLElement | null>(null);
+  const captureButtonRef = useRef<HTMLButtonElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const { locale, t } = useDesignBoardI18n();
   const [history, setHistory] = useState<DesignHistory>(() => createDesignHistory());
@@ -65,6 +67,7 @@ export function DesignBoard({
   const [fill, setFill] = useState("transparent");
   const [strokeWidth, setStrokeWidth] = useState(4);
   const [busyAction, setBusyAction] = useState<BusyAction | null>(null);
+  const [captureMode, setCaptureMode] = useState(false);
   const [error, setError] = useState("");
   const summary = useMemo(() => summarizeBoard(history.present), [history.present]);
   const titleId = `${idPrefix}-design-board-title`;
@@ -140,12 +143,23 @@ export function DesignBoard({
     }
   }
 
-  async function capturePage() {
+  function startPageCapture() {
+    setError("");
+    setCaptureMode(true);
+  }
+
+  function cancelPageCapture() {
+    if (busyAction === "capture") return;
+    setCaptureMode(false);
+    restoreCaptureButtonFocus();
+  }
+
+  async function capturePage(region: Rect) {
     setBusyAction("capture");
     setError("");
     try {
       const image = await createImageElement(
-        await captureBrowserViewport(),
+        await captureBrowserRegion(region),
         "image/jpeg",
         "screenshot",
       );
@@ -161,7 +175,13 @@ export function DesignBoard({
       setError(errorMessage(cause, t("captureFailed"), locale));
     } finally {
       setBusyAction(null);
+      setCaptureMode(false);
+      restoreCaptureButtonFocus();
     }
+  }
+
+  function restoreCaptureButtonFocus() {
+    window.requestAnimationFrame(() => captureButtonRef.current?.focus({ preventScroll: true }));
   }
 
   function undo() {
@@ -227,6 +247,19 @@ export function DesignBoard({
     onCancel();
   }
 
+  if (captureMode) {
+    return <PageCaptureOverlay
+      busy={busyAction === "capture"}
+      title={t("captureRegionTitle")}
+      help={t("captureRegionHelp")}
+      busyLabel={t("capturingRegion")}
+      tooSmallLabel={t("captureRegionTooSmall")}
+      cancelLabel={t("cancelCapture")}
+      onCancel={cancelPageCapture}
+      onSelect={(region) => void capturePage(region)}
+    />;
+  }
+
   const tools = (["select", "draw", "rectangle", "text"] as const);
 
   return <div className="a3s-design-layer" data-side="right">
@@ -271,7 +304,7 @@ export function DesignBoard({
           </div>
           <span className="a3s-design-divider" aria-hidden="true" />
           <div className="a3s-design-tool-group a3s-design-media" aria-label={t("imageHelp")}>
-            <button type="button" disabled={busy} aria-label={t("capturePage")} title={t("capturePageHelp")} onClick={() => void capturePage()}>
+            <button ref={captureButtonRef} type="button" disabled={busy} aria-label={t("capturePage")} title={t("capturePageHelp")} onClick={startPageCapture}>
               <DesignGlyph name="capture" /><span>{busyAction === "capture" ? t("capturingPage") : t("capturePage")}</span>
             </button>
             <button type="button" disabled={busy} title={t("uploadScreenshot")} onClick={() => fileInputRef.current?.click()}>
@@ -418,30 +451,6 @@ function readFile(file: File): Promise<string> {
     reader.onerror = () => reject(new Error("The screenshot could not be read."));
     reader.readAsDataURL(file);
   });
-}
-
-async function captureBrowserViewport(): Promise<string> {
-  const { domToJpeg } = await import("modern-screenshot");
-  const viewport = window.visualViewport;
-  return domToJpeg(document.documentElement, {
-    width: Math.max(1, Math.round(viewport?.width ?? window.innerWidth)),
-    height: Math.max(1, Math.round(viewport?.height ?? window.innerHeight)),
-    quality: 0.9,
-    scale: 1,
-    backgroundColor: pageBackgroundColor(),
-    maximumCanvasSize: 4_096,
-    timeout: 10_000,
-    features: { restoreScrollPosition: true },
-    filter: (node) => !(node instanceof Element && node.hasAttribute("data-a3s-testkit-overlay")),
-  });
-}
-
-function pageBackgroundColor(): string {
-  for (const element of [document.documentElement, document.body]) {
-    const color = window.getComputedStyle(element).backgroundColor;
-    if (color && color !== "transparent" && color !== "rgba(0, 0, 0, 0)") return color;
-  }
-  return "#ffffff";
 }
 
 function errorMessage(

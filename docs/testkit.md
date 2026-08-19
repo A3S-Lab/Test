@@ -514,11 +514,22 @@ multi-page documents, and infinite-canvas features that do not belong in a
 finding attachment.
 
 A reviewer may instead upload, paste, or drop a PNG/JPEG screenshot, then draw
-annotations over it. **Capture current page** renders only the visible browser
-page and excludes the Test Kit overlay. It does not call a display-capture API
-or request screen-sharing permission. If DOM capture fails because a page
-asset cannot be reproduced, the board reports the failure while upload,
-paste, and drop remain available.
+annotations over it. **Select screenshot area** temporarily replaces the board
+with a viewport selection layer. Dragging and releasing captures only that
+visible page region, while `Escape` cancels and returns focus to the board. The
+capture excludes the Test Kit overlay and does not call a display-capture API
+or request screen-sharing permission. If DOM capture fails because a page asset
+cannot be reproduced, the board reports the failure while upload, paste, and
+drop remain available.
+
+Node and text targets do not keep their original viewport rectangle as their
+primary marker geometry. While the overlay is open, page scrolling,
+nested-scroll-container movement, viewport scrolling, and resizing schedule one
+animation-frame refresh; the marker and candidate editor then resolve the live
+DOM elements and read fresh `getBoundingClientRect()` values. A stored
+`target.region` remains the source of truth for region, drawing, and Layout
+targets, adjusted by `target.regionScroll`, and is only a fallback when a node
+target can no longer be resolved.
 
 The board runs entirely inside the Test Kit Shadow DOM and is part of the MIT
 licensed Test Kit implementation. It has no external drawing runtime, license

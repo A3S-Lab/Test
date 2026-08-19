@@ -13,6 +13,154 @@ ${DESIGN_REFERENCE_CSS}
   justify-content: flex-end;
 }
 
+.a3s-page-capture {
+  position: fixed;
+  z-index: 24;
+  inset: 0;
+  overflow: hidden;
+  background: rgb(5 12 26 / 48%);
+  cursor: crosshair;
+  pointer-events: auto;
+  touch-action: none;
+  user-select: none;
+}
+
+.a3s-page-capture.has-selection {
+  background: transparent;
+}
+
+.a3s-page-capture:focus-visible {
+  outline: none;
+}
+
+.a3s-page-capture-bar {
+  position: fixed;
+  z-index: 3;
+  top: max(14px, env(safe-area-inset-top));
+  left: 50%;
+  display: grid;
+  width: min(510px, calc(100vw - 24px));
+  min-height: 52px;
+  padding: 7px 8px 7px 10px;
+  border: 1px solid rgb(255 255 255 / 18%);
+  border-radius: 12px;
+  background: #0e1b35;
+  box-shadow: 0 16px 42px rgb(3 8 18 / 34%), 0 3px 10px rgb(3 8 18 / 24%);
+  color: #ffffff;
+  cursor: default;
+  grid-template-columns: 32px minmax(0, 1fr) 34px;
+  align-items: center;
+  gap: 9px;
+  transform: translateX(-50%);
+}
+
+.a3s-page-capture-icon {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  background: var(--a3s-blue);
+  color: #ffffff;
+  place-items: center;
+}
+
+.a3s-page-capture-icon svg,
+.a3s-page-capture-bar button svg {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.a3s-page-capture-copy {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+}
+
+.a3s-page-capture-copy strong {
+  overflow: hidden;
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.a3s-page-capture-copy small {
+  overflow: hidden;
+  color: #c7d6ee;
+  font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.a3s-page-capture-bar button {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  min-height: 34px;
+  padding: 0;
+  border-color: transparent;
+  background: transparent;
+  color: #d8e3f5;
+  place-items: center;
+}
+
+.a3s-page-capture-bar button:hover {
+  background: rgb(255 255 255 / 10%);
+  color: #ffffff;
+}
+
+.a3s-page-capture-selection {
+  position: fixed;
+  z-index: 1;
+  border: 2px solid #ffffff;
+  background: transparent;
+  box-shadow: 0 0 0 1px var(--a3s-blue), 0 0 0 9999px rgb(5 12 26 / 58%);
+  pointer-events: none;
+}
+
+.a3s-page-capture-selection::before,
+.a3s-page-capture-selection::after {
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  border: 2px solid #ffffff;
+  background: var(--a3s-blue);
+  content: "";
+}
+
+.a3s-page-capture-selection::before {
+  top: -5px;
+  left: -5px;
+}
+
+.a3s-page-capture-selection::after {
+  right: -5px;
+  bottom: -5px;
+}
+
+.a3s-page-capture-size {
+  position: fixed;
+  z-index: 2;
+  display: grid;
+  width: 88px;
+  height: 26px;
+  border-radius: 7px;
+  background: #0e1b35;
+  box-shadow: 0 5px 16px rgb(3 8 18 / 28%);
+  color: #ffffff;
+  font: 700 10px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+  pointer-events: none;
+  place-items: center;
+}
+
+.a3s-page-capture[aria-busy="true"] {
+  cursor: progress;
+}
+
 .a3s-design-board {
   display: flex;
   width: min(880px, calc(100vw - 24px));
@@ -391,6 +539,18 @@ ${DESIGN_REFERENCE_CSS}
 }
 
 @media (max-width: 600px) {
+  .a3s-page-capture-bar {
+    top: max(8px, env(safe-area-inset-top));
+    width: calc(100vw - 16px);
+    min-height: 58px;
+  }
+
+  .a3s-page-capture-bar button {
+    width: 44px;
+    height: 44px;
+    min-height: 44px;
+  }
+
   .a3s-design-layer {
     padding: 0;
   }

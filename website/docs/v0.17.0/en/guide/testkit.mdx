@@ -168,10 +168,11 @@ image, history, and style actions share one localized icon toolbar.
 
 The built-in SVG board supports freehand strokes, rectangles, text, selection,
 movement, resizing, styling, undo, and redo on a bounded 960 × 600 surface. A
-reviewer may also capture only the visible browser page without screen-sharing
-permission, or upload, paste, or drop a PNG or JPEG screenshot, then annotate
-it before attaching it to the finding. The captured image excludes the Test
-Kit overlay.
+reviewer may also choose **Select screenshot area**, drag over one part of the
+visible browser page, and release to add that crop to the board. `Escape`
+cancels the temporary selection layer. This DOM capture excludes the Test Kit
+overlay and does not request screen-sharing permission. Upload, paste, and drop
+remain available for PNG or JPEG screenshots.
 
 The board runs inside the Test Kit Shadow DOM and does not load a drawing SDK,
 license key, watermark, remote font, or CDN asset. It admits no more than 250

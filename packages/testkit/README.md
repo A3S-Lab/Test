@@ -180,9 +180,15 @@ Mode. After selecting an element or region, a reviewer can open the design
 board. Its built-in, dependency-free SVG editor uses a constrained 960 × 600
 surface with freehand, rectangle, text, selection, movement, resize, styling,
 keyboard, and history tools, and admits at most 250 objects. It can also
-capture the visible browser page directly, excluding the Test Kit overlay,
-without requesting screen-sharing permission. Upload, paste, and drop remain
-available for PNG/JPEG references.
+open a viewport selection layer so the reviewer can drag over one visible page
+area and release to add that crop to the board. The capture excludes the Test
+Kit overlay and never requests screen-sharing permission. `Escape` cancels the
+selection; upload, paste, and drop remain available for PNG/JPEG references.
+
+Node and text markers resolve their current DOM elements again after page or
+nested-container scrolling and viewport changes. Stored viewport regions remain
+document-aligned through their captured scroll offset and act only as a fallback
+for node targets that no longer resolve.
 
 Keep the review overlay development-only in normal integrations. The board
 runs entirely inside the Test Kit Shadow DOM. It does not load a drawing SDK,

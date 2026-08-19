@@ -79,6 +79,13 @@ Every draft has a stable ID, creation time, target, instruction, optional succes
 | `target.regionScroll` | Optional page scroll offset captured with the viewport region   |
 | `relations`           | Currently an explicit `conflicts_with` relation                 |
 
+Node and text markers are positioned from their currently resolved DOM
+elements. Page scrolling, nested scroll containers, visual viewport movement,
+and resizing trigger a bounded refresh that reads fresh
+`getBoundingClientRect()` values. Stored regions stay aligned through
+`target.regionScroll` and are used for region, drawing, and Layout targets or
+as a fallback when a node no longer resolves.
+
 At submission, Test Kit reads the fresh revision and adds `contextRevision`, page, route, viewport, component and source hints, semantic locators, target and nearby nodes, facts, and bounded UI understanding. The complete `context` is marked `untrusted: true`.
 
 Page text, DOM attributes, facts, and instructions are never concatenated into hidden system instructions. The coding agent may inspect them as evidence but must apply its own authority and repository rules to every code operation.

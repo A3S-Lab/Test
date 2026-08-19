@@ -71,20 +71,23 @@ export function markerRects(target: RepairTarget, bridge: PageContextBridge | nu
   if (!bridge) return [];
   const region = currentTargetRegion(target);
   if (target.layout && region) return [region];
-  if (region && (target.kind === "region" || target.kind === "drawing" || target.nodeIds.length > 1)) {
-    return [region];
-  }
   const nodeRects = target.nodeIds.flatMap((nodeId) => {
     const element = bridge.resolve(nodeId);
     return element ? [element.getBoundingClientRect()] : [];
   });
-  if (nodeRects.length === 0) return region ? [region] : [];
-  if (nodeRects.length === 1) return nodeRects;
-  const left = Math.min(...nodeRects.map((rect) => rect.x));
-  const top = Math.min(...nodeRects.map((rect) => rect.y));
-  const right = Math.max(...nodeRects.map((rect) => rect.x + rect.width));
-  const bottom = Math.max(...nodeRects.map((rect) => rect.y + rect.height));
-  return [{ x: left, y: top, width: right - left, height: bottom - top }];
+  if ((target.kind === "node" || target.kind === "text") && nodeRects.length > 0) {
+    return [boundingRect(nodeRects)];
+  }
+  if (region) return [region];
+  return nodeRects.length > 0 ? [boundingRect(nodeRects)] : [];
+}
+
+function boundingRect(rects: RectLike[]): Rect {
+  const left = Math.min(...rects.map((rect) => rect.x));
+  const top = Math.min(...rects.map((rect) => rect.y));
+  const right = Math.max(...rects.map((rect) => rect.x + rect.width));
+  const bottom = Math.max(...rects.map((rect) => rect.y + rect.height));
+  return { x: left, y: top, width: right - left, height: bottom - top };
 }
 
 export function repairId(prefix: string): string {
