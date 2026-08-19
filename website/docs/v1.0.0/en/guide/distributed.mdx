@@ -1,0 +1,311 @@
+---
+title: Workers and distributed execution
+description: Deploy fixed-capability remote workers, build immutable shard plans, transport evidence safely, and analyze distributed test results.
+---
+
+# Workers and distributed execution
+
+Distributed execution solves capacity, platform, and physical-device scheduling. It does not explore an unknown workflow. Stabilize a deterministic Web, GUI, or TUI suite locally before giving it to the coordinator for sharding.
+
+A remote request never becomes a shell command. Worker startup fixes the browser adapter, Web policy, GUI application, TUI executable, credentials, and resource boundary. The coordinator can submit only admitted suite inputs and an exact scenario selection.
+
+## Four independent protocols
+
+| Protocol                         | Discovery command                   | Responsibility                                                    |
+| -------------------------------- | ----------------------------------- | ----------------------------------------------------------------- |
+| `a3s.test.worker-capabilities/2` | `worker schema`, `worker inventory` | Runtime, surfaces, drivers, capacity, platform limits             |
+| `a3s.test.remote-worker/3`       | `worker remote schema`              | Inspect, submit, status, renew lease, and cancel                  |
+| `a3s.test.remote-artifacts/1`    | `worker artifacts schema`           | Report index, artifact listing, digest-bound chunk reads          |
+| `a3s.test.distributed-run/2`     | `distributed schema`                | Coordinator planning, dispatch, validation, history, and analysis |
+
+Separate versioning prevents the execution protocol from gaining arbitrary file-read authority. It also prevents an unauthenticated inventory from granting scheduling authority.
+
+## 1. Produce worker inventory
+
+### Read compiled local capability
+
+```bash
+a3s-test worker inventory --max-parallel-scenarios 1
+```
+
+Inventory contains at least protocol, runtime, `max_parallel_scenarios`, and a non-empty canonically ordered surface list. Surface order is Web, GUI, then TUI. Concurrency admits 1 through 64.
+
+### Probe Web explicitly
+
+```bash
+a3s-test worker inventory \
+  --browser-driver standalone \
+  --browser-executable agent-browser \
+  --max-parallel-scenarios 4
+```
+
+Web capability is absent by default. It appears only when a typed integration is explicitly selected and the executable passes a real version probe and feature admission. A requested probe failure fails the whole command and never silently degrades to TUI-only inventory.
+
+### Probe one GUI desktop explicitly
+
+```bash
+a3s-test worker inventory \
+  --gui-host-profile /etc/a3s-test/gui-host.acl \
+  --max-parallel-scenarios 1
+```
+
+A GUI inventory represents one physical desktop and therefore has exactly one lane. A read-only CUA probe checks the locked protocol, tool vocabulary, Accessibility, Screen Recording, application identity, policy digest, and permission attribution without launching or attaching to the application.
+
+TUI capability comes from the compiled `unix_pty` or `windows_con_pty` backend and declares hard limits for columns, rows, scrollback, output bytes, and terminal cells. A platform without a reviewed backend fails closed.
+
+Inventory is self-reported scheduling evidence, not authentication or authorization. Deployment must bind an external image digest and independently control worker identity, network, filesystem, credentials, CPU, memory, and process resources.
+
+## 2. Start a fixed-authority worker
+
+This TUI-only example binds the reference server to loopback. External TLS and client identity belong to deployment infrastructure.
+
+```bash
+export A3S_TEST_WORKER_AUTHORIZATION='Bearer replace-with-a-secret'
+
+a3s-test worker serve \
+  --listen 127.0.0.1:9400 \
+  --state-root /var/lib/a3s-test-worker \
+  --instance-id runner-west-1 \
+  --image-digest sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa \
+  --authorization-env A3S_TEST_WORKER_AUTHORIZATION \
+  --tui-executable /opt/example-app/bin/test-console \
+  --max-queued-jobs 16 \
+  --compact
+```
+
+A Web worker also fixes its adapter and allowed origins.
+
+```bash
+a3s-test worker serve \
+  --listen 127.0.0.1:9400 \
+  --state-root /var/lib/a3s-test-worker \
+  --instance-id web-west-1 \
+  --image-digest sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa \
+  --authorization-env A3S_TEST_WORKER_AUTHORIZATION \
+  --browser-driver standalone \
+  --browser-executable agent-browser \
+  --web-allow-origin https://preview.example.test \
+  --web-allow-domain cdn.example.test \
+  --max-parallel-scenarios 4
+```
+
+A GUI worker fixes CUA and the application through deployment-owned ACL.
+
+```acl
+gui_host "desktop-primary" {
+    endpoint = "installed_daemon"
+    proxy_executable = "/opt/a3s/bin/cua-driver"
+    policy_file = "/etc/a3s-test/cua-policy.yaml"
+    macos_bundle_id = "com.example.Editor"
+    target = "launch"
+    arguments = ["--safe-mode"]
+    profile = "semantic"
+    permission_source = "driver_daemon"
+    permissions = ["accessibility", "screen_recording"]
+}
+```
+
+```bash
+a3s-test worker serve \
+  --listen 127.0.0.1:9400 \
+  --state-root /var/lib/a3s-test-gui-worker \
+  --instance-id desktop-primary-1 \
+  --image-digest sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc \
+  --authorization-env A3S_TEST_WORKER_AUTHORIZATION \
+  --gui-host-profile /etc/a3s-test/gui-host.acl \
+  --max-parallel-scenarios 1
+```
+
+A remote submission cannot override any profile field. The fixed TUI executable remains an authority boundary. Selecting a shell or an application with shell escapes grants that capability to authenticated jobs, and deployment must intend that explicitly.
+
+### Credentials never reach child processes
+
+`--authorization-env` supplies the complete exact Authorization header. The value is not printed and is removed before browser probes, Web commands, CUA proxy creation, and TUI child creation. The reference protocols listen only on loopback `/v1/worker` and `/v1/artifacts`. Public TLS, rate limiting, and client authentication are external responsibilities.
+
+## 3. Understand remote job lifecycle
+
+Every submission binds these immutable identities.
+
+- Portable `job_id` and globally immutable `dispatch_id`
+- Exact worker instance ID
+- External image SHA-256
+- Complete admitted inventory SHA-256
+- Issue time, absolute deadline, and renewable lease expiry
+- Scenario concurrency, required surfaces, and sorted exact scenario IDs
+- Exact host-permission digest for GUI jobs
+- Sorted inline input bundle and complete request digest
+
+Remote commands are limited to `inspect`, `submit`, `status`, `renew_lease`, and `cancel`. They contain no executable, environment, or arbitrary command field.
+
+```text
+submit
+    -> queued
+    -> running
+    -> passed | failed | timed_out | cancelled | interrupted
+```
+
+An exact job and dispatch replay returns the existing snapshot. Reusing either ID with different content fails closed. A lease can extend a non-terminal claim only monotonically and never beyond the job deadline. Cancel addresses one exact job and dispatch.
+
+The worker persists transitions in append-only event files. After a process restart, the last durable non-terminal state becomes `interrupted`; it is never guessed successful or resumed automatically. One worker executes one job at a time behind a bounded job queue, while scenario concurrency inside that job remains bounded by deployment.
+
+### Admit the complete input bundle before materialization
+
+Inputs use portable relative paths, canonical Base64, and per-file SHA-256. Paths reject empty components, `.`, `..`, backslashes, roots, trailing dots, Windows reserved devices, and ASCII case-folding collisions. The complete bundle passes count, per-file, total-byte, encoding, and digest admission in memory before any private job files are materialized.
+
+A failed submission therefore cannot leave partial input behind or use path differences and links to overwrite worker files.
+
+## 4. Read results only through the artifact protocol
+
+An execution response returns terminal summary, scenario counts, and a report descriptor, not report bytes. The coordinator follows this independent read-only path.
+
+```text
+list terminal report
+    -> bind job_id + dispatch_id + request_digest
+    -> list indexed report and evidence descriptors
+    -> read bounded Base64 chunks by exact digest
+    -> verify complete length and SHA-256
+    -> parse and cross-check suite result
+```
+
+`list_reports` returns at most 100 records per page and `list_artifacts` at most 256 descriptors. A cursor binds the original query or immutable request digest, so changing a filter invalidates it. One read returns at most 1,048,576 bytes and can select only an indexed report or evidence path, never an arbitrary server path.
+
+Before returning a chunk, the worker rechecks regular-file type, link or reparse-point absence, canonical containment, size, and complete SHA-256. A replaced or corrupted file never yields an apparently valid partial chunk.
+
+### Two retention tiers
+
+| Tier             | Default retention        | When the bound is exceeded                                        |
+| ---------------- | ------------------------ | ----------------------------------------------------------------- |
+| Complete payload | 256 jobs, 20 GiB, 7 days | Inputs, report bytes, and evidence are removed                    |
+| Compact index    | 10,000 jobs, 90 days     | Terminal snapshot and descriptors remain, then job record expires |
+
+After payload pruning, the index reports `payload_state = "pruned"`. It still supports history and status lookup but cannot restore deleted bytes. Index expiry ends status lookup and idempotent replay for those job and dispatch IDs.
+
+Retention runs after completion, on restart, and at the next idle age deadline. A durable index writes `pruning` before deletion and `pruned` after it, so restart can complete interrupted garbage collection. Unsafe evidence converts an otherwise successful executor result into a durable failed job without following the external link target.
+
+## 5. Author distributed ACL
+
+```acl
+distributed_run "ci" {
+    input_root = "."
+    manifest = "tests/e2e/smoke.acl"
+    additional_inputs = ["tests/fixtures/account.json"]
+    history_root = ".a3s-test/distributed/ci"
+    history_window = 20
+    history_max_runs = 100
+    history_max_age_ms = 7776000000
+    job_timeout_ms = 600000
+    lease_ms = 60000
+    poll_interval_ms = 250
+    http_timeout_ms = 30000
+
+    worker "runner-west" {
+        endpoint = "https://runner-west.example.test"
+        image_digest = "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        inventory_digest = "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+        authorization_env = "A3S_TEST_WORKER_AUTHORIZATION_WEST"
+        max_parallel_scenarios = 4
+    }
+
+    quarantine "known-checkout-race" {
+        reason = "Known checkout state race"
+        owner = "checkout-team"
+        issue = "https://issues.example.test/123"
+        expires_at_ms = 4102444800000
+    }
+}
+```
+
+A GUI worker also binds the permission digest from live inventory and retains one exclusive lane.
+
+```acl
+worker "desktop-primary" {
+    endpoint = "https://desktop-primary.example.test"
+    image_digest = "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+    inventory_digest = "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+    host_permission_digest = "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+    authorization_env = "A3S_TEST_WORKER_AUTHORIZATION_DESKTOP"
+    max_parallel_scenarios = 1
+}
+```
+
+`manifest` is relative to `input_root`. The suite manifest, upload sources, Surface Contracts, and provenance enter the bundle automatically. Use `additional_inputs` only for other regular files. Admission permits at most 1,024 non-empty files, 16 MiB per file, and 32 MiB decoded in total. Every path component rejects links and reparse points.
+
+A config admits 1 through 64 workers. An endpoint must be an HTTPS origin or explicit loopback HTTP origin without path, credentials, query, or fragment. `authorization_env` requires the `A3S_TEST_WORKER_AUTHORIZATION_` prefix and its value is never serialized. Omitting `inventory_digest` does not weaken the plan; live inspection still writes the actual digest into the immutable plan.
+
+## 6. Plan before running
+
+```bash
+a3s-test distributed plan tests/distributed.acl --compact
+a3s-test distributed run tests/distributed.acl --json
+```
+
+Planning is not an offline syntax check. The coordinator contacts each execution and artifact endpoint concurrently and validates instance, image, inventory, limits, and any GUI permission before matching scenarios.
+
+Deterministic ordering has three levels.
+
+1. A scenario eligible for fewer workers is placed first.
+2. For the same suite digest, recent pass or product-failure history provides median duration, with longer scenarios placed first.
+3. Without history, scenario timeout is the estimate, followed by stable worker and lane scoring to balance completion.
+
+Every scenario appears exactly once. Each used worker receives one shard binding instance, image, inventory, surface, concurrency, predicted duration, scenario IDs, and optional GUI permission digest. The plan digest also covers quarantine.
+
+Before transport, run validates each submission again against inspected limits. Shards execute concurrently, each with an independent lease supervisor so slow status polling cannot block renewal. The first Ctrl+C stops undispatched work, sends exact cancel requests for every known job and dispatch, and retains a cancelled analysis.
+
+## The coordinator does not trust a one-line passed summary
+
+After reading report bytes, the coordinator rechecks these bindings.
+
+- Job, dispatch, request digest, offset, and EOF for every chunk
+- Descriptor media type, byte length, and complete SHA-256
+- Suite digest, run ID, and aggregate status
+- Scenario counts, exact ID set, and surface mapping
+- Agreement between shard summary and report contents
+
+Any missing or conflicting evidence becomes a `shard_issues` infrastructure error. A remote terminal summary cannot determine the test outcome by itself.
+
+## Quarantine suppresses only product failure
+
+A quarantine label exactly matches a scenario ID and requires reason, owner, issue, and a future `expires_at_ms`. Unknown, duplicate, or expired targets fail planning. Admission is frozen at run start and bound into the plan digest.
+
+| May become quarantined failure | Never suppressible                                      |
+| ------------------------------ | ------------------------------------------------------- |
+| `test.assert.*`                | Driver, cleanup, transport, report, and artifact errors |
+| `test.contract.mismatch`       | Inconclusive contract results                           |
+| `test.contract.state_mismatch` | Timeout, cancellation, and interruption                 |
+
+A passing quarantined scenario is reported as `quarantined_pass`, making stale exceptions visible for removal.
+
+## History, flakes, and exit codes
+
+The history root is exclusively locked and atomically published.
+
+```text
+.a3s-test/distributed/ci/
+├── runs/
+└── reports/
+    └── <run-id>.json
+```
+
+The latest retained run is the change baseline even if the suite digest changed, allowing added, removed, fixed, and regressed scenario classification. Duration and flake statistics use only history with the exact same suite digest, so changed test semantics do not become reliability noise.
+
+| Exit code | Meaning                                                    |
+| --------- | ---------------------------------------------------------- |
+| `0`       | Passed, possibly with quarantined product failures         |
+| `1`       | Required assertion or Surface Contract failure             |
+| `2`       | Coordinator, worker, transport, cleanup, or report failure |
+| `124`     | Timed out                                                  |
+| `130`     | Cancelled                                                  |
+
+CI should treat `shard_issues` as separate infrastructure evidence. It must not retry exit 2 into a product pass.
+
+## Deployment checklist
+
+1. Local `check` and `run` are stable and do not depend on fixed sleeps.
+2. Worker image digest comes from the deployed image rather than self-reported inventory.
+3. Web executable, GUI host profile, or TUI executable is fixed at worker startup.
+4. A GUI worker passed a real host probe and keeps one desktop per lane.
+5. Authorization exists only in deployment environment and is absent from children.
+6. Every scenario appears once in the plan and worker identities and digests are expected.
+7. Artifact retention satisfies the audit window and the effect of pruned payload is accepted.
+8. Quarantine has an owner, issue, and short expiry and cannot hide infrastructure errors.
+9. First-interrupt cancellation produces a retained cancelled analysis with no surviving owned process.

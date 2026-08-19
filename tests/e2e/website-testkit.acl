@@ -21,7 +21,7 @@ suite "website-testkit-experience" {
         }
 
         expect "published-install-version" {
-            text = "CLI + Agent Skill · v0.16.2"
+            text = "CLI + Agent Skill · v1.0.0"
         }
 
         wait "motion-sequence-active" {
@@ -42,10 +42,6 @@ suite "website-testkit-experience" {
 
         wait "motion-sequence-resumed" {
             visible = css(".test-motion-toggle[aria-pressed='false']")
-        }
-
-        expect "release-candidate-disclosure" {
-            text = "当前文档已进入下一版本准备阶段"
         }
 
         expect "source-contract-boundary" {

@@ -1,0 +1,397 @@
+---
+title: 从页面探索到稳定回归
+description: 用 Agent 会话从最新观察走通未知路径，再把明确动作、等待和断言保存为可重复执行的 ACL 套件。
+---
+
+# 从页面探索到稳定回归
+
+面对未知页面时，编码 Agent 从最新观察开始，每次只选择一个动作。路径跑通且成功条件能够由本地证据确认后，再把明确动作、等待和断言写成 ACL，交给本地开发或 CI 重复执行。两种工作方式共用动作、驱动、证据和清理规则。
+
+| 工作流            | 谁做规划                 | 适合场景                          | 入口                        |
+| ----------------- | ------------------------ | --------------------------------- | --------------------------- |
+| Agent 会话        | 调用方编码 Agent         | 探索、问题复现、未知路径、UX 评审 | 持久 Web CLI 或 Web/GUI MCP |
+| ACL 套件          | 关闭式类型化清单         | 稳定回归、CI、跨界面测试          | `check` 与 `run`            |
+| 嵌入式 Agent 循环 | 宿主注入的 `LlmProvider` | 把 A3S Test 嵌入自己的产品        | `a3s-test-agent` 库         |
+
+## Agent 会话
+
+调用方 Agent 始终保留规划权。每一轮遵守相同顺序。
+
+1. 从 A3S Test 获取新的观察和 `observation_id`。
+2. 根据可见状态选择一个动作。
+3. A3S Test 校验动作 Schema、能力、来源和策略。
+4. 驱动执行动作，状态变化后旧引用立即失效。
+5. Agent 重新观察，直到本地证据证明成功或失败。
+
+语义引用不是长期定位器。`@e1` 或 Test Kit 的 `@c7` 必须绑定产生它的最新观察。A3S Test 不允许模型声称自己看到了未被驱动或 Test Kit 记录的状态。
+
+常用命令如下。
+
+```bash
+a3s-test agent start <url> --session <name> --goal <goal> --success <condition>
+a3s-test agent observe --session <name> --interactive --json
+a3s-test agent click <ref> --session <name> --observation <id> --json
+a3s-test agent finish --session <name> --status passed --summary <text> --json
+```
+
+`agent act --action-json` 暴露完整动作 Schema。v1.0.0 的动作协议修订为 15，其中包含修订 7 的选择范围 `insert_text`、修订 8 的实时控件状态断言、修订 9 的目标绑定渲染输出断言、修订 10 的有序渲染文本集合、修订 11 的双目标渲染布局关系、修订 12 的 visual viewport 与指针命中断言、修订 13 的精确或组件范围焦点归属、修订 14 的展开、按压、只读、必填与有效性状态，以及修订 15 的有界 visual viewport 覆盖率。`insert_text` 仍然只作用于先前已经建立的编辑上下文，不携带新的目标或定位权限。
+
+## ACL 套件
+
+稳定路径使用 ACL 表达。
+
+```acl
+suite "product-smoke" {
+    version = 1
+
+    scenario "home-page" {
+        name = "Open the home page"
+        surface = "web"
+        timeout_ms = 30000
+
+        navigate "open" {
+            url = "https://example.com"
+        }
+
+        wait "loaded" {
+            load = "networkidle"
+        }
+
+        expect "heading" {
+            text = "Example Domain"
+        }
+
+        screenshot "evidence" {
+            path = "home.png"
+        }
+    }
+}
+```
+
+先做静态准入，再打开界面。
+
+```bash
+a3s-test check tests/e2e/smoke.acl --json
+a3s-test run tests/e2e/smoke.acl --json
+```
+
+未知块、未知属性、重复标识、歧义条件、非法定位器和越界证据路径都会在表面启动前被拒绝。断言失败、超时和已经派发但结果不明确的动作不会自动重放。
+
+## 证明控件的实时状态
+
+仅凭元素存在和文字正确，并不能证明表单可用。按钮可能可见却不可用，复选框可能存在却没有勾选，多选框也可能展示了正确标签却保留了错误选项。修订 8 可以直接观察这些状态。
+
+```acl
+expect "display-name" {
+    target = label("Display name")
+    value = "Ada"
+}
+
+expect "submit" {
+    disabled = role("button", "Submit")
+}
+
+expect "terms" {
+    checked = label("Accept terms")
+}
+
+expect "review" {
+    selected = role("option", "Review")
+}
+
+expect "status" {
+    target = role("listbox", "Publication status")
+    selected_values = ["review", "published"]
+    stable_for_ms = 300
+    sample_interval_ms = 25
+}
+```
+
+完整的成对条件包括 `enabled`/`disabled`、`checked`/`unchecked` 和 `selected`/`unselected`。`value` 与 `selected_values` 另写一个 `target`。预期选项不能重复，并按规范化后的精确集合比较。顺序不影响结果，但多一个或少一个值都会失败。`selected_values = []` 只有在一个真实目标确实暴露了空选择时才成立。
+
+定位目标和比较状态是两个独立的证据步骤。
+
+| 驱动实际观察到的情况                 | 结果                                                                                    |
+| ------------------------------------ | --------------------------------------------------------------------------------------- |
+| 唯一目标、状态受支持、值一致         | 通过，并记录结构化 expected/actual 证据                                                 |
+| 唯一目标、状态受支持、值不同         | 返回对应的 `test.assert.*` 产品不匹配                                                   |
+| 没有目标                             | `test.driver.*.target_not_found`，绝不能充当 disabled、unchecked、unselected 或空值证据 |
+| 匹配多个目标                         | `test.driver.*.target_ambiguous`                                                        |
+| 目标非法、状态不受支持或输出结构错误 | 保留 surface 驱动原始错误                                                               |
+
+| Surface | 精确值                    | 布尔状态                                         | 已选值集合           |
+| ------- | ------------------------- | ------------------------------------------------ | -------------------- |
+| Web     | 实时 DOM `value`          | 原生实时属性优先，自定义控件再读取布尔 ARIA 状态 | 原生多选框的精确集合 |
+| GUI     | CUA 确实提供 value 时支持 | CUA 暴露类型化状态前不支持                       | 不支持               |
+| TUI     | 不支持                    | 不支持                                           | 不支持               |
+
+Web 语义目标会穿透开放的 Shadow DOM，并识别原生多选框的 `listbox` 与 `option` role。直接浏览器 ref 可以读取 value、enabled、原生 checkbox/radio 的 checked 状态及已准入的 ARIA 状态；standalone ref 协议还不能读取原生 option 选择或多选数组，这两类断言应使用稳定语义目标或 CSS。Page Context ref 如果能在派发前解析成这类目标，仍然可以使用。
+
+当前检入证据覆盖 400/400 个确定性 Web 分类、100/100 个稳定状态窗口、100/100 个瞬态状态拒绝，以及真实 standalone Chromium 中 15/15 个正向检查、4/4 个负向错误分类和零私有运行目录泄漏。
+
+## 证明文案、重复项数量和渲染顺序都正确
+
+页面级文字断言可能因为同一句话出现在错误区域而误通过；单元素可见性断言也无法发现列表漏项、重复或错序。修订 9 与修订 10 直接观察这些事实。
+
+```acl
+expect "total-copy" {
+    target = testid("order-total")
+    rendered_text = "Total $42.00"
+    stable_for_ms = 300
+    sample_interval_ms = 25
+}
+
+expect "three-visible-lines" {
+    target = css("[data-order-line]")
+    visible_count = 3
+}
+
+expect "ordered-lines" {
+    target = css("[data-order-line]")
+    rendered_texts = ["Keyboard × 1", "Mouse × 2", "Shipping", "Shipping"]
+    stable_for_ms = 300
+    sample_interval_ms = 25
+}
+
+expect "no-lines" {
+    target = css("[data-missing-order-line]")
+    rendered_texts = []
+}
+
+expect "no-visible-errors" {
+    target = role("alert", "Checkout error")
+    visible_count = 0
+}
+```
+
+两种断言使用不同的身份规则。
+
+| 问题                           | 必需证据                       | 失败归属                                                                   |
+| ------------------------------ | ------------------------------ | -------------------------------------------------------------------------- |
+| 这个组件实际渲染了什么文案     | 唯一可见目标及其规范化渲染文本 | 零个或多个目标属于驱动错误；已观察文案不同才是 `test.assert.rendered_text` |
+| 这个定位器产生了多少个可见元素 | 完整可见集合，包括空集合       | 非法定位器属于驱动错误；已观察数量不同才是 `test.assert.visible_count`     |
+| 可见文案有哪些，顺序是否正确   | 保留重复项的完整规范化文本向量 | 非法或超限集合属于驱动错误；向量不同时才是 `test.assert.rendered_texts`    |
+
+文本规范化会去掉两端空白并折叠连续空白，所以嵌套标签和格式换行不会制造偶然差异。`rendered_texts` 对每一项独立应用同一规则，不排序也不去重。空定位器产生 `[]`，`["Shipping", "Shipping"]` 与 `["Shipping"]` 仍然不同。ACL 与 Web 都把向量限制为最多 256 项。`visible_count = 0` 和 `rendered_texts = []` 都是定位器实际求值后的正向证据，不是“ref 找不到”的捷径。两种集合断言都接受语义或 CSS 定位器，并拒绝观察 ref 与 visual point。
+
+CSS 数量遵循视觉渲染。单独的 `aria-hidden` 仍有像素，因此计数；hidden、display-none、visibility-hidden、完全透明和零几何元素不计数。语义数量遵循可访问交互平面，会排除可访问性隐藏祖先，并穿透开放 Shadow DOM。两者都不声称完成截图级遮挡判断或 viewport 相交判断。
+
+修订 9 数据集精确分类 600/600 个标量文案与数量案例。修订 10 新增 600/600 个有序向量案例，覆盖匹配、错序、重复项或内容错误、空集合匹配、空集合与非空预期不符，以及非法 selector。组合稳定性数据集接受 300/300 个持续一致的标量文案、向量和数量窗口，并拒绝 300/300 个瞬态窗口。真实 Chromium CLI 回归证明 12 个通过观察、12 个错误类别、三个通过和三个被拒绝的 100 ms 窗口，以及准确 runtime 清理。
+
+## 用渲染几何证明空间关系
+
+Page Context 可以描述几何，但回归测试仍然需要明确的产品断言。修订 11 在同一次 surface 观察中比较两个重新解析的矩形。
+
+```acl
+expect "checkout-below-summary" {
+    target = testid("checkout")
+    relative_to = role("region", "Order summary")
+    layout = "below"
+    tolerance_px = 1
+    stable_for_ms = 300
+    sample_interval_ms = 25
+}
+```
+
+封闭关系词表覆盖方向关系 `above`、`below`、`left_of`、`right_of`，包含关系 `contains`、`inside`，相交关系 `overlaps`、`not_overlapping`，六种边缘或中心对齐，以及宽、高、尺寸相同。容差必须是 0 到 1,024 的整数 CSS 像素。方向与包含允许边界在容差内侵入，相交要求两个轴的交集都大于容差，对齐与尺寸则比较绝对差。
+
+两个目标都必须是可重复解析的语义或 CSS 定位器。浏览器 ref 与 visual point 的几何只属于一次观察，因此在 ACL 准入阶段失败。当前 Page Context ref 只有在两个目标都解析成稳定定位器后才能使用。Web 随后在一次页面求值中解析并读取两个矩形，避免动态页面把不同时间点的几何拼接成伪证据。
+
+CSS 遵循视觉渲染可见性，因此仅设置 `aria-hidden` 但仍有像素的目标可以测量。语义定位器遵循可访问交互平面，会排除可访问性隐藏祖先，并穿透开放 Shadow DOM。缺失、歧义、非法、语义隐藏或畸形几何仍由驱动负责；只有两个合法矩形违反指定关系时才返回 `test.assert.layout`。
+
+通过结果记录两个目标、两个矩形、关系、容差与 `matched = true`。稳定性采样把完整载荷保存在 `assertion.first` 和 `assertion.last` 中，后续关系不成立时返回 `test.assert.unstable`。GUI 要求两个 frame 来自同一份新鲜 CUA snapshot；TUI 不会把终端单元格冒充浏览器几何，而是明确关闭失败。
+
+当前检入证据精确分类 3,400/3,400 个确定性关系案例，接受 100/100 个持续窗口，拒绝 100/100 个瞬态窗口，并在 standalone Chromium 中验证全部 17 种关系、25 个正向断言和 15 个负向或驱动错误案例，同时完成精确 fixture 与 runtime 清理。
+
+## 证明视口呈现程度与指针可达性
+
+渲染可见性只证明存在边界盒，不能证明目标在哪里、进入视口多少，也不能证明指针最终命中了谁。修订 12 与修订 15 分别建模这些事实。
+
+```acl
+expect "checkout-in-view" {
+    in_viewport = testid("checkout")
+}
+
+expect "checkout-mostly-visible" {
+    target = testid("checkout")
+    viewport_coverage_at_least = 80
+}
+
+expect "drawer-mostly-outside" {
+    target = css("#drawer")
+    viewport_coverage_at_most = 10
+}
+
+expect "checkout-pointer-hit" {
+    pointer_reachable = testid("checkout")
+    stable_for_ms = 300
+    sample_interval_ms = 25
+}
+```
+
+只要目标有正面积进入 visual viewport 就满足要求时，使用 `in_viewport`。必须至少呈现某个有效比例时，使用 `viewport_coverage_at_least`；目标应大部分或完全留在视口外时，使用 `viewport_coverage_at_most`。覆盖率等于相交面积除以完整目标面积。`at_least` 接受 1 到 100 的整数百分比，`at_most` 接受 0 到 99，两个恒真端点不会进入执行。浏览器命中测试必须到达目标或 composed-tree 后代时，使用 `pointer_reachable`。覆盖率只证明几何，不证明无遮挡。所有写法都不能替代 enabled、键盘可达性、事件处理或业务上是否应该点击的判断。
+
+Web 在一次页面求值中解析稳定定位器、采集两个矩形，并执行可选的深层命中测试。语义定位器和命中测试都能穿透开放 Shadow DOM。遮挡由浏览器原生绘制和 `pointer-events` 规则决定，因此接收指针事件的透明覆盖层会阻挡，`pointer-events: none` 则会穿透。Rust 随后重算相交比例，并校验每一个 `1/6`、`1/2`、`5/6` 样本坐标。
+
+浏览器 ref 与 visual point 无法在稳定窗口中重复解析，因此 ACL 会拒绝。当前 Page Context ref 可以先解析成稳定语义或 CSS 定位器。缺失、歧义、非法与畸形证据仍由驱动归类。合法离屏几何返回 `test.assert.in_viewport`；合法覆盖率不满足阈值时返回 `test.assert.viewport_coverage_at_least` 或 `.viewport_coverage_at_most`；九个合法样本都未命中时返回 `test.assert.pointer_reachable`。GUI 与 TUI 明确关闭失败。
+
+当前检入证据覆盖 1,000/1,000 个基础 Core 几何案例与 2,000/2,000 个阈值案例、4,000/4,000 个 Web 协议分类、300/300 个持续窗口与 300/300 个瞬态窗口，以及 standalone Chromium 中 37 个通过断言和 25 个负向或驱动错误分类，并完成精确清理。
+
+## 证明键盘焦点最终落在哪里
+
+发送 `Tab`、`Shift+Tab` 或 focus 动作，只能证明输入已经派发。修订 13 会直接观察动作后的焦点归属。
+
+```acl
+expect "checkout-focused" {
+    focused = role("button", "Checkout")
+}
+
+expect "cancel-unfocused" {
+    unfocused = testid("cancel")
+}
+
+expect "dialog-owns-focus" {
+    focus_within = role("dialog", "Checkout")
+    stable_for_ms = 300
+    sample_interval_ms = 25
+}
+
+expect "page-does-not-own-focus" {
+    focus_outside = testid("page-shell")
+}
+```
+
+一个明确元素必须持有焦点时使用 `focused`。组件、对话框或复合控件中的任意有效后代都可以持有焦点时，使用 `focus_within`。范围断言会沿 assigned slot、DOM 父级与开放 Shadow host 检查渲染扁平树。两种负向形式仍然要求解析到真实目标，元素缺失不能伪装成正确焦点行为。
+
+Web 在一次页面求值中解析稳定定位器，并沿嵌套开放 Shadow DOM 读取最深层 active element。语义定位器穿透开放 Shadow DOM，并排除可访问性隐藏的 composed ancestry。CSS 保持当前 document 查询语义。browser ref 与 visual point 无法跨稳定窗口重新解析，因此 ACL 会拒绝；当前 Page Context ref 可先解析成稳定定位器。GUI 与 TUI 缺乏等价证据时明确关闭失败。
+
+焦点归属不能替代可见焦点样式、指针可达、enabled 状态或业务激活结果。当前检入覆盖 600/600 个确定性 Web 案例、200/200 个持续窗口、200/200 个瞬态窗口，以及 standalone Chromium 中 17 个正向断言和 11 个负向或驱动错误分类。真实浏览器流程包含正向与反向 Tab、开放 Shadow DOM、assigned slot、隐藏 slot ancestry、定时焦点移动和精确清理。
+
+## 证明实时语义状态
+
+修订 14 会直接观察渲染控件的五个状态维度。
+
+```acl
+expect "filters-open" { expanded = testid("filters") }
+expect "pin-off" { unpressed = role("button", "Pin") }
+expect "name-locked" { readonly = label("Display name") }
+expect "email-required" { required = placeholder("Email") }
+expect "email-invalid" { invalid = css("#email") }
+```
+
+对应的反向写法是 `collapsed`、`pressed`、`writable`、`optional` 和 `valid`。Web 优先读取适用的原生状态，包括 `<details>.open`、原生只读或必填属性，以及 `willValidate` 为 true 时的 Constraint Validation。其他元素可以使用合法 ARIA 状态。布尔 ARIA 只接受 `true` 与 `false`；`aria-invalid` 还接受 `grammar` 和 `spelling`。混合按压状态、未知 token 与缺失证据都会关闭失败为 unsupported。
+
+五个维度彼此独立。`writable` 只证明适用的只读状态为 false；若产品要求是真正可编辑，还要组合 `enabled`。反向状态仍然要求目标解析成功，并且浏览器观察到明确布尔值。元素缺失不能伪装成 collapsed、unpressed、writable、optional 或 valid。
+
+ACL 只接受可重复解析的语义或 CSS 定位器，并以 `test.spec.semantic_state_target_unstable` 拒绝 browser ref 与 visual point。当前 Page Context ref 可以在派发前解析为稳定定位器。缺失、歧义、非法和不支持的证据仍由驱动归类；只有已观察状态不符才返回对应的 `test.assert.*`。GUI 与 TUI 明确关闭失败，十种写法都支持有界稳定性窗口。
+
+当前检入覆盖 1,000/1,000 个确定性 Web 案例、100/100 个持续窗口、100/100 个瞬态窗口，以及 standalone Chromium 中 27 个正向断言和 17 个负向或驱动错误分类。真实浏览器 fixture 包含原生状态、合法与非法 ARIA、开放 Shadow DOM、优先级、瞬态展开和精确清理。
+
+## 证明界面已经没有可见匹配
+
+当产品要求是关闭、移除或隐藏某个目标时，使用 `hidden`。稳定定位器没有匹配元素，或所有匹配元素都没有渲染出的可见边界时，断言通过。
+
+```acl
+expect "checkout-dialog-closed" {
+    hidden = role("dialog", "Checkout")
+}
+```
+
+`hidden` 是 Runner 围绕现有正向可见性断言执行的步骤策略，不会增加 Action 变体。当前协议已推进到修订 15，是因为上面的类型化 expectation。Runner 向 surface 驱动发送正向探测，再确定性地分类结果。
+
+| 正向探测结果                      | `hidden` 断言结果                                                 |
+| --------------------------------- | ----------------------------------------------------------------- |
+| 返回目标可见证据                  | 以 `test.assert.hidden` 失败，并保留驱动数据作为反证              |
+| 返回 `test.assert.visible` 不匹配 | 通过，记录 `expected = hidden`、`visible = false`、目标与探测错误 |
+| 驱动、过期、歧义或 I/O 错误       | 保留原始错误，基础设施或定位失败不能充当隐藏证据                  |
+
+应使用所选 surface 支持的 role、label、test ID、placeholder、text、CSS 或其他稳定定位器。ACL 准入会以 `test.spec.hidden_target_unstable` 拒绝 `ref()` 与 `visual_point()`。两者都属于某次观察，解析失败可能只是证据过期，不能证明产品目标已隐藏。绕过准入的程序化 suite 会在派发前以 `test.run.assertion_mode_invalid` 关闭失败。
+
+`expect hidden` 会立即观察。若要证明目标在水合或回滚期间持续隐藏，可组合有界采样。
+
+```acl
+expect "checkout-dialog-stays-closed" {
+    hidden = role("dialog", "Checkout")
+    stable_for_ms = 300
+    sample_interval_ms = 25
+}
+```
+
+第一次隐藏探测通过、后续探测又发现可见目标时，结果为 `test.assert.unstable`。稳定性数据会在 `assertion.first` 中保留 `visible = false`，并在 `assertion.last` 中保留可见反例。
+
+### 等待目标消失
+
+当“目标消失”本身就是 ready 条件时，使用 `wait hidden`。目标已经隐藏或不存在时立即结束，不需要猜测动画时长。
+
+```acl
+wait "checkout-dialog-closed" {
+    hidden = role("dialog", "Checkout")
+}
+```
+
+ACL 编译器仍保存 `Action::Wait(WaitCondition::Visible(target))`，只增加 Runner 负责的 `WaitMode::Hidden`。在当前 Action 协议修订 15 下，它仍然复用早先的可见性 Action 变体。Runner 先执行一次立即的正向可见性断言；目标仍可见时，每 50 ms 重复一次。
+
+| 正向探测结果                      | 隐藏等待结果                                                            |
+| --------------------------------- | ----------------------------------------------------------------------- |
+| 返回 `test.assert.visible` 不匹配 | 立即通过，记录 `visible = false`、探测次数和耗时                        |
+| 返回目标可见证据                  | 保留第一次和最近一次正向数据，然后继续到 deadline、取消或下一次探测     |
+| 驱动、过期、歧义或 I/O 错误       | 保留原始错误并标记为 `inconclusive`，可见性未知绝不会被当作目标已经消失 |
+
+静态上限为 1,201 次探测。程序化场景即使声明更长 deadline，也会以 `test.run.hidden_wait_probe_limit` 在上限处失败。场景超时和取消保留原有状态与退出码，关闭准确的自有会话，并在 `last_visible` 中保留最近的可见反证。`output.data.wait` 会记录 `outcome`、`poll_interval_ms`、`max_probes`、`probes` 和 `observed_ms`。Agent run 的确定性验证也走同一条 Runner 路径，因此同一 ACL 不会出现两套语义。
+
+## 证明瞬态界面已经稳定
+
+单点断言回答的是“这一刻是否成立”。静态内容通常够用，但它也可能刚好接受加载闪烁、水合替换、乐观更新或动画中的一帧。如果产品要求是“界面完成收敛后仍然成立”，就把时间条件显式写在断言上。
+
+```acl
+wait "checkout-ready" {
+    visible = css("[data-checkout-ready]")
+}
+
+expect "settled-total" {
+    visible = testid("order-total")
+    stable_for_ms = 300
+    sample_interval_ms = 25
+}
+```
+
+三种同步工具回答不同问题。
+
+| 工具          | 回答的问题                   | 何时结束                                |
+| ------------- | ---------------------------- | --------------------------------------- |
+| `wait`        | 条件何时第一次成立           | 第一次匹配，或场景 deadline             |
+| 普通 `expect` | 条件现在是否成立             | 一次观察通过或失败                      |
+| 稳定 `expect` | 条件在有界窗口内是否持续成立 | 窗口末端采样、后续失败、取消或 deadline |
+
+第一次断言通过后，Runner 才启动 300 ms 窗口，每 25 ms 重复同一个只读断言，并在窗口边界一定补一次采样。第 2 个及之后的任一采样为假，步骤就以 `test.assert.unstable` 失败。通过时会保留下列机器证据。
+
+```json
+{
+  "attempts": 13,
+  "output": {
+    "data": {
+      "assertion": {
+        "first": { "visible": true },
+        "last": { "visible": true }
+      },
+      "stability": {
+        "outcome": "passed",
+        "required_ms": 300,
+        "sample_interval_ms": 25,
+        "samples": 13,
+        "observed_ms": 301
+      }
+    }
+  }
+}
+```
+
+第一次采样就失败时，原始 `test.assert.*` 错误会被保留，因为稳定窗口尚未开始。后续采样为假时使用 `test.assert.unstable`。驱动或基础设施错误保留自身错误码，并使本次稳定性验证不可判定。场景取消和 deadline 都能中断间隔等待或驱动调用，自有界面的清理仍会执行。
+
+采样提供的是有限时间证据。只有状态变化覆盖某个采样点时才会被发现，因此它不能证明两个采样点之间绝对连续。更短的间隔能提高时间分辨率，也会增加浏览器调用。只为真正影响产品的闪烁使用更短间隔，并让 `timeout_ms` 覆盖前置步骤、完整稳定窗口、命令耗时和获准的基础设施重试。
+
+## 本地验证仍决定结果
+
+部署方可以通过 `a3s-test agent run` 注入受 Schema 限制的 HTTP LLM provider，但 provider 只能提出一个类型化动作或请求结束。它不能决定 verdict、伪造观察或授权修复。成功仍要求至少一个本地 `expect` 通过，并且精确拥有的界面会话完成清理。
+
+需要页面上下文和人工修复评审时，请继续阅读 [Test Kit](./testkit.mdx)。

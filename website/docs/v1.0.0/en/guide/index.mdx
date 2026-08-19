@@ -1,0 +1,129 @@
+---
+title: Run your first Web test
+description: Observe a current page in a persistent agent session, execute one bounded action, retain the evidence, and preserve the proven path as ACL.
+---
+
+# Run your first Web test
+
+This guide starts with a local page that is already running. When you finish, you will have an inspectable session record containing the goal, every observation, the action that ran, a screenshot, and the terminal report. Once the path is stable, you can preserve it as an ACL regression suite.
+
+## Choose the right entry point
+
+| What you need to do                               | Start here                                                         |
+| ------------------------------------------------- | ------------------------------------------------------------------ |
+| Explore an unfamiliar page or reproduce an issue  | Continue here with a persistent agent session                      |
+| Repeat a workflow you already understand          | [Exploration and regression workflows](./workflows.mdx)            |
+| Look up every action, wait, and evidence output   | [Actions, waits, and evidence](./actions-and-evidence.mdx)         |
+| Author control, layout, and stability assertions  | [Assertions and stability](./assertions.mdx)                       |
+| Choose Web, GUI, TUI, or MCP                      | [Web, GUI, TUI, and MCP](./surfaces-and-mcp.mdx)                   |
+| Expose components, locators, and geometry         | [Add Web Test Kit](./testkit.mdx)                                  |
+| Inspect Page Context fields and expiry            | [Page Context details](../concepts/page-context.mdx)               |
+| Mark issues and hand them to a coding agent       | [Human review and automated repair](./repairs.mdx)                 |
+| Compare a PRD or design with the rendered page    | [Generate a Surface Contract](./contracts.mdx)                     |
+| Connect LLM, grounding, or design models          | [LLM, grounding, and design providers](./providers.mdx)            |
+| Shard a deterministic suite across remote workers | [Workers and distributed execution](./distributed.mdx)             |
+| Review model, human, and source authority         | [Authority and safety model](../concepts/authority-and-safety.mdx) |
+| Inspect every current capability by entry point   | [Complete capability reference](../reference/capabilities.mdx)     |
+| Diagnose a failure from its code and evidence     | [Troubleshooting](./troubleshooting.mdx)                           |
+
+The example assumes that your product runs at `http://127.0.0.1:3000/checkout` and that the confirmation page exposes an observable heading. Replace the URL, goal, and success condition with facts from your project.
+
+## Install the CLI and Agent Skill
+
+macOS or Linux
+
+```bash
+curl -fsSL https://github.com/A3S-Lab/Test/releases/latest/download/install.sh |
+  sh -s -- --version v1.0.0
+```
+
+Windows PowerShell
+
+```powershell
+& ([scriptblock]::Create((irm 'https://github.com/A3S-Lab/Test/releases/latest/download/install.ps1'))) -Version v1.0.0
+```
+
+The installer downloads the platform CLI, verifies its SHA-256, and installs the matching Skill for detected coding agents. See [Installation](./installation.mdx) to pin a version, agent, or destination.
+
+## 1. Start a persistent session
+
+Run the local product, then declare the test goal and a success condition that the page can prove.
+
+```bash
+a3s-test agent start http://127.0.0.1:3000/checkout \
+  --session checkout \
+  --goal "Complete checkout with the fixture account" \
+  --success "The confirmation heading is visible" \
+  --json
+```
+
+The session retains the browser, policy boundary, and append-only event log until you explicitly finish, abort, or reach its timeout.
+
+## 2. Read the fresh observation
+
+```bash
+a3s-test agent observe --session checkout --interactive --json
+```
+
+The response contains a new `observation_id` and semantic refs that are actionable in the current page state.
+
+```text
+observation_id: 1
+@e1 [button] Continue
+```
+
+One observation may contain three kinds of refs with different authority:
+
+| Ref   | Source                            | Action target                                                  |
+| ----- | --------------------------------- | -------------------------------------------------------------- |
+| `@eN` | Browser accessibility semantics   | Yes, but only inside the current observation                   |
+| `@cN` | Test Kit Page Context             | Yes, for a uniquely actionable node in the current observation |
+| `@uN` | Supplemental Test Kit UI evidence | No, it only connects style, layout, state, and motion evidence |
+
+`@uN` is a read-only evidence ref. Never put it in a `click`, `fill`, `drag`, or ACL action; A3S Test rejects it during admission or before driver dispatch. Page changes also expire `@eN` and `@cN`, so observe again before continuing.
+
+## 3. Execute one bounded action
+
+Bind the action to the observation you just received.
+
+```bash
+a3s-test agent click @e1 \
+  --session checkout \
+  --observation 1 \
+  --json
+```
+
+Before the driver executes, A3S Test checks the action schema, session capability, policy, and observation revision. A state change immediately expires old refs. Run `agent observe` again before choosing the next action.
+
+## 4. Retain evidence and finish
+
+After the target state appears, save a screenshot and write the terminal report.
+
+```bash
+a3s-test agent screenshot screenshots/confirmation.png \
+  --session checkout \
+  --json
+
+a3s-test agent finish \
+  --session checkout \
+  --status passed \
+  --summary "Checkout completed and confirmation was observed" \
+  --json
+```
+
+Each workspace retains an append-only record.
+
+```text
+.a3s-test/agent-sessions/checkout/
+├── session.json
+├── events.jsonl
+├── report.json
+└── artifacts/
+    └── screenshots/confirmation.png
+```
+
+`events.jsonl` explains what happened at each step, `report.json` stores the terminal state and summary, and `artifacts/` contains only evidence owned by this session.
+
+## 5. Preserve the stable path as a regression
+
+Agent sessions are for discovering a path. Once the actions, waits, and success conditions are explicit, encode them as ACL. Use `a3s-test check` for static admission and `a3s-test run` to repeat the suite locally or in CI. Continue with [Exploration and regression workflows](./workflows.mdx) for the complete example.

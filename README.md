@@ -48,11 +48,11 @@ Pin a release when the test environment must be reproducible:
 
 ```bash
 curl -fsSL https://github.com/A3S-Lab/Test/releases/latest/download/install.sh |
-  sh -s -- --version v0.16.2
+  sh -s -- --version v1.0.0
 ```
 
 ```powershell
-& ([scriptblock]::Create((irm 'https://github.com/A3S-Lab/Test/releases/latest/download/install.ps1'))) -Version v0.16.2
+& ([scriptblock]::Create((irm 'https://github.com/A3S-Lab/Test/releases/latest/download/install.ps1'))) -Version v1.0.0
 ```
 
 The installers support CLI-only, Skill-only, agent-specific, and custom
@@ -604,10 +604,10 @@ export function App() {
 ```
 
 This provider-plus-overlay pair is enough to start the Review Overlay. The
-v0.17.0 line adds the design board and page-region capture shown below. Add
-`A3STestBoundary` only when page context needs component ownership or bounded
-source hints. For headless CI context, keep the provider and omit the visible
-overlay.
+v1.0.0 release includes the design board and page-region capture shown below.
+Add `A3STestBoundary` only when page context needs component ownership or
+bounded source hints. For headless CI context, keep the provider and omit the
+visible overlay.
 
 After rendering, Test Kit publishes bounded, revisioned context:
 

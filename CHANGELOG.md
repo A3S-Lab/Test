@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+## 1.0.0 - 2026-08-20
+
+A3S Test 1.0.0 establishes the first stable release line for the documented
+CLI, ACL, evidence, Web and TUI execution, Agent Skill, and Test Kit release
+asset contracts. Test Kit keeps its independent `0.4.0` package version.
+Unsupported surfaces remain explicit: Windows and Linux GUI execution are not
+claimed, standalone-browser origin containment remains limited by its current
+protocol, and the independent hands-on screen-reader audit remains open.
+
 ### Added
 
 - Added action protocol revision 15 with bounded visual-viewport coverage
@@ -180,10 +189,11 @@
 - Added a finding-level, dependency-free SVG design board after element or
   rectangular-area selection. Reviewers can draw, add rectangles and text,
   select, move and resize objects, style the canvas, use history, upload,
-  paste, or drop PNG/JPEG screenshots, request permissioned browser screen
-  capture, annotate screenshots, and attach the result to the repair sent to a
-  coding agent. The bounded editor runs entirely inside the Test Kit Shadow
-  DOM without a drawing SDK, license key, watermark, or CDN dependency.
+  paste, or drop PNG/JPEG screenshots, capture a selected region of the visible
+  browser page without screen-sharing permission, annotate screenshots, and
+  attach the result to the repair sent to a coding agent. The bounded editor
+  runs entirely inside the Test Kit Shadow DOM without a drawing SDK, license
+  key, watermark, or CDN dependency.
 - Added the optional typed `designReference` repair field across the Test Kit,
   core model, session ledger, CLI/MCP handoff, structured export, and repair
   summaries. Web sessions materialize inline references as viewable
@@ -255,9 +265,9 @@
   typography to the real Rspress document root so sidebar labels retain their
   intended density.
 
-## 0.17.0 - 2026-08-16
+### Earlier staging work included in 1.0.0
 
-### Added
+#### Added
 
 - Added English and Simplified Chinese review locales across visible controls,
   status labels, live announcements, and accessible names. The new
@@ -282,7 +292,7 @@
   Chromium coverage verify both the control metadata and accessibility-tree
   help content.
 
-### Changed
+#### Changed
 
 - Refined the review Dock, target editor, findings workspace, markers, and
   preferences with clearer hierarchy and typography, mutually exclusive tool
@@ -323,7 +333,7 @@
   shortcut dispatch retain explicit ownership below the repository file-size
   limit.
 
-### Fixed
+#### Fixed
 
 - Preserved free-form Layout component values across locale changes while
   translating known catalog selections, so a Chinese search such as `结账`

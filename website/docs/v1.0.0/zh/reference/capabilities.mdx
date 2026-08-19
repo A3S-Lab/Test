@@ -1,0 +1,254 @@
+---
+title: 能力参考
+description: 按入口、输入、输出、证据和失败边界核对 A3S Test 的会话、动作、Test Kit、修复、契约、模型与调度能力。
+---
+
+# 能力参考
+
+这页列出当前版本可以被调用和验证的能力。每一项都说明入口、需要的上下文、可观察输出和关闭失败条件。部署方提供的模型、浏览器和远程 worker 会影响运行时可用性，因此代码里存在类型并不等于当前机器已经具备相应后端。
+
+## 先读取当前安装的契约
+
+```bash
+a3s-test --version
+a3s-test agent schema
+a3s-test provider schema contract-generation
+a3s-test provider schema design-audit
+a3s-test provider schema visual-grounding
+a3s-test worker inventory
+```
+
+`agent schema` 返回当前外部规划协议、动作修订、JSON Schema 和会话不变量，不需要启动浏览器。`capabilities --json` 会探测实际 Web adapter，adapter 版本不兼容、不可执行或启动失败时会返回 `test.driver.web.*` 错误。调用方应处理这类结果，不能用静态文档替代机器能力发现。
+
+页面里出现的能力分为三种交付状态。
+
+| 状态            | 含义                                                        | 调用方责任                                       |
+| --------------- | ----------------------------------------------------------- | ------------------------------------------------ |
+| Core 内置       | 类型、准入、状态和结果由 A3S Test 实现                      | 提供合法输入并处理结构化失败                     |
+| 驱动提供        | Core 定义契约，Web、GUI 或 TUI 驱动负责真实感知与执行       | 先读取能力清单并遵守平台验证范围                 |
+| 部署方 provider | A3S Test 校验请求、响应、来源和预算，不捆绑模型或推理运行时 | 提供端点、身份、凭据、许可、容量、超时和费用边界 |
+
+需要从能力表继续进入完整教程时，按下面的主题阅读。
+
+| 主题                                   | 深度文档                                               |
+| -------------------------------------- | ------------------------------------------------------ |
+| 全部动作、等待、网络和证据             | [动作、等待与证据](../guide/actions-and-evidence.mdx)  |
+| 基础与高级断言                         | [断言与稳定性](../guide/assertions.mdx)                |
+| Web、GUI、TUI 和 MCP 生命周期          | [Web、GUI、TUI 与 MCP](../guide/surfaces-and-mcp.mdx)  |
+| LLM、契约、视觉与设计模型              | [LLM、视觉定位与设计 Provider](../guide/providers.mdx) |
+| Inventory、Worker、Shard 和 Quarantine | [Worker 与分布式执行](../guide/distributed.mdx)        |
+
+## 核心会话
+
+| 能力               | 入口                       | 必要输入                                              | 输出与失败边界                                                    |
+| ------------------ | -------------------------- | ----------------------------------------------------- | ----------------------------------------------------------------- |
+| 创建持久 Web 会话  | `agent start`              | URL、session、goal、至少一个 success                  | 保存会话、origin 和策略。驱动不兼容或启动失败时不创建可操作会话   |
+| 读取最新观察       | `agent observe`            | active session                                        | 新 `observation_id`、页面状态和当前引用。失败会使旧引用不可继续用 |
+| 深入 Page Context  | `agent inspect`            | 当前 session 与 page、node、component 或 region scope | 返回有界明细和 cursor。私有 node ID 过期时关闭失败                |
+| 执行类型化动作     | `agent act` 或紧凑动作命令 | Action JSON，引用动作还需要最新 observation           | 先通过 Schema、能力、目标、策略和修订校验，再交给驱动             |
+| 请求视觉定位       | `agent ground`             | 最新观察、ACL provider 配置、query                    | 返回截图绑定候选，不执行点击，不产生 verdict                      |
+| 请求设计审查       | `agent audit`              | 最新观察、ACL provider 配置、可选维度                 | 返回建议报告，不产生动作和修复权限                                |
+| 查看持久状态       | `agent show`、`agent list` | workspace-local session                               | 读取会话元数据、事件和终态，不接管仍在运行的其他会话              |
+| 正常结束           | `agent finish`             | passed 或 failed 与证据支持的 summary                 | 写入终态报告并清理自有界面                                        |
+| 取消无法继续的会话 | `agent abort`              | 精确 session                                          | 取消该会话并清理它拥有的界面，不按进程名终止其他浏览器            |
+
+持久会话的固定循环是 `start -> observe -> act -> observe -> finish`。一个动作可能改变 DOM、焦点、路由、视口或浏览器上下文。发生变化后必须重新观察，不能继续使用旧 `@eN` 或 `@cN`。
+
+## 界面执行
+
+### 页面与交互动作
+
+| 动作                            | 目标或上下文要求                        | 结果与约束                                               |
+| ------------------------------- | --------------------------------------- | -------------------------------------------------------- |
+| `navigate`                      | 绝对 URL                                | URL 必须属于已准入 origin，成功导航后旧观察失效          |
+| `snapshot`                      | 当前 surface                            | 生成可访问快照和新引用，`interactive` 可以限制为交互节点 |
+| `click`、`hover`、`focus`       | 最新 ref、语义目标或明确 CSS            | 目标必须存在、可用并符合动作能力                         |
+| `double_click`、`context_click` | 最新 ref 或 CSS                         | 右键只作用于页面，不读取浏览器原生上下文菜单             |
+| `fill`、`type`                  | 可编辑目标                              | `fill` 先替换值，`type` 在现有值后输入                   |
+| `insert_text`                   | 已建立的焦点、光标或选择范围            | 不接受新目标，不扩大定位权限                             |
+| `check`、`uncheck`、`select`    | 匹配的 checkbox、radio 或 select 控件   | 非法控件类型在驱动执行前拒绝                             |
+| `drag`                          | 当前观察中的 source 与 target           | 两端都要通过定位和修订检查                               |
+| `press`                         | 当前键盘上下文                          | 支持按键和 chord，页面变化后重新观察                     |
+| `wheel`                         | delta 与可选 modifiers，可带当前目标    | 用于真实滚动或缩放手势，不代替 viewport 配置             |
+| `viewport`                      | width、height 与可选 scale              | 推进观察修订，用于验证响应式布局                         |
+| `tab`、`frame`                  | 标签页操作或可访问 frame 目标           | 切换上下文后重新观察，跨域内容仍受浏览器策略限制         |
+| `dialog`                        | 当前待处理对话框与 accept、dismiss 操作 | 不允许对不存在的 dialog 假定成功                         |
+| `upload`                        | 文件控件和清单允许的输入路径            | 输入文件必须位于允许根并通过数量与大小限制               |
+| `download`                      | 可触发下载的目标和相对 artifact 路径    | 只写入本次运行的 artifact 根                             |
+
+### 同步、网络与证据动作
+
+| 动作                               | 输入                                      | 输出与约束                                                  |
+| ---------------------------------- | ----------------------------------------- | ----------------------------------------------------------- |
+| `wait`                             | load、文本、URL 或可见性条件              | 有明确 deadline，超时返回结构化失败                         |
+| 隐藏 `wait`                        | 稳定的语义或 CSS 目标                     | 每 50 ms 只读探测；由 deadline、取消和 1,201 次探测共同约束 |
+| `assert`                           | 文本、URL、可见性或其他已准入 expectation | 由本地证据决定通过或失败，provider 不能覆盖结果             |
+| 隐藏 `assert`                      | 稳定的语义或 CSS 目标                     | 没有可见匹配时通过；可见反例返回 `test.assert.hidden`       |
+| 稳定 `assert`                      | expectation、`stable_for_ms` 与可选间隔   | 只重复只读断言；后续采样为假时返回 `test.assert.unstable`   |
+| `network_route`、`network_unroute` | 已准入 pattern 与静态 route               | 只能在网络策略内添加或移除规则                              |
+| `har`、`trace`、`video`            | start 或 stop 与受约束相对路径            | 只记录显式窗口，停止后产出会话所有的工件                    |
+| `screenshot`                       | 相对 PNG 路径                             | 截图位于当前 artifact 根，可绑定后续 provider 请求          |
+| `accessibility`                    | 相对 JSON 路径与 interactive 选择         | 保存交互树或完整语义树                                      |
+| `console`、`page_errors`           | 相对 JSON 路径与 clear 选择               | 保存浏览器错误基线，清空只影响当前驱动缓冲                  |
+| `terminal_paste`                   | 有界文本                                  | 只在 TUI surface 合法                                       |
+| `terminal_resize`                  | columns 与 rows                           | 调整自有 PTY 或 ConPTY，随后终端语义会更新                  |
+| `terminal_recording`               | 相对 artifact 路径                        | 保存受约束终端记录，不写到工作区任意位置                    |
+
+动作协议修订为 15。完整可生成 Schema 以 `a3s-test agent schema` 输出为准。未知字段、缺少必填字段、非法枚举和 surface 不支持的动作会在执行前拒绝。
+
+### 实时控件状态断言
+
+| 能力         | ACL 写法                                                               | 观察证据                                       | 失败边界                                                                                         |
+| ------------ | ---------------------------------------------------------------------- | ---------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| 精确控件值   | `target` 加 `value`                                                    | 当前 DOM 或驱动值，返回 `expected` 与 `actual` | 缺失、歧义、非法或不可读取的目标保持为 `test.driver.*`；已观察值不同时才是 `test.assert.value`   |
+| 布尔控件状态 | `enabled`/`disabled`、`checked`/`unchecked` 或 `selected`/`unselected` | 实时布尔状态与规范状态名                       | 目标不存在绝不能证明负向状态；只有已解析目标的状态不符才返回对应 `test.assert.*`                 |
+| 精确选中集合 | `target` 加 `selected_values`                                          | 去重并排序后的 `expected` 与 `actual` 数组     | 预期重复值在准入阶段失败，非法驱动输出关闭失败，精确集合不同时返回 `test.assert.selected_values` |
+| 稳定控件状态 | 上述任一写法加 `stable_for_ms` 与可选采样间隔                          | 首次与末次断言输出、有界样本数和实际观察窗口   | 后续出现反例时返回 `test.assert.unstable`，并保留初始证据和瞬态不匹配                            |
+
+Web 断言读取实时 DOM 属性。原生 checkbox 和 radio 的 `checked` 值优先于矛盾的 ARIA，自定义控件则可以通过合法 ARIA 暴露布尔状态。`selected_values = []` 是合法的精确空集合断言。GUI 只有在 CUA 确实提供值时才能比较精确值，其他情况关闭失败；布尔和多选状态目前不支持。TUI 不支持控件状态断言。Page Context ref 会在派发前解析为当前语义目标；standalone ref 无法暴露所需属性时返回驱动错误，不进行猜测。
+
+### 实时语义状态断言
+
+| 能力       | ACL 写法                  | Web 权威证据                                                                 | 失败边界                                                                    |
+| ---------- | ------------------------- | ---------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
+| 展开状态   | `expanded` 或 `collapsed` | `<details>.open`，否则读取合法 `aria-expanded`                               | 缺失状态属于 unsupported；不匹配使用 `test.assert.expanded` 或 `.collapsed` |
+| 按压状态   | `pressed` 或 `unpressed`  | 精确布尔 `aria-pressed`                                                      | `mixed` 属于 unsupported；不匹配使用 `test.assert.pressed` 或 `.unpressed`  |
+| 只读状态   | `readonly` 或 `writable`  | 适用时读取原生 `readOnly`，否则读取合法 `aria-readonly`                      | writable 不蕴含 enabled；不匹配使用 `test.assert.readonly` 或 `.writable`   |
+| 必填状态   | `required` 或 `optional`  | 适用时读取原生 `required`，否则读取合法 `aria-required`                      | 不支持的控件仍由驱动归类；不匹配使用 `test.assert.required` 或 `.optional`  |
+| 有效性状态 | `invalid` 或 `valid`      | `willValidate` 时读取 Constraint Validation，否则读取定义内的 `aria-invalid` | 未知状态不能证明 valid；不匹配使用 `test.assert.invalid` 或 `.valid`        |
+
+原生状态优先于矛盾 ARIA。布尔 ARIA 只接受精确的 `true` 和 `false`；`aria-invalid` 还接受 `grammar` 与 `spelling`，并映射为 invalid。五个维度彼此独立，每种负向写法都要求解析到唯一目标并得到权威布尔证据。
+
+ACL 以 `test.spec.semantic_state_target_unstable` 拒绝 browser ref 与 visual point；当前 Page Context ref 可以先解析为稳定定位器。语义定位器穿透开放 Shadow DOM，并排除可访问性隐藏祖先；CSS 保持当前 document 语义。不支持的状态返回 `test.driver.web.state_unsupported`。GUI 与 TUI 明确关闭失败。所有写法支持有界稳定性；当前检入证据覆盖 1,000/1,000 个确定性 Web 分类、100/100 个持续窗口、100/100 个瞬态窗口，以及 standalone Chromium 中 27 个正向断言和 17 个负向或驱动错误分类。
+
+### 焦点归属断言
+
+| 能力           | ACL 写法                                     | 观察证据                                           | 失败边界                                                                                          |
+| -------------- | -------------------------------------------- | -------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| 精确焦点归属   | `focused` 或 `unfocused` 加一个目标          | 目标与最深层可观察 active element 的比较结果       | 目标缺失不能证明 `unfocused`；已解析不匹配使用 `test.assert.focused` 或 `.unfocused`              |
+| 组件内焦点归属 | `focus_within` 或 `focus_outside` 加一个目标 | 精确焦点及渲染扁平树祖先关系，包括 slot assignment | 目标缺失不能证明 `focus_outside`；已解析不匹配使用 `test.assert.focus_within` 或 `.focus_outside` |
+| 稳定焦点归属   | 上述任一组加 `stable_for_ms` 与采样间隔      | 首次与末次布尔状态，以及有界稳定性指标             | 后续合法不匹配返回 `test.assert.unstable`；目标或驱动失败保留原始归属                             |
+
+Web 在一次页面求值中解析一个稳定目标，并沿嵌套开放 Shadow DOM 读取最深层 `activeElement`。扁平树包含关系依次跟随 assigned slot、DOM 父级与 Shadow host。语义定位器穿透开放 Shadow DOM，并排除可访问性隐藏的 composed ancestry，包括隐藏的 slot wrapper。CSS 保持当前 document 查询语义。
+
+ACL 以 `test.spec.focus_target_unstable` 拒绝 browser ref 与 visual point；当前 Page Context ref 可先解析为稳定定位器。程序化 standalone browser ref 返回 `test.driver.web.state_unsupported`。GUI 与 TUI 的当前协议没有等价焦点证据，因此明确关闭失败。当前检入证据覆盖 600/600 个确定性 Web 分类、200/200 个持续窗口、200/200 个瞬态窗口，以及 standalone Chromium 中 17 个正向断言和 11 个负向或驱动错误分类，包含正向/反向 Tab、开放 Shadow DOM、assigned slot、定时焦点移动和精确清理。
+
+### 渲染输出断言
+
+| 能力               | ACL 写法                                      | 观察证据                                                 | 失败边界                                                                                                 |
+| ------------------ | --------------------------------------------- | -------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| 目标绑定的渲染文案 | `target` 加 `rendered_text`                   | 唯一可见目标，以及规范化后的 `expected` 与 `actual` 文本 | 目标缺失或歧义保留为驱动错误；已观察文案不同才是 `test.assert.rendered_text`                             |
+| 可见定位集合数量   | 稳定 `target` 加非负 `visible_count`          | 完整可见匹配集合的数量，包括零                           | ref/visual point 在准入阶段失败，非法 selector 保留为驱动错误，数量不同才是 `test.assert.visible_count`  |
+| 有序渲染文本集合   | 稳定 `target` 加 `rendered_texts`             | 保留顺序、重复项与空集合的完整规范化文本向量             | ref/visual point 在准入阶段失败；非法或超限集合保留为驱动错误，向量不同才是 `test.assert.rendered_texts` |
+| 稳定渲染输出       | 上述任一写法加 `stable_for_ms` 与可选采样间隔 | 首次/末次标量文案、向量或数量，以及有界窗口              | 后续观察不匹配返回 `test.assert.unstable`；后续驱动失败仍由驱动负责                                      |
+
+CSS 集合探测使用视觉渲染几何，单独的 `aria-hidden` 不会让像素消失，因此仍计入。语义定位器还会排除可访问性隐藏祖先，并穿透开放 Shadow DOM。两者都会排除 hidden、display-none、visibility-hidden、完全透明和零几何目标。`rendered_texts` 的预期与实际集合上限都是 256 项。GUI 与 TUI 对修订 9 和修订 10 的三种断言都明确关闭失败。
+
+### 渲染布局断言
+
+| 能力           | ACL 写法                                           | 观察证据                                   | 失败边界                                                                              |
+| -------------- | -------------------------------------------------- | ------------------------------------------ | ------------------------------------------------------------------------------------- |
+| 双目标布局关系 | `target`、`relative_to` 与 17 种 `layout` 关系之一 | 两个新鲜解析的矩形、关系、容差与匹配状态   | 缺失、歧义、非法或畸形几何保留为驱动错误；两个合法矩形不符时才是 `test.assert.layout` |
+| 有界容差       | 可选整数 `tolerance_px`，范围 0 到 1,024           | Core 实际使用的精确 CSS 像素容差           | 负数、小数或超限值在 ACL 准入失败；绕过 ACL 的类型化调用会在页面派发前失败            |
+| 稳定布局关系   | 布局写法加 `stable_for_ms` 与可选采样间隔          | 首次与末次完整双矩形载荷，以及有界采样指标 | 后续关系不符返回 `test.assert.unstable`；后续目标解析或几何失败仍由驱动负责           |
+
+17 种关系覆盖四个方向、包含与内部、相交与不相交、六种边缘或中心对齐，以及宽、高、尺寸相同。两个目标都必须是稳定语义或 CSS 定位器；浏览器 ref 与 visual point 在准入阶段失败，当前 Page Context ref 可在派发前解析为稳定定位器。
+
+Web 在一次页面求值中解析两个目标并读取两个矩形。CSS 保留仍有视觉像素的 `aria-hidden` 元素，语义定位器则排除可访问性隐藏祖先并穿透开放 Shadow DOM。GUI 要求两个 frame 来自同一份新鲜 CUA snapshot。TUI 会关闭失败，因为终端单元格不等价于页面渲染几何。当前检入证据覆盖 3,400/3,400 个确定性案例、100/100 个持续窗口、100/100 个瞬态窗口、全部 17 种关系，以及 standalone Chromium 中 15 个负向或错误分类。
+
+### 视口覆盖率与指针命中断言
+
+| 能力                 | ACL 写法                                                | 观察证据                                           | 失败边界                                                                                         |
+| -------------------- | ------------------------------------------------------- | -------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| visual viewport 相交 | `in_viewport = <稳定目标>`                              | 目标矩形、visual viewport 矩形和独立重算的相交比例 | 零面积相交返回 `test.assert.in_viewport`；目标解析和畸形证据仍由驱动负责                         |
+| 最低视口覆盖率       | 稳定 `target` 加 `viewport_coverage_at_least = 1..=100` | 同一组矩形、比例、实际百分比、比较方向与阈值       | 合法几何低于阈值时返回 `test.assert.viewport_coverage_at_least`；恒真的零阈值在准入阶段失败      |
+| 最高视口覆盖率       | 稳定 `target` 加 `viewport_coverage_at_most = 0..=99`   | 同一份独立重算的覆盖率证据                         | 合法几何高于阈值时返回 `test.assert.viewport_coverage_at_most`；恒真的 100 阈值在准入阶段失败    |
+| 指针命中可达         | `pointer_reachable = <稳定目标>`                        | 同一几何，加有序 3×3 深层命中网格和可达样本数      | 九个合法样本全部未命中时返回 `test.assert.pointer_reachable`；不推断 enabled、键盘或业务可点击性 |
+| 稳定交互前提         | 任一写法加 `stable_for_ms` 与采样间隔                   | 首次和末次完整几何或命中载荷，以及有界稳定性指标   | 后续合法不匹配返回 `test.assert.unstable`；解析或证据失败保留驱动归属                            |
+
+所有断言都要求可重复解析的语义或 CSS 定位器。浏览器 ref 与 visual point 在准入阶段失败，当前 Page Context ref 可以先解析为稳定定位器。覆盖率等于相交面积除以完整目标面积，只证明几何，不声称无遮挡或指针可达。Web 在一次页面求值中原子采集目标、visual viewport 和可选九点命中网格。语义目标与深层命中测试都可穿透开放 Shadow DOM。原生命中测试会把接收指针事件的透明覆盖层视为阻挡，并跳过 `pointer-events: none` 覆盖层。GUI 与 TUI 的当前协议没有等价证据，因此明确关闭失败。
+
+当前检入证据覆盖 1,000/1,000 个基础 Core 几何案例与 2,000/2,000 个阈值案例、4,000/4,000 个 Web 协议分类、300/300 个持续窗口与 300/300 个瞬态窗口，以及 standalone Chromium 中 37 个通过断言和 25 个负向或驱动错误分类，并完成精确清理。
+
+## 页面感知与 Test Kit
+
+| 能力            | 入口或字段                                    | 产出                                                     | 关键边界                                                 |
+| --------------- | --------------------------------------------- | -------------------------------------------------------- | -------------------------------------------------------- |
+| 自动 DOM 上下文 | `A3STestKit` 或 `installTestKit`              | Light DOM、开放 Shadow DOM、语义、状态、定位器与几何     | Test Kit 是增强项，未接入时 Web 可访问快照仍可工作       |
+| 组件归属        | `A3STestBoundary`                             | 组件 ID、名称、父级、ready、facts、source 与多根 boxes   | source 只是定位提示，不授权文件读取或修改                |
+| 三套几何        | `geometry.viewport`、`document`、`normalized` | CSS 像素、文档位置和 visual viewport 标准化位置          | 坐标是证据和最后退化，不优先于语义定位                   |
+| 稳定定位器链    | `locators`                                    | role、label、test ID、placeholder、text 与 CSS 候选      | 候选仍需在最新页面修订解析                               |
+| 布局图          | `ui.layout`                                   | Flex、Grid、普通流、box model、overflow 与关系边         | 缺失端点、循环包含和预算不一致会被 Web 驱动拒绝          |
+| 视觉系统        | `ui.style`                                    | 颜色、排版、间距、圆角、阴影、z-index 与响应式条件       | 类名本身不被当作组件事实                                 |
+| 状态差分        | `ui.stateDiffs`                               | 页面自然出现的交互状态变化                               | Test Kit 不为了采样主动触发 hover、focus 或 click        |
+| 动效画像        | `ui.motion`                                   | transition、animation、timeline、range 与 reduced motion | 浏览器未解析的 named timeline 不会被猜成 scroll 或 view  |
+| 作用域快照      | `snapshot({ detail, scope })`                 | page、node、component 或 region 的有界上下文             | 私有 node ID 不能跨修订持久化                            |
+| 差分与分页      | `sinceRevision`、`cursor`、`nextCursor`       | removed node 与下一页                                    | cursor 不匹配请求、scope 或 revision 时关闭失败          |
+| 预算            | provider 上限与单次 `limits`                  | 节点、字符串、编码、UI 节点、状态、时间使用量            | 单次请求只能降低安装上限                                 |
+| 脱敏            | `redact` 与内置敏感字段规则                   | 经过过滤的文本、属性、表单与 facts                       | Cookie、storage、password、header 和 secret 不进入上下文 |
+
+公开引用的权限保持固定。`@eN` 来自可访问快照，`@cN` 来自可唯一操作的 Page Context 节点，两者只在最新观察可操作。`@uN` 连接样式、布局、状态和动效证据，永远只读。
+
+## 人工评审与修复
+
+| 能力           | 入口                                                 | 输出或状态                                       | 失败边界                                            |
+| -------------- | ---------------------------------------------------- | ------------------------------------------------ | --------------------------------------------------- |
+| 元素与文本标记 | Overlay 的元素、文本与多选工具                       | node、text 或 ordered multi target               | 发送时目标必须仍属于最新修订                        |
+| 区域与手绘标记 | area 与 draw 工具                                    | 视口矩形或有界点序列                             | 不规则绘制仍受点数、区域和编码预算限制              |
+| Layout Mode    | placement 或 rearrange                               | 组件类型、canvas、purpose 与目标区域             | 只记录意图，不移动 DOM 或写样式                     |
+| 草稿恢复       | `repairStorage`                                      | memory、session 或 local 草稿                    | 保存草稿不进入 Repair Ledger                        |
+| 单项与批量发送 | Overlay send 或 bridge queue                         | 稳定顺序的 `a3s.test.repair/1` finding 与 batch  | 只有显式发送才授权已连接 Agent 处理列出范围         |
+| 同源 adapter   | `repairEndpoint`                                     | 有界 POST 与浏览器侧重试队列                     | 不能接收工作区、Shell、Git、MCP 或模型凭据          |
+| 领取           | `repair-watch`、`repair-claim`                       | queued finding、lease 与 attempt ID              | 一个工作区同一时间只允许一次可能修改                |
+| 报告修改阶段   | `repair-progress`、`repair-reply`、`repair-complete` | repairing、needs_input 或 verifying              | attempt 与 lease 不匹配时不推进状态                 |
+| A3S Test 验证  | `repair-verify`                                      | 前后证据、聚焦检查、可选 ACL 候选与 review_ready | 必须出现更新后的 ready 修订，失败不能自动解决       |
+| 终止尝试       | `repair-fail`、`repair-cancel`                       | 追加式失败或取消事件                             | 不删除旧 attempt、回复或证据                        |
+| 人工验收       | accept、dismiss、reopen action                       | resolved、dismissed 或重新 queued                | 默认必须由人处理，自动模式仍要先持久化 review_ready |
+
+## 期望、契约与模型
+
+| 能力                | 入口                                  | 输出                                       | 权限边界                                     |
+| ------------------- | ------------------------------------- | ------------------------------------------ | -------------------------------------------- |
+| PRD 候选生成        | `contract generate` 与 PRD source     | 精确字节范围、摘要、置信度、冲突和开放问题 | 只产生 draft，不成为 runner expectation      |
+| 设计稿候选生成      | `contract generate` 与 design source  | 图像摘要、区域、层级和几何候选             | 不声称已经观察浏览器可访问树                 |
+| 人工契约审阅        | `contract review`                     | 规范 Surface Contract 与 review audit      | 未解决冲突、来源变化或无效引用会阻止发布     |
+| 页面契约验证        | ACL `verify_contract`                 | 确定性匹配、finding、outcome 与来源        | 只允许在关闭式 ACL 套件中执行                |
+| 视觉定位 provider   | `agent ground`                        | observation 与 PNG 摘要绑定的点或矩形候选  | 建议不点击、不决定 verdict、不授权修复       |
+| 设计审查 provider   | `agent audit`                         | 九类设计维度的有界建议                     | 高优先级建议最多映射为 important             |
+| 嵌入式规划 provider | `agent run` 或 SDK 注入 `LlmProvider` | 一个类型化动作提案或 finish 请求           | 成功仍需要本地 expect，provider 不能自报通过 |
+
+所有 provider 由部署方注入。A3S Test 不下载权重，不选择推理后端，也不持有 provider 的长期凭据。请求会绑定 provider 和 model 身份、deadline、字节、候选数、费用与使用量限制。
+
+## 证据、回归与调度
+
+| 能力            | 入口                          | 产出或约束                                                           |
+| --------------- | ----------------------------- | -------------------------------------------------------------------- |
+| ACL 静态准入    | `a3s-test check`              | 在 surface 启动前拒绝未知块、非法目标、越界路径和歧义条件            |
+| 确定性运行      | `a3s-test run`                | 动作、等待、断言、工件、终态报告和有界清理                           |
+| 负向可见性      | ACL `expect` 的 `hidden`      | 隐藏或不存在证据、可见反例，并保留驱动错误的责任归属                 |
+| 采样稳定性      | ACL `expect` 稳定字段         | 首末断言数据、有界样本数、实际观察窗口和稳定的瞬态失败错误码         |
+| 失败归类        | JSON result 与稳定 error code | 分开 `test.spec.*`、`test.driver.*`、`test.assert.*` 与 `test.run.*` |
+| Worker 能力清单 | `worker inventory`            | 平台、surface、驱动、协议、容量和健康信息                            |
+| 分布式计划      | `distributed plan`            | 只把已准入场景匹配给能力相容 worker                                  |
+| 分布式执行      | `distributed run`             | 鉴权 shard、结果汇总和远程 artifact 引用                             |
+| 远程工件        | `a3s.test.remote-artifacts/1` | 有界列举、分块读取、摘要校验和本地归档                               |
+
+远程请求不能选择 worker executable、应用、后端、凭据或网络策略。这些参数由部署启动配置固定。GUI worker 还需要独占池，避免同一真实桌面被并发会话争用。
+
+## 当前支持范围
+
+| Surface | 当前状态                                                              |
+| ------- | --------------------------------------------------------------------- |
+| Web     | 支持持久 Agent 会话和 ACL，使用 A3S Browser 或兼容 standalone adapter |
+| GUI     | macOS CUA 已在真实 arm64 主机验证；Windows 与 Linux 仍在独立审核      |
+| TUI     | ACL 套件通过自有 PTY 或 ConPTY 进程树执行                             |
+
+## 不属于内置能力的事项
+
+- Test Kit 不直接修改业务 DOM、源码或工作区。
+- 模型 provider 不拥有浏览器观察、测试 verdict 或修复授权。
+- 提交 finding 不自动授予 Git 提交、推送、发布或部署权限。
+- PRD 和设计稿不会被转换成伪造的浏览器可访问树。
+- 未通过真实平台验证的 GUI 后端不会按发布级支持宣传。
+
+需要开始一条实际流程时，查看[从页面探索到稳定回归](../guide/workflows.mdx)。接入页面上下文时，查看[Web Test Kit](../guide/testkit.mdx)。遇到错误时，按[故障排查](../guide/troubleshooting.mdx)区分产品、测试规范、驱动和运行环境问题。

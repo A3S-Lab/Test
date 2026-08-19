@@ -1,8 +1,8 @@
 {
   "current": {
-    "version": "v0.17.0",
-    "sourceTag": "v0.17.0",
-    "sourceCommit": "aeec0fdd0a9f6df82abb5d50bce477abb6b5f4c4",
+    "version": "v1.0.0",
+    "sourceTag": "v1.0.0",
+    "sourceCommit": "c724dc02b0d53adbbc8803089d3d50076e41ed0c",
     "testkitVersion": "0.4.0"
   },
   "archives": [

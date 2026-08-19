@@ -1,0 +1,601 @@
+---
+title: CLI commands and stable contracts
+description: Find agent-session, ACL, provider, distributed-run, surface-capability, and exit-code references by task.
+---
+
+# CLI commands and stable contracts
+
+This page groups A3S Test's stable commands and return conventions by task. Start with capability discovery, then move into agent sessions, ACL suites, or distributed execution for the job at hand.
+
+## Discover capabilities
+
+These commands report installed protocols and scheduling boundaries instead of guessing from documentation:
+
+```bash
+a3s-test capabilities --json
+a3s-test agent schema
+a3s-test provider schema contract-generation
+a3s-test provider schema design-audit
+a3s-test provider schema llm
+a3s-test provider schema visual-grounding
+a3s-test worker schema
+a3s-test worker inventory
+a3s-test worker remote schema
+a3s-test worker artifacts schema
+a3s-test distributed schema
+```
+
+Provider schemas describe request, response, provenance, and authority fields. They do not mean the repository bundles an inference backend.
+
+## Agent sessions
+
+| Command                                   | Purpose                                                                              |
+| ----------------------------------------- | ------------------------------------------------------------------------------------ |
+| `agent start`                             | Create a persistent Web session with a goal, success condition, and policy boundary. |
+| `agent observe`                           | Return a fresh observation, semantic refs, and `observation_id`.                     |
+| `agent click`, `fill`, `press`, and peers | Execute compact actions bound to the latest observation.                             |
+| `agent act --action-json`                 | Execute the complete generated action schema.                                        |
+| `agent screenshot`                        | Save a contained PNG inside the session artifact root.                               |
+| `agent ground`                            | Request visual-location candidates without clicking.                                 |
+| `agent audit`                             | Request advisory design review without changing the verdict.                         |
+| `agent finish`                            | Write a terminal report and close the owned surface.                                 |
+| `agent abort`                             | Cancel the session and perform bounded cleanup.                                      |
+
+`agent open` aliases `agent start`, and `agent snapshot` aliases `agent observe`.
+
+### Session-start options
+
+```bash
+a3s-test agent start http://127.0.0.1:3000/checkout \
+  --session checkout \
+  --goal "Complete checkout" \
+  --success "The confirmation heading is visible" \
+  --allow-origin http://127.0.0.1:3001 \
+  --browser-driver standalone \
+  --json
+```
+
+| Option                   | Default or requirement | Purpose                                                                                |
+| ------------------------ | ---------------------- | -------------------------------------------------------------------------------------- |
+| `--session`              | Required               | Stable unique identifier inside the workspace                                          |
+| `--goal`                 | Required               | Concrete outcome for the coding agent                                                  |
+| `--success`              | At least one           | Repeatable observable success condition                                                |
+| `--allow-origin`         | Initial origin         | Adds an exact origin that may be navigated and observed                                |
+| `--allow-domain`         | None                   | Adds a network hostname without expanding action origins                               |
+| `--browser-driver`       | `a3s`                  | Selects the `a3s` or a compatible `standalone` adapter                                 |
+| `--browser-executable`   | Discovered             | Selects the executable for the chosen adapter                                          |
+| `--command-timeout-ms`   | 25,000                 | Deadline for each browser command                                                      |
+| `--idle-timeout-ms`      | 300,000                | Browser-daemon idle time allowed between agent turns                                   |
+| `--browser-microphone`   | `disabled`             | Can select a deterministic synthetic microphone                                        |
+| `--headed`               | Off                    | Shows the browser only for explicit local debugging                                    |
+| `--auto-resolve-repairs` | Off                    | Moves a repair from review-ready to resolved only after every verification gate passes |
+
+Automatic resolution is session-scoped. A verification failure, missing fresh ready revision, or incomplete evidence can never produce `resolved`.
+
+### Compact action commands
+
+Compact commands cover common one-step operations.
+
+```bash
+a3s-test agent click @e3 \
+  --session checkout \
+  --observation 7 \
+  --json
+
+a3s-test agent fill @e4 "tester@example.test" \
+  --session checkout \
+  --observation 8 \
+  --json
+
+a3s-test agent press Enter --session checkout --json
+a3s-test agent viewport 390 844 --session checkout --json
+a3s-test agent screenshot screenshots/confirmation.png \
+  --session checkout \
+  --json
+```
+
+Compact commands include `click`, `hover`, `focus`, `double-click`, `context-click`, `fill`, `type`, `insert-text`, `check`, `uncheck`, `select`, `drag`, `press`, `wheel`, `viewport`, and `screenshot`. When an action uses a ref, pass the latest observation ID that created it.
+
+### Complete Action JSON
+
+Tabs, frames, dialogs, network controls, waits, assertions, and advanced evidence use `agent act`.
+
+```bash
+a3s-test agent act \
+  --session checkout \
+  --action-json '{"type":"wait","condition":{"type":"text","value":"Order confirmed"}}' \
+  --json
+```
+
+Generate the complete revision-15 JSON Schema with `a3s-test agent schema`. Current action types are grouped below.
+
+| Category              | `type` values                                                                                                    |
+| --------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| Page state            | `navigate`, `snapshot`, `viewport`, `tab`, `frame`, `dialog`                                                     |
+| Pointer and form      | `click`, `hover`, `focus`, `double_click`, `context_click`, `fill`, `type`, `check`, `uncheck`, `select`, `drag` |
+| Keyboard and terminal | `insert_text`, `press`, `wheel`, `terminal_paste`, `terminal_resize`, `terminal_recording`                       |
+| Synchronization       | `wait`, `assert`                                                                                                 |
+| File and network      | `upload`, `download`, `network_route`, `network_unroute`                                                         |
+| Evidence              | `screenshot`, `har`, `trace`, `video`, `accessibility`, `console`, `page_errors`                                 |
+
+`insert_text` reuses an established editing context and accepts no target. `terminal_*` is legal only on a TUI surface. Unknown fields and actions unsupported by the selected surface are rejected before dispatch.
+
+### Test Kit inspection
+
+```bash
+a3s-test agent inspect \
+  --session checkout \
+  --component checkout-form \
+  --detail forensic \
+  --limit 100 \
+  --json
+```
+
+`--detail` accepts `summary`, `scoped`, `diff`, and `forensic`. Scope can be the page, a current private node, a component, or a region written as `viewport,x,y,width,height` or `document,x,y,width,height`. When the response returns a cursor, the next inspection must retain the same session, scope, and page revision.
+
+### Repair Ledger commands
+
+| Stage            | Command                        | Key arguments and result                                                           |
+| ---------------- | ------------------------------ | ---------------------------------------------------------------------------------- |
+| Pickup           | `repair-watch`                 | `--limit` defaults to 20, `--timeout-ms` to 30,000, and the batch window to 250 ms |
+| Claim            | `repair-claim`                 | Finding ID, idempotent request ID, attempt ID, and five-minute default lease       |
+| Start editing    | `repair-progress`              | Attempt ID must match, then state enters `repairing`                               |
+| Ask for input    | `repair-reply`                 | Retains the message and enters `needs_input`                                       |
+| Finish editing   | `repair-complete`              | Enters A3S Test-owned `verifying` without declaring resolved                       |
+| Run verification | `repair-verify`                | Success criteria, changed files, checks JSON, and optional ACL candidate           |
+| Fail or cancel   | `repair-fail`, `repair-cancel` | Appends a terminal event while retaining attempt history                           |
+
+Every transition needs a new idempotent request ID. Reuse the attempt ID returned by claim for progress, reply, complete, and fail. `repair-verify` must target a newer ready page revision.
+
+### Terminal session state and files
+
+```bash
+a3s-test agent finish \
+  --session checkout \
+  --status passed \
+  --summary "Checkout completed and confirmation was observed" \
+  --json
+```
+
+Persistent sessions live under `.a3s-test/agent-sessions/<session>/` in the current workspace. `events.jsonl` is append-only, `report.json` is the terminal result, and `artifacts/` accepts only relative evidence paths. Use `finish` for a session with an evidence-backed passed or failed result. Use the exact `abort` when the test cannot continue safely.
+
+## Contracts and providers
+
+```bash
+a3s-test contract generate \
+  --config tests/contracts/checkout.generate.acl \
+  --output tests/contracts/checkout.draft.json
+
+a3s-test contract review \
+  --draft tests/contracts/checkout.draft.json \
+  --review tests/contracts/checkout.review.acl \
+  --output tests/contracts/checkout.acl \
+  --audit tests/contracts/checkout.reviewed.json
+```
+
+`contract generate` writes a candidate draft only. `contract review` revalidates sources, review actions, and conflicts before publishing canonical ACL. Visual grounding and design review call deployment providers through `agent ground` and `agent audit`; both return advice without acting on the page.
+
+## ACL and distributed runs
+
+```bash
+a3s-test check <suite.acl> --json
+a3s-test run <suite.acl> --json
+a3s-test distributed plan <distributed.acl> --compact
+a3s-test distributed run <distributed.acl> --json
+```
+
+Remote workers use separate `a3s.test.remote-worker/3` execution and `a3s.test.remote-artifacts/1` artifact protocols. A request cannot select executables, applications, backends, credentials, or network policy. Deployment startup fixes those authorities.
+
+`check` performs admission without starting a surface. `run` executes after admission and separates product failures, specification errors, infrastructure errors, and cleanup errors in its machine result. `distributed plan` matches worker capabilities before `distributed run` dispatches authenticated shards.
+
+### Control-state ACL expectations
+
+Action protocol revision 8 adds the following `expect` conditions:
+
+```acl
+expect "name" {
+    target = label("Display name")
+    value = "Ada"
+}
+
+expect "submit" { disabled = role("button", "Submit") }
+expect "terms" { checked = label("Accept terms") }
+expect "review" { selected = role("option", "Review") }
+
+expect "status" {
+    target = role("listbox", "Publication status")
+    selected_values = ["review", "published"]
+}
+```
+
+`value` and `selected_values` require a separate `target`. The boolean pairs are `enabled`/`disabled`, `checked`/`unchecked`, and `selected`/`unselected`. Expected selected values must be unique. Both sides are sorted and compared as an exact set; `[]` is admitted and means an observed empty selection.
+
+A passing boolean state step returns this shape under `output.data`:
+
+```json
+{
+  "target": { "type": "role", "role": "button", "name": "Submit" },
+  "state": "enabled",
+  "expected": false,
+  "actual": false
+}
+```
+
+Value and selected-value outputs likewise contain `target`, `expected`, and `actual`; selected arrays use canonical order. `stable_for_ms` repeats the same typed assertion and adds the normal `assertion` and `stability` evidence.
+
+| Code                                                                                     | Meaning                                                                   |
+| ---------------------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
+| `test.spec.condition_ambiguous`                                                          | More than one expectation condition was configured                        |
+| `test.spec.attribute_required`                                                           | `value` or `selected_values` omitted `target`                             |
+| `test.spec.selected_value_duplicate`                                                     | An expected selected value appeared more than once                        |
+| `test.driver.web.target_not_found`                                                       | No target matched; this never proves a negative state                     |
+| `test.driver.web.target_ambiguous`                                                       | More than one target matched                                              |
+| `test.driver.web.state_unsupported`                                                      | The target or standalone ref protocol does not expose the requested state |
+| `test.driver.web.output_invalid`                                                         | Browser output had the wrong type or a duplicate selected value           |
+| `test.assert.value`                                                                      | An observed exact value differed                                          |
+| `test.assert.enabled`, `.disabled`, `.checked`, `.unchecked`, `.selected`, `.unselected` | An observed boolean state differed                                        |
+| `test.assert.selected_values`                                                            | The observed exact selected set differed                                  |
+
+Web reads live DOM state and gives native checkbox/radio properties priority over ARIA. GUI supports exact values only when CUA returned one, then rejects boolean and multi-selection state as `test.driver.gui.assertion_unsupported`. TUI supports visible terminal text only. A Page Context ref is resolved before dispatch; direct standalone refs cannot expose native option selection or multi-select arrays.
+
+### Focus-ownership ACL expectations
+
+Action protocol revision 13 adds four stable-target conditions.
+
+```acl
+expect "checkout-focused" { focused = role("button", "Checkout") }
+expect "cancel-unfocused" { unfocused = testid("cancel") }
+expect "dialog-owns-focus" { focus_within = role("dialog", "Checkout") }
+expect "page-does-not-own-focus" { focus_outside = testid("page-shell") }
+```
+
+`focused` compares the target with the deepest active element observable through the current document and nested open shadow roots. `focus_within` additionally follows rendered flat-tree ancestry through assigned slots, DOM parents, and shadow hosts. The negative forms compare the same live evidence only after target resolution. A missing element never proves `unfocused` or `focus_outside`.
+
+| Code                                                                          | Boundary                                                           |
+| ----------------------------------------------------------------------------- | ------------------------------------------------------------------ |
+| `test.spec.focus_target_unstable`                                             | ACL target is a browser ref or visual point                        |
+| `test.driver.web.target_not_found`, `.target_ambiguous`, or `.target_invalid` | Focus cannot be compared because stable target resolution failed   |
+| `test.driver.web.state_unsupported`                                           | A programmatic standalone ref requested live focus ownership       |
+| `test.assert.focused` or `.unfocused`                                         | The exact resolved element ownership differed                      |
+| `test.assert.focus_within` or `.focus_outside`                                | The resolved flat-tree scope ownership differed                    |
+| `test.assert.unstable`                                                        | A later sample contradicted an initially passing focus expectation |
+
+Semantic locators traverse open Shadow DOM and exclude accessibility-hidden composed ancestry, including hidden slot wrappers. CSS retains current-document query semantics. GUI and TUI fail closed without equivalent ownership evidence. Checked-in coverage includes 600/600 deterministic Web classifications, 200/200 sustained and 200/200 transient windows, plus 17 positive assertions and 11 negative or driver-error classifications in standalone Chromium.
+
+### Live semantic-state ACL expectations
+
+Action protocol revision 14 adds five independent positive/negative pairs.
+
+```acl
+expect "filters-open" { expanded = testid("filters") }
+expect "pin-off" { unpressed = role("button", "Pin") }
+expect "name-locked" { readonly = label("Display name") }
+expect "email-required" { required = placeholder("Email") }
+expect "email-invalid" { invalid = css("#email") }
+```
+
+The complete pairs are `expanded`/`collapsed`, `pressed`/`unpressed`, `readonly`/`writable`, `required`/`optional`, and `invalid`/`valid`. Native state wins where applicable: `<details>.open`, native read-only and required properties, and Constraint Validation when `willValidate` is true. ARIA fallback accepts exact booleans; `aria-invalid` additionally maps `grammar` and `spelling` to invalid. Mixed pressed state, unknown tokens, and absent state are unsupported rather than false.
+
+| Code                                                                                                                                        | Boundary                                                                              |
+| ------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| `test.spec.semantic_state_target_unstable`                                                                                                  | ACL target is a browser ref or visual point                                           |
+| `test.driver.web.target_not_found`, `.target_ambiguous`, or `.target_invalid`                                                               | Stable target resolution failed; this never proves a negative state                   |
+| `test.driver.web.state_unsupported`                                                                                                         | Target, token, surface, or programmatic browser ref cannot expose authoritative state |
+| `test.assert.expanded`, `.collapsed`, `.pressed`, `.unpressed`, `.readonly`, `.writable`, `.required`, `.optional`, `.invalid`, or `.valid` | Exactly one target exposed a boolean that differed from the requested condition       |
+| `test.assert.unstable`                                                                                                                      | A later valid sample contradicted an initially passing semantic-state expectation     |
+
+`writable` does not imply `enabled`; combine both when editability is the requirement. A current Page Context ref may resolve to a stable locator before dispatch. Semantic locators cross open Shadow DOM and exclude accessibility-hidden ancestry, while CSS retains current-document semantics. GUI and TUI fail closed. Checked-in evidence covers 1,000/1,000 deterministic Web classifications, 100/100 sustained and 100/100 transient windows, plus 27 positive assertions and 17 negative or driver-error classifications in standalone Chromium.
+
+### Rendered-text, ordered-sequence, and visible-count ACL expectations
+
+Action protocol revision 9 binds expected copy to one target and observes the complete visible count produced by a stable locator. Revision 10 adds the exact ordered rendered-text vector.
+
+```acl
+expect "total-copy" {
+    target = testid("total")
+    rendered_text = "Total $42.00"
+}
+
+expect "visible-rows" {
+    target = css("[data-row]")
+    visible_count = 3
+}
+
+expect "line-items" {
+    target = css("[data-line-item]")
+    rendered_texts = ["Keyboard × 1", "Mouse × 2", "Shipping", "Shipping"]
+}
+
+expect "no-line-items" {
+    target = css("[data-missing-line-item]")
+    rendered_texts = []
+}
+
+expect "no-errors" {
+    target = role("alert", "Checkout error")
+    visible_count = 0
+}
+```
+
+`rendered_text` requires exactly one visible target. It trims both ends, collapses each whitespace run to one space, and compares the normalized value exactly. A missing or ambiguous target remains a driver error; an observed mismatch is `test.assert.rendered_text`.
+
+`visible_count` accepts a semantic or CSS locator and compares its complete visible cardinality as a non-negative integer. An empty match set is observed evidence for zero. ACL rejects `ref()` and `visual_point()` with `test.spec.visible_count_target_unstable`; neither describes a repeatable set. An invalid CSS selector remains `test.driver.web.target_invalid`, while an observed count mismatch is `test.assert.visible_count`.
+
+`rendered_texts` accepts a stable semantic or CSS locator, normalizes every visible match independently, and compares the complete vector without sorting or deduplication. An empty match set is observed as `[]`; order and repeated strings remain significant. ACL rejects refs and visual points with `test.spec.rendered_texts_target_unstable`. Expected and observed vectors are capped at 256 items at both ACL and Web driver boundaries. Invalid selectors and limit violations remain driver errors; an observed vector mismatch is `test.assert.rendered_texts`.
+
+| Code                                       | Boundary                                                              |
+| ------------------------------------------ | --------------------------------------------------------------------- |
+| `test.spec.rendered_texts_target_unstable` | ACL target is a ref or visual point                                   |
+| `test.spec.rendered_texts_limit`           | ACL expected vector contains more than 256 items                      |
+| `test.driver.web.expectation_invalid`      | A typed caller bypassed ACL with an oversized expectation             |
+| `test.driver.web.collection_limit`         | The page or an untrusted driver response produced more than 256 items |
+| `test.assert.rendered_texts`               | A bounded observed vector differs in content, duplicates, or order    |
+
+| Locator plane | Match and visibility semantics                                                                                                                                                                                                      |
+| ------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| CSS           | Current document only. Positive rendered geometry counts unless a composed ancestor is hidden, display-none, visibility-hidden/collapsed, or fully transparent. `aria-hidden` alone does not remove visual pixels and still counts. |
+| Semantic      | Role, text, test ID, label, and placeholder targets traverse open Shadow DOM and apply the same rendered checks plus accessibility-hidden ancestry.                                                                                 |
+
+Both planes exclude zero-geometry elements. They do not claim viewport intersection or pixel-level occlusion. A current browser ref may identify the single `rendered_text` element, but cannot represent a `visible_count` or `rendered_texts` collection. GUI and TUI fail closed for all three conditions.
+
+All three conditions accept `stable_for_ms`. A later scalar-text, ordered-vector, or count mismatch becomes `test.assert.unstable`; a driver failure keeps its original code. Revision 9 covers 600/600 deterministic scalar-text/count classifications. Revision 10 adds 600/600 ordered-vector classifications. Combined stability evidence covers 300/300 consistent and 300/300 transient windows, plus a real Chromium CLI suite with 12 positive observations, 12 negative classifications, three accepted and three rejected 100 ms windows, and no private runtime leak.
+
+### Rendered-layout ACL expectations
+
+Action protocol revision 11 compares the rendered geometry of two stable targets.
+
+```acl
+expect "checkout-below-summary" {
+    target = testid("checkout")
+    relative_to = role("region", "Order summary")
+    layout = "below"
+    tolerance_px = 1
+    stable_for_ms = 300
+    sample_interval_ms = 25
+}
+```
+
+`target`, `relative_to`, and `layout` are required. Both targets accept role, text, test ID, label, placeholder, or CSS locators. ACL rejects `ref()` and `visual_point()` with `test.spec.layout_target_unstable`; each is bound to one observation and cannot be re-resolved through a stability window. Current Page Context refs remain usable after both resolve to stable locators. `tolerance_px` defaults to zero and accepts only integers through 1,024.
+
+| Group        | Relations                                                                                                | Comparison rule                                                                 |
+| ------------ | -------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| Direction    | `above`, `below`, `left_of`, `right_of`                                                                  | Boundary intrusion cannot exceed the tolerance                                  |
+| Containment  | `contains`, `inside`                                                                                     | Every containing edge may miss by at most the tolerance                         |
+| Intersection | `overlaps`, `not_overlapping`                                                                            | Overlap exceeds the tolerance on both axes; non-overlap needs one axis at/below |
+| Alignment    | `aligned_left`, `aligned_right`, `aligned_top`, `aligned_bottom`, `aligned_center_x`, `aligned_center_y` | Absolute edge or center difference is at most the tolerance                     |
+| Size         | `same_width`, `same_height`, `same_size`                                                                 | Absolute width or height difference is at most the tolerance                    |
+
+Web resolves both targets and captures both rectangles in one page evaluation. CSS uses visual rendered visibility, including an otherwise visible `aria-hidden` element. Semantic locators additionally exclude accessibility-hidden ancestry and traverse open Shadow DOM. A passing payload returns both targets, both rectangles, relation, tolerance, and `matched = true`.
+
+| Code                                | Boundary                                                                                     |
+| ----------------------------------- | -------------------------------------------------------------------------------------------- |
+| `test.spec.layout_target_unstable`  | Either ACL target is a ref or visual point                                                   |
+| `test.spec.layout_relation_unknown` | `layout` is outside the closed 17-relation vocabulary                                        |
+| `test.spec.layout_tolerance_limit`  | ACL tolerance exceeds 1,024 pixels                                                           |
+| `test.driver.web.target_not_found`  | Either stable target has no eligible match                                                   |
+| `test.driver.web.target_ambiguous`  | Either stable target has multiple eligible matches                                           |
+| `test.driver.web.target_invalid`    | Either CSS selector is invalid                                                               |
+| `test.driver.web.output_invalid`    | Either rectangle or the untrusted result envelope is malformed or outside the geometry bound |
+| `test.assert.layout`                | Two valid rectangles violate the requested relation                                          |
+| `test.assert.unstable`              | A later stability sample violates a relation that initially matched                          |
+
+GUI requires both frames in one fresh CUA snapshot. TUI returns an explicit unsupported error. Stability output retains the first and last complete dual-rectangle payloads; later resolution or geometry failure keeps driver ownership. The checked-in evidence covers 3,400/3,400 deterministic cases, 100/100 accepted sustained windows, 100/100 rejected transients, all 17 relations, 25 positive assertions, and 15 negative/error classifications in standalone Chromium with exact cleanup.
+
+### Visual-viewport coverage and pointer-hit ACL expectations
+
+Action protocol revision 12 distinguishes a target that intersects the visual viewport from one that pointer hit testing can reach. Revision 15 adds bounded coverage thresholds.
+
+```acl
+expect "checkout-in-view" {
+    in_viewport = testid("checkout")
+}
+
+expect "checkout-mostly-visible" {
+    target = testid("checkout")
+    viewport_coverage_at_least = 80
+}
+
+expect "drawer-mostly-outside" {
+    target = css("#drawer")
+    viewport_coverage_at_most = 10
+}
+
+expect "checkout-pointer-hit" {
+    pointer_reachable = role("button", "Checkout")
+    stable_for_ms = 300
+    sample_interval_ms = 25
+}
+```
+
+`in_viewport` requires positive-area intersection. A partial target passes with an `intersection_ratio` between zero and one; a fully offscreen target or boundary-only contact fails. Coverage is intersection area divided by complete target area. `viewport_coverage_at_least` accepts 1 through 100; `viewport_coverage_at_most` accepts 0 through 99. The excluded endpoints would be unconditionally true. `pointer_reachable` samples a deterministic 3 by 3 grid over the clipped target rectangle and passes when at least one deep hit reaches the target or a composed-tree descendant. Coverage does not prove occlusion, and none of these forms proves enabled state, keyboard access, event handling, or product intent.
+
+All forms accept stable role, text, test ID, label, placeholder, or CSS locators. ACL rejects refs and visual points, while a current Page Context ref may resolve to a stable locator before dispatch. Semantic targets traverse open Shadow DOM and exclude accessibility-hidden ancestry. CSS keeps visually rendered `aria-hidden` targets. Native hit testing makes a pointer-receiving transparent overlay block and makes a `pointer-events: none` overlay pass through.
+
+| Code                                            | Boundary                                                                          |
+| ----------------------------------------------- | --------------------------------------------------------------------------------- |
+| `test.spec.in_viewport_target_unstable`         | ACL target is a browser ref or visual point                                       |
+| `test.spec.viewport_coverage_target_unstable`   | ACL coverage target is a browser ref or visual point                              |
+| `test.spec.viewport_coverage_threshold_trivial` | ACL threshold would make the coverage assertion unconditionally true              |
+| `test.spec.viewport_coverage_percent_limit`     | ACL coverage percentage is greater than 100                                       |
+| `test.spec.pointer_reachable_target_unstable`   | ACL target is a browser ref or visual point                                       |
+| `test.driver.web.target_not_found`              | Stable target has no eligible match                                               |
+| `test.driver.web.target_ambiguous`              | Stable target has multiple eligible matches                                       |
+| `test.driver.web.target_invalid`                | CSS selector is invalid                                                           |
+| `test.driver.web.output_invalid`                | Rectangle, sample count, sample order, coordinate, type, or envelope is malformed |
+| `test.driver.web.interactability_unsupported`   | The browser does not expose the required hit-test primitive                       |
+| `test.assert.in_viewport`                       | Valid target rectangle has no positive-area visual-viewport intersection          |
+| `test.assert.viewport_coverage_at_least`        | Valid recomputed coverage is below the admitted minimum                           |
+| `test.assert.viewport_coverage_at_most`         | Valid recomputed coverage is above the admitted maximum                           |
+| `test.assert.pointer_reachable`                 | No admitted sample reaches the target or a composed-tree descendant               |
+| `test.assert.unstable`                          | A later stability sample violates an assertion that initially passed              |
+
+A passing viewport payload carries both rectangles and the independently recomputed ratio. Coverage adds `actual_percent`, `comparison`, `threshold_percent`, and `matched`. A passing pointer payload adds all nine ordered sample coordinates and booleans plus `sample_count` and `reachable_samples`. GUI and TUI fail closed because their current protocols do not provide equivalent evidence. Checked-in evidence covers 1,000/1,000 base Core geometry cases plus 2,000/2,000 threshold cases, 4,000/4,000 Web protocol classifications, 300/300 sustained and 300/300 transient windows, and a standalone Chromium matrix with 37 passing assertions and 25 negative or driver-error classifications plus exact cleanup.
+
+### Hidden ACL expectations
+
+`hidden` asserts that a stable target locator has no visible match at the current observation. Both an absent target and a matching element without a rendered visible box satisfy the condition.
+
+```acl
+expect "dialog-closed" {
+    hidden = role("dialog", "Checkout")
+}
+```
+
+The ACL compiler stores the existing `Action::Assert(Expectation::Visible(target))` plus a runner-owned hidden mode. This policy adds no action variant; the current protocol is revision 15 because of the typed expectations above. The runner dispatches a positive visibility probe and uses this contract.
+
+| Probe result                       | Step result                                                                                  |
+| ---------------------------------- | -------------------------------------------------------------------------------------------- |
+| Visible output                     | `test.assert.hidden`, with `visible = true` and the positive output under `probe`            |
+| `test.assert.visible`              | Passed, with `visible = false` and code/message under `probe_error`                          |
+| Any `test.driver.*` or other error | Original error; failed target resolution or infrastructure is not evidence that UI is hidden |
+
+A passing step exposes the following stable shape under `output.data`.
+
+```json
+{
+  "expected": "hidden",
+  "visible": false,
+  "target": {
+    "type": "role",
+    "role": "dialog",
+    "name": "Checkout"
+  },
+  "probe_error": {
+    "code": "test.assert.visible",
+    "message": "target is not visible"
+  }
+}
+```
+
+Use a semantic or CSS locator supported by the selected surface. `ref()` and `visual_point()` fail admission because they identify observation-bound evidence; failure to resolve them could mean stale data rather than hidden UI. Web supports its semantic and CSS visibility targets. GUI supports its admitted semantic targets and keeps stale or ambiguous matches as driver errors. TUI does not currently support target visibility assertions.
+
+| Error code                         | Meaning                                                                  |
+| ---------------------------------- | ------------------------------------------------------------------------ |
+| `test.spec.hidden_target_unstable` | ACL used an observation-bound ref or visual point                        |
+| `test.assert.hidden`               | The positive probe found a visible target                                |
+| `test.run.assertion_mode_invalid`  | A programmatic suite attached hidden mode to an invalid action or target |
+
+`expect hidden` is an immediate assertion. Combine it with `stable_for_ms` when the product must remain hidden. A later visible sample then returns `test.assert.unstable` and retains the first hidden observation plus the visible counterexample. Use the wait form below when disappearance is the synchronization condition.
+
+### Hidden ACL waits
+
+```acl
+wait "dialog-closed" {
+    hidden = role("dialog", "Checkout")
+}
+```
+
+The compiler stores the existing visible-target wait condition plus `wait_mode = hidden`; under current revision 15 it still reuses the earlier visible-action variant. Runner sends immediate read-only positive visibility assertions and polls every 50 ms only while visible evidence continues.
+
+| Boundary                             | Result                                                                                 |
+| ------------------------------------ | -------------------------------------------------------------------------------------- |
+| Already hidden or absent             | Passed after one probe; no interval wait                                               |
+| Becomes hidden                       | Passed on the first `test.assert.visible` mismatch                                     |
+| Remains visible at scenario deadline | `timed_out`, `test.run.timeout`, exit 124, with latest visible counter-evidence        |
+| Run is cancelled                     | `cancelled`, `test.run.cancelled`, exit 130, with bounded cleanup and counter-evidence |
+| Reaches 1,201 probes                 | Failed with `test.run.hidden_wait_probe_limit`                                         |
+| Driver, stale, or ambiguous failure  | Original code, `wait.outcome = inconclusive`; never converted into disappearance       |
+| Programmatic policy/target mismatch  | `test.run.wait_mode_invalid` before driver dispatch                                    |
+
+A matched delayed wait exposes this stable shape under `output.data`:
+
+```json
+{
+  "expected": "hidden",
+  "visible": false,
+  "first_visible": { "visible": true },
+  "last_visible": { "visible": true },
+  "probe_error": {
+    "code": "test.assert.visible",
+    "message": "target is not visible"
+  },
+  "wait": {
+    "condition": "hidden",
+    "outcome": "matched",
+    "poll_interval_ms": 50,
+    "max_probes": 1201,
+    "probes": 3,
+    "observed_ms": 101
+  }
+}
+```
+
+`probes` counts logical observations. Step `attempts` counts driver dispatches and can exceed it only for admitted retryable infrastructure failures. The same runner policy is used by normal suites and agent-run deterministic verification.
+
+### Stable ACL expectations
+
+`stable_for_ms` adds a bounded sampling policy to an ACL `expect`. It works with text, exact URL, visible-target, and hidden-target expectations on every surface whose driver supports the underlying expectation. It does not add a new action type or change a driver contract.
+
+```acl
+expect "settled-total" {
+    visible = testid("order-total")
+    stable_for_ms = 300
+    sample_interval_ms = 25
+}
+```
+
+| Field                | Required            | Admitted values                             | Default                           |
+| -------------------- | ------------------- | ------------------------------------------- | --------------------------------- |
+| `stable_for_ms`      | To enable stability | Integer from 10 through 60,000 ms           | Stability disabled                |
+| `sample_interval_ms` | No                  | Positive integer no greater than the window | 50 ms, or the window when shorter |
+
+The maximum planned work is `ceil(stable_for_ms / sample_interval_ms) + 1` samples, including the initial observation. Admission rejects a plan above 1,001 samples. The runner starts the clock only after the initial sample passes and always samples once at the end of the requested window.
+
+Stable-step JSON keeps the normal step fields and adds the following values under `output.data`.
+
+| JSON path                      | Meaning                                                                                                                   |
+| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------- |
+| `assertion.first`              | Driver data from the initial successful sample                                                                            |
+| `assertion.last`               | Driver data from the final or failing sample; it may be `null` when the driver returned only an error                     |
+| `stability.outcome`            | `passed`, `unstable`, or `inconclusive`                                                                                   |
+| `stability.required_ms`        | Requested stability window                                                                                                |
+| `stability.sample_interval_ms` | Admitted sampling interval                                                                                                |
+| `stability.samples`            | Completed observation points, including the first sample                                                                  |
+| `stability.observed_ms`        | Actual elapsed time after the first successful sample; it may exceed the request because of scheduling and driver latency |
+| step `attempts`                | All driver invocations; it may exceed `samples` when infrastructure retries are enabled                                   |
+
+The first false sample retains its original assertion code. A later false sample uses `test.assert.unstable`. Timeout and cancellation remain terminal `test.run.*` results and may have no stability payload because sampling did not complete.
+
+| Error code                                   | Meaning                                                                   |
+| -------------------------------------------- | ------------------------------------------------------------------------- |
+| `test.spec.type` or `test.spec.number_range` | A duration or interval is not a positive integer                          |
+| `test.spec.stability_duration_required`      | An interval was supplied without a window                                 |
+| `test.spec.stability_range`                  | The window is outside 10 through 60,000 ms                                |
+| `test.spec.stability_interval`               | The interval exceeds the window                                           |
+| `test.spec.stability_sample_limit`           | The plan exceeds 1,001 samples                                            |
+| `test.assert.unstable`                       | The initial sample passed and a later sample was false                    |
+| `test.run.stability_action_invalid`          | A programmatic suite attached stability to a non-assert action            |
+| `test.run.stability_invalid`                 | A programmatic suite bypassed admitted bounds                             |
+| `test.run.stability_output_invalid`          | A programmatic driver returned an advisory report for a sampled assertion |
+
+## JSON and error contracts
+
+Automation should pass `--json` and read stable error codes, state, and structured fields instead of parsing human help text.
+
+| Scope            | Owner                                           |
+| ---------------- | ----------------------------------------------- |
+| `test.spec.*`    | ACL, configuration, target, or path admission   |
+| `test.driver.*`  | Surface adapter, protocol, and lifecycle        |
+| `test.assert.*`  | Product state differs from an expectation       |
+| `test.run.*`     | Deadline, cancellation, scheduling, and cleanup |
+| `test.session.*` | Persistent sessions, Repair Ledger, and leases  |
+
+See [Troubleshooting](../guide/troubleshooting.mdx) for response steps. See the [capability reference](./capabilities.mdx) for complete functionality and authority boundaries.
+
+## Exit codes
+
+|  Exit | Meaning                                                                    |
+| ----: | -------------------------------------------------------------------------- |
+|   `0` | Passed                                                                     |
+|   `1` | Test or action failed                                                      |
+|   `2` | Invalid invocation or configuration, or distributed infrastructure failure |
+| `124` | Timed out                                                                  |
+| `130` | Cancelled                                                                  |
+
+The first `Ctrl+C` requests cancellation and owned-surface cleanup. A second interrupt terminates only browser and CUA process boundaries and TUI process trees owned by the current process.
+
+## Web capability summary
+
+The Web driver supports navigation, semantic snapshots, click, hover, focus, fill and type, selection-scoped text insertion, check, select, double and context click, drag, key press, modifier wheel, and viewport control. Synchronization covers load, text, URL, positive visibility, bounded disappearance waits, exact or scoped focus ownership, live disclosure/toggle/read-only/required/validity state, and positive or hidden expectations. Evidence includes screenshots, accessibility trees, console output, page errors, HAR, Chrome traces, WebM video, and contained downloads.
+
+Browser execution is headless by default. `--headed` is an explicit debugging option. Initial origin, `--allow-origin`, and explicit hostname exceptions constrain navigation and network access.

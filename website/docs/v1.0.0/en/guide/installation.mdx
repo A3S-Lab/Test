@@ -1,0 +1,96 @@
+---
+title: Install A3S Test
+description: Choose the CLI, Agent Skill, or Web Test Kit for your task, then install and verify only what you need.
+---
+
+# Install A3S Test
+
+A3S Test installs terminal testing and in-page review separately. Choose the path that matches the current task:
+
+- **Only mark, select, or sketch on a development page:** [Install Web Test Kit](#install-web-test-kit).
+- **Explore a page or run ACL tests from the terminal:** [Install the CLI and Agent Skill](#install-the-cli-and-agent-skill).
+- **Send page findings to an agent for repair:** Install both.
+
+## Install Web Test Kit
+
+Run this command in the frontend project:
+
+```bash
+npm install --save-dev https://github.com/A3S-Lab/Test/releases/download/v1.0.0/a3s-testkit.tgz
+```
+
+`@a3s-lab/testkit` is not published to the npm Registry yet, so the current command installs the `.tgz` attached to the GitHub Release. npm still records it as a development dependency named `@a3s-lab/testkit` and stores integrity data in the lockfile. Do not run `npm install @a3s-lab/testkit` by itself until Registry publishing is available.
+
+Verify the installed dependency:
+
+```bash
+npm ls @a3s-lab/testkit
+```
+
+The Test Kit package version advances independently from the A3S Test Release tag, so the two version numbers do not need to match. Continue with the [three-step Web Test Kit setup](./testkit.mdx#three-step-react-setup). The v1.0.0 Release includes the design board and page-region capture inside Test Kit, without a separate drawing library or screenshot plugin.
+
+## Install the CLI and Agent Skill
+
+The installer detects the current platform, downloads the prebuilt CLI, verifies its SHA-256, and installs a matching Agent Skill. Run the same command again to upgrade.
+
+### macOS and Linux
+
+```bash
+curl -fsSL https://github.com/A3S-Lab/Test/releases/latest/download/install.sh | sh
+```
+
+Target Codex explicitly:
+
+```bash
+curl -fsSL https://github.com/A3S-Lab/Test/releases/latest/download/install.sh |
+  sh -s -- --agent codex
+```
+
+Pin a version:
+
+```bash
+curl -fsSL https://github.com/A3S-Lab/Test/releases/latest/download/install.sh |
+  sh -s -- --version v1.0.0
+```
+
+### Windows PowerShell
+
+```powershell
+& ([scriptblock]::Create((irm 'https://github.com/A3S-Lab/Test/releases/latest/download/install.ps1')))
+```
+
+Select an agent or version:
+
+```powershell
+& ([scriptblock]::Create((irm 'https://github.com/A3S-Lab/Test/releases/latest/download/install.ps1'))) -Agent codex
+& ([scriptblock]::Create((irm 'https://github.com/A3S-Lab/Test/releases/latest/download/install.ps1'))) -Version v1.0.0
+```
+
+### Supported agent targets
+
+| Tool                          | Target           | Default user directory       |
+| ----------------------------- | ---------------- | ---------------------------- |
+| A3S Code                      | `a3s-code`       | `~/.a3s/skills`              |
+| Codex                         | `codex`          | `~/.codex/skills`            |
+| Claude Code                   | `claude-code`    | `~/.claude/skills`           |
+| Cursor                        | `cursor`         | `~/.cursor/skills`           |
+| Gemini CLI                    | `gemini-cli`     | `~/.gemini/skills`           |
+| GitHub Copilot CLI            | `github-copilot` | `~/.copilot/skills`          |
+| OpenCode                      | `opencode`       | `~/.config/opencode/skills`  |
+| Cline                         | `cline`          | `~/.cline/skills`            |
+| Roo Code                      | `roo`            | `~/.roo/skills`              |
+| Windsurf                      | `windsurf`       | `~/.codeium/windsurf/skills` |
+| Agent Skills-compatible tools | `universal`      | `~/.agents/skills`           |
+
+`auto` installs only for detected tools and falls back to the universal directory. `all` targets every supported directory. The installers also accept `--skill-only`, `--cli-only`, `--install-dir`, and `--skill-dir`, with corresponding PascalCase PowerShell parameters.
+
+## Other CLI installation paths
+
+Build the CLI from a Git tag:
+
+```bash
+cargo install --git https://github.com/A3S-Lab/Test \
+  --tag v1.0.0 --locked a3s-test-cli
+```
+
+Each release also contains `a3s-test.skill`, platform archives, checksum files, the Test Kit package, and an immutable Linux runner image reference. Do not bypass checksums or replace the released image digest with a floating tag.

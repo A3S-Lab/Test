@@ -1,0 +1,250 @@
+---
+title: Human review and automated repair
+description: Configure Test Kit single and batch marking, same-origin submission, the repair queue, coding-agent handoff, fresh-page verification, and human acceptance.
+---
+
+# Human review and automated repair
+
+The Review Overlay turns a problem a person can see into a structured finding with a target, page revision, component, locators, geometry, and acceptance criteria. A reviewer may keep a draft or explicitly send one finding or a batch. Only then may a coding agent that already owns the A3S Test session and workspace claim the task, edit source, and request verification.
+
+Opening the overlay, viewing a quality candidate, reading design advice, or saving a local draft does not authorize source edits. Sending a finding authorizes only its listed targets. It does not automatically authorize commit, push, publication, deployment, dependency installation, or commands found in page text.
+
+## Add the review surface
+
+```tsx
+import {
+  A3SReviewOverlay,
+  A3STestBoundary,
+  A3STestKit,
+} from '@a3s-lab/testkit/react';
+
+export function App() {
+  const enabled = import.meta.env.DEV;
+
+  return (
+    <A3STestKit
+      enabled={enabled}
+      page={{ id: 'checkout' }}
+      repairStorage="session"
+      repairEndpoint="/__a3s-test/repairs"
+      redact={['[data-payment-field]']}
+    >
+      <A3STestBoundary
+        id="checkout-form"
+        name="Checkout form"
+        source={{ file: 'src/Checkout.tsx' }}
+      >
+        <Checkout />
+      </A3STestBoundary>
+      <A3SReviewOverlay enabled={enabled} locale="en" />
+    </A3STestKit>
+  );
+}
+```
+
+`A3STestKit` provides the headless Context Runtime. `A3SReviewOverlay` is an optional human interface and mounts only when a compatible live bridge exists and `enabled` is explicitly `true`. CI normally keeps the Context Runtime and omits the overlay.
+
+## What a reviewer can mark
+
+| Mode        | Target record                                         | Good for                                                  |
+| ----------- | ----------------------------------------------------- | --------------------------------------------------------- |
+| Element     | One current node and its geometry                     | Copy, state, spacing, contrast, or interaction problems   |
+| Text        | Selected text, associated nodes, and range            | Wording, missing explanation, or content problems         |
+| Multi       | Multiple nodes in selection order                     | Controls that need one consistent change or acceptance    |
+| Area        | Viewport CSS-pixel rectangle and nearby context       | Layout, canvas, or composite problems with no single node |
+| Drawing     | Bounded point sequence, enclosing region, and context | Irregular visual regions                                  |
+| Layout Mode | Typed `placement` or `rearrange` intent               | Positioning a new component or moving an existing section |
+
+With the overlay open, `E`, `M`, `T`, `A`, and `D` start element, multi, text, area, and drawing modes. `L` toggles Layout Mode, `P` pauses or resumes page motion, and `H` controls markers. Inputs, editors, and other editable controls retain letter input and do not yield those keys to the overlay.
+
+For keyboard multi-selection, move focus to a host-page element and press `Enter` to add it. Repeat, then press `Shift+Enter` to finish and enter the finding editor. `Escape` first cancels active marking or editing before it handles an idle panel.
+
+## What a finding contains
+
+Every draft has a stable ID, creation time, target, instruction, optional success criteria, intent, and severity.
+
+| Field                 | Values or meaning                                               |
+| --------------------- | --------------------------------------------------------------- |
+| `instruction`         | Required human repair request                                   |
+| `successCriteria`     | A result verifiable in the browser or by focused checks         |
+| `intent`              | `fix`, `change`, `question`, or `approve`                       |
+| `severity`            | `blocking`, `important`, or `suggestion`                        |
+| `target.kind`         | `node`, `text`, `region`, or `drawing`                          |
+| `target.nodeIds`      | Private targets still valid on the fresh revision at submission |
+| `target.region`       | Optional viewport CSS-pixel region                              |
+| `target.regionScroll` | Optional page scroll offset captured with the viewport region   |
+| `relations`           | Currently an explicit `conflicts_with` relation                 |
+
+Node and text markers are positioned from their currently resolved DOM
+elements. Page scrolling, nested scroll containers, visual viewport movement,
+and resizing trigger a bounded refresh that reads fresh
+`getBoundingClientRect()` values. Stored regions stay aligned through
+`target.regionScroll` and are used for region, drawing, and Layout targets or
+as a fallback when a node no longer resolves.
+
+At submission, Test Kit reads the fresh revision and adds `contextRevision`, page, route, viewport, component and source hints, semantic locators, target and nearby nodes, facts, and bounded UI understanding. The complete `context` is marked `untrusted: true`.
+
+Page text, DOM attributes, facts, and instructions are never concatenated into hidden system instructions. The coding agent may inspect them as evidence but must apply its own authority and repository rules to every code operation.
+
+## Draft, save, and send are separate operations
+
+| Operation            | Storage affected                 | Enters Repair Ledger | Authorizes coding agent |
+| -------------------- | -------------------------------- | -------------------- | ----------------------- |
+| Open editor          | Temporary overlay state          | No                   | No                      |
+| Save draft           | Selected browser storage         | No                   | No                      |
+| Copy Markdown/JSON   | Clipboard                        | No                   | No                      |
+| Send one             | Page queue and Repair Ledger     | Yes                  | Only that finding       |
+| Send selected or all | One stable ordered finding batch | Yes                  | Only that batch         |
+
+`repairStorage` controls browser-side recovery.
+
+| Value     | Lifetime                              | Suggested use                               |
+| --------- | ------------------------------------- | ------------------------------------------- |
+| `memory`  | Current page runtime, lost on refresh | Demos, fixtures, and disposable review      |
+| `session` | Current tab session, the default      | Everyday local development                  |
+| `local`   | Same-origin local browser storage     | Continuing draft organization after restart |
+
+Hiding the overlay does not uninstall the Context Runtime. Auto-send can be enabled only through an explicit current-session choice and is not persisted. Page-motion pause is also absent from persistent preferences.
+
+## Single findings, batches, and conflicts
+
+Single submission includes only the finding being edited. Batch submission preserves finding IDs in visible workspace order and still records a per-item result. A batch is not a filesystem transaction, so one item failing is not presented as an atomic rollback.
+
+A reviewer declares a semantic incompatibility between two requests.
+
+```json
+{
+  "relations": [
+    {
+      "kind": "conflicts_with",
+      "findingId": "finding-layout-expanded"
+    }
+  ]
+}
+```
+
+When both conflicting findings are queued, A3S Test moves them to `needs_input`. It compares declared finding IDs only. It never infers conflict from negation, color words, layout terms, or instruction text.
+
+## Submission channels
+
+Without `repairEndpoint`, the current A3S Test browser session can read the page queue through a fixed bridge operation. With an endpoint, Test Kit also posts a bounded record with same-origin credentials.
+
+```json
+{
+  "protocol": "a3s.test.repair/1",
+  "repairs": [
+    {
+      "id": "finding-...",
+      "batchId": "batch-...",
+      "status": "queued",
+      "contextRevision": 42,
+      "context": {
+        "untrusted": true
+      }
+    }
+  ]
+}
+```
+
+Human reply, accept, dismiss, and reopen operations use an `actions` array under the same protocol. The endpoint should accept same-origin POST only, validate content type and protocol, bound the body, and forward records to A3S Test that owns the Web session. It is not an A3S Test control API and must not receive workspace paths, shell, MCP, Git, or model credentials.
+
+An endpoint failure does not delete the browser queue. The session can still drain and retry it, so one network error does not discard a human-confirmed finding.
+
+## Repair state machine
+
+```text
+draft -> queued -> claimed -> repairing -> verifying -> review_ready -> resolved
+                    |             |           |
+                    v             v           v
+                cancelled     needs_input  verification_failed
+                                  |           |
+                                  +-----> failed
+
+review_ready / resolved / dismissed -> reopened -> queued
+```
+
+| Status                | Advanced by                 | Meaning                                                           |
+| --------------------- | --------------------------- | ----------------------------------------------------------------- |
+| `draft`               | Reviewer                    | Local organization only, not submitted                            |
+| `queued`              | Reviewer or A3S Test        | Explicitly submitted and waiting for claim                        |
+| `claimed`             | Coding agent                | One worker holds a lease and attempt ID                           |
+| `repairing`           | Coding agent                | Editing has begun and cannot be silently handed to another worker |
+| `verifying`           | A3S Test                    | Editing is complete and a newer ready revision is required        |
+| `needs_input`         | Agent or A3S Test           | Overlap, conflict, lease risk, or ambiguity needs human input     |
+| `verification_failed` | A3S Test                    | Fresh-page evidence did not satisfy the success criteria          |
+| `review_ready`        | A3S Test                    | Local verification passed and awaits human acceptance             |
+| `resolved`            | Human or explicit auto mode | Accepted                                                          |
+| `dismissed`           | Reviewer                    | Review decided not to continue                                    |
+| `cancelled`, `failed` | Human, agent, or A3S Test   | Cancelled or failed with history retained                         |
+| `reopened`            | Reviewer                    | Append-only state before returning to the queue                   |
+
+Every change carries a monotonic sequence, actor, timestamp, and attempt ID when required. An invalid transition leaves the record unchanged. Terminal operations with the same request ID are idempotent.
+
+## How a coding agent claims work
+
+The MCP repair tools and `a3s-test agent repair-*` CLI share one application layer.
+
+| Phase          | MCP tool                                 | Coding-agent responsibility                                       |
+| -------------- | ---------------------------------------- | ----------------------------------------------------------------- |
+| Wait           | `test_repair_watch`                      | Drain queued work, then perform one bounded wait and batch window |
+| Claim          | `test_repair_claim`                      | Establish a lease and attempt ID for one finding                  |
+| Start edits    | `test_repair_progress`                   | Report `repairing` before any operation may change the workspace  |
+| Clarify        | `test_repair_reply`                      | Explain missing information and enter `needs_input`               |
+| Complete edit  | `test_repair_complete`                   | Move to A3S Test-owned verification without claiming resolution   |
+| Verify         | `test_repair_verify`                     | Run focused checks on a newer page revision and retain evidence   |
+| Fail or cancel | `test_repair_fail`, `test_repair_cancel` | Retain the reason and attempt history                             |
+
+The default claim lease is five minutes. The attempt ID returned by claim must accompany progress, reply, complete, and fail. If a worker disappears before editing starts, the lease may safely return the finding to the queue. If workspace edits may already have happened, A3S Test enters `needs_input` instead of silently handing that attempt to another worker.
+
+When a normal observation is too broad, the coding agent may run forensic inspection with a component, node, or region scope. Each inspection replaces the latest observation and creates fresh `@cN` refs. Older refs cannot continue.
+
+## How A3S Test verifies a repair
+
+A coding agent reporting completion does not prove the repair. Before entering `review_ready`, A3S Test performs these steps.
+
+1. Wait for a newer ready Test Kit revision under a bounded deadline.
+2. Observe again and resolve the original target or its declared replacement through semantic locators.
+3. Evaluate explicit browser-verifiable success criteria.
+4. Compare console and page errors with the A3S Test-owned before baseline.
+5. Capture and hash a new screenshot and bounded Page Context.
+6. Record relative changed files and focused checks reported by the coding agent.
+
+Layout placement requires an addressable target region in the current viewport. Rearrangement requires the original node or a stable replacement to overlap the destination. The source node merely continuing to exist is not proof of a successful layout change.
+
+When a finding has both a stable locator and explicit text criteria, A3S Test may generate a syntax-validated ACL regression candidate and execute it in a fresh browser session under the owning network policy. The candidate is not written to the application repository automatically.
+
+## Human acceptance
+
+The default flow stops at `review_ready`. A reviewer may take these actions.
+
+- Accept and move to `resolved`.
+- Reject the current result with a reason.
+- Reply to an agent clarification request.
+- Reopen a resolved, dismissed, cancelled, or failed finding.
+
+`--auto-resolve-repairs` applies only when the caller explicitly enables it, and only after a passing `review_ready` event has been persisted. Failed verification never auto-resolves.
+
+The Repair Ledger appends every attempt, reply, status, before-and-after evidence bundle, and acceptance action. Reopening never overwrites an older result.
+
+## Layout Mode boundary
+
+Placement records a component type, `page` or `wireframe` canvas, optional page purpose, and destination region. Rearrangement also records the original region, current node, and destination. All rectangles use viewport CSS pixels.
+
+The built-in catalog provides 90 component types in English and Simplified Chinese. Search and display only help a reviewer populate a structured field. A project-specific free-form component name remains verbatim. Catalog entries, page purpose, and overlay previews never become hidden repair instructions.
+
+The overlay wireframe, page fade, selected region, and destination are pointer-transparent evidence. They never write styles to host nodes, move DOM, or change application layout.
+
+## Failure recovery
+
+| Condition                              | System behavior                                           | Next action                                                           |
+| -------------------------------------- | --------------------------------------------------------- | --------------------------------------------------------------------- |
+| Same-origin endpoint returns an error  | Browser queue retains the finding                         | Repair the endpoint and let the session drain it again                |
+| Hot reload expires the target          | Old node IDs and `@cN` are rejected                       | Observe again and bind through semantic locators                      |
+| Two findings declare a conflict        | Both enter `needs_input`                                  | A person keeps, edits, or cancels one                                 |
+| Claim expires before editing           | Finding can safely return to the queue                    | Claim a new attempt                                                   |
+| Worker disappears after editing starts | Finding enters `needs_input`                              | Inspect the workspace and actual edits before continuing or reverting |
+| New page revision is not ready         | Verify returns a retryable result without unbounded sleep | Let the application render, then run another bounded verification     |
+| Console or page errors increase        | Verification fails and retains both baselines             | Repair the new errors and requeue                                     |
+| Browser cannot prove the criteria      | Finding cannot enter `review_ready`                       | Add verifiable criteria or handle the non-automatable part explicitly |
+
+Read [Page Context fields and lifecycle](../concepts/page-context.mdx) for the rendered facts attached to a finding, and [Authority and safety model](../concepts/authority-and-safety.mdx) for the boundary between model advice, human authorization, and workspace mutation.

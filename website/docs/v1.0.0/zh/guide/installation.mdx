@@ -1,0 +1,96 @@
+---
+title: 安装 A3S Test
+description: 分清 CLI、Agent Skill 与 Web Test Kit，按使用场景安装所需部分并验证结果。
+---
+
+# 安装 A3S Test
+
+A3S Test 将终端测试与页面评审分开安装。按当前目标选择一个入口：
+
+- **只需页面点选、框选或画草图：** [安装 Web Test Kit](#安装-web-test-kit)。
+- **需要从终端探索页面或运行 ACL 测试：** [安装 CLI 与 Agent Skill](#安装-cli-与-agent-skill)。
+- **需要把页面问题发送给 Agent 修复：** 两者都安装。
+
+## 安装 Web Test Kit
+
+在前端工程目录执行：
+
+```bash
+npm install --save-dev https://github.com/A3S-Lab/Test/releases/download/v1.0.0/a3s-testkit.tgz
+```
+
+当前 `@a3s-lab/testkit` 尚未发布到 npm Registry，因此安装命令使用 GitHub Release 中的 `.tgz`。npm 仍会把它记录为名为 `@a3s-lab/testkit` 的开发依赖，并在 lockfile 中保存完整性信息。现阶段不要只运行 `npm install @a3s-lab/testkit`，该命令还无法从 Registry 找到包。
+
+确认安装结果：
+
+```bash
+npm ls @a3s-lab/testkit
+```
+
+Test Kit 的包版本独立于 A3S Test 的 Release 标签，因此两个版本号不必相同。安装完成后，按[三步接入 Web Test Kit](./testkit.mdx#三步完成-react-接入)挂载评审界面。v1.0.0 Release 已包含画板和页面区域截图，不需要另装绘图库或截图插件。
+
+## 安装 CLI 与 Agent Skill
+
+下方安装器会识别当前系统、下载预编译 CLI、校验 SHA-256，并安装版本匹配的 Agent Skill。以后运行同一条命令即可升级。
+
+### macOS 与 Linux
+
+```bash
+curl -fsSL https://github.com/A3S-Lab/Test/releases/latest/download/install.sh | sh
+```
+
+只为 Codex 安装 Skill：
+
+```bash
+curl -fsSL https://github.com/A3S-Lab/Test/releases/latest/download/install.sh |
+  sh -s -- --agent codex
+```
+
+固定版本：
+
+```bash
+curl -fsSL https://github.com/A3S-Lab/Test/releases/latest/download/install.sh |
+  sh -s -- --version v1.0.0
+```
+
+### Windows PowerShell
+
+```powershell
+& ([scriptblock]::Create((irm 'https://github.com/A3S-Lab/Test/releases/latest/download/install.ps1')))
+```
+
+指定 Agent 或版本：
+
+```powershell
+& ([scriptblock]::Create((irm 'https://github.com/A3S-Lab/Test/releases/latest/download/install.ps1'))) -Agent codex
+& ([scriptblock]::Create((irm 'https://github.com/A3S-Lab/Test/releases/latest/download/install.ps1'))) -Version v1.0.0
+```
+
+### 支持的 Agent 目标
+
+| 工具                  | 参数值           | 默认用户级目录               |
+| --------------------- | ---------------- | ---------------------------- |
+| A3S Code              | `a3s-code`       | `~/.a3s/skills`              |
+| Codex                 | `codex`          | `~/.codex/skills`            |
+| Claude Code           | `claude-code`    | `~/.claude/skills`           |
+| Cursor                | `cursor`         | `~/.cursor/skills`           |
+| Gemini CLI            | `gemini-cli`     | `~/.gemini/skills`           |
+| GitHub Copilot CLI    | `github-copilot` | `~/.copilot/skills`          |
+| OpenCode              | `opencode`       | `~/.config/opencode/skills`  |
+| Cline                 | `cline`          | `~/.cline/skills`            |
+| Roo Code              | `roo`            | `~/.roo/skills`              |
+| Windsurf              | `windsurf`       | `~/.codeium/windsurf/skills` |
+| Agent Skills 兼容工具 | `universal`      | `~/.agents/skills`           |
+
+`auto` 只安装到检测到的工具，没有命中时回退到通用目录。`all` 安装到所有目标。安装器也支持 `--skill-only`、`--cli-only`、`--install-dir` 和 `--skill-dir`，PowerShell 使用对应的 PascalCase 参数。
+
+## 其他 CLI 安装方式
+
+从 Git 标签构建 CLI：
+
+```bash
+cargo install --git https://github.com/A3S-Lab/Test \
+  --tag v1.0.0 --locked a3s-test-cli
+```
+
+每个发布还包含可手动安装的 `a3s-test.skill`、各平台归档、校验文件、Test Kit 包和 Linux runner 镜像引用。不要跳过校验文件或用未固定的镜像标签代替发布的 digest。

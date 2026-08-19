@@ -1,0 +1,416 @@
+---
+title: Actions, waits, and evidence
+description: Understand every typed action, target, synchronization condition, network control, and bounded evidence channel in A3S Test.
+---
+
+# Actions, waits, and evidence
+
+A3S Test does not treat a test step as an unrestricted browser script. Every step is a closed typed action. Static admission and session policy run before dispatch. The selected driver then checks its capability and resolves the target before any platform input. The runner assigns the step result only after the driver returns structured output and evidence.
+
+This boundary has three practical benefits.
+
+- An agent can propose only protocol-admitted intent, not arbitrary code for page execution.
+- Failures remain attributable to the specification, locator, product assertion, driver, or cleanup.
+- Local exploration, ACL regression suites, and MCP sessions share one action vocabulary.
+
+The current action protocol revision is 15. Treat installed machine output as the authoritative contract.
+
+```bash
+a3s-test agent schema
+a3s-test capabilities --json
+```
+
+## How one action completes
+
+A typical Web action follows this path.
+
+```text
+ACL or agent proposal
+    -> Action JSON Schema
+    -> current surface capability
+    -> origin, network, and file policy
+    -> current observation and target resolution
+    -> surface driver and platform input
+    -> StepOutput and Evidence
+    -> next observation captures any new page revision
+```
+
+An ACL suite completes syntax and attribute admission before opening a surface. A persistent agent session also verifies that the action is in the session allowlist. Actions using `@eN`, `@cN`, `@gN.M`, or `@vN` are bound to the latest observation. Observe again after any step that can change the DOM, route, focus, tab, frame, or viewport.
+
+## Choose a stable target first
+
+Target choice determines whether a test can be repeated across page revisions. Prefer this order.
+
+| Target                         | Use it for                                       | Stability and boundary                                                 |
+| ------------------------------ | ------------------------------------------------ | ---------------------------------------------------------------------- |
+| `role("button", "Save")`       | A control with a correct accessible name         | Preferred user-facing identity; traverses open Shadow DOM              |
+| `label("Email")`               | Form controls                                    | Binds the actual labeling relation                                     |
+| `testid("checkout")`           | A product-owned stable test identifier           | Use when semantics are insufficient                                    |
+| `placeholder("Search")`        | An input with a unique, stable placeholder       | It should not compensate for a missing accessible label                |
+| `text("Saved", true)`          | Visible copy that is itself the identity         | The second argument requests exact matching                            |
+| `css("[data-row]")`            | Collections, geometry, or exact browser targets  | Current-document semantics; does not pierce Shadow DOM                 |
+| `ref("@e4")`                   | A browser element from the latest observation    | Valid only for the observation that produced it                        |
+| Page Context `@cN`             | An actionable Test Kit component node            | Core first resolves it to a stable locator; latest ready revision only |
+| `automation_id("save-button")` | A GUI accessibility automation ID                | GUI only                                                               |
+| `visual_point("@v3", 120, 80)` | A GUI target absent from accessibility semantics | GUI only; coordinates, image digest, and observation must remain fresh |
+
+`@uN` is Test Kit UI-understanding evidence, not an action target. It can associate style, layout, state, motion, and component facts with a report, but it cannot enter `click`, `fill`, `drag`, or another input action.
+
+ACL locator functions and Action JSON discriminants do not always use the same spelling. Use these machine forms with `agent act` or MCP `test_act`.
+
+| ACL form                       | Action JSON target                                        |
+| ------------------------------ | --------------------------------------------------------- |
+| `ref("@e4")`                   | `{"type":"ref","value":"@e4"}`                            |
+| `css("#save")`                 | `{"type":"css","selector":"#save"}`                       |
+| `role("button", "Save")`       | `{"type":"role","role":"button","name":"Save"}`           |
+| `text("Saved", true)`          | `{"type":"text","value":"Saved","exact":true}`            |
+| `automation_id("save-button")` | `{"type":"automation_id","value":"save-button"}`          |
+| `visual_point("@v3", 120, 80)` | `{"type":"visual_point","snapshot":"@v3","x":120,"y":80}` |
+| `testid("checkout")`           | `{"type":"test_id","value":"checkout"}`                   |
+| `label("Email")`               | `{"type":"label","value":"Email"}`                        |
+| `placeholder("Search")`        | `{"type":"placeholder","value":"Search"}`                 |
+
+The two easy mistakes are ACL `testid()` versus JSON `type = "test_id"`, and the CSS target's `selector` field rather than `value`. `a3s-test agent schema` remains authoritative for the installed protocol revision.
+
+When a locator resolves to zero or multiple nodes, the driver returns a missing-target or ambiguity error. A3S Test never chooses the first match and never converts location failure into a product state.
+
+## Page, observation, and viewport
+
+| Action     | When to use it                             | Minimal ACL                    | Internal behavior and output                                     |
+| ---------- | ------------------------------------------ | ------------------------------ | ---------------------------------------------------------------- |
+| `navigate` | Open a known HTTP(S) page                  | `url = "https://example.test"` | Checks exact origin, navigates, and invalidates old observations |
+| `snapshot` | Explicitly retain an ACL semantic snapshot | `interactive = true`           | Produces a bounded observation and fresh surface references      |
+| `viewport` | Test a responsive breakpoint or scale      | `width = 390`, `height = 844`  | Resizes the real viewport and advances the page revision         |
+
+```acl
+navigate "checkout" {
+    url = "http://127.0.0.1:3000/checkout"
+}
+
+snapshot "interactive-controls" {
+    interactive = true
+}
+
+viewport "mobile" {
+    width = 390
+    height = 844
+    scale = 2
+}
+```
+
+An agent session performs the equivalent observation through `agent observe`. `snapshot` is an explicit action in the action protocol, while `observe` is a perception turn in the session loop. Either can advance the observation, so an earlier ref is never a durable selector.
+
+## Pointer, keyboard, and form input
+
+| Action             | Purpose                                         | Important distinction or limit                                 |
+| ------------------ | ----------------------------------------------- | -------------------------------------------------------------- |
+| `click`            | Activate a button, link, or clickable target    | Direct Web refs and CSS targets are scrolled into view first   |
+| `hover`            | Trigger hover state, a tooltip, or delayed menu | Moves the pointer without implying a click                     |
+| `focus`            | Establish explicit editing or keyboard context  | The current Web protocol requires a ref or CSS target          |
+| `double_click`     | Dispatch double-click semantics                 | Do not approximate it with two independent clicks              |
+| `context_click`    | Trigger the page `contextmenu` behavior         | Web does not inspect the browser-native context menu           |
+| `fill`             | Replace the complete value of an input          | Best for deterministic form values                             |
+| `type`             | Append text through target-scoped typing        | Resolves and focuses the target                                |
+| `insert_text`      | Insert at an established caret or selection     | Has no target and does not reset focus or selection            |
+| `check`, `uncheck` | Set a checkbox or radio state                   | Inapplicable control types fail closed                         |
+| `select`           | Select one or more exact option values          | Requires at least one value; Web currently requires ref or CSS |
+| `drag`             | Drag one target to another                      | Resolves and checks source and target independently            |
+| `press`            | Send one key or chord                           | Uses the current keyboard context                              |
+| `wheel`            | Perform real scroll or modified-wheel input     | `delta_y` is required; at least one delta must be nonzero      |
+
+The current Web adapter accepts only a latest ref or explicit CSS for several browser-native commands: `focus`, `double_click`, `context_click`, `type`, `uncheck`, `select`, both ends of `drag`, `upload`, `download`, and a targeted `wheel`. These actions do not invent a role, label, or text fallback. `click`, `hover`, `fill`, and `check` are the actions that lower supported semantic targets into an adapter command.
+
+```acl
+focus "title" {
+    target = css("#title")
+}
+
+type "append-title" {
+    target = css("#title")
+    value = " plan"
+}
+
+insert_text "insert-at-caret" {
+    value = " approved"
+}
+
+check "terms" {
+    target = label("Accept terms")
+}
+
+select "status" {
+    target = css("#status")
+    values = ["review", "published"]
+}
+
+drag "reorder" {
+    source = css("[data-item='second']")
+    target = css("[data-item='first']")
+}
+
+press "submit" {
+    key = "Enter"
+}
+
+wheel "zoom-canvas" {
+    target = css(".document-canvas")
+    delta_x = 0
+    delta_y = -120
+    modifiers = ["control"]
+}
+```
+
+`fill`, `type`, and `insert_text` have different input semantics. Use `fill` when a field must become one exact value. Use `type` when keystroke-style input behavior matters. Use `insert_text` only after the editor already has the intended caret or selection.
+
+## Tabs, frames, and dialogs
+
+These actions change browser context. Observe again before addressing the next target.
+
+```acl
+tab "list" {
+    operation = "list"
+}
+
+tab "open-docs" {
+    operation = "new"
+    url = "https://example.test/docs"
+    label = "docs"
+}
+
+tab "switch-docs" {
+    operation = "switch"
+    tab = "docs"
+}
+
+frame "payment" {
+    target = css("#payment-frame")
+}
+
+frame "return-main" {
+    target = main()
+}
+
+dialog "accept-prompt" {
+    operation = "accept"
+    text = "Approved"
+}
+```
+
+`tab` supports `list`, `new`, `switch`, and `close`. A tab can be addressed by its stable ID or user label. `frame` accepts the main document, a current ref, or a CSS frame target. `dialog` supports `status`, `accept`, and `dismiss`; only `accept` can carry prompt text. A missing pending dialog never becomes an assumed success.
+
+## Synchronize on conditions, not fixed sleeps
+
+A Web `wait` accepts exactly one condition.
+
+```acl
+wait "document-ready" {
+    load = "domcontentloaded"
+}
+
+wait "network-settled" {
+    load = "networkidle"
+}
+
+wait "confirmation-copy" {
+    text = "Order confirmed"
+}
+
+wait "confirmation-route" {
+    url = "http://127.0.0.1:3000/orders/42"
+}
+
+wait "dialog-visible" {
+    visible = role("dialog", "Checkout")
+}
+
+wait "dialog-gone" {
+    hidden = role("dialog", "Checkout")
+}
+```
+
+`domcontentloaded` reads current document readiness, so it remains deterministic when navigation finished before the wait began. `networkidle` uses the driver's bounded idle detector. Runner-owned `hidden` polls with a read-only visibility probe every 50 ms and completes immediately when the target is already hidden or absent. The scenario deadline, cancellation, and a 1,201-probe ceiling bound it.
+
+A stable locator with no visible match can prove hidden state. An expired ref cannot, because staleness is not disappearance. `wait hidden` therefore rejects `ref()` and `visual_point()`. See [Assertions and stability](./assertions.mdx) for the complete truth model.
+
+## Uploads, downloads, and network stubs
+
+```acl
+upload "attachments" {
+    target = css("input[type=file]")
+    paths = ["tests/fixtures/one.txt", "tests/fixtures/two.txt"]
+}
+
+download "report" {
+    target = css("[data-download-report]")
+    path = "downloads/report.pdf"
+}
+
+network_route "empty-users" {
+    pattern = "**/api/users"
+    body = "{\"users\":[]}"
+}
+
+network_route "block-analytics" {
+    pattern = "**/analytics"
+    abort = true
+}
+
+network_unroute "users" {
+    pattern = "**/api/users"
+}
+
+network_unroute "all" {}
+```
+
+The CLI resolves relative upload paths from its current working directory before sending them to the browser. The driver still applies allowed-root, count, and size limits. A download path is always relative to the current scenario or session artifact root.
+
+Each `network_route` selects exactly one response mode, static body or abort. Routes remain inside browser network policy and cannot reach an unadmitted domain. A patterned `network_unroute` removes matching rules; an empty block removes all routes created by the current session.
+
+## Record only useful evidence
+
+| Action          | Artifact                                   | Question it can answer                        |
+| --------------- | ------------------------------------------ | --------------------------------------------- |
+| `screenshot`    | PNG                                        | What did the final UI look like               |
+| `accessibility` | Interactive or complete semantic-tree JSON | What semantics could a user or agent perceive |
+| `console`       | Browser console JSON                       | Did the page emit script warnings or errors   |
+| `page_errors`   | Uncaught page-error JSON                   | Did page runtime fail                         |
+| `har`           | Network HAR for an explicit window         | Were requests, responses, and timing correct  |
+| `trace`         | Browser trace for an explicit window       | Why did a multi-step interaction fail         |
+| `video`         | WebM                                       | Does the state transition need human review   |
+| `download`      | Product download                           | Did a real download produce the expected file |
+
+```acl
+har "start-network" {
+    operation = "start"
+}
+
+trace "start-trace" {
+    operation = "start"
+}
+
+video "start-video" {
+    operation = "start"
+    path = "video/checkout.webm"
+}
+
+accessibility "semantic-tree" {
+    path = "evidence/accessibility.json"
+    interactive = false
+}
+
+console "console-log" {
+    path = "evidence/console.json"
+    clear = false
+}
+
+page_errors "runtime-errors" {
+    path = "evidence/page-errors.json"
+    clear = false
+}
+
+screenshot "confirmation" {
+    path = "screenshots/confirmation.png"
+}
+
+har "stop-network" {
+    operation = "stop"
+    path = "network/checkout.har"
+}
+
+trace "stop-trace" {
+    operation = "stop"
+    path = "traces/checkout.zip"
+}
+
+video "stop-video" {
+    operation = "stop"
+}
+```
+
+HAR and trace choose the artifact path on stop. Video chooses it on start and attaches the completed file on stop. `clear = true` clears only the driver's current console or page-error buffer; it does not mutate product state.
+
+Every evidence path must be relative to the artifact root. Traversal, symlinks, Windows reparse points, non-regular files, and resolution outside that root fail closed. A stale file is removed before a fresh capture, so a successful command cannot reuse old evidence. Screenshots also have a 1-byte through 32-MiB admission bound.
+
+## TUI-specific actions
+
+TUI is for known deterministic terminal workflows. It does not expose an interactive agent session.
+
+```acl
+terminal_resize "working-size" {
+    columns = 120
+    rows = 40
+}
+
+terminal_paste "command" {
+    text = "open fixtures/report.txt"
+}
+
+press "submit" {
+    key = "Enter"
+}
+
+wait "loaded" {
+    regex = "Loaded [0-9]+ lines"
+}
+
+terminal_recording "evidence" {
+    path = "terminal/editor.vt"
+}
+```
+
+`terminal_paste` honors the application's current bracketed-paste mode. `terminal_resize` resizes the A3S Test-owned PTY or ConPTY. `terminal_recording` retains bounded VT evidence. A TUI wait accepts only text or regex; it never guesses how a browser URL, load, or element-visibility condition should map to a terminal.
+
+TUI explicitly rejects browser-targeted `type`; use `terminal_paste` for text input. Generic `viewport` also maps width and height to terminal columns and rows when `scale` is absent. Prefer `terminal_resize` in terminal suites because its field meanings are explicit.
+
+## Send full Action JSON in an agent session
+
+Common steps have compact commands such as `agent click`, `agent fill`, and `agent press`. Browser-context, network, and evidence steps can use the complete Action JSON form.
+
+```bash
+a3s-test agent act \
+  --session checkout \
+  --observation 7 \
+  --action-json '{"type":"click","target":{"type":"ref","value":"@e3"}}' \
+  --json
+```
+
+An action with no observation-bound ref can omit `--observation`. If the action contains a current ref, it must include the latest observation ID that created that ref. Strict schema admission rejects unknown fields.
+
+## Surface capability boundary
+
+| Capability group                       | Web                                                           | GUI                                                                    | TUI                                                     |
+| -------------------------------------- | ------------------------------------------------------------- | ---------------------------------------------------------------------- | ------------------------------------------------------- |
+| Observation                            | Interactive or complete semantics, plus optional Page Context | Actionable accessibility semantics; window vision can add a screenshot | Viewport, scrollback, cursor, and VT state              |
+| Common input                           | Full browser action set                                       | Click, double click, context click, fill, type, drag, press, and wheel | Press and terminal paste                                |
+| Browser context, network, Web evidence | Supported                                                     | Unsupported                                                            | Unsupported                                             |
+| Screenshot                             | Supported                                                     | Supported within bound window and artifact root                        | Unsupported                                             |
+| Terminal resize and recording          | Unsupported                                                   | Unsupported                                                            | Supported; viewport without scale also resizes the grid |
+
+This table describes the current implementation. Runtime availability still depends on the installed inventory, driver version, and GUI certification. The existence of an Action variant does not imply that every surface can execute it.
+
+## Use the error code to choose the next step
+
+| Error family        | What it usually means                                                                            | What to inspect                                                            |
+| ------------------- | ------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------- |
+| `test.spec.*`       | ACL fields, combinations, or values failed admission                                             | Attribute path, single condition, stable target, and bound                 |
+| `test.session.*`    | Session, observation, or revision is no longer valid                                             | Re-observe, session state, and browser containment                         |
+| `test.driver.web.*` | Web location, capability, protocol, I/O, or evidence failure                                     | Target uniqueness, driver version, network, artifact path                  |
+| `test.driver.gui.*` | GUI permission, window, reference, or CUA failure                                                | Host certification, PID, window binding, latest screenshot                 |
+| `test.driver.tui.*` | Terminal action, PTY, or semantic-state failure                                                  | Executable, key, regex, output bound, and process lifecycle                |
+| `test.assert.*`     | Valid evidence was observed but product state differed                                           | Expected, actual, and attached evidence                                    |
+| Cleanup error field | `test.run.cleanup_*`, `test.session.cleanup_*`, `test.agent.cleanup_*`, or a driver cleanup code | Preserve product outcome and inspect the separately reported cleanup proof |
+
+An infrastructure error cannot prove a product pass or failure. Preserve its ownership, then use the `retryable` field to decide whether the same session can retry. See [Troubleshooting](./troubleshooting.mdx) for the full workflow.
+
+## A practical minimum evidence set
+
+Most Web regressions do not need full-session video. A useful, reviewable set usually does the following.
+
+1. Wait on a typed ready condition.
+2. Prove the outcome with one or more typed expectations.
+3. Save the final screenshot.
+4. Save the interactive accessibility tree.
+5. Save console and page errors.
+6. Enable HAR, trace, or video only when network or timing diagnosis needs it.
+
+This preserves structured verdict evidence without burying the actual failure signal in unrelated binary artifacts.

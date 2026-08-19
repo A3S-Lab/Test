@@ -1,0 +1,254 @@
+---
+title: Capability reference
+description: Inspect A3S Test sessions, actions, Test Kit, repair, contracts, model, evidence, and scheduling by entry point, input, output, and failure boundary.
+---
+
+# Capability reference
+
+This page lists capabilities that the current version exposes and can verify. Each entry identifies its invocation, required context, observable output, and fail-closed condition. Deployment-provided models, browsers, and remote workers affect runtime availability, so the presence of a type in source does not prove that the current machine has its backend.
+
+## Read the installed contracts first
+
+```bash
+a3s-test --version
+a3s-test agent schema
+a3s-test provider schema contract-generation
+a3s-test provider schema design-audit
+a3s-test provider schema visual-grounding
+a3s-test worker inventory
+```
+
+`agent schema` returns the external-planner protocol, action revision, JSON Schema, and session invariants without starting a browser. `capabilities --json` probes the actual Web adapter and returns a `test.driver.web.*` error when that adapter is incompatible, missing, or unable to start. Callers must handle this result instead of substituting static documentation for machine discovery.
+
+Capabilities have three delivery states.
+
+| State                | Meaning                                                         | Caller responsibility                                                                |
+| -------------------- | --------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| Built into Core      | A3S Test implements types, admission, state, and results        | Supply admitted input and handle structured failures                                 |
+| Supplied by a driver | Core defines the contract while a Web, GUI, or TUI driver acts  | Discover capabilities and respect platform verification                              |
+| Deployment provider  | A3S Test validates requests, responses, provenance, and budgets | Supply endpoint, identity, credentials, license, capacity, deadline, and cost limits |
+
+Use these guides when you need procedure and implementation detail beyond the tables.
+
+| Topic                                             | In-depth guide                                                    |
+| ------------------------------------------------- | ----------------------------------------------------------------- |
+| Every action, wait, network control, and artifact | [Actions, waits, and evidence](../guide/actions-and-evidence.mdx) |
+| Basic and advanced assertions                     | [Assertions and stability](../guide/assertions.mdx)               |
+| Web, GUI, TUI, and MCP lifecycle                  | [Web, GUI, TUI, and MCP](../guide/surfaces-and-mcp.mdx)           |
+| LLM, contract, grounding, and design models       | [LLM, grounding, and design providers](../guide/providers.mdx)    |
+| Inventory, workers, shards, and quarantine        | [Workers and distributed execution](../guide/distributed.mdx)     |
+
+## Core sessions
+
+| Capability                     | Entry point                             | Required input                                                   | Output and failure boundary                                                               |
+| ------------------------------ | --------------------------------------- | ---------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| Start a persistent Web session | `agent start`                           | URL, session, goal, and at least one success condition           | Retains session, origin, and policy. Driver startup failure creates no actionable session |
+| Read a fresh observation       | `agent observe`                         | Active session                                                   | New `observation_id`, page state, and refs. A failed observation leaves old refs unusable |
+| Inspect Page Context           | `agent inspect`                         | Session plus page, node, component, or region scope              | Bounded detail and cursor. A stale private node ID fails closed                           |
+| Execute a typed action         | `agent act` or a compact action command | Action JSON and latest observation for ref targets               | Schema, capability, target, policy, and revision validation precede driver dispatch       |
+| Request visual grounding       | `agent ground`                          | Latest observation, ACL provider config, and query               | Screenshot-bound candidates with no click and no verdict                                  |
+| Request a design audit         | `agent audit`                           | Latest observation, ACL provider config, and optional dimensions | Advisory report with no action or repair authority                                        |
+| Inspect persisted state        | `agent show`, `agent list`              | Workspace-local session                                          | Reads metadata, events, and terminal state without taking over another live session       |
+| Finish normally                | `agent finish`                          | Evidence-backed passed or failed status and summary              | Writes the terminal report and cleans up the owned surface                                |
+| Abort an unsafe session        | `agent abort`                           | Exact session                                                    | Cancels that session and cleans up its surface without killing browsers by process name   |
+
+The persistent-session loop is `start -> observe -> act -> observe -> finish`. An action can change the DOM, focus, route, viewport, or browser context. Observe again after the change and never reuse an old `@eN` or `@cN`.
+
+## Surface execution
+
+### Page and interaction actions
+
+| Action                          | Target or context requirement                           | Result and constraint                                                                  |
+| ------------------------------- | ------------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| `navigate`                      | Absolute URL                                            | URL must belong to an admitted origin; a successful navigation expires the observation |
+| `snapshot`                      | Current surface                                         | Creates a semantic snapshot and new refs; `interactive` can limit the result           |
+| `click`, `hover`, `focus`       | Latest ref, semantic target, or explicit CSS            | Target must exist, be usable, and fit the action capability                            |
+| `double_click`, `context_click` | Latest ref or CSS                                       | Context-click is page-scoped and does not expose the browser's native menu             |
+| `fill`, `type`                  | Editable target                                         | `fill` replaces the value while `type` appends                                         |
+| `insert_text`                   | Established focus, caret, or selection                  | Accepts no target and grants no additional targeting authority                         |
+| `check`, `uncheck`, `select`    | Matching checkbox, radio, or select control             | An incompatible control type is rejected before driver dispatch                        |
+| `drag`                          | Source and target from the current observation          | Both endpoints pass targeting and revision checks                                      |
+| `press`                         | Current keyboard context                                | Supports keys and chords; re-observe after a page change                               |
+| `wheel`                         | Deltas, optional modifiers, and optional current target | Produces a real wheel gesture and does not replace viewport configuration              |
+| `viewport`                      | Width, height, and optional scale                       | Advances the observation revision for responsive validation                            |
+| `tab`, `frame`                  | Tab operation or accessible frame target                | Re-observe after changing context; browser policy still limits cross-origin content    |
+| `dialog`                        | Current dialog plus accept or dismiss operation         | A missing dialog cannot be treated as success                                          |
+| `upload`                        | File control and manifest-admitted input paths          | Files must fit root, count, and size limits                                            |
+| `download`                      | Download trigger plus relative artifact path            | Writes only under the current run's artifact root                                      |
+
+### Synchronization, network, and evidence actions
+
+| Action                             | Input                                                  | Output and constraint                                                                   |
+| ---------------------------------- | ------------------------------------------------------ | --------------------------------------------------------------------------------------- |
+| `wait`                             | Load, text, URL, or visibility condition               | Runs under a deadline and returns a structured timeout                                  |
+| Hidden `wait`                      | Stable semantic or CSS target                          | Polls read-only visibility every 50 ms; deadline/cancellation and 1,201 probes bound it |
+| `assert`                           | Admitted text, URL, visibility, or other expectation   | Local evidence decides pass or fail; providers cannot override it                       |
+| Hidden `assert`                    | Stable semantic or CSS target                          | Passes when no visible match exists; visible counter-evidence is `test.assert.hidden`   |
+| Stable `assert`                    | Expectation plus `stable_for_ms` and optional interval | Repeats only the read-only assertion; a later false sample is `test.assert.unstable`    |
+| `network_route`, `network_unroute` | Admitted pattern and static route                      | Adds or removes a rule only inside network policy                                       |
+| `har`, `trace`, `video`            | Start or stop plus a bounded relative path             | Records an explicit window and produces session-owned artifacts                         |
+| `screenshot`                       | Relative PNG path                                      | Saves under the artifact root and can bind a later provider request                     |
+| `accessibility`                    | Relative JSON path and interactive selection           | Retains an interactive or complete semantic tree                                        |
+| `console`, `page_errors`           | Relative JSON path and clear selection                 | Retains browser-error baselines; clear affects only the current driver buffer           |
+| `terminal_paste`                   | Bounded text                                           | Legal only on a TUI surface                                                             |
+| `terminal_resize`                  | Columns and rows                                       | Resizes the owned PTY or ConPTY and updates terminal semantics                          |
+| `terminal_recording`               | Relative artifact path                                 | Retains a bounded terminal recording outside arbitrary workspace paths                  |
+
+The action protocol revision is 15. Generate the complete schema with `a3s-test agent schema`. Unknown fields, missing required fields, invalid enums, and actions unsupported by the selected surface are rejected before execution.
+
+### Live control-state assertions
+
+| Capability            | ACL form                                                                | Observed evidence                                                         | Failure boundary                                                                                                                   |
+| --------------------- | ----------------------------------------------------------------------- | ------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| Exact control value   | `target` plus `value`                                                   | Current DOM or driver value, returned as `expected` and `actual`          | Missing, ambiguous, invalid, or unreadable targets stay `test.driver.*`; an observed mismatch is `test.assert.value`               |
+| Boolean control state | `enabled`/`disabled`, `checked`/`unchecked`, or `selected`/`unselected` | Live boolean state and the normalized state name                          | A missing target never proves a negative state; only a resolved mismatch becomes the matching `test.assert.*` code                 |
+| Exact selected set    | `target` plus `selected_values`                                         | Duplicate-free, sorted `expected` and `actual` arrays                     | Expected duplicates fail admission, invalid driver output fails closed, and a different exact set is `test.assert.selected_values` |
+| Stable control state  | Any form above plus `stable_for_ms` and optional interval               | First and last assertion output, bounded sample count, and elapsed window | A later counterexample is `test.assert.unstable` and retains both the initial evidence and transient mismatch                      |
+
+Web assertions read live DOM properties. Native checkbox and radio `checked` values take priority over contradictory ARIA, while custom controls can expose boolean state through valid ARIA. `selected_values = []` is a valid exact empty-set assertion. GUI can compare an exact value only when CUA supplies one and otherwise fails closed; boolean and multi-selection state are currently unsupported there. TUI control-state assertions are unsupported. Page Context refs resolve to their current semantic target before dispatch, while a standalone ref that cannot expose the requested property returns a driver error rather than guessing.
+
+### Live semantic-state assertions
+
+| Capability        | ACL form                  | Authoritative Web evidence                                                  | Failure boundary                                                                              |
+| ----------------- | ------------------------- | --------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| Disclosure state  | `expanded` or `collapsed` | `<details>.open`, otherwise valid `aria-expanded`                           | Missing state is unsupported; a mismatch uses `test.assert.expanded` or `.collapsed`          |
+| Toggle state      | `pressed` or `unpressed`  | Exact boolean `aria-pressed`                                                | `mixed` is unsupported; a mismatch uses `test.assert.pressed` or `.unpressed`                 |
+| Read-only state   | `readonly` or `writable`  | Native `readOnly` where applicable, otherwise valid `aria-readonly`         | Writable does not imply enabled; a mismatch uses `test.assert.readonly` or `.writable`        |
+| Requirement state | `required` or `optional`  | Native `required` where applicable, otherwise valid `aria-required`         | Unsupported controls stay driver-owned; a mismatch uses `test.assert.required` or `.optional` |
+| Validity state    | `invalid` or `valid`      | Constraint Validation when `willValidate`, otherwise defined `aria-invalid` | Unknown state never proves valid; a mismatch uses `test.assert.invalid` or `.valid`           |
+
+Native state takes priority over contradictory ARIA. Boolean ARIA accepts exactly `true` and `false`; `aria-invalid` additionally accepts `grammar` and `spelling` as invalid. The five dimensions are orthogonal, and every negative form requires one resolved target plus authoritative boolean evidence.
+
+ACL rejects browser refs and visual points as `test.spec.semantic_state_target_unstable`; a current Page Context ref may resolve to a stable locator first. Semantic locators traverse open Shadow DOM and exclude accessibility-hidden ancestry, while CSS retains current-document semantics. Unsupported state returns `test.driver.web.state_unsupported`. GUI and TUI fail closed. Every form supports bounded stability; checked-in evidence covers 1,000/1,000 deterministic Web classifications, 100/100 sustained and 100/100 transient windows, plus 27 positive assertions and 17 negative or driver-error classifications in standalone Chromium.
+
+### Focus-ownership assertions
+
+| Capability                       | ACL form                                      | Observed evidence                                                   | Failure boundary                                                                                                               |
+| -------------------------------- | --------------------------------------------- | ------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| Exact focus ownership            | `focused` or `unfocused` with one target      | Target compared with the deepest observable active element          | Missing targets never prove `unfocused`; resolved mismatches use `test.assert.focused` or `test.assert.unfocused`              |
+| Component-scoped focus ownership | `focus_within` or `focus_outside`             | Exact focus plus rendered flat-tree ancestry, including assignments | Missing targets never prove `focus_outside`; resolved mismatches use `test.assert.focus_within` or `test.assert.focus_outside` |
+| Stable focus ownership           | Either pair plus `stable_for_ms` and interval | First and last boolean state plus bounded stability metrics         | A later valid mismatch is `test.assert.unstable`; target or driver failures keep their original ownership                      |
+
+Web resolves one stable target and reads the deepest `activeElement` through nested open shadow roots in one page evaluation. Flat-tree containment follows assigned slots, DOM parents, and shadow hosts. Semantic locators traverse open Shadow DOM and exclude accessibility-hidden composed ancestry, including hidden slot wrappers. CSS retains current-document query semantics.
+
+ACL rejects browser refs and visual points as `test.spec.focus_target_unstable`; a current Page Context ref may first resolve to a stable locator. A programmatic standalone browser ref returns `test.driver.web.state_unsupported`. GUI and TUI fail closed because their current protocols do not expose equivalent focus ownership. Checked-in evidence covers 600/600 deterministic Web classifications, 200/200 sustained and 200/200 transient windows, plus 17 positive assertions and 11 negative or driver-error classifications in standalone Chromium with forward/reverse Tab, open Shadow DOM, assigned slots, timed focus movement, and exact cleanup.
+
+### Rendered-output assertions
+
+| Capability                  | ACL form                                                  | Observed evidence                                                             | Failure boundary                                                                                                                        |
+| --------------------------- | --------------------------------------------------------- | ----------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| Target-bound rendered copy  | `target` plus `rendered_text`                             | Exactly one visible target, normalized `expected` and `actual` text           | Missing or ambiguous targets stay driver errors; different observed copy is `test.assert.rendered_text`                                 |
+| Visible locator cardinality | stable `target` plus non-negative `visible_count`         | Complete visible match-set size, including zero                               | Refs/visual points fail admission, invalid selectors stay driver errors, and a different count is `test.assert.visible_count`           |
+| Ordered rendered collection | stable `target` plus `rendered_texts`                     | Complete normalized text vector, preserving order, duplicates, and empty sets | Refs/visual points fail admission; invalid/oversized collections stay driver errors; a different vector is `test.assert.rendered_texts` |
+| Stable rendered output      | Any form above plus `stable_for_ms` and optional interval | First/last scalar text, vector, or count plus the bounded window              | A later observed mismatch is `test.assert.unstable`; later driver failure keeps driver ownership                                        |
+
+CSS collection probes use visual rendered geometry and do not treat `aria-hidden` alone as invisible. Semantic locators additionally exclude accessibility-hidden ancestry and traverse open Shadow DOM. Both exclude hidden, display-none, visibility-hidden, fully transparent, and zero-geometry targets. `rendered_texts` is bounded to 256 expected and observed items. GUI and TUI fail closed for all revision-9/revision-10 forms.
+
+### Rendered-layout assertions
+
+| Capability                 | ACL form                                                       | Observed evidence                                                      | Failure boundary                                                                                                                |
+| -------------------------- | -------------------------------------------------------------- | ---------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| Two-target layout relation | `target`, `relative_to`, and one of 17 `layout` relation names | Both freshly resolved rectangles, relation, tolerance, and match state | Missing/ambiguous/invalid/malformed geometry stays a driver error; two valid rectangles that differ become `test.assert.layout` |
+| Bounded tolerance          | Optional integer `tolerance_px` from 0 through 1,024           | Exact CSS-pixel tolerance used by Core                                 | Negative, fractional, or excessive values fail ACL admission; typed callers above the bound fail before page dispatch           |
+| Stable layout relation     | Layout form plus `stable_for_ms` and optional interval         | First and last complete dual-rectangle payloads plus bounded metrics   | A later relation mismatch is `test.assert.unstable`; later target resolution or geometry failure keeps driver ownership         |
+
+The 17 relations cover four directions, containment/inside, overlap/non-overlap, six edge or center alignments, and width/height/size equality. Both targets must be stable semantic or CSS locators; browser refs and visual points fail admission, while current Page Context refs can resolve to stable locators before dispatch.
+
+Web resolves both targets and reads both rectangles in one page evaluation. CSS keeps visually rendered `aria-hidden` elements, while semantic locators exclude accessibility-hidden ancestry and traverse open Shadow DOM. GUI requires both frames in one fresh CUA snapshot. TUI fails closed because terminal cells are not equivalent rendered-page geometry. Checked-in evidence covers 3,400/3,400 deterministic cases, 100/100 sustained and 100/100 transient windows, all 17 relations, and 15 negative/error classifications in standalone Chromium.
+
+### Viewport coverage and pointer-hit assertions
+
+| Capability                      | ACL form                                                    | Observed evidence                                                                 | Failure boundary                                                                                                                    |
+| ------------------------------- | ----------------------------------------------------------- | --------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| Visual-viewport intersection    | `in_viewport = <stable target>`                             | Target rectangle, visual-viewport rectangle, and independently recomputed ratio   | Zero-area intersection is `test.assert.in_viewport`; target resolution and malformed evidence remain driver errors                  |
+| Minimum viewport coverage       | Stable `target` plus `viewport_coverage_at_least = 1..=100` | The same rectangles, ratio, actual percent, comparison, and threshold             | Valid geometry below the threshold is `test.assert.viewport_coverage_at_least`; the trivial zero threshold fails admission          |
+| Maximum viewport coverage       | Stable `target` plus `viewport_coverage_at_most = 0..=99`   | The same independently recomputed coverage evidence                               | Valid geometry above the threshold is `test.assert.viewport_coverage_at_most`; the trivial 100 threshold fails admission            |
+| Pointer hit reachability        | `pointer_reachable = <stable target>`                       | The same geometry plus an ordered 3 by 3 deep-hit grid and reachable-sample count | Nine valid misses are `test.assert.pointer_reachable`; this does not imply enabled state, keyboard access, or business clickability |
+| Stable interaction prerequisite | Any form plus `stable_for_ms` and interval                  | First and last complete geometry or hit payloads plus bounded stability metrics   | A later valid mismatch is `test.assert.unstable`; a later resolution or evidence failure keeps driver ownership                     |
+
+All forms require a repeatable semantic or CSS locator. Browser refs and visual points fail admission, while a current Page Context ref may resolve to a stable locator before dispatch. Coverage is intersection area divided by complete target area, so it proves geometry without claiming occlusion or pointer reachability. Web captures the target, visual viewport, and optional nine-point hit grid atomically. Semantic targets and deep hit testing traverse open Shadow DOM. Native hit testing treats a pointer-receiving transparent overlay as a blocker and skips `pointer-events: none` overlays. GUI and TUI fail closed because their current protocols do not expose equivalent evidence.
+
+Checked-in evidence covers 1,000/1,000 base Core geometry cases plus 2,000/2,000 threshold cases, 4,000/4,000 Web protocol classifications, 300/300 sustained and 300/300 transient windows, plus 37 passing assertions and 25 negative or driver-error classifications in standalone Chromium with exact cleanup.
+
+## Page perception and Test Kit
+
+| Capability            | Entry point or field                          | Output                                                                          | Key boundary                                                         |
+| --------------------- | --------------------------------------------- | ------------------------------------------------------------------------------- | -------------------------------------------------------------------- |
+| Automatic DOM context | `A3STestKit` or `installTestKit`              | Light DOM, open Shadow DOM, semantics, state, locators, and geometry            | Test Kit is optional; Web accessibility snapshots work without it    |
+| Component ownership   | `A3STestBoundary`                             | ID, name, parent, ready, facts, source, and multi-root boxes                    | Source is a locator hint and grants no file authority                |
+| Three geometry spaces | `geometry.viewport`, `document`, `normalized` | CSS pixels, document position, and visual-viewport normalization                | Geometry is evidence and a last resort after semantics               |
+| Stable locator chain  | `locators`                                    | Role, label, test ID, placeholder, text, and CSS candidates                     | A candidate must still resolve in the latest revision                |
+| Layout graph          | `ui.layout`                                   | Flex, Grid, normal flow, box model, overflow, and relation edges                | Missing endpoints, cyclic containment, and budget drift are rejected |
+| Visual system         | `ui.style`                                    | Colors, typography, spacing, radii, shadows, z-index, and responsive conditions | Class names alone never establish a component                        |
+| State differences     | `ui.stateDiffs`                               | Interaction-state changes that the page actually produced                       | Test Kit does not trigger hover, focus, or click to sample           |
+| Motion profile        | `ui.motion`                                   | Transitions, animations, timelines, ranges, and reduced motion                  | An unresolved named timeline is not guessed as scroll or view        |
+| Scoped snapshot       | `snapshot({ detail, scope })`                 | Page, node, component, or region context                                        | Private node IDs do not persist across revisions                     |
+| Diff and pagination   | `sinceRevision`, `cursor`, `nextCursor`       | Removed nodes and the next page                                                 | A cursor mismatched to request, scope, or revision fails closed      |
+| Budgets               | Provider ceilings and per-request `limits`    | Node, string, encoding, UI node, state, and duration use                        | A request can only reduce installation ceilings                      |
+| Redaction             | `redact` plus built-in sensitive-field rules  | Filtered text, attributes, form state, and facts                                | Cookies, storage, passwords, headers, and secrets stay out           |
+
+Public ref authority remains fixed. `@eN` comes from browser accessibility, and `@cN` represents a uniquely actionable Page Context node. Both are actionable only in the latest observation. `@uN` connects style, layout, state, and motion evidence and is always read-only.
+
+## Human review and repair
+
+| Capability               | Entry point                                          | Output or state                                                                 | Failure boundary                                                          |
+| ------------------------ | ---------------------------------------------------- | ------------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
+| Element and text marking | Overlay element, text, and multi tools               | Node, text, or ordered multi target                                             | Target must still belong to the latest revision at send time              |
+| Region and freehand      | Area and draw tools                                  | Viewport rectangle or bounded point sequence                                    | Drawings remain subject to point, region, and encoding budgets            |
+| Layout Mode              | Placement or rearrange                               | Component type, canvas, purpose, and destination                                | Records intent only and never moves DOM or writes styles                  |
+| Draft recovery           | `repairStorage`                                      | Memory, session, or local draft                                                 | Saving a draft does not enter the Repair Ledger                           |
+| Single and batch send    | Overlay send or bridge queue                         | Ordered `a3s.test.repair/1` findings and batch                                  | Explicit send authorizes only the listed scope                            |
+| Same-origin adapter      | `repairEndpoint`                                     | Bounded POST plus browser-side retry queue                                      | Receives no workspace, shell, Git, MCP, or model credentials              |
+| Pickup and claim         | `repair-watch`, `repair-claim`                       | Queued finding, lease, and attempt ID                                           | Only one potential workspace mutation runs at a time                      |
+| Report editing phase     | `repair-progress`, `repair-reply`, `repair-complete` | Repairing, needs-input, or verifying state                                      | Attempt or lease mismatch leaves state unchanged                          |
+| A3S Test verification    | `repair-verify`                                      | Before/after evidence, focused checks, optional ACL candidate, and review-ready | Requires a newer ready revision; failure never auto-resolves              |
+| End an attempt           | `repair-fail`, `repair-cancel`                       | Append-only failure or cancellation event                                       | Retains old attempts, replies, and evidence                               |
+| Human acceptance         | Accept, dismiss, or reopen action                    | Resolved, dismissed, or queued again                                            | Human review is default; automatic mode still persists review-ready first |
+
+## Expectations, contracts, and models
+
+| Capability                  | Entry point                               | Output                                                                | Authority boundary                                                            |
+| --------------------------- | ----------------------------------------- | --------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| PRD candidate generation    | `contract generate` plus a PRD source     | Exact byte ranges, digests, confidence, conflicts, and open questions | Produces a draft and never a runner expectation                               |
+| Design candidate generation | `contract generate` plus a design source  | Image digest, regions, hierarchy, and geometry candidates             | Does not claim browser accessibility observation                              |
+| Human contract review       | `contract review`                         | Canonical Surface Contract and review audit                           | Unresolved conflicts, changed sources, or invalid citations block publication |
+| Page contract verification  | ACL `verify_contract`                     | Deterministic matches, findings, outcome, and provenance              | Legal only inside a closed ACL suite                                          |
+| Visual-grounding provider   | `agent ground`                            | Observation and PNG-digest-bound point or box candidates              | Advice does not click, set verdicts, or authorize repair                      |
+| Design-audit provider       | `agent audit`                             | Bounded advice across nine design dimensions                          | High-priority advice maps to at most important                                |
+| Embedded planning provider  | `agent run` or SDK-injected `LlmProvider` | One typed action proposal or finish request                           | Success still requires a local expect                                         |
+
+Every provider is deployment-supplied. A3S Test downloads no weights, selects no inference backend, and stores no provider's long-lived credentials. Requests bind provider and model identity, deadline, bytes, candidate count, cost, and usage limits.
+
+## Evidence, regression, and scheduling
+
+| Capability             | Entry point                       | Output or constraint                                                                                    |
+| ---------------------- | --------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| ACL static admission   | `a3s-test check`                  | Rejects unknown blocks, invalid targets, escaped paths, and ambiguous conditions before surface startup |
+| Deterministic run      | `a3s-test run`                    | Actions, waits, assertions, artifacts, terminal report, and bounded cleanup                             |
+| Negative visibility    | ACL `expect` with `hidden`        | Hidden/absent evidence, visible counterexample, and preserved driver-error ownership                    |
+| Sampled stability      | ACL `expect` stability fields     | First/last assertion data, bounded sample count, elapsed window, and stable transient-failure code      |
+| Failure classification | JSON result and stable error code | Separates `test.spec.*`, `test.driver.*`, `test.assert.*`, and `test.run.*`                             |
+| Worker inventory       | `worker inventory`                | Platform, surface, driver, protocol, capacity, and health                                               |
+| Distributed plan       | `distributed plan`                | Assigns admitted scenarios only to compatible workers                                                   |
+| Distributed execution  | `distributed run`                 | Authenticated shards, aggregated results, and remote-artifact references                                |
+| Remote artifacts       | `a3s.test.remote-artifacts/1`     | Bounded listing, chunked reads, digest verification, and local archival                                 |
+
+A remote request cannot select a worker executable, application, backend, credential, or network policy. Deployment startup fixes those values. GUI workers also use exclusive pools so concurrent sessions cannot compete for one physical desktop.
+
+## Current support scope
+
+| Surface | Current status                                                                           |
+| ------- | ---------------------------------------------------------------------------------------- |
+| Web     | Persistent agent sessions and ACL through A3S Browser or a compatible standalone adapter |
+| GUI     | macOS CUA verified on a real arm64 host; Windows and Linux remain under separate review  |
+| TUI     | ACL suites run in an owned PTY or ConPTY process tree                                    |
+
+## Outside built-in authority
+
+- Test Kit does not edit the host DOM, source, or workspace.
+- A model provider owns no browser observation, test verdict, or repair authorization.
+- Submitting a finding grants no commit, push, release, or deployment permission.
+- PRDs and designs do not become a fabricated browser accessibility tree.
+- An unverified GUI backend is not presented as release-grade support.
+
+To run a real flow, continue with [From page exploration to stable regression](../guide/workflows.mdx). To expose rendered context, use [Web Test Kit](../guide/testkit.mdx). When a run fails, use [Troubleshooting](../guide/troubleshooting.mdx) to separate product, specification, driver, and infrastructure faults.

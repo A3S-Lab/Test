@@ -1,0 +1,325 @@
+---
+title: Web, GUI, TUI, and MCP
+description: Choose the right test surface and understand its perception source, execution boundary, lifecycle, and MCP integration.
+---
+
+# Web, GUI, TUI, and MCP
+
+A3S Test abstracts a tested interface behind `SurfaceDriver`. Core knows only typed observations, actions, evidence, and close results. It does not depend on browser DOM APIs, operating-system accessibility APIs, or a terminal emulator. Web, GUI, and TUI drivers project their real perception into that shared protocol.
+
+This separation has an important consequence. The same `click` or `expect` name does not imply the same evidence on all three surfaces. Each driver can report only what its underlying platform actually exposes and must fail closed when equivalent evidence is absent.
+
+## Choose a surface
+
+| Product shape                                  | Recommended entry point      | Authoritative perception                                 | Main limit                                                                    |
+| ---------------------------------------------- | ---------------------------- | -------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| Browser page with a known workflow             | Deterministic Web ACL        | Browser semantics, live DOM, geometry, network, Test Kit | URL and network are constrained by origin policy                              |
+| Browser page that needs agent exploration      | `agent start` or `agent run` | Latest observation, Page Context, bounded evidence       | Refs expire every turn; model finish is not a verdict                         |
+| Native desktop application                     | GUI ACL or MCP               | CUA accessibility semantics and optional window image    | Current admitted platform is macOS; real host certification is still required |
+| Known terminal-program workflow                | Deterministic TUI ACL        | VT viewport, scrollback, cursor, and modes               | No interactive agent host                                                     |
+| External coding agent needing one tool surface | `a3s-test mcp`               | Session layer for registered Web or GUI drivers          | MCP does not replace deterministic `check` and `run`                          |
+
+## Web surface
+
+Web has the richest structural evidence and the strictest browser policy. It covers business regression, responsive layout, accessibility, network stubbing, file transfer, and Test Kit context.
+
+### Deterministic ACL
+
+```acl
+suite "checkout" {
+    version = 1
+
+    scenario "complete-order" {
+        name = "Complete checkout"
+        surface = "web"
+        timeout_ms = 30000
+
+        navigate "open" {
+            url = "http://127.0.0.1:3000/checkout"
+        }
+
+        fill "email" {
+            target = label("Email")
+            value = "tester@example.test"
+        }
+
+        click "continue" {
+            target = role("button", "Continue")
+        }
+
+        expect "confirmed" {
+            visible = role("heading", "Order confirmed")
+        }
+    }
+}
+```
+
+```bash
+a3s-test check tests/checkout.acl --json
+a3s-test run tests/checkout.acl --json
+```
+
+`check` performs parsing and admission without opening a browser. After admission, `run` creates an owned browser session per Web scenario, executes steps in source order, retains reports and evidence, and cleans up the process tree it created.
+
+### Browser adapter and capability discovery
+
+```bash
+a3s-test capabilities --json
+
+a3s-test run tests/checkout.acl \
+  --browser-driver standalone \
+  --browser-executable /path/to/agent-browser \
+  --json
+```
+
+The current protocol admits A3S Browser `>= 0.4.0, < 0.5.0` and standalone adapter `>= 0.26.0, < 0.27.0`. Capability discovery probes the executable. A present file with an incompatible version, schema, or startup behavior still returns `test.driver.web.*`.
+
+Runs are forced headless by default. Only explicit `--headed` displays a window. `--browser-microphone synthetic` uses a deterministic fake device and never reads a real microphone; the default is `disabled`.
+
+### Origin and network domain are different authorities
+
+A persistent agent session derives its exact-origin set from the initial URL and every `--allow-origin`. The set constrains both explicit navigation and successful observations.
+
+```bash
+a3s-test agent start http://127.0.0.1:3000/checkout \
+  --session checkout \
+  --goal "Complete checkout" \
+  --success "The confirmation heading is visible" \
+  --allow-origin https://auth.example.test \
+  --allow-domain cdn.example.test \
+  --json
+```
+
+`--allow-origin` includes scheme, hostname, and effective port and can expand action-navigation scope. `--allow-domain` adds only a hostname or leading `*.` wildcard to the browser network layer. It does not allow the agent to navigate to or accept a new page observation from that origin. The two options are not interchangeable.
+
+A3S Browser enforces exact-origin policy directly. The standalone protocol can express only hostnames, so it receives a conservative projection. Session metadata records the deployed containment mode, and a changed policy or adapter mode fails closed when a persistent session is resumed.
+
+### How Test Kit attaches context during DOM rendering
+
+The browser produces its own interactive semantics first. When a page includes Test Kit, the runtime incrementally maintains Page Context around component registration, DOM commit, viewport changes, and explicit page readiness.
+
+```text
+React or page component
+    -> Test Kit registers component identity, intent, and stable locators
+    -> reads DOM geometry, accessible name, state, and style facts
+    -> produces a revisioned Page Context snapshot
+    -> Web driver aligns it with browser semantics for this observation
+    -> agent receives @eN, @cN, and read-only @uN
+```
+
+Test Kit does not rewrite the product accessibility tree or attach large permanent attributes to every DOM node. It maintains a separate, reversible, bounded metadata layer. Coordinates come from post-render DOM geometry and are valid only for the current revision. MutationObserver, ResizeObserver, scroll, viewport, and explicit ready state trigger invalidation and resampling; they do not grant new action authority.
+
+Normal observations stay compact. Use `agent inspect` when a component, private node, or local region requires full detail. See [Page Context](../concepts/page-context.mdx) for protocol fields, coordinate spaces, and pagination.
+
+### Web lifecycle
+
+Every deterministic scenario, agent session, or MCP session owns an isolated runtime namespace, artifact root, and browser process boundary. Unix uses dedicated process groups and an EOF watchdog. Windows uses a kill-on-close Job Object. Timeout, cancellation, Drop, and a second interrupt clean only the process trees registered by this run. Cleanup never targets browsers by process name.
+
+## GUI surface
+
+GUI uses an A3S CUA adapter for operating-system accessibility and window capture. A3S Test continues to own sessions, action policy, budgets, reports, and cleanup; CUA owns platform perception and input. Private CUA element tokens never enter Core or reach the agent.
+
+### Inspect platform support and certify the real host
+
+```bash
+a3s-test gui-certification --json
+```
+
+The locked CUA 0.10.0 configuration admits only macOS installed-daemon and embedded-socket profiles. Windows and Linux fail before transport startup. `contract_tested` means the checked-in protocol contract passes; it does not mean this machine has granted Accessibility and Screen Recording permissions.
+
+Certify a real worker before enabling it.
+
+```bash
+a3s-test gui-certify \
+  --gui-policy-file config/gui-policy.yaml \
+  --cua-proxy-executable /Applications/CuaDriver.app/Contents/MacOS/cua-proxy \
+  --gui-macos-bundle-id com.example.Editor \
+  --gui-target-mode launch \
+  --gui-profile window-vision \
+  --json
+```
+
+Certification performs a real observation and ownership-safe cleanup. A release additionally requires CI to produce a signed record binding source revisions, binary and policy digests, host permissions, semantic and visual observations, and zero residual fixture processes. A successful local JSON result is not a release certification.
+
+### The host fixes application identity and capture scope
+
+These GUI choices are host configuration and cannot be changed by an agent action.
+
+- CUA policy and endpoint
+- macOS bundle ID
+- Launch or attach mode
+- Attach PID or launch arguments
+- Exact window title, automation ID, or primary window
+- Semantic or window-vision perception profile
+
+`launch` creates a new application instance. The session terminates it only when it proves the application was absent before launch and the PID still has the configured identity. `attach` connects to an existing application and never terminates it. The current capture scope is strictly the bound top-level window, not the entire desktop.
+
+### Semantic and window-vision profiles
+
+A semantic observation returns bounded accessibility elements, role, label, value, automation ID, parent, and frame. The adapter projects them as A3S Test-owned `@gN.M` refs. Every state-changing action expires the complete ref generation.
+
+Window vision adds one window-scoped PNG, dimensions, SHA-256, and `@vN` for each observation. Use a visual point only when semantics cannot identify the target.
+
+```json
+{
+  "type": "click",
+  "target": {
+    "type": "visual_point",
+    "snapshot": "@v2",
+    "x": 420,
+    "y": 96
+  }
+}
+```
+
+Before input, the adapter revalidates the latest observation, coordinate bounds, screenshot digest, artifact containment, application PID, and window identity. Any drift prevents the CUA input call. A successful visual action returns the grounding image and digest as evidence.
+
+### GUI capability boundary
+
+GUI semantic locators accept only a current `ref`, `role`, `text`, `label`, or `automation_id`. CSS, test ID, and placeholder are browser semantics; GUI does not guess an equivalent element from those strings. A semantic locator that matches multiple elements returns an ambiguity error instead of choosing the first one.
+
+| Action                                   | Admitted target and constraint                                                                                                                                                       |
+| ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `snapshot`                               | Only `interactive = true` is supported; the current CUA protocol cannot prove a complete non-interactive node collection                                                             |
+| `click`, `double_click`, `context_click` | Accept a semantic target or current `visual_point`; the action expires the complete `@gN.M` and `@vN` generation                                                                     |
+| `fill`                                   | Requires a semantic element and dispatches CUA `set_value`; a visual point cannot prove control identity, so use `type` there, while the driver still owns non-editable-state errors |
+| `type`                                   | Accepts a semantic element or current visual point and dispatches CUA `type_text`                                                                                                    |
+| `drag`                                   | Currently requires two `visual_point` targets from the same latest window image; semantic-to-semantic drag is not admitted                                                           |
+| `press`                                  | Sends a non-empty key name without an element target                                                                                                                                 |
+| `wheel`                                  | May omit the target or use a semantic element or current visual point; modifiers are unsupported and exactly one axis must be nonzero                                                |
+| `screenshot`                             | Produces only a bound-window PNG and revalidates artifact path, image digest, PID, and window identity                                                                               |
+
+GUI wheel converts the delta magnitude to one line per 100 units, rounds up, and clamps the request to 1 through 50 lines. It is not equivalent to a modified Web wheel zoom gesture.
+
+| Assertion            | GUI evidence boundary                                                                                                                                                            |
+| -------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `text`               | Searches the name or value of current accessibility elements for visible text                                                                                                    |
+| `visible` / `hidden` | `visible` accepts admitted semantic targets and a current ref; `hidden` requires a repeatable semantic target, and stale or ambiguous resolution is not evidence of hidden state |
+| `value`              | Compares an exact string only when the matched element actually exposes a value                                                                                                  |
+| `layout`             | Both stable semantic targets must expose finite, positive-size frames in the same snapshot; refs and visual points are not admitted                                              |
+
+`in_viewport`, viewport coverage, pointer reachability, URL, rendered-text collections, visible count, boolean state, and selected values currently lack equivalent CUA evidence and fail closed as `test.driver.gui.assertion_unsupported`. Browser network, tabs, frames, DOM collections, and terminal actions are likewise not guessed into GUI equivalents.
+
+## TUI surface
+
+The TUI driver owns the executable, PTY or ConPTY, complete process tree, VT state, evidence, and cleanup. It is designed for workflows with known commands, keys, and textual success conditions.
+
+```acl
+suite "editor" {
+    version = 1
+
+    scenario "open-document" {
+        surface = "tui"
+        timeout_ms = 30000
+
+        wait "ready" {
+            text = "Ready"
+        }
+
+        terminal_resize "size" {
+            columns = 120
+            rows = 40
+        }
+
+        terminal_paste "open" {
+            text = "open fixtures/report.txt"
+        }
+
+        press "submit" {
+            key = "Enter"
+        }
+
+        expect "visible" {
+            text = "Quarterly report"
+        }
+    }
+}
+```
+
+```bash
+a3s-test run tests/editor.acl \
+  --tui-executable ./target/debug/editor \
+  --tui-arg --fixture-mode \
+  --tui-columns 120 \
+  --tui-rows 40 \
+  --json
+```
+
+`--tui-working-directory` must be absolute. Scrollback-row and raw-output-byte limits control bounded retention; they never make observations unbounded. A TUI snapshot reports viewport, scrollback, cursor, alternate-screen, application-cursor, bracketed-paste, process exit, and truncation metadata.
+
+Unix creates a dedicated PTY session, process group, and EOF watchdog per scenario. Windows uses ConPTY and a kill-on-close Job. If descendants remain after the root exits, cleanup still addresses the complete owned tree.
+
+TUI currently runs deterministic ACL only. An external agent cannot start a TUI session through `agent start` or MCP.
+
+## MCP as a uniform session interface for external agents
+
+MCP is a stdio projection of the same session application layer, not a second runner. A host can register Web, GUI, or both.
+
+### Start a Web host
+
+```bash
+a3s-test mcp \
+  --web-url http://127.0.0.1:3000 \
+  --web-allow-domain cdn.example.test \
+  --max-sessions 4 \
+  --artifacts-root .a3s-test/mcp-sessions
+```
+
+### Start a GUI host
+
+```bash
+a3s-test mcp \
+  --gui-policy-file config/gui-policy.yaml \
+  --cua-proxy-executable /Applications/CuaDriver.app/Contents/MacOS/cua-proxy \
+  --gui-macos-bundle-id com.example.Editor \
+  --gui-target-mode attach \
+  --gui-attach-pid 4242 \
+  --gui-profile window-vision
+```
+
+MCP tool arguments contain no executable, bundle ID, window selector, capture scope, or policy. A caller can choose only a surface registered by the host.
+
+### Protocol lifecycle
+
+The client must use MCP `2025-06-18` and complete this sequence.
+
+```text
+initialize
+    -> notifications/initialized
+    -> tools/list
+    -> test_session_start
+    -> test_observe
+    -> test_act
+    -> test_observe
+    -> test_finish or test_abort
+```
+
+The server serializes turns per session while independent sessions run within the configured global bound. A failed observation also invalidates refs from the previous turn. EOF closes independent surfaces concurrently, with the cleanup deadline still applied to each one.
+
+### MCP tools
+
+| Group            | Tools                                                                                        | Purpose                                         |
+| ---------------- | -------------------------------------------------------------------------------------------- | ----------------------------------------------- |
+| Session          | `test_session_start`, `test_observe`, `test_act`, `test_finish`, `test_abort`, `test_schema` | Run the observe, decide, act loop               |
+| Page Context     | `test_inspect`                                                                               | Read a bounded page, node, component, or region |
+| Repair pickup    | `test_repair_watch`, `test_repair_claim`                                                     | Pick up human submissions and claim one attempt |
+| Repair lifecycle | `test_repair_progress`, `test_repair_reply`, `test_repair_complete`, `test_repair_verify`    | Report editing, ask for input, and verify       |
+| Repair terminal  | `test_repair_fail`, `test_repair_cancel`                                                     | Append failure or cancellation without erasure  |
+
+`test_schema` returns the current interactive Action JSON Schema and the actually registered surfaces. Runner-owned `verify_contract` is absent from that interactive schema. See [Human review and repair](./repairs.mdx) for attempt, lease, and verification rules.
+
+### Cleanup is observable state
+
+If `test_finish` or `test_abort` reaches its caller deadline, the dispatched driver close continues in an owned task. Other turns return retryable `test.session.cleanup_in_progress`. If close eventually returns a retryable failure, the session enters `cleanup_required`. The caller may retry finish or abort with the same session ID, but cannot observe or act.
+
+This rule prevents caller timeout from discarding surface ownership and prevents reuse of a session name that still owns an old browser or application.
+
+## How the three execution entries fit together
+
+| Entry point          | Decision maker          | Persistent   | Final verdict source                                                        |
+| -------------------- | ----------------------- | ------------ | --------------------------------------------------------------------------- |
+| `a3s-test run`       | Fixed ACL steps         | No           | Runner aggregation of deterministic steps and cleanup                       |
+| `a3s-test agent run` | Deployment LLM provider | One workflow | Local verification block and cleanup; model finish has no verdict authority |
+| `agent start` or MCP | External coding agent   | Yes          | Caller finish summary plus persistent evidence; stabilize the path as ACL   |
+
+Use a persistent session to discover an unknown path. Once actions and success conditions are stable, migrate them into ACL. Distributed execution schedules deterministic Web, GUI, and TUI suites; see [Workers and distributed execution](./distributed.mdx).
