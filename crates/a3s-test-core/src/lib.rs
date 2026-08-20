@@ -7,6 +7,8 @@ mod error;
 mod manifest;
 mod model;
 mod page_context;
+mod page_context_diff;
+mod page_context_observation;
 mod reconcile;
 mod source_mapping;
 mod ui_understanding;
@@ -52,8 +54,12 @@ pub use model::{
 pub use page_context::{
     action_uses_observation_target, action_uses_page_context_ref,
     bind_page_context_observation_refs, bind_page_context_refs, preferred_page_context_target,
-    resolve_page_context_refs, validate_action_page_context_refs, PageContextBindings,
-    PageContextRefError,
+    refresh_page_context_bindings, resolve_page_context_refs, validate_action_page_context_refs,
+    PageContextBindings, PageContextRefError,
+};
+pub use page_context_diff::{
+    PageContextDelta, PageContextDeltaStatus, PageContextDeltaValidationError,
+    PageContextInvalidation, PAGE_CONTEXT_DIFF_PROTOCOL,
 };
 pub use reconcile::{
     ContractFinding, ContractMatch, ContractMatchStrategy, ContractOutcome, ContractReport,

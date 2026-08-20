@@ -2,6 +2,27 @@ use async_trait::async_trait;
 
 use super::*;
 
+const PAGE_CONTEXT_INSPECT_FUNCTION: &str = r#"(async ({ request, waitTimeoutMs }) => {
+  const bridge = window[Symbol.for("a3s.test.page-context")];
+  if (!bridge || typeof bridge.probe !== "function" || typeof bridge.snapshot !== "function") {
+    return { present: false };
+  }
+  const probe = bridge.probe();
+  if (probe?.protocol !== "a3s.test.page-context/1") return { present: false };
+  const capture = () => ({ present: true, ...bridge.snapshot(request) });
+  if (request.detail !== "diff" || request.sinceRevision == null || waitTimeoutMs <= 0) {
+    return capture();
+  }
+  if (typeof bridge.waitForDiff === "function") {
+    const diff = await bridge.waitForDiff({ ...request, timeoutMs: waitTimeoutMs });
+    return diff === null ? capture() : { present: true, ...diff };
+  }
+  if (typeof bridge.waitForChange === "function") {
+    await bridge.waitForChange(request.sinceRevision, waitTimeoutMs);
+  }
+  return capture();
+})"#;
+
 #[async_trait]
 impl DriverSession for AgentBrowserSession {
     async fn observe(&mut self) -> Result<SurfaceObservation, DriverError> {
@@ -467,11 +488,61 @@ impl DriverSession for AgentBrowserSession {
         Ok(())
     }
 
+    async fn page_context_delta(
+        &mut self,
+        since_revision: u64,
+    ) -> Result<Option<PageContextObservation>, DriverError> {
+        if since_revision == 0 {
+            return Err(DriverError::new(
+                "test.driver.web.page_context_diff_invalid",
+                "page context diff revision must be positive",
+            ));
+        }
+        self.inspect_page_context(&PageContextInspectRequest {
+            detail: "diff".to_string(),
+            scope: PageContextInspectScope::Page,
+            since_revision: Some(since_revision),
+            wait_timeout_ms: 0,
+            cursor: None,
+            limit: 5_000,
+        })
+        .await
+        .map(Some)
+    }
+
     async fn inspect_page_context(
         &mut self,
         request: &PageContextInspectRequest,
     ) -> Result<PageContextObservation, DriverError> {
         self.ensure_open()?;
+        if !matches!(
+            request.detail.as_str(),
+            "summary" | "scoped" | "diff" | "forensic"
+        ) {
+            return Err(DriverError::new(
+                "test.driver.web.page_context_inspect_invalid",
+                "page context detail must be summary, scoped, diff, or forensic",
+            ));
+        }
+        if request.detail == "diff" {
+            if request.since_revision.is_none_or(|revision| revision == 0) {
+                return Err(DriverError::new(
+                    "test.driver.web.page_context_diff_invalid",
+                    "diff inspection requires a positive since revision",
+                ));
+            }
+        } else if request.since_revision.is_some() || request.wait_timeout_ms != 0 {
+            return Err(DriverError::new(
+                "test.driver.web.page_context_diff_invalid",
+                "since revision and diff wait are valid only for diff inspection",
+            ));
+        }
+        if request.wait_timeout_ms > 300_000 {
+            return Err(DriverError::new(
+                "test.driver.web.page_context_diff_invalid",
+                "page context diff wait cannot exceed 300000 milliseconds",
+            ));
+        }
         let scope = match &request.scope {
             PageContextInspectScope::Page => serde_json::json!({ "kind": "page" }),
             PageContextInspectScope::Node(node_id) => {
@@ -495,19 +566,25 @@ impl DriverSession for AgentBrowserSession {
                 "height": height,
             }),
         };
-        let request = serde_json::json!({
+        let request_value = serde_json::json!({
             "detail": request.detail,
             "scope": scope,
+            "sinceRevision": request.since_revision,
             "cursor": request.cursor,
+            "ui": request.detail != "diff",
             "limits": { "nodes": request.limit.clamp(1, 5_000) },
         });
-        let script = format!(
-            "(() => {{ const bridge = window[Symbol.for(\"a3s.test.page-context\")]; if (!bridge || typeof bridge.probe !== \"function\" || typeof bridge.snapshot !== \"function\") return {{ present: false }}; const probe = bridge.probe(); if (probe?.protocol !== \"a3s.test.page-context/1\") return {{ present: false }}; return {{ present: true, ...bridge.snapshot({request}) }}; }})()"
-        );
+        let payload = serde_json::json!({
+            "request": request_value,
+            "waitTimeoutMs": request.wait_timeout_ms,
+        });
+        let script = format!("{PAGE_CONTEXT_INSPECT_FUNCTION}({payload})");
         let value = self
             .execute_command(vec!["eval".into(), script.into()])
             .await?;
-        parse_page_context_value(browser_result(value))
+        let observation = parse_page_context_value(browser_result(value))?;
+        validate_inspect_response(request, &observation)?;
+        Ok(observation)
     }
 
     async fn page_console_error_count(&mut self) -> Result<u32, DriverError> {

@@ -389,6 +389,8 @@ pub struct PageContextSnapshot {
     pub facts: serde_json::Map<String, Value>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub ui: Option<crate::UiUnderstandingSnapshot>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub delta: Option<crate::PageContextDelta>,
     #[serde(rename = "removedNodeIds")]
     pub removed_node_ids: Vec<String>,
     pub truncated: bool,
@@ -957,30 +959,6 @@ pub struct RepairBatchItemResult {
     #[serde(rename = "findingId")]
     pub finding_id: String,
     pub status: RepairStatus,
-}
-
-impl PageContextObservation {
-    #[must_use]
-    pub fn absent() -> Self {
-        Self {
-            present: false,
-            protocol: None,
-            sdk_version: None,
-            revision: None,
-            snapshot: None,
-        }
-    }
-
-    #[must_use]
-    pub fn from_snapshot(snapshot: PageContextSnapshot) -> Self {
-        Self {
-            present: true,
-            protocol: snapshot.protocol.clone(),
-            sdk_version: snapshot.sdk_version.clone(),
-            revision: snapshot.revision,
-            snapshot: Some(snapshot),
-        }
-    }
 }
 
 impl SurfaceObservation {

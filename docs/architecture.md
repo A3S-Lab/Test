@@ -251,10 +251,15 @@ versioned semantic projection after a stable browser frame:
   source contents before projection;
 - `MutationObserver`, `ResizeObserver`, route, viewport, and scroll signals
   invalidate the cached projection, while unchanged pages are never polled;
+- an eight-projection by twelve-revision bounded history hashes page, facts,
+  components, and nodes for `a3s.test.page-context-diff/1`; unavailable or
+  oversized exact deltas become `reset_required` rather than partial truth;
 - private node IDs remain in a `WeakMap` side table. The runtime does not write
   testing metadata into application DOM attributes;
 - the Web adapter captures the accessibility snapshot and Test Kit revision as
-  one stable observation or rejects the race.
+  one stable observation or rejects the race, then independently validates any
+  delta protocol, revision order, canonical invalidation IDs, and changed or
+  removed evidence coverage in Rust.
 
 The visual projection is nested protocol `a3s.test.ui-understanding/1`. It is
 not a second accessibility tree or a screenshot model. Its `pageRevision` and
@@ -1516,7 +1521,12 @@ Core owns page-context ref binding because persistent sessions, SDK hosts, and
 the direct CLI all consume the same observation contract. `@cN` never exposes
 the Test Kit's private node identity. Before a proposed `@cN` action reaches
 the driver, it resolves to the preferred test ID, role, label, placeholder,
-text, or CSS locator and the driver revalidates the observation revision.
+text, or CSS locator. The driver requests a delta from the bound revision; a
+complete delta retains only locators whose domain-separated SHA-256 node
+fingerprints are unaffected. Raw Test Kit node IDs are not persisted in
+session metadata. Reset, missing history, a legacy binding, or malformed
+evidence fails closed. This exception never retains browser refs, geometry,
+screenshots, or UI evidence across revision drift.
 Nested UI evidence reuses that `@cN` only for one unambiguous actionable node.
 Layout-only and other evidence identities receive observation-scoped `@uN`
 refs so relationships remain inspectable without leaking Test Kit handles.

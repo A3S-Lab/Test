@@ -1,6 +1,6 @@
 ---
 title: Add Web Test Kit
-description: Publish revisioned semantics, components, locators, geometry, and UI evidence after rendering, with optional human marking and batch repair review.
+description: Publish bounded post-render facts and exact revision deltas, then optionally add source-aware human marking and batch repair review.
 ---
 
 # Add Web Test Kit
@@ -16,7 +16,7 @@ Test Kit connects a rendered page to its implementation without turning the page
 | Let an agent read the page beyond a screenshot | A headless Context Runtime derives bounded facts after DOM, accessibility, style, and layout are computed                  |
 | Let a person point at the exact problem        | One right-side Review Overlay supports element, text, multi-select, region, drawing, board, and browser-page capture flows |
 | Lead a selected node back to code              | Explicit component boundaries, DOM ownership registration, and optional Source Map v3 produce ranked source spans          |
-| Prevent an old target from reaching a new page | Every snapshot and submitted finding binds to a monotonic page revision                                                    |
+| Prevent an old target from reaching a new page | Exact revision deltas retain only unaffected context targets; every uncertain binding fails closed                        |
 | Keep review separate from source mutation      | Saving stays local; only explicit submission enters the A3S Test repair ledger                                             |
 
 ```text
@@ -36,10 +36,10 @@ browser finishes rendering
 Run the version-pinned command in the frontend project:
 
 ```bash
-npm install --save-dev @a3s-lab/testkit@0.5.0
+npm install --save-dev @a3s-lab/testkit@0.6.0
 ```
 
-The package is published on the official npm Registry with GitHub OIDC provenance. The pinned 0.5.0 package includes the design board, page-region capture, live CLI compatibility handshake, and ranked rendered-node source mapping without a separate drawing or screenshot package.
+The package is published on the official npm Registry with GitHub OIDC provenance. The pinned 0.6.0 package includes the design board, page-region capture, live CLI compatibility handshake, ranked rendered-node source mapping, and revision-scoped Page Context diffs without separate drawing or screenshot packages.
 
 Verify that the dependency belongs to the current project:
 
@@ -259,6 +259,7 @@ console.log({
 A healthy integration meets at least these conditions.
 
 - `probe.protocol` equals `a3s.test.page-context/1`.
+- Test Kit 0.6.0 reports `revision_diff` in `probe.capabilities`.
 - `snapshot.page.id` matches the integration config.
 - `snapshot.page.ready` becomes `true` after the current render completes.
 - Declared boundaries appear in `components`.
@@ -338,7 +339,8 @@ Most React applications only need the components. Framework integrations, fixtur
 | `probe()`                                                                                                                                       | Returns protocol, SDK version, and capability names                                                 | Synchronous capability discovery only; it does not capture a snapshot                                |
 | `snapshot(request?)`                                                                                                                            | Reads summary, scoped, diff, or forensic detail for page, node, component, or region scope          | Results may truncate; cursor, scope, and revision must stay aligned                                  |
 | `resolve(nodeId)`                                                                                                                               | Resolves a private current node ID to a still-connected DOM `Element`                               | Page-local integration only; unknown, removed, or stale nodes return `null`                          |
-| `waitForChange(revision, timeoutMs)`                                                                                                            | Waits for a higher revision, returning it immediately when available or `null` on timeout           | Timeout is clamped to 1 through 300,000 ms; this is not a fixed sleep                                |
+| `waitForChange(revision, timeoutMs)`                                                                                                            | Waits for a higher revision, returning it immediately when available or `null` on timeout           | Timeout must be an integer from 0 through 300,000 ms                                                 |
+| `waitForDiff({ sinceRevision, timeoutMs, ...request })`                                                                                         | Waits for one higher revision and returns its exact bounded diff, or `null` on timeout              | Invalid baselines and timeouts reject; no value is rounded or clamped                                |
 | `subscribe(listener)`                                                                                                                           | Subscribes to context, quality, design-audit, and repair events and returns an unsubscribe function | A listener observes events but receives no action or workspace authority                             |
 | `submitRepair({ findings, batchId? })`                                                                                                          | Validates findings, captures current context, and returns queued records                            | A repeated finding ID is idempotent; this call is the explicit send step                             |
 | `peekRepairBatch(limit?)`, `takeRepairBatch(limit?)`                                                                                            | Reads or page-locally reserves up to 100 queued findings                                            | `take` prevents duplicate pickup on one bridge; it does not replace an agent lease claim             |
@@ -353,6 +355,25 @@ Most React applications only need the components. Framework integrations, fixtur
 | `dispose()`                                                                                                                                     | Disconnects observers, waiters, listeners, boundaries, reports, and the global bridge               | Idempotent; active-runtime operations reject afterward, while cloned repair history remains readable |
 
 `TestKitRuntime` also exposes `registerBoundary()`. The top-level function of the same name first looks up an installed bridge and throws when none exists. `installTestKit({ enabled: false })` returns a disabled runtime: `probe()` and `snapshot()` reject explicitly, while repair and report methods return empty results instead of silently enabling collection.
+
+### Observe only what changed
+
+Capture one normal baseline, then wait for the next meaningful difference:
+
+```ts
+let baseline = bridge.snapshot({ detail: 'summary', ui: false });
+const diff = await bridge.waitForDiff({
+  sinceRevision: baseline.revision,
+  timeoutMs: 5_000,
+  ui: false,
+});
+
+if (diff?.delta?.status === 'reset_required') {
+  baseline = bridge.snapshot({ detail: 'summary', ui: false });
+}
+```
+
+`complete` names every changed or removed node and changed component, plus independent page, facts, and UI invalidation. `reset_required` means the exact baseline is outside bounded history or its complete invalidation set cannot fit the byte ceiling; discard the old evidence instead of treating it as “no change.” Cursors bind the complete request and revision, so diff pagination cannot silently drift to another baseline.
 
 ## Review Overlay props and callbacks
 
@@ -406,17 +427,17 @@ Each snapshot carries a monotonic revision and binds these facts together:
 - Bounded computed style, page facts, and redacted form state.
 - Observed design tokens, overflow/clipping-aware layout relationships, repeated structures, real interaction-state differences, and timeline-aware motion facts.
 
-MutationObserver, ResizeObserver, scrolling, viewport, and navigation signals advance the revision. An unchanged page is not polled. Targets from an older revision expire so an agent cannot act on coordinates or DOM refs from before a hot reload.
+MutationObserver, ResizeObserver, scrolling, viewport, and navigation signals advance the revision. An unchanged page is not polled. Browser refs, coordinates, screenshots, and UI evidence expire on drift. A Page Context `@cN` may retain only its stable locator when a complete Rust-validated delta proves that its private node identity did not change; missing or reset metadata clears every old context binding.
 
 ## Distinguish actionable refs from read-only evidence
 
 | Ref   | Meaning                                             | Authority                                                                |
 | ----- | --------------------------------------------------- | ------------------------------------------------------------------------ |
 | `@eN` | Accessible semantic node in the browser observation | Actionable only in the observation that produced it                      |
-| `@cN` | Uniquely actionable node in current Page Context    | Actionable and bound to component and geometry facts in that observation |
+| `@cN` | Uniquely actionable node in current Page Context    | Actionable in that observation; only an unaffected stable locator may cross revision drift |
 | `@uN` | Evidence node in UI understanding                   | Read-only and only connects style, layout, state, and motion facts       |
 
-Public observations never expose Test Kit's private node IDs. A uniquely actionable UI node reuses `@cN`; other evidence nodes project to `@uN`. Any `@uN` action is rejected during ACL admission or before driver dispatch. If projection cannot preserve both graph integrity and the encoded byte budget, A3S Test omits the optional UI evidence.
+Public observations never expose Test Kit's private node IDs, and persistent session metadata stores only domain-separated SHA-256 node fingerprints. A uniquely actionable UI node reuses `@cN`; other evidence nodes project to `@uN`. Any `@uN` action is rejected during ACL admission or before driver dispatch. If projection cannot preserve both graph integrity and the encoded byte budget, A3S Test omits the optional UI evidence.
 
 ## Rendered UI understanding
 
@@ -438,7 +459,7 @@ Verification screenshots remain A3S Test evidence. A screenshot deliberately att
 
 ## Human marking and batch repair
 
-Test Kit 0.5.0 keeps review work in one fixed side panel. The shortest path is
+Test Kit 0.6.0 keeps review work in one fixed side panel. The shortest path is
 select a target, describe the change, then save or send. New feedback,
 findings, and preferences are three peer views. Marking tools are visible
 directly; selecting a target replaces them with the editor in the same panel,

@@ -47,14 +47,14 @@ observe 7 -> @e3 / @c4 -> typed action bound to 7
 observe 8 -> fresh refs <---------+
 ```
 
-`@eN` comes from browser accessibility semantics. `@cN` identifies one uniquely actionable Page Context node. Both are valid only in the observation that created them. `@uN` connects style, layout, state, and motion in UI understanding and is always read-only.
+`@eN` comes from browser accessibility semantics. `@cN` identifies one uniquely actionable Page Context node. Both are valid only in the observation that created them. If the page revision drifts before dispatch, an exact complete Page Context delta may retain only the stable locator behind an unaffected `@cN`; it never extends the observation or preserves geometry. `@uN` connects style, layout, state, and motion in UI understanding and is always read-only.
 
 Before an action reaches a driver, A3S Test checks these conditions.
 
 1. JSON or ACL fields conform to the typed schema.
 2. The current session and driver advertise the action capability.
 3. The target type permits the action, with `@uN` rejected immediately.
-4. The ref belongs to the latest observation and the page revision has not advanced.
+4. The ref belongs to the latest observation; revision drift either has a Rust-validated complete delta proving that `@cN` unaffected or fails closed.
 5. URL, origin, network, file, and evidence paths satisfy policy.
 6. Time, action-count, and evidence budgets remain.
 

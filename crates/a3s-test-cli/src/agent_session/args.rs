@@ -157,6 +157,12 @@ pub(super) struct InspectArgs {
     /// Context detail profile.
     #[arg(long, default_value = "scoped", value_parser = ["summary", "scoped", "diff", "forensic"])]
     pub(super) detail: String,
+    /// Baseline Test Kit revision for a diff inspection.
+    #[arg(long)]
+    pub(super) since_revision: Option<u64>,
+    /// Wait for a newer revision before returning the diff.
+    #[arg(long, default_value_t = 0, requires = "since_revision")]
+    pub(super) wait_timeout_ms: u64,
     /// Current private Test Kit node ID. Prefer component or region scopes for persisted workflows.
     #[arg(long, conflicts_with_all = ["component", "region"])]
     pub(super) node: Option<String>,

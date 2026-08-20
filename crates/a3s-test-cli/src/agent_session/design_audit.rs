@@ -217,6 +217,8 @@ async fn inspect_complete_page_context(
             .inspect_context(&a3s_test_core::PageContextInspectRequest {
                 detail: "forensic".to_string(),
                 scope: a3s_test_core::PageContextInspectScope::Page,
+                since_revision: None,
+                wait_timeout_ms: 0,
                 cursor: cursor.clone(),
                 limit: MAX_PAGE_CONTEXT_NODES,
             })

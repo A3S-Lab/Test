@@ -56,7 +56,8 @@ use self::store::{
 use self::validation::{compact_target, validate_session_id};
 use super::{validate_timeout, BrowserDriverKind};
 use a3s_test_session::{
-    action_uses_page_context_ref, bind_page_context_refs, resolve_page_context_refs,
+    action_uses_page_context_ref, bind_page_context_refs, refresh_page_context_bindings,
+    resolve_page_context_refs,
 };
 
 pub(crate) async fn execute(args: AgentArgs) -> Result<ExitCode> {
@@ -594,15 +595,38 @@ async fn perform_action(
         None
     };
     state.latest_observation = None;
-    let bindings = state.page_context_bindings.take().unwrap_or_default();
+    let mut bindings = state.page_context_bindings.take().unwrap_or_default();
     store.save(&state).await?;
     if let Some(revision) = expected_revision {
-        if let Err(error) = browser.validate_context_revision(revision).await {
+        match browser.context_delta(revision).await {
+            Ok(Some(context)) => {
+                if let Err(refresh_error) = refresh_page_context_bindings(&mut bindings, &context) {
+                    let error = DriverError::new(
+                        "test.driver.web.page_context_diff_invalid",
+                        refresh_error.to_string(),
+                    );
+                    record_failure(&store, &mut state, "act", Some(action), &error).await?;
+                    return emit_driver_error(json_output, &state, error);
+                }
+            }
+            Ok(None) => {}
+            Err(error) => {
+                record_failure(&store, &mut state, "act", Some(action), &error).await?;
+                return emit_driver_error(json_output, &state, error);
+            }
+        }
+    }
+    let action = match resolve_page_context_refs(action.clone(), &bindings) {
+        Ok(action) => action,
+        Err(resolve_error) => {
+            let error = DriverError::new(
+                "test.driver.web.page_context_stale",
+                resolve_error.to_string(),
+            );
             record_failure(&store, &mut state, "act", Some(action), &error).await?;
             return emit_driver_error(json_output, &state, error);
         }
-    }
-    let action = resolve_page_context_refs(action, &bindings)?;
+    };
     match browser
         .execute_action(format!("agent-act-{}", state.next_sequence), action.clone())
         .await

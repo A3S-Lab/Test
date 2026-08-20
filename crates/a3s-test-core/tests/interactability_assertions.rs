@@ -228,6 +228,7 @@ fn interactability_assertions_resolve_page_context_targets_and_reject_ui_evidenc
                 value: "checkout".to_string(),
             },
         )]),
+        node_fingerprints: BTreeMap::new(),
     };
     for expectation in [
         Expectation::InViewport(Target::Ref {

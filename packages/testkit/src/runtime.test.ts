@@ -3,6 +3,7 @@ import packageManifest from "../package.json";
 import { installTestKit, registerBoundary } from "./runtime";
 import type {
   DesignAuditReport,
+  PageContextSnapshot,
   QualityReport,
   RepairDraft,
   RepairEvent,
@@ -286,6 +287,33 @@ describe("page context runtime", () => {
     expect(described?.locators[0]).toEqual({ type: "test_id", value: "pay" });
   });
 
+  it("projects overlapping component roots only once", () => {
+    document.body.innerHTML = `<section id="panel"><button id="save">Save</button></section>`;
+    const panel = document.querySelector("#panel")!;
+    const save = document.querySelector("#save")!;
+    setRect(panel, { x: 0, y: 0, width: 200, height: 100 });
+    setRect(save, { x: 10, y: 10, width: 80, height: 32 });
+    const bridge = installTestKit({
+      enabled: true,
+      page: { id: "overlapping-roots" },
+      uiUnderstanding: false,
+      repairStorage: "memory",
+    });
+    registerBoundary({
+      id: "panel",
+      name: "Panel",
+      elements: () => [panel, save],
+    });
+
+    const snapshot = bridge.snapshot({
+      detail: "forensic",
+      scope: { kind: "component", componentId: "panel" },
+      ui: false,
+    });
+    expect(snapshot.nodes.map((node) => node.id)).toHaveLength(2);
+    expect(new Set(snapshot.nodes.map((node) => node.id)).size).toBe(2);
+  });
+
   it("models browser visual zoom without converting CSS-pixel element rectangles", () => {
     document.body.innerHTML = `<button data-testid="zoom-edge">Zoom edge</button>`;
     const button = document.querySelector("button")!;
@@ -385,6 +413,272 @@ describe("page context runtime", () => {
     });
     expect(changedRevision).toBeGreaterThan(baseline.revision);
     expect(diff.removedNodeIds).toContain(removedId);
+  });
+
+  it("waits for one revision-scoped diff and identifies only invalidated node evidence", async () => {
+    document.body.innerHTML = `<button>Keep</button><button>Change</button>`;
+    for (const element of document.querySelectorAll("button"))
+      setRect(element, { x: 1, y: 1, width: 80, height: 24 });
+    const bridge = installTestKit({
+      enabled: true,
+      page: { id: "revision-diff" },
+      uiUnderstanding: false,
+      repairStorage: "memory",
+    });
+    const baseline = bridge.snapshot({ ui: false });
+    const keep = baseline.nodes.find((node) => node.text === "Keep")!;
+    const change = baseline.nodes.find((node) => node.text === "Change")!;
+
+    const pending = bridge.waitForDiff({
+      sinceRevision: baseline.revision,
+      timeoutMs: 100,
+      ui: false,
+    });
+    document.querySelectorAll("button")[1]!.textContent = "Changed";
+
+    const diff = await pending;
+    expect(diff).not.toBeNull();
+    expect(diff?.delta).toMatchObject({
+      protocol: "a3s.test.page-context-diff/1",
+      fromRevision: baseline.revision,
+      toRevision: expect.any(Number),
+      status: "complete",
+      invalidated: {
+        all: false,
+        page: false,
+        facts: false,
+        ui: true,
+        nodeIds: expect.arrayContaining([change.id]),
+        componentIds: [],
+      },
+    });
+    expect(diff?.nodes.map((node) => node.id)).toContain(change.id);
+    expect(diff?.nodes.map((node) => node.id)).not.toContain(keep.id);
+    expect(diff?.delta?.invalidated.nodeIds).not.toContain(keep.id);
+  });
+
+  it("reports reset_required instead of treating an unavailable baseline as a complete diff", async () => {
+    document.body.innerHTML = `<button>Current</button>`;
+    setRect(document.querySelector("button")!, {
+      x: 1,
+      y: 1,
+      width: 80,
+      height: 24,
+    });
+    const bridge = installTestKit({
+      enabled: true,
+      page: { id: "missing-diff-baseline" },
+      uiUnderstanding: false,
+      repairStorage: "memory",
+    });
+
+    document.querySelector("button")!.textContent = "New current";
+    await bridge.waitForChange(1, 100);
+    const diff = bridge.snapshot({
+      detail: "diff",
+      sinceRevision: 1,
+      ui: false,
+    });
+
+    expect(diff.delta).toMatchObject({
+      protocol: "a3s.test.page-context-diff/1",
+      fromRevision: 1,
+      toRevision: diff.revision,
+      status: "reset_required",
+      invalidated: { all: true },
+    });
+  });
+
+  it("returns null when a revision diff wait expires without a page change", async () => {
+    document.body.innerHTML = `<button>Stable</button>`;
+    setRect(document.querySelector("button")!, {
+      x: 1,
+      y: 1,
+      width: 80,
+      height: 24,
+    });
+    const bridge = installTestKit({
+      enabled: true,
+      page: { id: "stable-diff" },
+      uiUnderstanding: false,
+      repairStorage: "memory",
+    });
+    const baseline = bridge.snapshot({ ui: false });
+
+    await expect(
+      bridge.waitForDiff({
+        sinceRevision: baseline.revision,
+        timeoutMs: 1,
+        ui: false,
+      }),
+    ).resolves.toBeNull();
+  });
+
+  it("binds continuation cursors to the exact snapshot request and revision", async () => {
+    document.body.innerHTML = `<button>One</button><button>Two</button><button>Three</button>`;
+    for (const element of document.querySelectorAll("button"))
+      setRect(element, { x: 1, y: 1, width: 80, height: 24 });
+    const bridge = installTestKit({
+      enabled: true,
+      page: { id: "bound-cursor" },
+      uiUnderstanding: false,
+      repairStorage: "memory",
+    });
+    const request = {
+      detail: "summary" as const,
+      ui: false,
+      limits: { nodes: 1, stringBytes: 512 },
+    };
+    const first = bridge.snapshot(request);
+    expect(first.nextCursor).not.toBeNull();
+
+    expect(() =>
+      bridge.snapshot({
+        ...request,
+        limits: { ...request.limits, stringBytes: 256 },
+        cursor: first.nextCursor,
+      }),
+    ).toThrow("cursor does not match");
+
+    document.querySelector("button")!.textContent = "Changed";
+    await bridge.waitForChange(first.revision, 100);
+    expect(() =>
+      bridge.snapshot({ ...request, cursor: first.nextCursor }),
+    ).toThrow("cursor is stale");
+  });
+
+  it("paginates one revision diff without changing its baseline", async () => {
+    document.body.innerHTML = `<button>One</button><button>Two</button><button>Three</button>`;
+    for (const element of document.querySelectorAll("button"))
+      setRect(element, { x: 1, y: 1, width: 80, height: 24 });
+    const bridge = installTestKit({
+      enabled: true,
+      page: { id: "diff-pages" },
+      uiUnderstanding: false,
+      repairStorage: "memory",
+    });
+    const baseline = bridge.snapshot({ ui: false });
+    for (const [index, element] of Array.from(
+      document.querySelectorAll("button"),
+    ).entries())
+      element.textContent = `Changed ${index + 1}`;
+    await bridge.waitForChange(baseline.revision, 100);
+
+    const request = {
+      detail: "diff" as const,
+      sinceRevision: baseline.revision,
+      ui: false,
+      limits: { nodes: 1 },
+    };
+    const pages: PageContextSnapshot[] = [];
+    let cursor: string | null = null;
+    do {
+      const page = bridge.snapshot({ ...request, cursor });
+      pages.push(page);
+      cursor = page.nextCursor;
+    } while (cursor !== null);
+
+    const invalidatedNodeIds = pages[0]!.delta!.invalidated.nodeIds;
+    const pagedNodeIds = pages.flatMap((page) =>
+      page.nodes.map((node) => node.id),
+    );
+    expect(pages).toHaveLength(invalidatedNodeIds.length);
+    expect(new Set(pagedNodeIds).size).toBe(invalidatedNodeIds.length);
+    expect([...pagedNodeIds].sort()).toEqual(invalidatedNodeIds);
+    expect(
+      pages.every(
+        (page) =>
+          page.delta?.fromRevision === baseline.revision &&
+          page.delta.toRevision === pages[0]!.revision,
+      ),
+    ).toBe(true);
+  });
+
+  it("returns a bounded reset instead of dropping an oversized invalidation set", async () => {
+    document.body.innerHTML = Array.from(
+      { length: 80 },
+      (_, index) => `<button>Action ${index}</button>`,
+    ).join("");
+    for (const element of document.querySelectorAll("button"))
+      setRect(element, { x: 1, y: 1, width: 80, height: 24 });
+    const bridge = installTestKit({
+      enabled: true,
+      page: { id: "bounded-diff" },
+      maxEncodedBytes: 16_384,
+      uiUnderstanding: false,
+      repairStorage: "memory",
+    });
+    const baseline = bridge.snapshot({ ui: false });
+    for (const element of document.querySelectorAll("button"))
+      element.textContent = `${element.textContent} changed`;
+    await bridge.waitForChange(baseline.revision, 100);
+
+    const diff = bridge.snapshot({
+      detail: "diff",
+      sinceRevision: baseline.revision,
+      ui: false,
+      limits: { encodedBytes: 1_024 },
+    });
+
+    expect(new TextEncoder().encode(JSON.stringify(diff)).byteLength).toBeLessThanOrEqual(1_024);
+    expect(diff.delta).toMatchObject({
+      status: "reset_required",
+      invalidated: {
+        all: true,
+        page: true,
+        facts: true,
+        ui: true,
+        nodeIds: [],
+        componentIds: [],
+      },
+    });
+    expect(diff.removedNodeIds).toEqual([]);
+  });
+
+  it("rejects malformed diff requests and unbounded wait values", async () => {
+    document.body.innerHTML = `<button>Stable</button>`;
+    setRect(document.querySelector("button")!, {
+      x: 1,
+      y: 1,
+      width: 80,
+      height: 24,
+    });
+    const bridge = installTestKit({
+      enabled: true,
+      page: { id: "diff-admission" },
+      uiUnderstanding: false,
+      repairStorage: "memory",
+    });
+    const baseline = bridge.snapshot({ ui: false });
+
+    expect(() => bridge.snapshot({ detail: "diff" })).toThrow(
+      "diff snapshot requires",
+    );
+    expect(() =>
+      bridge.snapshot({ sinceRevision: baseline.revision }),
+    ).toThrow("sinceRevision requires");
+    expect(() =>
+      bridge.snapshot({
+        detail: "diff",
+        sinceRevision: baseline.revision + 1,
+      }),
+    ).toThrow("current or prior revision");
+    expect(() =>
+      bridge.snapshot({ limits: { encodedBytes: Number.NaN } }),
+    ).toThrow("finite numbers");
+
+    for (const timeoutMs of [Number.NaN, Number.POSITIVE_INFINITY, -1, 300_001]) {
+      expect(() => bridge.waitForChange(baseline.revision, timeoutMs)).toThrow(
+        "timeout",
+      );
+      await expect(
+        bridge.waitForDiff({
+          sinceRevision: baseline.revision,
+          timeoutMs,
+          ui: false,
+        }),
+      ).rejects.toThrow("timeout");
+    }
   });
 
   it("observes open shadow DOM changes and excludes overlay DOM", async () => {

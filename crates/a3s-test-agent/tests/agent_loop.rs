@@ -8,9 +8,10 @@ use a3s_test_agent::{
     StructuredLlmResponse,
 };
 use a3s_test_core::{
-    Action, DriverError, DriverSession, Evidence, ModifierKey, PageContextLocator, PageContextNode,
+    Action, DriverError, DriverSession, Evidence, ModifierKey, PageContextDelta,
+    PageContextDeltaStatus, PageContextInvalidation, PageContextLocator, PageContextNode,
     PageContextNodeState, PageContextObservation, PageContextSnapshot, StepOutput, Surface,
-    SurfaceObservation, Target, TestStep,
+    SurfaceObservation, Target, TestStep, PAGE_CONTEXT_DIFF_PROTOCOL,
 };
 use async_trait::async_trait;
 use tokio_util::sync::CancellationToken;
@@ -68,6 +69,7 @@ struct FakeSession {
     observations: VecDeque<SurfaceObservation>,
     actions: Vec<Action>,
     validated_revisions: Vec<u64>,
+    page_context_delta: Option<PageContextObservation>,
 }
 
 impl FakeSession {
@@ -76,7 +78,13 @@ impl FakeSession {
             observations: observations.into_iter().collect(),
             actions: Vec::new(),
             validated_revisions: Vec::new(),
+            page_context_delta: None,
         }
+    }
+
+    fn with_page_context_delta(mut self, delta: PageContextObservation) -> Self {
+        self.page_context_delta = Some(delta);
+        self
     }
 }
 
@@ -102,6 +110,14 @@ impl DriverSession for FakeSession {
     ) -> Result<(), DriverError> {
         self.validated_revisions.push(expected_revision);
         Ok(())
+    }
+
+    async fn page_context_delta(
+        &mut self,
+        since_revision: u64,
+    ) -> Result<Option<PageContextObservation>, DriverError> {
+        self.validated_revisions.push(since_revision);
+        Ok(self.page_context_delta.take())
     }
 
     async fn close(&mut self) -> Result<(), DriverError> {
@@ -416,6 +432,84 @@ async fn resolves_page_context_refs_before_surface_execution() {
 }
 
 #[tokio::test]
+async fn retains_an_unaffected_page_context_ref_across_a_revision_delta() {
+    let provider = Arc::new(ScriptedProvider::new([response(
+        AgentDecision::Act {
+            action: Action::Click {
+                target: Target::Ref {
+                    value: "@c1".to_string(),
+                },
+            },
+        },
+        usage(5, 3, 8),
+    )]));
+    let policy = Arc::new(CapabilityPolicy::new(
+        [ActionKind::Click],
+        NavigationScope::Denied,
+    ));
+    let agent = AgentLoop::new(provider, policy, options()).expect("valid agent");
+    let mut session = FakeSession::new([page_context_observation()])
+        .with_page_context_delta(page_context_delta(7, 8, &["private-other"]));
+
+    let result = agent
+        .run(
+            &goal(),
+            Surface::Web,
+            &mut session,
+            CancellationToken::new(),
+        )
+        .await;
+
+    assert_eq!(result.status, AgentStatus::Failed);
+    assert_eq!(session.validated_revisions, [7]);
+    assert_eq!(
+        session.actions,
+        [Action::Click {
+            target: Target::TestId {
+                value: "submit".to_string()
+            }
+        }]
+    );
+}
+
+#[tokio::test]
+async fn rejects_a_page_context_ref_invalidated_by_the_revision_delta() {
+    let provider = Arc::new(ScriptedProvider::new([response(
+        AgentDecision::Act {
+            action: Action::Click {
+                target: Target::Ref {
+                    value: "@c1".to_string(),
+                },
+            },
+        },
+        usage(5, 3, 8),
+    )]));
+    let policy = Arc::new(CapabilityPolicy::new(
+        [ActionKind::Click],
+        NavigationScope::Denied,
+    ));
+    let agent = AgentLoop::new(provider, policy, options()).expect("valid agent");
+    let mut session = FakeSession::new([page_context_observation()])
+        .with_page_context_delta(page_context_delta(7, 8, &["private-submit"]));
+
+    let result = agent
+        .run(
+            &goal(),
+            Surface::Web,
+            &mut session,
+            CancellationToken::new(),
+        )
+        .await;
+
+    assert_eq!(result.status, AgentStatus::PolicyDenied);
+    assert_eq!(
+        result.error.as_ref().map(|error| error.code.as_str()),
+        Some("test.agent.policy.observation_ref_invalid")
+    );
+    assert!(session.actions.is_empty());
+}
+
+#[tokio::test]
 async fn refuses_to_execute_a_decision_that_exceeds_the_token_budget() {
     let provider = Arc::new(ScriptedProvider::new([response(
         AgentDecision::Act {
@@ -666,8 +760,8 @@ fn page_context_observation() -> SurfaceObservation {
             page: None,
             components: Vec::new(),
             nodes: vec![PageContextNode {
-                id: String::new(),
-                r#ref: Some("@c1".to_string()),
+                id: "private-submit".to_string(),
+                r#ref: None,
                 parent_id: None,
                 component_id: None,
                 tag: "button".to_string(),
@@ -698,8 +792,46 @@ fn page_context_observation() -> SurfaceObservation {
             }],
             facts: Default::default(),
             ui: None,
+            delta: None,
             removed_node_ids: Vec::new(),
             truncated: false,
             next_cursor: None,
         }))
+}
+
+fn page_context_delta(
+    from_revision: u64,
+    to_revision: u64,
+    invalidated_node_ids: &[&str],
+) -> PageContextObservation {
+    PageContextObservation::from_snapshot(PageContextSnapshot {
+        protocol: Some("a3s.test.page-context/1".to_string()),
+        sdk_version: Some("0.6.0".to_string()),
+        revision: Some(to_revision),
+        page: None,
+        components: Vec::new(),
+        nodes: Vec::new(),
+        facts: Default::default(),
+        ui: None,
+        delta: Some(PageContextDelta {
+            protocol: PAGE_CONTEXT_DIFF_PROTOCOL.to_string(),
+            from_revision,
+            to_revision,
+            status: PageContextDeltaStatus::Complete,
+            invalidated: PageContextInvalidation {
+                all: false,
+                page: false,
+                facts: false,
+                ui: true,
+                node_ids: invalidated_node_ids
+                    .iter()
+                    .map(|value| (*value).to_string())
+                    .collect(),
+                component_ids: Vec::new(),
+            },
+        }),
+        removed_node_ids: Vec::new(),
+        truncated: false,
+        next_cursor: None,
+    })
 }

@@ -187,6 +187,7 @@ fn viewport_coverage_resolves_page_context_targets_and_rejects_ui_evidence_refs(
                 value: "hero".to_string(),
             },
         )]),
+        node_fingerprints: BTreeMap::new(),
     };
     let action = Action::Assert {
         expectation: Expectation::ViewportCoverage {

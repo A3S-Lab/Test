@@ -50,7 +50,7 @@ Target choice determines whether a test can be repeated across page revisions. P
 | `text("Saved", true)`          | Visible copy that is itself the identity         | The second argument requests exact matching                            |
 | `css("[data-row]")`            | Collections, geometry, or exact browser targets  | Current-document semantics; does not pierce Shadow DOM                 |
 | `ref("@e4")`                   | A browser element from the latest observation    | Valid only for the observation that produced it                        |
-| Page Context `@cN`             | An actionable Test Kit component node            | Core first resolves it to a stable locator; latest ready revision only |
+| Page Context `@cN`             | An actionable Test Kit component node            | Latest observation; drift requires an exact delta proving its private node ID unchanged |
 | `automation_id("save-button")` | A GUI accessibility automation ID                | GUI only                                                               |
 | `visual_point("@v3", 120, 80)` | A GUI target absent from accessibility semantics | GUI only; coordinates, image digest, and observation must remain fresh |
 

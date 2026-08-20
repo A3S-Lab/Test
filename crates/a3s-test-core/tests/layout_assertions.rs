@@ -369,6 +369,7 @@ fn layout_assertion_resolves_both_page_context_targets_and_rejects_ui_evidence_r
                 },
             ),
         ]),
+        node_fingerprints: BTreeMap::new(),
     };
     let resolved = resolve_page_context_refs(action, &bindings).expect("both context refs");
     let Action::Assert {

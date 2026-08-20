@@ -1,6 +1,6 @@
 ---
 title: Page Context 字段与生命周期
-description: 了解 Test Kit 如何从渲染后的 DOM、可访问语义、组件边界、几何与浏览器计算样式生成有界页面上下文。
+description: 了解 Test Kit 如何生成有界渲染事实、精确修订差异、组件归属、几何与浏览器计算后的 UI 证据。
 ---
 
 # Page Context 字段与生命周期
@@ -62,7 +62,11 @@ const summary = bridge.snapshot({
   limits: { nodes: 300, uiNodes: 120 },
 });
 
-const nextRevision = await bridge.waitForChange(summary.revision, 5_000);
+const diff = await bridge.waitForDiff({
+  sinceRevision: summary.revision,
+  timeoutMs: 5_000,
+  ui: false,
+});
 ```
 
 | 方法                          | 返回或执行的内容                                          |
@@ -71,6 +75,7 @@ const nextRevision = await bridge.waitForChange(summary.revision, 5_000);
 | `snapshot(request)`           | 当前修订上的有界快照                                      |
 | `resolve(nodeId)`             | 当前私有节点 ID 对应的实时 DOM 节点，仅供同页 bridge 使用 |
 | `waitForChange(revision, ms)` | 等待语义修订推进，超时返回 `null`                         |
+| `waitForDiff(request)`        | 等待一次新修订，并返回有界的精确差异                     |
 | `subscribe(listener)`         | 订阅修订、质量候选、设计建议和修复事件                    |
 | `dispose()`                   | 移除观察器、监听器、portal 和私有状态                     |
 
@@ -84,7 +89,7 @@ Bridge 不提供 `eval`、Cookie、浏览器存储、任意网络请求、文件
 | ---------- | ---------------------------------------------------- |
 | `summary`  | 常规观察，读取主要语义、组件、定位器与有界 UI 证据   |
 | `scoped`   | 深入一个节点、组件或区域，减少与当前任务无关的上下文 |
-| `diff`     | 结合 `sinceRevision` 查看两个页面修订之间的变化      |
+| `diff`     | 必须提供 `sinceRevision`，返回精确失效信息或明确 reset |
 | `forensic` | 修复验证或设计审查，获取允许预算内的完整取证记录     |
 
 ### 范围
@@ -100,7 +105,7 @@ Bridge 不提供 `eval`、Cookie、浏览器存储、任意网络请求、文件
 
 ## 快照字段
 
-每次响应都包含 `protocol`、`sdkVersion`、`revision`、`page`、`components`、`nodes`、`facts`、可选 `ui`、`removedNodeIds`、`truncated` 和 `nextCursor`。
+每次响应都包含 `protocol`、`sdkVersion`、`revision`、`page`、`components`、`nodes`、`facts`、可选 `ui`、可选 `delta`、`removedNodeIds`、`truncated` 和 `nextCursor`。
 
 ### 页面字段
 
@@ -197,19 +202,46 @@ UI 记录有独立 `observationId`。焦点、悬停或运行中的动画可能�
 
 重复结构不会把类名当作组件真相。状态采集不会主动移动焦点或派发事件。跨域样式表不会绕过浏览器限制，只会增加 `inaccessibleStyleSheets` 计数。
 
-## 修订与公开引用
+## 修订、精确差异与公开引用
 
-MutationObserver、ResizeObserver、路由、视口、滚动和相关表单变化会使缓存失效并推进单调修订号。没有变化的页面不会被轮询。
+MutationObserver、ResizeObserver、路由、视口、滚动和相关表单变化会推进单调修订号。页面不变时不会轮询。A3S Test 会把浏览器可访问快照与 Test Kit 修订原子绑定，组装观察期间页面再次变化时会直接拒绝竞态。
 
-A3S Test 把浏览器可访问快照和 Test Kit 修订原子绑定。读取期间如果页面继续变化，驱动会拒绝竞态并要求重新观察。
+从第一性原理看，规则不应该是“每次编辑后丢掉整页”，而应该是“只丢掉已经无法证明仍然有效的证据”。Test Kit 0.6.0 通过 `a3s.test.page-context-diff/1` 实现这条规则。
 
-| 引用  | 来源                           | 生命周期与权限                             |
-| ----- | ------------------------------ | ------------------------------------------ |
-| `@eN` | 浏览器可访问快照               | 当前观察内可操作，页面变化后失效           |
-| `@cN` | 可唯一操作的 Page Context 节点 | 当前观察内可操作，并绑定组件、定位器和几何 |
-| `@uN` | UI 理解中的补充证据节点        | 当前观察内只读，永远不能成为动作目标       |
+```json
+{
+  "delta": {
+    "protocol": "a3s.test.page-context-diff/1",
+    "fromRevision": 42,
+    "toRevision": 43,
+    "status": "complete",
+    "invalidated": {
+      "all": false,
+      "page": false,
+      "facts": false,
+      "ui": true,
+      "nodeIds": ["n12"],
+      "componentIds": ["checkout-form"]
+    }
+  }
+}
+```
 
-任何导航、热更新或动态重排后都要重新观察。A3S Test 会在 ACL 准入或驱动执行前拒绝 `@uN`，也会拒绝绑定到旧观察的 `@eN` 与 `@cN`。
+- `complete` 只返回变化节点和组件，列出每个变化或消失的私有节点 ID，并分别标记 page 与 facts。修订一旦推进，UI 证据一定失效，因为几何、样式、状态和动效都绑定原修订。
+- 同修订的 `complete` 是没有任何变化的空差异。
+- `reset_required` 表示精确 baseline 已不在历史中，或完整失效元数据无法装入字节预算。它会声明全部失效，不返回容易误解的部分 ID，并要求调用方重新获取非 diff baseline。
+
+运行时最多保留八种标准化 projection，每种保留十二个修订。projection 由 semantic 或 forensic 明细、标准化 scope 和字符串预算共同决定。diff 分页始终使用同一个 baseline。opaque cursor 还会绑定 detail、scope、baseline、UI 选择、全部标准化 limit 和当前修订；任何错配或过期都会明确拒绝，不会偷偷回到第一页。`waitForDiff` 的 `timeoutMs` 必须是 0 到 300,000 的整数，非法值和未来修订会直接拒绝，不会 clamp。
+
+Web adapter 会在 Rust 中再次校验协议、修订顺序、UTF-8 ID 顺序、唯一性、大小、changed/removed 互斥和失效集合完整性。因此 Core 只能保留未受影响 `@cN` 背后的稳定定位器，任何不确定目标都会关闭失败。
+
+| 引用  | 来源                           | 生命周期与权限                                                                 |
+| ----- | ------------------------------ | ------------------------------------------------------------------------------ |
+| `@eN` | 浏览器可访问快照               | 只在当前浏览器观察中可操作，不会因 Page Context diff 跨修订保留                |
+| `@cN` | 可唯一操作的 Page Context 节点 | 绑定一次观察与私有节点 ID，只有 complete delta 明确排除它时才能跨过修订漂移   |
+| `@uN` | UI 理解中的补充证据节点        | 当前观察内只读，修订推进后一定失效                                             |
+
+A3S Test 仍会拒绝来自更早 A3S 观察的引用。在最新观察内部，只要 delta 缺失、返回 `reset_required`、绑定来自旧版协议、目标变化或消失、修订倒退，相关 `@cN` 就会在输入前被清除或拒绝。这个例外只用于稳定定位，不允许复用截图、坐标或 UI 证据。
 
 ## 预算、截断与分页
 
@@ -225,7 +257,7 @@ A3S Test 把浏览器可访问快照和 Test Kit 修订原子绑定。读取期�
 | UI 采集时间       | 32 ms   | 100 ms |
 | UI 编码           | 256 KiB | 1 MiB  |
 
-返回 `truncated: true` 时，检查 `nextCursor` 并在相同修订和 scope 上继续读取。Cursor 对修订和范围有绑定，页面变化后不能复用。
+返回 `truncated: true` 时，检查 `nextCursor` 并使用完全相同的请求与修订继续读取。页面变化，或 detail、scope、baseline、UI 选择、limit 任一变化后都不能复用 cursor。
 
 UI 记录还有自己的 `budget.used`、`truncated` 和原因列表。如果 UI 投影无法同时满足图完整性和编码预算，A3S Test 会省略这块可选记录，保留外层语义观察。它不会为了塞进预算而返回断边、循环关系或私有身份。
 
@@ -255,5 +287,6 @@ UI 记录还有自己的 `budget.used`、`truncated` 和原因列表。如果 UI
 | `truncated` 持续为 true       | 页面超过安装或请求预算               | 缩小 scope、降低 detail、使用 cursor，或有依据地提高安装上限 |
 | 没有 UI 理解                  | 请求关闭、安装关闭或图与预算校验失败 | 检查 `ui` 配置和预算；外层 Page Context 仍可继续使用         |
 | `@cN` 动作被拒绝              | 引用来自旧观察或不再唯一             | 重新观察，并优先选择新的语义定位器                           |
+| diff 返回 `reset_required`    | baseline 已淘汰或精确失效集合超出预算 | 丢弃旧证据，重新获取一次非 diff 快照                         |
 
 继续阅读[接入 Web Test Kit](../guide/testkit.mdx)完成安装，或查看[人工评审与修复](../guide/repairs.mdx)了解 Page Context 如何随明确发送的问题进入修复验证。

@@ -12,7 +12,7 @@ use crate::workspace::config::{
 #[tokio::test]
 async fn compatible_installed_testkit_versions_pass() {
     let temp = tempfile::tempdir().expect("tempdir");
-    write_testkit(temp.path(), "0.5.0");
+    write_testkit(temp.path(), "0.6.0");
     let profile = profile(temp.path().to_path_buf());
     let mut checks = Vec::new();
 
@@ -20,7 +20,7 @@ async fn compatible_installed_testkit_versions_pass() {
 
     let installed = check(&checks, "testkit.installed");
     assert_eq!(installed.status, CheckStatus::Passed);
-    assert!(installed.summary.contains("0.5.0"));
+    assert!(installed.summary.contains("0.6.0"));
     assert!(installed.summary.contains("passes the static"));
     assert!(installed.summary.contains("a3s-test dev"));
     assert!(installed.summary.contains("live protocol handshake"));
@@ -30,7 +30,7 @@ async fn compatible_installed_testkit_versions_pass() {
 #[tokio::test]
 async fn incompatible_installed_testkit_versions_fail_with_a_fix() {
     let temp = tempfile::tempdir().expect("tempdir");
-    write_testkit(temp.path(), "0.6.0");
+    write_testkit(temp.path(), "0.7.0");
     let profile = profile(temp.path().to_path_buf());
     let mut checks = Vec::new();
 
@@ -38,10 +38,10 @@ async fn incompatible_installed_testkit_versions_fail_with_a_fix() {
 
     let installed = check(&checks, "testkit.installed");
     assert_eq!(installed.status, CheckStatus::Failed);
-    assert!(installed.summary.contains(">=0.4.0, <0.6.0"));
+    assert!(installed.summary.contains(">=0.4.0, <0.7.0"));
     assert_eq!(
         installed.fix.as_deref(),
-        Some("npm install --save-dev @a3s-lab/testkit@0.5.0")
+        Some("npm install --save-dev @a3s-lab/testkit@0.6.0")
     );
 }
 

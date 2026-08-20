@@ -29,7 +29,8 @@ static MANAGER_SEQUENCE: AtomicU64 = AtomicU64::new(1);
 
 pub use page_context::{
     action_uses_observation_target, action_uses_page_context_ref, bind_page_context_refs,
-    preferred_page_context_target, resolve_page_context_refs, PageContextBindings,
+    preferred_page_context_target, refresh_page_context_bindings, resolve_page_context_refs,
+    PageContextBindings,
 };
 use protocol::{validate_session_id, validate_start};
 pub use protocol::{
@@ -290,13 +291,16 @@ impl AgentSessionManager {
             None
         };
         managed.latest_observation = None;
-        let bindings = std::mem::take(&mut managed.page_context_targets);
+        let mut bindings = std::mem::take(&mut managed.page_context_targets);
         if let Some(revision) = expected_revision {
-            managed
+            if let Some(context) = managed
                 .driver
-                .validate_page_context_revision(revision)
+                .page_context_delta(revision)
                 .await
-                .map_err(SessionError::from_driver)?;
+                .map_err(SessionError::from_driver)?
+            {
+                refresh_page_context_bindings(&mut bindings, &context)?;
+            }
         }
         let action = resolve_page_context_refs(request.action, &bindings)?;
         let step = TestStep {

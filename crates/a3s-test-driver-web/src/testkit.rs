@@ -7,7 +7,7 @@ use serde_json::{Map, Value};
 
 pub const TESTKIT_HANDSHAKE_PROTOCOL: &str = "a3s.test.testkit-handshake/1";
 pub const TESTKIT_PACKAGE_NAME: &str = "@a3s-lab/testkit";
-pub const TESTKIT_SDK_COMPATIBILITY: &str = ">=0.4.0, <0.6.0";
+pub const TESTKIT_SDK_COMPATIBILITY: &str = ">=0.4.0, <0.7.0";
 
 const PAGE_CONTEXT_PROTOCOL: &str = "a3s.test.page-context/1";
 const MAX_HANDSHAKE_CAPABILITIES: usize = 64;
@@ -107,7 +107,7 @@ pub(crate) fn parse_testkit_handshake(
             exact_fields(object, &["state"])?;
             Err(DriverError::new(
                 "test.driver.web.testkit_handshake_missing",
-                "the mounted Test Kit does not expose the live handshake protocol; update @a3s-lab/testkit within >=0.4.0, <0.6.0",
+                "the mounted Test Kit does not expose the live handshake protocol; update @a3s-lab/testkit within >=0.4.0, <0.7.0",
             ))
         }
         "handshake_failed" => {

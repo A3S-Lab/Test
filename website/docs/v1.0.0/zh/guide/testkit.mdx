@@ -1,6 +1,6 @@
 ---
 title: 接入 Web Test Kit
-description: 在页面渲染后发布带修订的语义、组件、定位器、坐标与 UI 证据，并提供可选的人工点选与批量修复界面。
+description: 在页面渲染后提供有界事实与精确修订差异，并按需加入源码感知的人工标记与批量修复评审。
 ---
 
 # 接入 Web Test Kit
@@ -16,7 +16,7 @@ Test Kit 把渲染后的页面连接到负责它的实现，但不会把业务�
 | 让 Agent 读取截图之外的页面事实 | 无界面的 Context Runtime 在 DOM、可访问语义、样式与布局计算完成后生成有界事实  |
 | 让人准确指出问题                | 一个右侧 Review Overlay 完成元素、文本、多选、区域、手绘、画板和浏览器页面截图 |
 | 从点选节点定位到代码            | 显式组件边界、DOM 归属注册和可选 Source Map v3 生成排序后的源码跨度            |
-| 阻止旧目标继续作用于新页面      | 每份快照与明确发送的 finding 都绑定单调页面修订                                |
+| 阻止旧目标继续作用于新页面      | 精确修订差异只保留未受影响的上下文目标，其余绑定全部关闭失败                   |
 | 把评审与源码修改分开            | 保存只留在本地，只有明确发送才进入 A3S Test Repair Ledger                      |
 
 ```text
@@ -36,10 +36,10 @@ Test Kit 把渲染后的页面连接到负责它的实现，但不会把业务�
 在前端工程目录执行固定版本的安装命令：
 
 ```bash
-npm install --save-dev @a3s-lab/testkit@0.5.0
+npm install --save-dev @a3s-lab/testkit@0.6.0
 ```
 
-该包已通过 GitHub OIDC provenance 发布到官方 npm Registry。固定安装的 0.5.0 版本已包含画板、页面区域截图、CLI 实时兼容握手和渲染节点源码映射，不需要额外安装绘图或截图模块。
+该包已通过 GitHub OIDC provenance 发布到官方 npm Registry。固定安装的 0.6.0 版本已包含画板、页面区域截图、CLI 实时兼容握手、渲染节点源码映射和修订级 Page Context 差异，不需要额外安装绘图或截图模块。
 
 确认依赖已经进入当前工程：
 
@@ -256,6 +256,7 @@ console.log({
 一次健康接入至少满足以下条件。
 
 - `probe.protocol` 等于 `a3s.test.page-context/1`。
+- Test Kit 0.6.0 会在 `probe.capabilities` 中报告 `revision_diff`。
 - `snapshot.page.id` 与接入配置一致。
 - 页面完成当前渲染后 `snapshot.page.ready` 为 `true`。
 - 声明过的组件边界出现在 `components`。
@@ -328,7 +329,8 @@ artifact 元数据替换内联字节。
 | `probe()`                                                                                                                                       | 返回协议、SDK 版本和能力名称                                                            | 只做同步能力发现，不采集页面快照                                   |
 | `snapshot(request?)`                                                                                                                            | 读取 summary、scoped、diff 或 forensic 快照，并支持 page、node、component、region scope | 结果可能截断；cursor、scope 和 revision 必须保持一致               |
 | `resolve(nodeId)`                                                                                                                               | 把当前私有 node ID 解析为仍然连接的 DOM `Element`                                       | 仅用于页面内集成；未知、已移除或过期节点返回 `null`                |
-| `waitForChange(revision, timeoutMs)`                                                                                                            | 等待更高修订号，立即变化时直接返回，超时返回 `null`                                     | timeout 会限制到 1 至 300,000 ms，不用于固定 sleep                 |
+| `waitForChange(revision, timeoutMs)`                                                                                                            | 等待更高修订号，立即变化时直接返回，超时返回 `null`                                     | timeout 必须是 0 到 300,000 的整数                                 |
+| `waitForDiff({ sinceRevision, timeoutMs, ...request })`                                                                                         | 等待一次更高修订并返回精确有界差异，超时返回 `null`                                     | 非法 baseline 和 timeout 会拒绝，不会取整或 clamp                  |
 | `subscribe(listener)`                                                                                                                           | 订阅 context、quality、design audit 和 repair 事件，返回取消订阅函数                    | listener 只观察事件，不获得动作或工作区权限                        |
 | `submitRepair({ findings, batchId? })`                                                                                                          | 校验 finding、捕获当前上下文并返回进入 `queued` 的记录                                  | 重复 finding ID 幂等返回旧记录；只有这一步代表明确发送             |
 | `peekRepairBatch(limit?)`、`takeRepairBatch(limit?)`                                                                                            | 查看或在页面侧保留最多 100 条 queued finding                                            | `take` 防止同一 bridge 重复提取，不替代 Agent 的 lease claim       |
@@ -343,6 +345,25 @@ artifact 元数据替换内联字节。
 | `dispose()`                                                                                                                                     | 断开 observer、waiter、listener、边界、报告和全局 bridge                                | 幂等；随后 active-runtime 操作会拒绝，修复历史副本仍可读取         |
 
 `TestKitRuntime` 还提供 `registerBoundary()`。顶层导出的同名函数会先查找已安装 bridge，未安装时直接报错。`installTestKit({ enabled: false })` 返回禁用 runtime，其中 `probe()` 与 `snapshot()` 明确拒绝调用，修复和报告方法返回空结果，不会偷偷启用页面采集。
+
+### 只观察真正变化的部分
+
+先取得一次普通 baseline，再等待下一次有意义的差异。
+
+```ts
+let baseline = bridge.snapshot({ detail: 'summary', ui: false });
+const diff = await bridge.waitForDiff({
+  sinceRevision: baseline.revision,
+  timeoutMs: 5_000,
+  ui: false,
+});
+
+if (diff?.delta?.status === 'reset_required') {
+  baseline = bridge.snapshot({ detail: 'summary', ui: false });
+}
+```
+
+`complete` 会列出每个变化或消失的节点、变化组件，以及 page、facts、UI 是否失效。`reset_required` 表示精确 baseline 已不在有界历史中，或完整失效集合无法装入字节上限；此时应丢弃旧证据，不能把它理解为“没有变化”。Cursor 绑定完整请求和修订，所以 diff 分页不会悄悄漂移到另一个 baseline。
 
 ## Review Overlay 属性与回调
 
@@ -391,17 +412,17 @@ artifact 元数据替换内联字节。
 - 有界 computed style、页面事实和脱敏后的表单状态。
 - 观察到的设计令牌、包含 overflow/裁剪状态的布局关系、重复结构、真实交互状态差分和时间轴感知的动效事实。
 
-MutationObserver、ResizeObserver、滚动、视口和导航信号会推进修订号。没有变化的页面不会被轮询。任何旧修订上的目标都会失效，避免 Agent 对热更新前的坐标或 DOM 引用执行动作。
+MutationObserver、ResizeObserver、滚动、视口和导航信号会推进修订号。没有变化的页面不会被轮询。浏览器 ref、坐标、截图和 UI 证据会随修订漂移失效。只有完整 delta 经过 Rust 校验并证明私有节点身份未变时，Page Context `@cN` 才能保留背后的稳定定位器；delta 缺失或要求 reset 时会清空全部旧上下文绑定。
 
 ## 区分可操作引用与只读证据
 
 | 引用  | 含义                                 | 权限                                         |
 | ----- | ------------------------------------ | -------------------------------------------- |
 | `@eN` | 当前浏览器观察中的可访问语义节点     | 可操作，只在生成它的观察中有效               |
-| `@cN` | 当前 Page Context 中可唯一操作的节点 | 可操作，并与同一次观察中的组件和几何事实绑定 |
+| `@cN` | 当前 Page Context 中可唯一操作的节点 | 在该观察内可操作；只有未受影响的稳定定位器可以跨过修订漂移 |
 | `@uN` | UI 理解中的证据节点                  | 只读，只能关联样式、布局、状态与动效事实     |
 
-公开观察不会暴露 Test Kit 的私有节点 ID。可唯一操作的 UI 节点复用 `@cN`，其他证据节点投影为 `@uN`。任何 `@uN` 动作都会在 ACL 准入或驱动执行前被拒绝；如果投影后无法同时保留图完整性和字节预算，可选 UI 证据会被省略。
+公开观察不会暴露 Test Kit 的私有节点 ID，持久 session 元数据只保存带域隔离的 SHA-256 节点指纹。可唯一操作的 UI 节点复用 `@cN`，其他证据节点投影为 `@uN`。任何 `@uN` 动作都会在 ACL 准入或驱动执行前被拒绝；如果投影后无法同时保留图完整性和字节预算，可选 UI 证据会被省略。
 
 ## 渲染态 UI 理解
 
@@ -423,7 +444,7 @@ MutationObserver、ResizeObserver、滚动、视口和导航信号会推进修�
 
 ## 人工标记与批量修复
 
-Test Kit 0.5.0 把评审收敛到一个固定侧栏。最短流程只有三步：选择目标、描述修改、保存或发送。“新反馈”“问题”“偏好设置”是同一侧栏里的三个并列视图。标记工具直接展示；选中目标后，编辑器在原位置替换工具；保存后直接进入问题视图。不会再打开贴着目标的编辑器、第二层工具浮层或嵌套弹窗。
+Test Kit 0.6.0 把评审收敛到一个固定侧栏。最短流程只有三步：选择目标、描述修改、保存或发送。“新反馈”“问题”“偏好设置”是同一侧栏里的三个并列视图。标记工具直接展示；选中目标后，编辑器在原位置替换工具；保存后直接进入问题视图。不会再打开贴着目标的编辑器、第二层工具浮层或嵌套弹窗。
 
 画板打开时会暂时替换评审侧栏，关闭后回到同一个编辑器。短桌面视口中的问题和偏好内容会在侧栏内部滚动；移动端使用单一全宽界面，主要操作提供至少 44 CSS 像素的触控目标，表单文字保持 16 像素，避免浏览器自动缩放。开始标记后，桌面和移动端侧栏都会暂时让出页面，只保留轻量的“完成选择 / 取消”提示条，因此被侧栏覆盖的内容也能直接选择；侧栏回来后，页面标记始终位于它的下方。
 

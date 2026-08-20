@@ -4,6 +4,18 @@
 
 ### Added
 
+- Added revision-scoped Page Context deltas through
+  `a3s.test.page-context-diff/1` and Test Kit 0.6.0. `waitForDiff` now waits
+  for one bounded semantic revision and returns exact node, component, page,
+  facts, and UI invalidation instead of forcing a complete recapture. Opaque
+  cursors bind the full normalized request and revision; bounded projection
+  history and encoded-byte limits fail closed as `reset_required`; invalid
+  revisions, timeouts, cursors, ordering, duplicates, and incomplete changed
+  or removed node coverage are rejected. The Web driver validates the delta
+  independently in Rust, while Agent, persistent CLI, MCP, and session paths
+  retain only `@cN` bindings whose one-way private-node fingerprint was not
+  invalidated; raw Test Kit node IDs are never persisted in session metadata.
+  Legacy or unavailable deltas still clear all old context refs.
 - Added optional rendered-node source ownership through
   `a3s.test.source-mapping/1`. Test Kit 0.5.0 ranks explicit framework-adapter
   registrations, encoded Source Map v3 traces, `A3STestBoundary` hints, and
@@ -14,7 +26,7 @@
   map, and discards `sourcesContent`; TypeScript and Rust independently bound
   and validate registrations, maps, spans, ranking, deduplication, and
   truncation. New `init` and `doctor` repairs point every supported package
-  manager to the reproducible `@a3s-lab/testkit@0.5.0` install.
+  manager to the reproducible `@a3s-lab/testkit@0.6.0` install.
 - Added `a3s.test.local-repair-bridge/1` to `a3s-test dev`. An admitted Test
   Kit now feeds explicitly submitted Review Overlay findings into the existing
   authoritative repair ledger, captures owned before evidence, and emits each

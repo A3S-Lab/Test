@@ -28,6 +28,7 @@ pub(crate) struct FakeState {
     pub(crate) human_actions: Vec<RepairHumanAction>,
     pub(crate) fail_repair_projection_once: bool,
     pub(crate) inspect_context: Option<PageContextObservation>,
+    pub(crate) page_context_delta: Option<PageContextObservation>,
     pub(crate) console_errors: u32,
     pub(crate) page_errors: u32,
     pub(crate) evidence_started: Option<Arc<Notify>>,
@@ -101,6 +102,17 @@ impl DriverSession for FakeSession {
                 "fake page context revision changed",
             ))
         }
+    }
+
+    async fn page_context_delta(
+        &mut self,
+        since_revision: u64,
+    ) -> Result<Option<PageContextObservation>, DriverError> {
+        if let Some(delta) = self.state.lock().await.page_context_delta.clone() {
+            return Ok(Some(delta));
+        }
+        self.validate_page_context_revision(since_revision).await?;
+        Ok(None)
     }
 
     async fn inspect_page_context(
@@ -297,6 +309,7 @@ pub(crate) fn test_page_context() -> PageContextObservation {
         }],
         facts: serde_json::Map::new(),
         ui: None,
+        delta: None,
         removed_node_ids: vec!["private-removed".to_string()],
         truncated: false,
         next_cursor: None,

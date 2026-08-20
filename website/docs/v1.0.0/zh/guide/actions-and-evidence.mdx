@@ -50,7 +50,7 @@ ACL 或 Agent 提议
 | `text("Saved", true)`          | 可见文案本身就是身份                 | 第二个参数控制精确匹配                                  |
 | `css("[data-row]")`            | 集合、几何、浏览器协议或精确结构目标 | 保留当前 document 语义，不穿透 Shadow DOM               |
 | `ref("@e4")`                   | 刚观察到的浏览器元素                 | 只在生成它的最新 observation 中有效                     |
-| Page Context `@cN`             | Test Kit 暴露的当前可操作组件节点    | Core 会先解析为稳定定位器，只能使用当前 ready 修订      |
+| Page Context `@cN`             | Test Kit 暴露的当前可操作组件节点    | 只属于最新观察；修订漂移时必须有精确 delta 证明私有节点 ID 未变 |
 | `automation_id("save-button")` | GUI 辅助功能树中的稳定自动化 ID      | GUI 专用                                                |
 | `visual_point("@v3", 120, 80)` | GUI 语义无法识别且已有窗口截图的目标 | GUI 专用，坐标、图片摘要和 observation 必须同时保持新鲜 |
 

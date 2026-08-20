@@ -70,6 +70,8 @@ are:
 - `resolve(nodeId)` returns the live DOM node for a current snapshot node.
 - `waitForChange(revision, timeoutMs)` completes when the semantic revision
   advances or the bounded timeout expires.
+- `waitForDiff({ sinceRevision, timeoutMs, ...snapshotRequest })` waits for one
+  newer revision and returns its exact bounded delta, or `null` on timeout.
 - `subscribe(listener)` publishes revision and review events and returns an
   unsubscribe function.
 - `submitRepair(request)` accepts a human-confirmed single finding or batch
@@ -99,7 +101,7 @@ hydration and calls `handshake()` through the browser bridge:
 {
   "protocol": "a3s.test.testkit-handshake/1",
   "packageName": "@a3s-lab/testkit",
-  "sdkVersion": "0.5.0",
+  "sdkVersion": "0.6.0",
   "pageContextProtocol": "a3s.test.page-context/1",
   "capabilities": [
     "bounded_snapshot",
@@ -112,6 +114,7 @@ hydration and calls `handshake()` through the browser bridge:
     "open_shadow_dom",
     "quality_reports",
     "repair_queue",
+    "revision_diff",
     "revision_wait",
     "scoped_inspection",
     "source_mapping",
@@ -125,7 +128,7 @@ hydration and calls `handshake()` through the browser bridge:
 ```
 
 The adapter accepts only handshake protocol v1, package
-`@a3s-lab/testkit`, SDK `>= 0.4.0, < 0.6.0`, Page Context protocol v1, and a
+`@a3s-lab/testkit`, SDK `>= 0.4.0, < 0.7.0`, Page Context protocol v1, and a
 sorted, unique, bounded capability list. The local review loop requires
 `bounded_snapshot`, `component_boundaries`, `design_references`, `geometry`,
 `repair_queue`, `revision_wait`, and `scoped_inspection`. When the project
@@ -188,19 +191,22 @@ cleanup path.
 }
 ```
 
-`detail` is `summary`, `scoped`, `diff`, or `forensic`. A scope selects the
+`detail` is `summary`, `scoped`, `diff`, or `forensic`. `sinceRevision` is
+required for `diff` and rejected for every other detail profile. A scope selects the
 page, a current context node, a registered component, or a viewport/document
 rectangle. The SDK may lower caller limits to its configured ceiling but must
 never raise them. Truncated results carry an opaque cursor bound to the page
-revision and scope. UI understanding is enabled by default and can be omitted
-for one request with `"ui": false`.
+revision and the complete normalized request: detail, scope, baseline, UI
+choice, and every limit. A stale or mismatched cursor is rejected rather than
+restarting at the first page. UI understanding is enabled by default and can
+be omitted for one request with `"ui": false`.
 
 ### Snapshot response
 
 ```json
 {
   "protocol": "a3s.test.page-context/1",
-  "sdkVersion": "0.5.0",
+  "sdkVersion": "0.6.0",
   "revision": 42,
   "page": {
     "id": "checkout",
@@ -368,6 +374,83 @@ without becoming an action target; Core rejects an attempted `@uN` action
 before driver dispatch. If projection cannot retain the admitted encoded-size
 budget and graph integrity, A3S Test omits the optional UI record instead of
 returning a private identity.
+
+### Revision-scoped diffs
+
+The smallest safe verification unit is the evidence that actually changed,
+not the complete page. Test Kit 0.6.0 adds
+`a3s.test.page-context-diff/1` and advertises `revision_diff`. A caller first
+captures a normal snapshot, then either requests a diff immediately or waits
+for one change:
+
+```ts
+const baseline = bridge.snapshot({ detail: "summary", ui: false });
+const changed = await bridge.waitForDiff({
+  sinceRevision: baseline.revision,
+  timeoutMs: 5_000,
+  scope: { kind: "page" },
+  ui: false,
+});
+```
+
+`timeoutMs` must be an integer from 0 through 300,000. Zero performs an
+immediate check: an already newer revision returns its diff, while an unchanged
+page returns `null`. NaN, infinity, fractions, negative values, future
+revisions, and values above the ceiling are rejected instead of clamped.
+
+A complete response carries changed nodes and components, removed node IDs,
+and one canonical invalidation record:
+
+```json
+{
+  "delta": {
+    "protocol": "a3s.test.page-context-diff/1",
+    "fromRevision": 42,
+    "toRevision": 43,
+    "status": "complete",
+    "invalidated": {
+      "all": false,
+      "page": false,
+      "facts": false,
+      "ui": true,
+      "nodeIds": ["n12"],
+      "componentIds": ["checkout-form"]
+    }
+  }
+}
+```
+
+The semantics are fail-closed:
+
+- `complete` means every changed or removed private node identity is named in
+  the sorted, unique `nodeIds` set. `page`, `facts`, and `componentIds` state
+  which other evidence changed. Any revision advance invalidates the optional
+  UI record because its geometry, style, state, and motion are revision-bound.
+- `fromRevision === toRevision` is a valid `complete` no-op. It contains no
+  changed nodes, removed nodes, components, or invalidation flags.
+- `reset_required` means the requested baseline or projection is no longer in
+  bounded history, or the complete invalidation metadata cannot fit the hard
+  encoded-byte budget. It sets `all`, `page`, `facts`, and `ui` to `true`,
+  carries no partial IDs, and requires the caller to discard old evidence and
+  establish a fresh non-diff baseline.
+
+History retains at most eight normalized projection shapes and twelve
+revisions per shape. The semantic `summary`, `scoped`, and `diff` profiles
+share a compatible projection; `forensic`, scope, and admitted string budget
+remain distinct. A complete diff can paginate without changing its baseline,
+and every page repeats the same delta metadata. If that metadata cannot fit,
+the runtime returns a bounded reset instead of silently omitting invalidated
+IDs.
+
+The Web driver validates the protocol, revision ordering, canonical UTF-8 ID
+order, ID counts and lengths, changed/removed disjointness, and complete
+coverage again in Rust. Core converts the private node identity behind each
+public `@cN` into a domain-separated SHA-256 fingerprint before persistent
+session metadata is written. When the page advances, it fingerprints the
+validated invalidation set and removes only matching bindings. A missing
+delta, a legacy binding without a fingerprint, or `reset_required` clears all
+retained context refs. Browser accessibility refs, screenshots, coordinates,
+and UI evidence never inherit this exception.
 
 ### UI understanding evidence
 
@@ -1148,9 +1231,26 @@ a3s-test agent inspect \
   --json
 ```
 
+Wait for the smallest Page Context change when a baseline revision is already
+known:
+
+```bash
+a3s-test agent inspect \
+  --session checkout \
+  --detail diff \
+  --since-revision 42 \
+  --wait-timeout-ms 5000 \
+  --json
+```
+
+`--since-revision` is required by `--detail diff`; both it and
+`--wait-timeout-ms` are rejected for other profiles. The wait accepts zero
+through 300,000 milliseconds and never becomes an unbounded poll.
+
 MCP exposes the same operation as `test_inspect`, with mutually exclusive
-page, node, component, and region scopes. Each inspection replaces the latest
-observation and emits fresh `@cN` refs.
+page, node, component, and region scopes plus `since_revision` and
+`wait_timeout_ms`. Each inspection replaces the latest observation and emits
+fresh `@cN` refs.
 
 `watch` first drains already queued work, then waits with bounded timeout and
 batch window. A claim uses a lease and attempt ID. If a worker disappears
@@ -1215,7 +1315,7 @@ independent scenarios prove:
 | Clarification | agent question, page-local human reply, authoritative ingestion, and return to the queue |
 | Cancellation | cancellation from both queued and claimed states |
 | Agent disconnect | a pre-edit claim returns to the queue, while possible editing is quarantined in `needs_input` |
-| Hot reload | an observation-bound `@cN` ref is rejected after the page revision changes, then a fresh inspection succeeds |
+| Hot reload | an unaffected `@cN` survives a complete revision delta, while changed or removed targets are rejected before input |
 | Verification failure | explicit failed criteria and project checks produce `verification_failed`, never `resolved`, and permit human retry |
 | Restart recovery | independent CLI processes replay the append-only ledger without duplicating events |
 | ACL promotion | a generated candidate is persisted and passes in a fresh same-origin browser before `review_ready` |
@@ -1261,11 +1361,11 @@ unknown; bridge presence and protocol are discovered independently from the
 loaded page. Unsupported or malformed bridges fail closed for scoped context
 operations without exposing arbitrary browser evaluation to the agent.
 
-Treat `a3s.test.page-context/1`, `a3s.test.quality-report/1`,
+Treat `a3s.test.page-context/1`, `a3s.test.page-context-diff/1`, `a3s.test.quality-report/1`,
 `a3s.test.design-audit-report/1`, and `a3s.test.repair/1` as versioned
 contracts. Additive SDK releases may add
 optional fields or capabilities but must retain the hard payload bounds,
-private node-ID handling, redaction behavior, latest-observation ref expiry,
+private node-ID handling, redaction behavior, exact delta invalidation,
 and the separation between deterministic quality candidates, advisory design
 suggestions, and repair authorization.
 

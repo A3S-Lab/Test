@@ -3,11 +3,12 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use a3s_test_core::{
-    Action, DriverError, DriverSession, PageContextInspectRequest, PageContextInspectScope,
-    RepairActor, RepairCheckResult, RepairCheckStatus, RepairFinding, RepairHumanAction,
-    RepairHumanActionKind, RepairIntent, RepairSeverity, RepairStatus, RepairTarget,
-    RepairTargetKind, ScenarioContext, StepOutput, Surface, SurfaceDriver, SurfaceObservation,
-    Target, TestStep,
+    Action, DriverError, DriverSession, PageContextDelta, PageContextDeltaStatus,
+    PageContextInspectRequest, PageContextInspectScope, PageContextInvalidation, RepairActor,
+    RepairCheckResult, RepairCheckStatus, RepairFinding, RepairHumanAction, RepairHumanActionKind,
+    RepairIntent, RepairSeverity, RepairStatus, RepairTarget, RepairTargetKind, ScenarioContext,
+    StepOutput, Surface, SurfaceDriver, SurfaceObservation, Target, TestStep,
+    PAGE_CONTEXT_DIFF_PROTOCOL,
 };
 use a3s_test_session::{
     ActSessionRequest, AgentSessionManager, FinishSessionRequest, RepairRecord, RepairTransition,
@@ -440,6 +441,114 @@ async fn binds_private_page_nodes_to_observation_scoped_context_refs() {
 }
 
 #[tokio::test]
+async fn retains_an_unaffected_context_ref_across_a_complete_page_revision_delta() {
+    let state = Arc::new(Mutex::new(FakeState {
+        page_context: true,
+        page_context_delta: Some(context_delta(3, 4, &["private-other"])),
+        ..FakeState::default()
+    }));
+    let manager = manager(Arc::clone(&state));
+    manager
+        .start(StartSessionRequest {
+            session: "context-diff-retain".to_string(),
+            surface: Surface::Gui,
+            goal: "Click an unchanged Test Kit target".to_string(),
+            success_criteria: vec!["Target clicked".to_string()],
+            auto_resolve_repairs: false,
+        })
+        .await
+        .expect("start");
+    let observed = manager
+        .observe("context-diff-retain")
+        .await
+        .expect("observe");
+
+    manager
+        .act(ActSessionRequest {
+            session: "context-diff-retain".to_string(),
+            observation_id: Some(observed.observation_id),
+            action: Action::Click {
+                target: Target::Ref {
+                    value: "@c1".to_string(),
+                },
+            },
+        })
+        .await
+        .expect("unaffected context action");
+    assert_eq!(state.lock().await.actions.len(), 1);
+    manager.abort("context-diff-retain").await.expect("abort");
+}
+
+#[tokio::test]
+async fn rejects_a_context_ref_named_by_the_latest_invalidation_set() {
+    let state = Arc::new(Mutex::new(FakeState {
+        page_context: true,
+        page_context_delta: Some(context_delta(3, 4, &["private-n1"])),
+        ..FakeState::default()
+    }));
+    let manager = manager(Arc::clone(&state));
+    manager
+        .start(StartSessionRequest {
+            session: "context-diff-reject".to_string(),
+            surface: Surface::Gui,
+            goal: "Do not reuse changed evidence".to_string(),
+            success_criteria: vec!["Changed target is rejected".to_string()],
+            auto_resolve_repairs: false,
+        })
+        .await
+        .expect("start");
+    let observed = manager
+        .observe("context-diff-reject")
+        .await
+        .expect("observe");
+
+    let error = manager
+        .act(ActSessionRequest {
+            session: "context-diff-reject".to_string(),
+            observation_id: Some(observed.observation_id),
+            action: Action::Click {
+                target: Target::Ref {
+                    value: "@c1".to_string(),
+                },
+            },
+        })
+        .await
+        .expect_err("invalidated context ref must fail");
+    assert_eq!(error.code(), "test.session.context_ref_invalid");
+    assert!(state.lock().await.actions.is_empty());
+    manager.abort("context-diff-reject").await.expect("abort");
+}
+
+fn context_delta(
+    from_revision: u64,
+    to_revision: u64,
+    invalidated_node_ids: &[&str],
+) -> a3s_test_core::PageContextObservation {
+    let mut context = ready_page_context(to_revision);
+    let snapshot = context.snapshot.as_mut().expect("snapshot");
+    snapshot.nodes.clear();
+    snapshot.removed_node_ids.clear();
+    snapshot.delta = Some(PageContextDelta {
+        protocol: PAGE_CONTEXT_DIFF_PROTOCOL.to_string(),
+        from_revision,
+        to_revision,
+        status: PageContextDeltaStatus::Complete,
+        invalidated: PageContextInvalidation {
+            all: false,
+            page: false,
+            facts: false,
+            ui: true,
+            node_ids: invalidated_node_ids
+                .iter()
+                .map(|value| (*value).to_string())
+                .collect(),
+            component_ids: Vec::new(),
+        },
+    });
+    context
+}
+
+#[tokio::test]
 async fn scoped_inspection_returns_fresh_context_refs() {
     let state = Arc::new(Mutex::new(FakeState::default()));
     let manager = manager(state);
@@ -460,6 +569,8 @@ async fn scoped_inspection_returns_fresh_context_refs() {
             PageContextInspectRequest {
                 detail: "scoped".to_string(),
                 scope: PageContextInspectScope::Component("checkout".to_string()),
+                since_revision: None,
+                wait_timeout_ms: 0,
                 cursor: None,
                 limit: 100,
             },

@@ -610,6 +610,7 @@ fn snapshot(nodes: Vec<PageContextNode>) -> PageContextSnapshot {
         nodes,
         facts: serde_json::Map::new(),
         ui: None,
+        delta: None,
         removed_node_ids: Vec::new(),
         truncated: false,
         next_cursor: None,

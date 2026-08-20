@@ -133,6 +133,13 @@ impl DriverSession for McpWebSession {
             .await
     }
 
+    async fn page_context_delta(
+        &mut self,
+        since_revision: u64,
+    ) -> Result<Option<a3s_test_core::PageContextObservation>, DriverError> {
+        self.inner.page_context_delta(since_revision).await
+    }
+
     async fn inspect_page_context(
         &mut self,
         request: &a3s_test_core::PageContextInspectRequest,

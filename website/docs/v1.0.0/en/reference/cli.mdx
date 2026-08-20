@@ -195,6 +195,19 @@ a3s-test agent inspect \
 
 `--detail` accepts `summary`, `scoped`, `diff`, and `forensic`. Scope can be the page, a current private node, a component, or a region written as `viewport,x,y,width,height` or `document,x,y,width,height`. When the response returns a cursor, the next inspection must retain the same session, scope, and page revision.
 
+For a revision-scoped delta, provide the positive baseline and an optional bounded wait:
+
+```bash
+a3s-test agent inspect \
+  --session checkout \
+  --detail diff \
+  --since-revision 42 \
+  --wait-timeout-ms 5000 \
+  --json
+```
+
+`--since-revision` is required for `diff` and rejected for other detail profiles. `--wait-timeout-ms` must be an integer from 0 through 300,000. A continuation cursor also binds detail, scope, baseline, UI choice, normalized limits, and the current revision; changing any of them fails instead of restarting pagination.
+
 ### Repair Ledger commands
 
 | Stage            | Command                        | Key arguments and result                                                           |

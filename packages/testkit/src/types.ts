@@ -1,4 +1,6 @@
 export const PAGE_CONTEXT_PROTOCOL = "a3s.test.page-context/1" as const;
+export const PAGE_CONTEXT_DIFF_PROTOCOL =
+  "a3s.test.page-context-diff/1" as const;
 export const TESTKIT_HANDSHAKE_PROTOCOL =
   "a3s.test.testkit-handshake/1" as const;
 export const TESTKIT_PACKAGE_NAME = "@a3s-lab/testkit" as const;
@@ -41,6 +43,14 @@ export type ContextSnapshotRequest = {
   cursor?: string | null;
   ui?: boolean;
   limits?: Partial<ContextLimits>;
+};
+
+export type ContextDiffRequest = Omit<
+  ContextSnapshotRequest,
+  "detail" | "sinceRevision"
+> & {
+  sinceRevision: number;
+  timeoutMs: number;
 };
 
 export type Rect = {
@@ -426,9 +436,25 @@ export type PageContextSnapshot = {
   nodes: ContextNode[];
   facts: Record<string, JsonValue>;
   ui?: UIUnderstandingSnapshot;
+  delta?: PageContextDelta;
   removedNodeIds: string[];
   truncated: boolean;
   nextCursor: string | null;
+};
+
+export type PageContextDelta = {
+  protocol: typeof PAGE_CONTEXT_DIFF_PROTOCOL;
+  fromRevision: number;
+  toRevision: number;
+  status: "complete" | "reset_required";
+  invalidated: {
+    all: boolean;
+    page: boolean;
+    facts: boolean;
+    ui: boolean;
+    nodeIds: string[];
+    componentIds: string[];
+  };
 };
 
 export type RepairIntent = "fix" | "change" | "question" | "approve";
@@ -734,6 +760,7 @@ export type PageContextBridge = {
   snapshot(request?: ContextSnapshotRequest): PageContextSnapshot;
   resolve(nodeId: string): Element | null;
   waitForChange(revision: number, timeoutMs: number): Promise<number | null>;
+  waitForDiff(request: ContextDiffRequest): Promise<PageContextSnapshot | null>;
   subscribe(listener: (event: TestKitEvent) => void): () => void;
   submitRepair(submission: RepairSubmission): SubmittedRepair[];
   takeRepairBatch(limit?: number): SubmittedRepair[];

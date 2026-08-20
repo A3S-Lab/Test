@@ -2,8 +2,8 @@ use std::future::Future;
 use std::sync::Arc;
 
 use a3s_test_core::{
-    action_uses_page_context_ref, preferred_page_context_target, resolve_page_context_refs,
-    DriverSession, PageContextBindings, Surface, SurfaceObservation, TestStep,
+    action_uses_page_context_ref, bind_page_context_refs, refresh_page_context_bindings,
+    resolve_page_context_refs, DriverSession, PageContextBindings, Surface, TestStep,
 };
 use schemars::schema_for;
 use sha2::{Digest, Sha256};
@@ -81,42 +81,44 @@ impl AgentLoop {
         let mut turns = Vec::with_capacity(self.options.max_turns as usize);
 
         for turn in 1..=self.options.max_turns {
-            let observation = match await_stage(&cancellation, deadline, session.observe()).await {
-                Stage::Completed(Ok(observation)) => observation,
-                Stage::Completed(Err(error)) => {
-                    return self.result(
-                        AgentStatus::Failed,
-                        None,
-                        usage,
-                        turns,
-                        Some(AgentError::new(error.code(), error.message())),
-                    );
-                }
-                Stage::Cancelled => {
-                    return self.result(
-                        AgentStatus::Cancelled,
-                        None,
-                        usage,
-                        turns,
-                        Some(AgentError::new(
-                            "test.agent.cancelled",
-                            "agent run was cancelled while observing the surface",
-                        )),
-                    );
-                }
-                Stage::TimedOut => {
-                    return self.result(
-                        AgentStatus::TimedOut,
-                        None,
-                        usage,
-                        turns,
-                        Some(AgentError::new(
-                            "test.agent.timeout",
-                            "agent deadline expired while observing the surface",
-                        )),
-                    );
-                }
-            };
+            let mut observation =
+                match await_stage(&cancellation, deadline, session.observe()).await {
+                    Stage::Completed(Ok(observation)) => observation,
+                    Stage::Completed(Err(error)) => {
+                        return self.result(
+                            AgentStatus::Failed,
+                            None,
+                            usage,
+                            turns,
+                            Some(AgentError::new(error.code(), error.message())),
+                        );
+                    }
+                    Stage::Cancelled => {
+                        return self.result(
+                            AgentStatus::Cancelled,
+                            None,
+                            usage,
+                            turns,
+                            Some(AgentError::new(
+                                "test.agent.cancelled",
+                                "agent run was cancelled while observing the surface",
+                            )),
+                        );
+                    }
+                    Stage::TimedOut => {
+                        return self.result(
+                            AgentStatus::TimedOut,
+                            None,
+                            usage,
+                            turns,
+                            Some(AgentError::new(
+                                "test.agent.timeout",
+                                "agent deadline expired while observing the surface",
+                            )),
+                        );
+                    }
+                };
+            let page_context_bindings = bind_page_context_refs(&mut observation);
 
             let context = PlannerContext {
                 goal: goal.clone(),
@@ -306,30 +308,49 @@ impl AgentLoop {
                         );
                     }
 
-                    let (action, expected_revision) =
-                        match resolve_observation_target(action, &agent_turn.observation) {
-                            Ok(resolved) => resolved,
-                            Err(error) => {
-                                agent_turn.error = Some(error.clone());
-                                turns.push(agent_turn);
-                                return self.result(
-                                    AgentStatus::PolicyDenied,
-                                    None,
-                                    usage,
-                                    turns,
-                                    Some(error),
-                                );
-                            }
-                        };
+                    let mut bindings = page_context_bindings;
+                    let expected_revision = match observation_target_revision(&action, &bindings) {
+                        Ok(revision) => revision,
+                        Err(error) => {
+                            agent_turn.error = Some(error.clone());
+                            turns.push(agent_turn);
+                            return self.result(
+                                AgentStatus::PolicyDenied,
+                                None,
+                                usage,
+                                turns,
+                                Some(error),
+                            );
+                        }
+                    };
                     if let Some(revision) = expected_revision {
                         match await_stage(
                             &cancellation,
                             deadline,
-                            session.validate_page_context_revision(revision),
+                            session.page_context_delta(revision),
                         )
                         .await
                         {
-                            Stage::Completed(Ok(())) => {}
+                            Stage::Completed(Ok(Some(context))) => {
+                                if let Err(error) =
+                                    refresh_page_context_bindings(&mut bindings, &context)
+                                {
+                                    let error = AgentError::new(
+                                        "test.agent.policy.observation_ref_invalid",
+                                        error.message(),
+                                    );
+                                    agent_turn.error = Some(error.clone());
+                                    turns.push(agent_turn);
+                                    return self.result(
+                                        AgentStatus::PolicyDenied,
+                                        None,
+                                        usage,
+                                        turns,
+                                        Some(error),
+                                    );
+                                }
+                            }
+                            Stage::Completed(Ok(None)) => {}
                             Stage::Completed(Err(error)) => {
                                 let error = AgentError::new(error.code(), error.message());
                                 agent_turn.error = Some(error.clone());
@@ -345,7 +366,7 @@ impl AgentLoop {
                             Stage::Cancelled => {
                                 let error = AgentError::new(
                                     "test.agent.cancelled",
-                                    "agent run was cancelled while validating page context",
+                                    "agent run was cancelled while refreshing page context",
                                 );
                                 agent_turn.error = Some(error.clone());
                                 turns.push(agent_turn);
@@ -360,7 +381,7 @@ impl AgentLoop {
                             Stage::TimedOut => {
                                 let error = AgentError::new(
                                     "test.agent.timeout",
-                                    "agent deadline expired while validating page context",
+                                    "agent deadline expired while refreshing page context",
                                 );
                                 agent_turn.error = Some(error.clone());
                                 turns.push(agent_turn);
@@ -374,6 +395,20 @@ impl AgentLoop {
                             }
                         }
                     }
+                    let action = match resolve_observation_target(action, &bindings) {
+                        Ok(action) => action,
+                        Err(error) => {
+                            agent_turn.error = Some(error.clone());
+                            turns.push(agent_turn);
+                            return self.result(
+                                AgentStatus::PolicyDenied,
+                                None,
+                                usage,
+                                turns,
+                                Some(error),
+                            );
+                        }
+                    };
 
                     let step = TestStep {
                         id: format!("agent-turn-{turn}"),
@@ -490,53 +525,26 @@ impl AgentLoop {
 
 fn resolve_observation_target(
     action: a3s_test_core::Action,
-    observation: &SurfaceObservation,
-) -> Result<(a3s_test_core::Action, Option<u64>), AgentError> {
-    let uses_page_context = action_uses_page_context_ref(&action);
-    let bindings = observation_page_context_bindings(observation);
-    let expected_revision = if uses_page_context {
-        Some(bindings.revision.ok_or_else(|| {
-            AgentError::new(
-                "test.agent.policy.observation_revision_missing",
-                "page context ref is missing its observation revision",
-            )
-        })?)
-    } else {
-        None
-    };
-    resolve_page_context_refs(action, &bindings)
-        .map(|action| (action, expected_revision))
-        .map_err(|error| {
-            AgentError::new("test.agent.policy.observation_ref_invalid", error.message())
-        })
+    bindings: &PageContextBindings,
+) -> Result<a3s_test_core::Action, AgentError> {
+    resolve_page_context_refs(action, bindings).map_err(|error| {
+        AgentError::new("test.agent.policy.observation_ref_invalid", error.message())
+    })
 }
 
-fn observation_page_context_bindings(observation: &SurfaceObservation) -> PageContextBindings {
-    let mut bindings = PageContextBindings {
-        revision: observation
-            .page_context
-            .as_ref()
-            .and_then(|context| context.revision),
-        ..Default::default()
-    };
-    let Some(nodes) = observation
-        .page_context
-        .as_ref()
-        .and_then(|context| context.snapshot.as_ref())
-        .map(|snapshot| snapshot.nodes.as_slice())
-    else {
-        return bindings;
-    };
-    for node in nodes {
-        let (Some(reference), Some(target)) = (
-            node.r#ref.as_ref(),
-            preferred_page_context_target(&node.locators),
-        ) else {
-            continue;
-        };
-        bindings.targets.insert(reference.clone(), target);
+fn observation_target_revision(
+    action: &a3s_test_core::Action,
+    bindings: &PageContextBindings,
+) -> Result<Option<u64>, AgentError> {
+    if !action_uses_page_context_ref(action) {
+        return Ok(None);
     }
-    bindings
+    bindings.revision.map(Some).ok_or_else(|| {
+        AgentError::new(
+            "test.agent.policy.observation_revision_missing",
+            "page context ref is missing its observation revision",
+        )
+    })
 }
 
 enum Stage<T> {

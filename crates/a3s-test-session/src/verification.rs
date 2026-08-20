@@ -333,6 +333,7 @@ mod tests {
             nodes: vec![],
             facts: Default::default(),
             ui: None,
+            delta: None,
             removed_node_ids: vec![],
             truncated: false,
             next_cursor: None,

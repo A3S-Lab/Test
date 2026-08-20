@@ -26,6 +26,8 @@ pub enum PageContextInspectScope {
 pub struct PageContextInspectRequest {
     pub detail: String,
     pub scope: PageContextInspectScope,
+    pub since_revision: Option<u64>,
+    pub wait_timeout_ms: u64,
     pub cursor: Option<String>,
     pub limit: usize,
 }
@@ -135,6 +137,17 @@ pub trait DriverSession: Send {
             "test.driver.page_context_validation_unsupported",
             "this surface driver cannot validate a page context revision",
         ))
+    }
+
+    /// Returns a complete revision delta when the surface can retain
+    /// unaffected Page Context evidence. Drivers without delta support still
+    /// validate the exact revision and return `None`.
+    async fn page_context_delta(
+        &mut self,
+        since_revision: u64,
+    ) -> Result<Option<PageContextObservation>, DriverError> {
+        self.validate_page_context_revision(since_revision).await?;
+        Ok(None)
     }
 
     async fn inspect_page_context(

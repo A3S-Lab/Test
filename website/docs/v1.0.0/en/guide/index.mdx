@@ -83,7 +83,7 @@ observation_id: 1
 | `@cN` | Test Kit Page Context                  | Actionable only when the current node is unique and valid         |
 | `@uN` | Supplemental UI-understanding evidence | Always read-only; connects style, layout, state, and motion facts |
 
-Page changes expire old `@eN` and `@cN` refs. `@uN` can never be used in `click`, `fill`, `drag`, or another action. This prevents an agent from silently applying an old decision to a new page state.
+Page changes expire `@eN`, `@uN`, geometry, and screenshots. An `@cN` stable locator survives only inside the latest observation when an exact complete delta proves its private node unchanged; every changed, reset, legacy, or uncertain binding expires. This prevents an agent from silently applying an old decision to a new page state.
 
 ## 3. Execute one admitted action
 

@@ -399,6 +399,13 @@ impl AgentBrowserSession {
         <Self as DriverSession>::validate_page_context_revision(self, expected_revision).await
     }
 
+    pub async fn context_delta(
+        &mut self,
+        since_revision: u64,
+    ) -> Result<Option<PageContextObservation>, DriverError> {
+        <Self as DriverSession>::page_context_delta(self, since_revision).await
+    }
+
     pub async fn inspect_context(
         &mut self,
         request: &PageContextInspectRequest,
@@ -828,6 +835,21 @@ fn parse_page_context_value(mut value: Value) -> Result<PageContextObservation, 
             "page context bridge protocol is unsupported",
         ));
     }
+    if let Some(delta) = &parsed.delta {
+        delta
+            .validate(
+                parsed.revision,
+                &parsed.nodes,
+                &parsed.components,
+                &parsed.removed_node_ids,
+            )
+            .map_err(|error| {
+                DriverError::new(
+                    "test.driver.web.page_context_diff_invalid",
+                    format!("page context bridge returned an invalid revision diff: {error}"),
+                )
+            })?;
+    }
     for node in &parsed.nodes {
         if let Some(source_mapping) = &node.source_mapping {
             source_mapping.validate().map_err(|error| {
@@ -851,6 +873,43 @@ fn parse_page_context_value(mut value: Value) -> Result<PageContextObservation, 
         })?;
     }
     Ok(PageContextObservation::from_snapshot(parsed))
+}
+
+fn validate_inspect_response(
+    request: &PageContextInspectRequest,
+    observation: &PageContextObservation,
+) -> Result<(), DriverError> {
+    if !observation.present {
+        return Ok(());
+    }
+    let snapshot = observation.snapshot.as_ref().ok_or_else(|| {
+        DriverError::new(
+            "test.driver.web.page_context_invalid",
+            "page context bridge reported presence without a typed snapshot",
+        )
+    })?;
+    if request.detail == "diff" {
+        if let Some(delta) = snapshot.delta.as_ref() {
+            let expected = request.since_revision.ok_or_else(|| {
+                DriverError::new(
+                    "test.driver.web.page_context_diff_invalid",
+                    "diff inspection response cannot be validated without a baseline revision",
+                )
+            })?;
+            if delta.from_revision != expected {
+                return Err(DriverError::new(
+                    "test.driver.web.page_context_diff_invalid",
+                    "page context bridge returned a diff for a different baseline revision",
+                ));
+            }
+        }
+    } else if snapshot.delta.is_some() {
+        return Err(DriverError::new(
+            "test.driver.web.page_context_diff_invalid",
+            "page context bridge returned revision-diff metadata for a non-diff inspection",
+        ));
+    }
+    Ok(())
 }
 
 fn count_collection_entries(value: &Value) -> u32 {

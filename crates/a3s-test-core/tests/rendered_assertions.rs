@@ -346,6 +346,7 @@ fn rendered_expectation_targets_keep_observation_and_page_context_binding() {
                 )]
                 .into_iter()
                 .collect(),
+                node_fingerprints: Default::default(),
             },
         )
         .expect("resolve rendered assertion context ref");

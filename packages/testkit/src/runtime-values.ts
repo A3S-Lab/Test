@@ -21,6 +21,7 @@ export const MAX_CONTEXT_LIMITS: ContextLimits = {
 };
 
 export function clamp(value: number, minimum: number, maximum: number): number {
+  if (Number.isNaN(value)) return minimum;
   return Math.max(minimum, Math.min(maximum, Math.trunc(value)));
 }
 

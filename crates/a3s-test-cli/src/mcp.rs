@@ -521,6 +521,8 @@ fn inspect_schema() -> Value {
         "properties": {
             "session": { "type": "string" },
             "detail": { "type": "string", "enum": ["summary", "scoped", "diff", "forensic"], "default": "scoped" },
+            "since_revision": { "type": ["integer", "null"], "minimum": 1 },
+            "wait_timeout_ms": { "type": "integer", "minimum": 0, "maximum": 300000, "default": 0 },
             "node_id": { "type": ["string", "null"] },
             "component_id": { "type": ["string", "null"] },
             "region": {
@@ -727,6 +729,8 @@ struct SessionArgument {
 struct InspectArgument {
     session: String,
     detail: Option<String>,
+    since_revision: Option<u64>,
+    wait_timeout_ms: Option<u64>,
     node_id: Option<String>,
     component_id: Option<String>,
     region: Option<InspectRegion>,
@@ -765,6 +769,8 @@ impl InspectArgument {
             PageContextInspectRequest {
                 detail: self.detail.unwrap_or_else(|| "scoped".to_string()),
                 scope,
+                since_revision: self.since_revision,
+                wait_timeout_ms: self.wait_timeout_ms.unwrap_or(0),
                 cursor: self.cursor,
                 limit: self.limit.unwrap_or(100).clamp(1, 500),
             },

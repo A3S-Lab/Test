@@ -20,6 +20,16 @@ pub(super) async fn execute(args: InspectArgs) -> Result<ExitCode> {
     if !(1..=500).contains(&args.limit) {
         anyhow::bail!("inspect limit must be between 1 and 500");
     }
+    if args.detail == "diff" {
+        if args.since_revision.is_none_or(|revision| revision == 0) {
+            anyhow::bail!("diff inspection requires --since-revision with a positive revision");
+        }
+    } else if args.since_revision.is_some() || args.wait_timeout_ms != 0 {
+        anyhow::bail!("--since-revision and --wait-timeout-ms require --detail diff");
+    }
+    if args.wait_timeout_ms > 300_000 {
+        anyhow::bail!("diff wait timeout must not exceed 300000 milliseconds");
+    }
     let workspace = canonical_workspace().await?;
     let store = load_store(&workspace, &args.session)?;
     let mut state = load_active(&store, &workspace, &args.session).await?;
@@ -44,6 +54,8 @@ pub(super) async fn execute(args: InspectArgs) -> Result<ExitCode> {
     let request = PageContextInspectRequest {
         detail: args.detail,
         scope,
+        since_revision: args.since_revision,
+        wait_timeout_ms: args.wait_timeout_ms,
         cursor: args.cursor,
         limit: args.limit,
     };

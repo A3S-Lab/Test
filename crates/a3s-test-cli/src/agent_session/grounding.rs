@@ -82,6 +82,8 @@ pub(super) async fn execute(args: GroundArgs) -> Result<ExitCode> {
         .inspect_context(&a3s_test_core::PageContextInspectRequest {
             detail: "summary".to_string(),
             scope: a3s_test_core::PageContextInspectScope::Page,
+            since_revision: None,
+            wait_timeout_ms: 0,
             cursor: None,
             limit: 500,
         })
@@ -314,20 +316,10 @@ mod tests {
         PageContextGeometry, PageContextLocator, PageContextNode, PageContextNodeState,
         PageContextObservation, PageContextPosition, PageContextRect, PageContextSnapshot,
     };
-    use std::collections::BTreeMap;
-
     #[test]
     fn binds_current_context_to_the_exact_observation_refs() {
         let context = current_context("private-pay", "pay", 42);
-        let expected = PageContextBindings {
-            revision: Some(42),
-            targets: BTreeMap::from([(
-                "@c1".to_string(),
-                a3s_test_core::Target::TestId {
-                    value: "pay".to_string(),
-                },
-            )]),
-        };
+        let expected = bindings_for_context(current_context("private-pay", "pay", 42));
 
         let bound = bind_current_page_context(context, Some(&expected)).expect("bound context");
         let node = &bound.snapshot.expect("snapshot").nodes[0];
@@ -337,15 +329,7 @@ mod tests {
 
     #[test]
     fn rejects_changed_or_unexpected_current_context_bindings() {
-        let expected = PageContextBindings {
-            revision: Some(42),
-            targets: BTreeMap::from([(
-                "@c1".to_string(),
-                a3s_test_core::Target::TestId {
-                    value: "pay".to_string(),
-                },
-            )]),
-        };
+        let expected = bindings_for_context(current_context("private-pay", "pay", 42));
         for (context, bindings) in [
             (
                 current_context("private-pay", "changed", 42),
@@ -440,9 +424,16 @@ mod tests {
             }],
             facts: serde_json::Map::new(),
             ui: None,
+            delta: None,
             removed_node_ids: Vec::new(),
             truncated: false,
             next_cursor: None,
         })
+    }
+
+    fn bindings_for_context(context: PageContextObservation) -> PageContextBindings {
+        let mut observation =
+            SurfaceObservation::new("observed page context").with_page_context(context);
+        bind_page_context_refs(&mut observation)
     }
 }

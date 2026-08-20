@@ -13,7 +13,7 @@ A3S Test treats each link as a separate technical contract.
 
 | Fundamental constraint                                                        | Architectural consequence                                                                               |
 | ----------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
-| A Web page is dynamic and an observation becomes stale                        | Every public ref is bound to an observation and page revision                                           |
+| A Web page is dynamic and an observation becomes stale                        | Bind every ref to an observation; retain only targets proven unaffected by an exact revision delta      |
 | The browser already owns DOM, accessibility, CSS, layout, and scrolling truth | Page understanding is derived after rendering instead of reconstructed from a screenshot                |
 | Natural language does not define an executable safety boundary                | Actions use closed typed variants, schema validation, capability checks, and policy admission           |
 | A visible node and its source file are different identities                   | Test Kit keeps explicit component ownership and ranked source spans as navigation evidence              |
@@ -60,7 +60,7 @@ No arrow is implicit. An observation cannot authorize an edit. A model candidate
 
 | Layer                         | Repository owner                                   | Responsibility                                                                                            |
 | ----------------------------- | -------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
-| Embedded page context         | `packages/testkit`                                 | Post-render context, component boundaries, source mapping, bounded UI evidence, and optional human review |
+| Embedded page context         | `packages/testkit`                                 | Post-render context, exact revision deltas, source mapping, bounded UI evidence, and optional human review |
 | Surface-independent contracts | `crates/a3s-test-core`                             | Typed actions, targets, observations, policy inputs, evidence records, results, and driver traits         |
 | Persistent interaction state  | `crates/a3s-test-session`                          | Session lifecycle, observation-bound refs, action admission, append-only state, and verification bindings |
 | Concrete execution            | `crates/a3s-test-driver-web`, GUI, and TUI drivers | Surface perception, action dispatch, evidence capture, and exact runtime cleanup                          |
@@ -85,12 +85,14 @@ browser render
 
 Protocol `a3s.test.page-context/1` is exposed through a non-enumerable, Symbol-addressed bridge. Private node identities live in a `WeakMap`, not in product DOM attributes. Mutation, resize, route, viewport, scroll, and form-state signals advance a monotonic revision. Snapshot detail, scope, time, node count, string size, and encoded bytes are bounded.
 
+`a3s.test.page-context-diff/1` hashes one bounded projection across revisions. It reports exact node, component, page, facts, and UI invalidation. Missing history or metadata that cannot fit the byte ceiling becomes `reset_required`, never an incomplete “no change.” The Web adapter validates that claim again in Rust. Core persists only a domain-separated SHA-256 fingerprint of private node identity before retaining an unaffected stable locator.
+
 Public refs express authority instead of leaking private identity:
 
 | Ref   | Meaning                                                                      |
 | ----- | ---------------------------------------------------------------------------- |
 | `@eN` | Browser semantic target, actionable only in its observation                  |
-| `@cN` | Unique Page Context target, actionable only in its observation               |
+| `@cN` | Unique Page Context target; in its observation, only a proven unaffected locator may cross revision drift |
 | `@uN` | Supplemental style, layout, state, or motion evidence, permanently read-only |
 
 Rendered-node source mapping follows the same rule. `A3STestBoundary` may provide a coarse source hint. Framework adapters may explicitly register a DOM owner and an encoded Source Map v3. Test Kit ranks the resulting candidates but never reads framework private state, downloads a source map, or grants file authority.

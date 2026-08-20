@@ -64,9 +64,8 @@ impl AgentHostSession {
 #[async_trait]
 impl DriverSession for AgentHostSession {
     async fn observe(&mut self) -> Result<SurfaceObservation, DriverError> {
-        let mut observation = self.inner.observe().await?;
+        let observation = self.inner.observe().await?;
         self.validate_observation(&observation)?;
-        let _ = a3s_test_core::bind_page_context_refs(&mut observation);
         Ok(observation)
     }
 
@@ -126,6 +125,13 @@ impl DriverSession for AgentHostSession {
         self.inner
             .validate_page_context_revision(expected_revision)
             .await
+    }
+
+    async fn page_context_delta(
+        &mut self,
+        since_revision: u64,
+    ) -> Result<Option<PageContextObservation>, DriverError> {
+        self.inner.page_context_delta(since_revision).await
     }
 
     async fn inspect_page_context(

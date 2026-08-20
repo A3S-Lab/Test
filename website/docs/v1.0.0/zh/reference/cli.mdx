@@ -163,6 +163,19 @@ a3s-test agent inspect \
 
 `--detail` 接受 `summary`、`scoped`、`diff` 与 `forensic`。范围可以是 page、一个当前私有 node、component，或 `viewport,x,y,width,height` 与 `document,x,y,width,height` 形式的 region。响应带 `cursor` 时，下一次 inspection 必须保持相同 session、scope 与页面修订。
 
+需要修订级差异时，提供正整数 baseline 和可选有界等待。
+
+```bash
+a3s-test agent inspect \
+  --session checkout \
+  --detail diff \
+  --since-revision 42 \
+  --wait-timeout-ms 5000 \
+  --json
+```
+
+`diff` 必须带 `--since-revision`，其它 detail 会拒绝这个参数。`--wait-timeout-ms` 必须是 0 到 300,000 的整数。后续 cursor 还会绑定 detail、scope、baseline、UI 选择、标准化 limit 与当前修订，任一变化都会失败，不会重新从第一页开始。
+
 ### Repair Ledger 命令
 
 | 阶段       | 命令                           | 关键参数和结果                                                     |

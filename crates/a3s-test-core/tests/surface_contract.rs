@@ -521,6 +521,7 @@ fn observation(nodes: Vec<PageContextNode>) -> SurfaceObservation {
         nodes,
         facts: Map::new(),
         ui: None,
+        delta: None,
         removed_node_ids: Vec::new(),
         truncated: false,
         next_cursor: None,

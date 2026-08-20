@@ -1,11 +1,14 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use crate::{
-    Action, Expectation, PageContextLocator, PageContextObservation, SurfaceObservation, Target,
-    WaitCondition,
+    Action, Expectation, PageContextDeltaStatus, PageContextLocator, PageContextObservation,
+    SurfaceObservation, Target, WaitCondition,
 };
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 use thiserror::Error;
+
+const NODE_FINGERPRINT_DOMAIN: &[u8] = b"a3s.test.page-context-node-fingerprint/1\0";
 
 mod ui_projection;
 
@@ -13,6 +16,8 @@ mod ui_projection;
 pub struct PageContextBindings {
     pub revision: Option<u64>,
     pub targets: BTreeMap<String, Target>,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub node_fingerprints: BTreeMap<String, String>,
 }
 
 impl PageContextBindings {
@@ -74,13 +79,19 @@ pub fn bind_page_context_observation_refs(
         let reference = format!("@c{}", index + 1);
         node.r#ref = None;
         if !raw_id.is_empty() && !seen_node_ids.insert(raw_id.clone()) {
-            actionable_refs.remove(&raw_id);
+            if let Some(previous_ref) = actionable_refs.remove(&raw_id) {
+                bindings.targets.remove(&previous_ref);
+                bindings.node_fingerprints.remove(&previous_ref);
+            }
             ambiguous_node_ids.insert(raw_id.clone());
         }
         if let Some(target) = preferred_page_context_target(&node.locators) {
             bindings.targets.insert(reference.clone(), target);
             if !raw_id.is_empty() && !ambiguous_node_ids.contains(&raw_id) {
-                actionable_refs.insert(raw_id, reference.clone());
+                actionable_refs.insert(raw_id.clone(), reference.clone());
+                bindings
+                    .node_fingerprints
+                    .insert(reference.clone(), node_fingerprint(&raw_id));
             }
             node.r#ref = Some(reference);
         }
@@ -103,6 +114,110 @@ pub fn bind_page_context_observation_refs(
     }
     snapshot.removed_node_ids.clear();
     bindings
+}
+
+/// Advances observation-bound targets across a validated Page Context delta.
+/// Targets whose private node identity changed or disappeared are discarded;
+/// targets outside the invalidation set retain their stable locator at the
+/// newer revision. Missing history or legacy bindings fail closed by clearing
+/// every target instead of guessing.
+pub fn refresh_page_context_bindings(
+    bindings: &mut PageContextBindings,
+    context: &PageContextObservation,
+) -> Result<(), PageContextRefError> {
+    if !context.present {
+        return Err(PageContextRefError::new(
+            "the Test Kit page context bridge is no longer present",
+        ));
+    }
+    let current_revision = context.revision.ok_or_else(|| {
+        PageContextRefError::new("the refreshed page context is missing its revision")
+    })?;
+    let Some(previous_revision) = bindings.revision else {
+        bindings.targets.clear();
+        bindings.node_fingerprints.clear();
+        bindings.revision = Some(current_revision);
+        return Ok(());
+    };
+    if current_revision < previous_revision {
+        return Err(PageContextRefError::new(
+            "the refreshed page context revision moved backwards",
+        ));
+    }
+    if current_revision == previous_revision {
+        if let Some(snapshot) = context.snapshot.as_ref() {
+            if let Some(delta) = snapshot.delta.as_ref() {
+                delta
+                    .validate(
+                        snapshot.revision,
+                        &snapshot.nodes,
+                        &snapshot.components,
+                        &snapshot.removed_node_ids,
+                    )
+                    .map_err(|error| PageContextRefError::new(error.to_string()))?;
+                if delta.from_revision != previous_revision {
+                    return Err(PageContextRefError::new(
+                        "the page context delta does not start at the retained evidence revision",
+                    ));
+                }
+            }
+        }
+        return Ok(());
+    }
+    let snapshot = context.snapshot.as_ref().ok_or_else(|| {
+        PageContextRefError::new("the refreshed page context is missing its snapshot")
+    })?;
+    let Some(delta) = snapshot.delta.as_ref() else {
+        bindings.targets.clear();
+        bindings.node_fingerprints.clear();
+        bindings.revision = Some(current_revision);
+        return Ok(());
+    };
+    delta
+        .validate(
+            snapshot.revision,
+            &snapshot.nodes,
+            &snapshot.components,
+            &snapshot.removed_node_ids,
+        )
+        .map_err(|error| PageContextRefError::new(error.to_string()))?;
+    if delta.from_revision != previous_revision {
+        return Err(PageContextRefError::new(
+            "the page context delta does not start at the retained evidence revision",
+        ));
+    }
+    if delta.status == PageContextDeltaStatus::ResetRequired
+        || delta.invalidated.all
+        || bindings.node_fingerprints.len() != bindings.targets.len()
+    {
+        bindings.targets.clear();
+        bindings.node_fingerprints.clear();
+        bindings.revision = Some(current_revision);
+        return Ok(());
+    }
+
+    let invalidated = delta
+        .invalidated
+        .node_ids
+        .iter()
+        .map(|node_id| node_fingerprint(node_id))
+        .collect::<BTreeSet<_>>();
+    bindings.node_fingerprints.retain(|reference, fingerprint| {
+        bindings.targets.contains_key(reference) && !invalidated.contains(fingerprint)
+    });
+    bindings
+        .targets
+        .retain(|reference, _| bindings.node_fingerprints.contains_key(reference));
+    bindings.revision = Some(current_revision);
+    Ok(())
+}
+
+fn node_fingerprint(node_id: &str) -> String {
+    let mut digest = Sha256::new();
+    digest.update(NODE_FINGERPRINT_DOMAIN);
+    digest.update((node_id.len() as u64).to_be_bytes());
+    digest.update(node_id.as_bytes());
+    format!("sha256:{:x}", digest.finalize())
 }
 
 #[must_use]

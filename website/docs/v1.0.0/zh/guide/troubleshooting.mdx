@@ -135,7 +135,7 @@ a3s-test agent observe --session smoke --json
 
 ## 引用过期或动作目标被拒绝
 
-`@eN` 与 `@cN` 只在产生它们的最新观察中有效。导航、DOM 更新、滚动、视口、焦点和浏览器上下文变化都可能推进修订。
+`@eN` 与 `@cN` 只在产生它们的最新观察中有效。导航、DOM 更新、滚动、视口、焦点和浏览器上下文变化都可能推进修订。此时 `@eN`、UI、截图和坐标证据会失效。只有 Test Kit 0.6.0 返回 complete delta 且没有失效对应私有节点 ID 时，`@cN` 背后的稳定定位器才会保留；节点变化或消失、`reset_required`、元数据缺失或旧版 Test Kit 都会清除它。
 
 ```bash
 a3s-test agent observe --session smoke --interactive --json
@@ -145,7 +145,7 @@ a3s-test agent click @e3 \
   --json
 ```
 
-动作报告 stale ref 时重新观察并重新选择目标。不要重写旧 observation ID，也不要把旧坐标塞进 CSS 目标。
+动作报告 stale ref 时重新观察并重新选择目标。自定义集成收到 `delta.status = "reset_required"` 时，应丢弃旧 baseline 并先获取普通快照。不要重写旧 observation ID，也不要把旧坐标塞进 CSS 目标。
 
 `@uN` 永远只读。它出现在 UI 理解关系里时，可以帮助定位样式、布局或动效证据，不能用于 click、fill、drag 或 ACL action。需要操作同一节点时，寻找当前观察里的 `@eN`、可唯一操作的 `@cN` 或稳定语义定位器。
 

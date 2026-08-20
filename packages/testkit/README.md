@@ -11,7 +11,7 @@ attach a browser-page crop before explicitly sending a repair.
 
 | Layer           | Responsibility                                                                                                 |
 | --------------- | -------------------------------------------------------------------------------------------------------------- |
-| Context Runtime | Publish semantics, components, locators, geometry, layout, state, motion, and controlled facts after rendering |
+| Context Runtime | Publish semantics, exact revision deltas, components, locators, geometry, layout, state, motion, and controlled facts after rendering |
 | Source mapping  | Rank explicit component, DOM-owner, and Source Map v3 spans for a selected rendered node                       |
 | Review Overlay  | Keep element, text, multi-select, region, drawing, board, and capture flows in one localized side panel        |
 | Repair handoff  | Bind a submitted finding to the current page revision without granting workspace or source-edit authority      |
@@ -23,10 +23,10 @@ verification, and cleanup.
 ## Install
 
 ```bash
-npm install --save-dev @a3s-lab/testkit@0.5.0
+npm install --save-dev @a3s-lab/testkit@0.6.0
 ```
 
-`@a3s-lab/testkit` 0.5.0 is published on the official npm Registry with GitHub
+`@a3s-lab/testkit` 0.6.0 is published on the official npm Registry with GitHub
 OIDC provenance. The pinned command keeps installation reproducible and locks
 the package integrity in the project lockfile. The package can lag features on
 `main`; use the versioned documentation to distinguish published and staged
@@ -85,7 +85,7 @@ For headless CI context, keep `A3STestKit` enabled and omit
 `installTestKit` also requires `enabled: true`; omitted or false-like runtime
 configuration fails closed.
 
-Test Kit 0.5.0 exposes `a3s.test.testkit-handshake/1`. After the provider and
+Test Kit 0.6.0 exposes `a3s.test.testkit-handshake/1`. After the provider and
 overlay mount, `a3s-test dev --json` verifies the live package identity, SDK
 range, Page Context protocol, required capabilities, and Review Overlay before
 it reports a ready review session. The older `probe()` operation remains for
@@ -165,6 +165,37 @@ Web driver rejects protocol drift, stale bindings, invalid geometry,
 duplicate graph relationships, missing parents or edge endpoints, incomplete
 or cyclic containment, invalid component membership, and budget violations. It
 remains untrusted evidence with no action, verdict, or repair authority.
+
+## Revision-scoped diffs
+
+Test Kit 0.6.0 exposes `waitForDiff` and
+`a3s.test.page-context-diff/1`. Capture a normal baseline once, then wait for
+only the evidence invalidated by a newer page revision:
+
+```ts
+const baseline = bridge.snapshot({ detail: "summary", ui: false });
+const diff = await bridge.waitForDiff({
+  sinceRevision: baseline.revision,
+  timeoutMs: 5_000,
+  ui: false,
+});
+```
+
+A `complete` delta carries changed nodes and components, removed node IDs, and
+independent page, facts, and UI invalidation. `reset_required` means the exact
+baseline is outside bounded history or complete invalidation metadata cannot
+fit the encoded-byte ceiling; discard old evidence and capture a fresh normal
+snapshot. The runtime never turns reset into an empty diff or drops partial
+IDs silently.
+
+History, payloads, and waits remain bounded. A timeout must be an integer from
+0 through 300,000. Continuation cursors bind the full normalized request and
+revision. A stale cursor, mismatched baseline, future revision, NaN, infinity,
+negative timeout, or oversized wait is rejected. A3S Test validates delta
+ordering, identifiers, changed/removed coverage, and reset semantics again in
+Rust. Persistent sessions keep only one-way node fingerprints while retaining
+an unaffected `@cN` locator; raw Test Kit node IDs are not written to session
+metadata.
 
 ## Deterministic quality findings
 

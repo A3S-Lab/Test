@@ -1,8 +1,6 @@
 import {
   describeElement,
-  overlaps,
   visualViewportInfo,
-  walkElements,
   type NodeIdentity,
 } from "./dom";
 import packageManifest from "../package.json";
@@ -19,7 +17,20 @@ import {
   pageTheme,
 } from "./runtime-values";
 import { installPageObserver } from "./page-observer";
-import { safeCallback, sanitizeFacts } from "./sanitize";
+import { ContextHistory } from "./context-history";
+import { elementsForContextScope } from "./context-scope";
+import {
+  buildContextResponse,
+  decodeContextCursor,
+  isValidContextId,
+  normalizeContextLimits,
+  normalizeContextScope,
+  validateContextRevision,
+  validateContextSnapshotRequest,
+  validateContextWaitTimeout,
+  type ContextCursorRequest,
+} from "./context-response";
+import { safeCallback, sanitizeFacts, truncateUtf8 } from "./sanitize";
 import { normalizeSourceSpan, SourceMappingStore } from "./source-mapping";
 import { captureUIUnderstanding } from "./ui-understanding";
 import { UIStateTracker } from "./ui-understanding-state";
@@ -30,10 +41,8 @@ import {
   TESTKIT_PACKAGE_NAME,
   type BoundaryRegistration,
   type ContextComponent,
-  type ContextDetail,
-  type ContextLimits,
+  type ContextDiffRequest,
   type ContextNode,
-  type ContextScope,
   type ContextSnapshotRequest,
   type DesignAuditReport,
   type PageContextBridge,
@@ -69,6 +78,7 @@ const TESTKIT_CAPABILITIES = Object.freeze([
   "open_shadow_dom",
   "quality_reports",
   "repair_queue",
+  "revision_diff",
   "revision_wait",
   "scoped_inspection",
   "source_mapping",
@@ -102,8 +112,6 @@ type NormalizedOptions = Required<
   facts: (() => Record<string, unknown>) | undefined;
 };
 
-type RevisionState = { hashes: Map<string, string> };
-
 class Runtime implements TestKitRuntime, NodeIdentity {
   readonly #options: NormalizedOptions;
   readonly #nodeIds = new WeakMap<Element, string>();
@@ -115,7 +123,7 @@ class Runtime implements TestKitRuntime, NodeIdentity {
     finish(value: number | null): void;
     timer: ReturnType<typeof setTimeout>;
   }>();
-  readonly #history = new Map<number, RevisionState>();
+  readonly #history = new ContextHistory();
   readonly #cleanup: Array<() => void> = [];
   readonly #repairStore: RepairStore;
   readonly #qualityStore: QualityStore;
@@ -186,10 +194,54 @@ class Runtime implements TestKitRuntime, NodeIdentity {
   snapshot(request: ContextSnapshotRequest = {}): PageContextSnapshot {
     this.#ensureActive();
     const detail = request.detail ?? "summary";
-    const scope = request.scope ?? { kind: "page" };
-    const limits = this.#limits(request.limits);
-    const offset = this.#decodeCursor(request.cursor, scope);
-    const elements = this.#elementsForScope(scope);
+    const scope = normalizeContextScope(request.scope ?? { kind: "page" });
+    validateContextSnapshotRequest(detail, request.sinceRevision, this.#revision);
+    const limits = normalizeContextLimits(request.limits, {
+      nodes: Math.min(this.#options.maxNodes, MAX_CONTEXT_LIMITS.nodes),
+      stringBytes: Math.min(
+        this.#options.maxStringBytes,
+        MAX_CONTEXT_LIMITS.stringBytes,
+      ),
+      encodedBytes: Math.min(
+        this.#options.maxEncodedBytes,
+        MAX_CONTEXT_LIMITS.encodedBytes,
+      ),
+      uiNodes: Math.min(
+        this.#options.maxUiNodes,
+        MAX_CONTEXT_LIMITS.uiNodes,
+      ),
+      uiStateSamples: Math.min(
+        this.#options.maxUiStateSamples,
+        MAX_CONTEXT_LIMITS.uiStateSamples,
+      ),
+      uiDurationMs: Math.min(
+        this.#options.maxUiDurationMs,
+        MAX_CONTEXT_LIMITS.uiDurationMs,
+      ),
+      uiEncodedBytes: Math.min(
+        this.#options.maxUiEncodedBytes,
+        this.#options.maxEncodedBytes,
+        MAX_CONTEXT_LIMITS.uiEncodedBytes,
+      ),
+    });
+    const uiEnabled = request.ui !== false && this.#options.uiUnderstanding;
+    const cursorRequest: ContextCursorRequest = {
+      detail,
+      scope,
+      sinceRevision: request.sinceRevision ?? null,
+      ui: uiEnabled,
+      limits,
+    };
+    const offset = decodeContextCursor(
+      request.cursor,
+      this.#revision,
+      cursorRequest,
+    );
+    const elements = elementsForContextScope(
+      scope,
+      (nodeId) => this.resolve(nodeId),
+      this.#boundaries,
+    );
     const allNodes = elements
       .map((element) =>
         describeElement(
@@ -200,13 +252,12 @@ class Runtime implements TestKitRuntime, NodeIdentity {
           this.#options.redact,
         ),
       )
-      .filter((node): node is ContextNode => node !== null);
+      .filter((node): node is ContextNode => node !== null)
+      .slice(0, MAX_CONTEXT_LIMITS.nodes);
     this.#associateComponents(allNodes);
     this.#associateSourceMappings(allNodes);
-    const ui =
-      request.ui === false || !this.#options.uiUnderstanding
-        ? undefined
-        : captureUIUnderstanding({
+    const ui = uiEnabled
+      ? captureUIUnderstanding({
             elements,
             nodes: allNodes,
             identity: this,
@@ -221,72 +272,46 @@ class Runtime implements TestKitRuntime, NodeIdentity {
               durationMs: limits.uiDurationMs,
             },
             stateTracker: this.#uiStateTracker,
-          });
+        })
+      : undefined;
 
-    const currentHashes = new Map(
-      allNodes.map((node) => [node.id, JSON.stringify(node)]),
-    );
-    const baseline =
-      request.sinceRevision == null
-        ? undefined
-        : this.#history.get(request.sinceRevision);
-    const removedNodeIds = baseline
-      ? Array.from(baseline.hashes.keys()).filter(
-          (id) => !currentHashes.has(id),
-        )
-      : [];
-    const changedNodes =
-      detail === "diff" && baseline
-        ? allNodes.filter(
-            (node) =>
-              baseline.hashes.get(node.id) !== currentHashes.get(node.id),
-          )
-        : allNodes;
-
-    this.#history.set(this.#revision, { hashes: currentHashes });
-    while (this.#history.size > 12)
-      this.#history.delete(this.#history.keys().next().value as number);
-
-    const total = changedNodes.length;
-    let nodes = changedNodes.slice(offset, offset + limits.nodes);
     const components = this.#components(limits.stringBytes);
-    let truncated = offset + nodes.length < total;
-    let nextCursor = truncated
-      ? this.#encodeCursor(offset + nodes.length, scope)
-      : null;
-    let result = this.#response(
-      nodes,
-      components,
-      removedNodeIds,
-      truncated,
-      nextCursor,
-      limits.stringBytes,
-      ui,
-    );
-    while (
-      nodes.length > 0 &&
-      this.#encodedBytes(result) > limits.encodedBytes
-    ) {
-      nodes = nodes.slice(0, -1);
-      truncated = true;
-      nextCursor = this.#encodeCursor(offset + nodes.length, scope);
-      result = this.#response(
-        nodes,
+    const page = this.#page();
+    const facts = this.#facts(limits.stringBytes);
+    const projected = this.#history.project(
+      {
+        revision: this.#revision,
+        detail,
+        scope,
+        maxStringBytes: limits.stringBytes,
+        page,
         components,
-        removedNodeIds,
-        truncated,
-        nextCursor,
-        limits.stringBytes,
-        ui,
-      );
-    }
-    return this.#fitResponse(result, offset, scope, limits.encodedBytes);
+        nodes: allNodes,
+        facts,
+      },
+      request.sinceRevision,
+    );
+    return buildContextResponse({
+      revision: this.#revision,
+      sourceNodes: projected.nodes,
+      components: projected.components,
+      removedNodeIds: projected.removedNodeIds,
+      page,
+      facts,
+      ui,
+      delta: projected.delta,
+      offset,
+      cursorRequest,
+      limits,
+    });
   }
 
   waitForChange(revision: number, timeoutMs: number): Promise<number | null> {
     this.#ensureActive();
+    validateContextRevision(revision, this.#revision);
+    const bounded = validateContextWaitTimeout(timeoutMs);
     if (this.#revision > revision) return Promise.resolve(this.#revision);
-    const bounded = Math.max(1, Math.min(300_000, Math.trunc(timeoutMs)));
+    if (bounded === 0) return Promise.resolve(null);
     return new Promise((resolve) => {
       const waiter = {
         revision,
@@ -297,6 +322,21 @@ class Runtime implements TestKitRuntime, NodeIdentity {
         }, bounded),
       };
       this.#waiters.add(waiter);
+    });
+  }
+
+  async waitForDiff(
+    request: ContextDiffRequest,
+  ): Promise<PageContextSnapshot | null> {
+    this.#ensureActive();
+    validateContextRevision(request.sinceRevision, this.#revision);
+    const { timeoutMs, sinceRevision, ...snapshotRequest } = request;
+    const changed = await this.waitForChange(sinceRevision, timeoutMs);
+    if (changed === null) return null;
+    return this.snapshot({
+      ...snapshotRequest,
+      detail: "diff",
+      sinceRevision,
     });
   }
 
@@ -527,8 +567,8 @@ class Runtime implements TestKitRuntime, NodeIdentity {
 
   register(registration: BoundaryRegistration): () => void {
     this.#ensureActive();
-    if (!registration.id.trim() || !registration.name.trim())
-      throw new Error("boundary id and name must not be empty");
+    if (!isValidContextId(registration.id) || !registration.name.trim())
+      throw new Error("boundary id must be bounded and name must not be empty");
     if (boundaryElements(registration).length === 0)
       throw new Error("boundary must contain at least one element");
     if (this.#boundaries.has(registration.id))
@@ -602,6 +642,7 @@ class Runtime implements TestKitRuntime, NodeIdentity {
     this.#waiters.clear();
     this.#listeners.clear();
     this.#boundaries.clear();
+    this.#history.clear();
     this.#sourceMappingStore.clear();
     this.#qualityStore.clear();
     this.#designAuditStore.clear();
@@ -641,36 +682,6 @@ class Runtime implements TestKitRuntime, NodeIdentity {
         // One integration listener must not break the page bridge.
       }
     }
-  }
-
-  #elementsForScope(scope: ContextScope): Element[] {
-    let elements: Element[];
-    if (scope.kind === "node") {
-      const root = this.resolve(scope.nodeId);
-      elements = root ? walkElements(root) : [];
-    } else if (scope.kind === "component") {
-      const registration = this.#boundaries.get(scope.componentId);
-      const roots = registration ? boundaryElements(registration) : [];
-      elements = roots.flatMap((root) => walkElements(root));
-    } else {
-      elements = walkElements(document);
-    }
-    if (scope.kind === "region") {
-      return elements.filter((element) => {
-        const rect = element.getBoundingClientRect();
-        const candidate =
-          scope.space === "document"
-            ? {
-                x: rect.x + scrollX,
-                y: rect.y + scrollY,
-                width: rect.width,
-                height: rect.height,
-              }
-            : { x: rect.x, y: rect.y, width: rect.width, height: rect.height };
-        return overlaps(candidate, scope);
-      });
-    }
-    return elements;
   }
 
   #repairContext(draft: RepairDraft): {
@@ -762,7 +773,7 @@ class Runtime implements TestKitRuntime, NodeIdentity {
       );
       return {
         id: boundary.id,
-        name: boundary.name,
+        name: truncateUtf8(boundary.name, maxStringBytes),
         ...(boundary.source ? { source: boundary.source } : {}),
         ready: safeCallback(boundary.ready, true),
         facts: isJsonObject(facts) ? facts : {},
@@ -771,101 +782,31 @@ class Runtime implements TestKitRuntime, NodeIdentity {
     });
   }
 
-  #response(
-    nodes: ContextNode[],
-    components: ContextComponent[],
-    removedNodeIds: string[],
-    truncated: boolean,
-    nextCursor: string | null,
-    maxStringBytes: number,
-    ui: PageContextSnapshot["ui"],
-  ): PageContextSnapshot {
+  #page(): PageContextSnapshot["page"] {
     const root = document.documentElement;
+    return {
+      id: this.#options.page.id,
+      url: location.href,
+      route: `${location.pathname}${location.search}${location.hash}`,
+      title: document.title,
+      ready: safeCallback(
+        this.#options.ready,
+        document.readyState !== "loading",
+      ),
+      viewport: this.#viewport(),
+      document: { width: root.scrollWidth, height: root.scrollHeight },
+      scroll: { x: scrollX, y: scrollY },
+      language: document.documentElement.lang || navigator.language || "unknown",
+      theme: pageTheme(),
+    };
+  }
+
+  #facts(maxStringBytes: number): PageContextSnapshot["facts"] {
     const facts = sanitizeFacts(
       safeCallback(this.#options.facts, {}),
       maxStringBytes,
     );
-    return {
-      protocol: PAGE_CONTEXT_PROTOCOL,
-      sdkVersion: SDK_VERSION,
-      revision: this.#revision,
-      page: {
-        id: this.#options.page.id,
-        url: location.href,
-        route: `${location.pathname}${location.search}${location.hash}`,
-        title: document.title,
-        ready: safeCallback(
-          this.#options.ready,
-          document.readyState !== "loading",
-        ),
-        viewport: this.#viewport(),
-        document: { width: root.scrollWidth, height: root.scrollHeight },
-        scroll: { x: scrollX, y: scrollY },
-        language:
-          document.documentElement.lang || navigator.language || "unknown",
-        theme: pageTheme(),
-      },
-      components,
-      nodes,
-      facts: isJsonObject(facts) ? facts : {},
-      ...(ui ? { ui } : {}),
-      removedNodeIds,
-      truncated,
-      nextCursor,
-    };
-  }
-
-  #limits(requested: ContextSnapshotRequest["limits"]): ContextLimits {
-    return {
-      nodes: clamp(
-        requested?.nodes ?? this.#options.maxNodes,
-        1,
-        Math.min(this.#options.maxNodes, MAX_CONTEXT_LIMITS.nodes),
-      ),
-      stringBytes: clamp(
-        requested?.stringBytes ?? this.#options.maxStringBytes,
-        32,
-        Math.min(this.#options.maxStringBytes, MAX_CONTEXT_LIMITS.stringBytes),
-      ),
-      encodedBytes: clamp(
-        requested?.encodedBytes ?? this.#options.maxEncodedBytes,
-        1_024,
-        Math.min(
-          this.#options.maxEncodedBytes,
-          MAX_CONTEXT_LIMITS.encodedBytes,
-        ),
-      ),
-      uiNodes: clamp(
-        requested?.uiNodes ?? this.#options.maxUiNodes,
-        1,
-        Math.min(this.#options.maxUiNodes, MAX_CONTEXT_LIMITS.uiNodes),
-      ),
-      uiStateSamples: clamp(
-        requested?.uiStateSamples ?? this.#options.maxUiStateSamples,
-        1,
-        Math.min(
-          this.#options.maxUiStateSamples,
-          MAX_CONTEXT_LIMITS.uiStateSamples,
-        ),
-      ),
-      uiDurationMs: clamp(
-        requested?.uiDurationMs ?? this.#options.maxUiDurationMs,
-        1,
-        Math.min(
-          this.#options.maxUiDurationMs,
-          MAX_CONTEXT_LIMITS.uiDurationMs,
-        ),
-      ),
-      uiEncodedBytes: clamp(
-        requested?.uiEncodedBytes ?? this.#options.maxUiEncodedBytes,
-        8_192,
-        Math.min(
-          this.#options.maxUiEncodedBytes,
-          MAX_CONTEXT_LIMITS.uiEncodedBytes,
-          this.#options.maxEncodedBytes,
-        ),
-      ),
-    };
+    return isJsonObject(facts) ? facts : {};
   }
 
   #viewport(): PageViewport {
@@ -875,64 +816,6 @@ class Runtime implements TestKitRuntime, NodeIdentity {
       dpr: devicePixelRatio || 1,
       visual: visualViewportInfo(),
     };
-  }
-
-  #encodeCursor(offset: number, scope: ContextScope): string {
-    return btoa(JSON.stringify({ revision: this.#revision, offset, scope }));
-  }
-
-  #decodeCursor(
-    cursor: string | null | undefined,
-    scope: ContextScope,
-  ): number {
-    if (!cursor) return 0;
-    try {
-      const value = JSON.parse(atob(cursor)) as {
-        revision?: number;
-        offset?: number;
-        scope?: ContextScope;
-      };
-      if (
-        value.revision !== this.#revision ||
-        JSON.stringify(value.scope) !== JSON.stringify(scope)
-      )
-        return 0;
-      return Number.isSafeInteger(value.offset) && (value.offset ?? -1) >= 0
-        ? (value.offset ?? 0)
-        : 0;
-    } catch {
-      return 0;
-    }
-  }
-
-  #encodedBytes(value: unknown): number {
-    return new TextEncoder().encode(JSON.stringify(value)).byteLength;
-  }
-
-  #fitResponse(
-    result: PageContextSnapshot,
-    offset: number,
-    scope: ContextScope,
-    encodedBytes: number,
-  ): PageContextSnapshot {
-    if (this.#encodedBytes(result) <= encodedBytes) return result;
-    delete result.ui;
-    if (this.#encodedBytes(result) <= encodedBytes) {
-      result.truncated = true;
-      return result;
-    }
-    result.components = [];
-    result.facts = {};
-    result.removedNodeIds = [];
-    result.nodes = [];
-    result.truncated = true;
-    result.nextCursor = this.#encodeCursor(offset, scope);
-    if (this.#encodedBytes(result) <= encodedBytes) return result;
-    result.page.url = "";
-    result.page.route = "";
-    result.page.title = "";
-    result.page.language = "";
-    return result;
   }
 
   #ensureActive(): void {
@@ -987,7 +870,11 @@ export function installTestKit(options: TestKitOptions): TestKitRuntime {
     ),
     maxUiEncodedBytes: clamp(
       options.maxUiEncodedBytes ?? DEFAULT_CONTEXT_LIMITS.uiEncodedBytes,
-      8_192,
+      Math.min(
+        8_192,
+        MAX_CONTEXT_LIMITS.uiEncodedBytes,
+        options.maxEncodedBytes ?? DEFAULT_CONTEXT_LIMITS.encodedBytes,
+      ),
       Math.min(
         MAX_CONTEXT_LIMITS.uiEncodedBytes,
         options.maxEncodedBytes ?? DEFAULT_CONTEXT_LIMITS.encodedBytes,
@@ -1057,6 +944,7 @@ function disabledBridge(): TestKitRuntime {
     snapshot: unavailable,
     resolve: () => null,
     waitForChange: async () => null,
+    waitForDiff: async () => null,
     subscribe: () => () => undefined,
     submitRepair: () => [],
     takeRepairBatch: () => [],

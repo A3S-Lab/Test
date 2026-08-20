@@ -122,7 +122,7 @@ fn doctor_returns_a_machine_readable_fix_for_a_missing_testkit() {
         .expect("Test Kit dependency check");
     assert_eq!(testkit["status"], "failed");
     assert_eq!(
-        testkit["fix"], "npm install --save-dev @a3s-lab/testkit@0.5.0",
+        testkit["fix"], "npm install --save-dev @a3s-lab/testkit@0.6.0",
         "{testkit}"
     );
 }

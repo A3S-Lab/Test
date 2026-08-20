@@ -1,6 +1,6 @@
 ---
 title: Page Context fields and lifecycle
-description: Understand how Test Kit derives bounded page context from rendered DOM, accessibility semantics, component boundaries, geometry, and browser-computed UI evidence.
+description: Understand how Test Kit derives bounded rendered facts, exact revision deltas, component ownership, geometry, and browser-computed UI evidence.
 ---
 
 # Page Context fields and lifecycle
@@ -62,7 +62,11 @@ const summary = bridge.snapshot({
   limits: { nodes: 300, uiNodes: 120 },
 });
 
-const nextRevision = await bridge.waitForChange(summary.revision, 5_000);
+const diff = await bridge.waitForDiff({
+  sinceRevision: summary.revision,
+  timeoutMs: 5_000,
+  ui: false,
+});
 ```
 
 | Method                        | Result or operation                                                     |
@@ -71,6 +75,7 @@ const nextRevision = await bridge.waitForChange(summary.revision, 5_000);
 | `snapshot(request)`           | A bounded snapshot on the current revision                              |
 | `resolve(nodeId)`             | The live DOM node for a current private ID, within the same-page bridge |
 | `waitForChange(revision, ms)` | Wait for the semantic revision to advance, or return `null` on timeout  |
+| `waitForDiff(request)`        | Wait for one newer revision and return its bounded exact delta          |
 | `subscribe(listener)`         | Subscribe to revision, quality, design-advice, and repair events        |
 | `dispose()`                   | Remove observers, listeners, portals, and private state                 |
 
@@ -84,7 +89,7 @@ The bridge exposes no `eval`, cookies, browser storage, arbitrary network reques
 | ---------- | ------------------------------------------------------------------------------------------- |
 | `summary`  | Regular observation with principal semantics, components, locators, and bounded UI evidence |
 | `scoped`   | Inspect one node, component, or region without unrelated page context                       |
-| `diff`     | Combine with `sinceRevision` to inspect changes between revisions                           |
+| `diff`     | Requires `sinceRevision`; returns exact invalidation or an explicit reset                    |
 | `forensic` | Repair verification or design review with the fullest admitted record                       |
 
 ### Scopes
@@ -100,7 +105,7 @@ A scope can refer only to private identities on the current revision. A3S Test p
 
 ## Snapshot fields
 
-Every response contains `protocol`, `sdkVersion`, `revision`, `page`, `components`, `nodes`, `facts`, optional `ui`, `removedNodeIds`, `truncated`, and `nextCursor`.
+Every response contains `protocol`, `sdkVersion`, `revision`, `page`, `components`, `nodes`, `facts`, optional `ui`, optional `delta`, `removedNodeIds`, `truncated`, and `nextCursor`.
 
 ### Page fields
 
@@ -197,19 +202,46 @@ The UI record has its own `observationId`. Focus, hover, or a running animation 
 
 Repeated structures never treat class names as component truth. State collection does not move focus or dispatch events. Cross-origin stylesheet rules remain inaccessible under browser policy and only increment `inaccessibleStyleSheets`.
 
-## Revisions and public refs
+## Revisions, exact diffs, and public refs
 
-MutationObserver, ResizeObserver, route, viewport, scroll, and relevant form changes invalidate the cache and advance a monotonic revision. An unchanged page is not polled.
+MutationObserver, ResizeObserver, route, viewport, scroll, and relevant form changes advance a monotonic revision. An unchanged page is not polled. A3S Test atomically binds the browser accessibility snapshot to the Test Kit revision; if the page changes while that observation is assembled, the driver rejects the race.
 
-A3S Test atomically binds the browser accessibility snapshot to the Test Kit revision. If the page changes while that observation is being assembled, the driver rejects the race and requires another observation.
+The first-principles rule is smaller than “discard the page after every edit”: discard only evidence that can no longer be proved current. Test Kit 0.6.0 implements that rule with `a3s.test.page-context-diff/1`.
 
-| Ref   | Source                                | Lifetime and authority                                                              |
-| ----- | ------------------------------------- | ----------------------------------------------------------------------------------- |
-| `@eN` | Browser accessibility snapshot        | Actionable in the current observation and stale after change                        |
-| `@cN` | Uniquely actionable Page Context node | Actionable in the current observation with component, locator, and geometry binding |
-| `@uN` | Supplemental UI-understanding node    | Read-only in the current observation and never an action target                     |
+```json
+{
+  "delta": {
+    "protocol": "a3s.test.page-context-diff/1",
+    "fromRevision": 42,
+    "toRevision": 43,
+    "status": "complete",
+    "invalidated": {
+      "all": false,
+      "page": false,
+      "facts": false,
+      "ui": true,
+      "nodeIds": ["n12"],
+      "componentIds": ["checkout-form"]
+    }
+  }
+}
+```
 
-Observe again after navigation, hot reload, or dynamic rearrangement. A3S Test rejects `@uN` during ACL admission or before driver dispatch and also rejects `@eN` or `@cN` from an older observation.
+- `complete` contains only changed nodes and components, lists every changed or removed private node ID, and marks page or facts independently. A newer revision always invalidates UI evidence because geometry, style, state, and motion belong to that revision.
+- A same-revision `complete` delta is an empty no-op.
+- `reset_required` means the exact baseline is no longer retained or complete invalidation metadata cannot fit the byte budget. It invalidates everything, carries no misleading partial IDs, and tells the caller to capture a fresh non-diff baseline.
+
+The runtime keeps at most eight normalized projection shapes and twelve revisions per shape. A projection includes semantic versus forensic detail, normalized scope, and string budget. Diff pages retain one baseline. Their opaque cursor also binds detail, scope, baseline, UI choice, every normalized limit, and the current revision; a mismatch or stale cursor is rejected instead of restarting from page one. `timeoutMs` for `waitForDiff` must be an integer from 0 through 300,000. Invalid values and future revisions are rejected rather than clamped.
+
+The Web adapter validates protocol, revision order, UTF-8 ID order, uniqueness, size, changed/removed disjointness, and complete invalidation coverage again in Rust. This lets Core keep the stable locator behind an unaffected `@cN` while refusing any uncertain target.
+
+| Ref   | Source                                | Lifetime and authority                                                                                       |
+| ----- | ------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| `@eN` | Browser accessibility snapshot        | Actionable only in its current browser observation; never retained by a Page Context diff                   |
+| `@cN` | Uniquely actionable Page Context node | Bound to one observation and private node ID; may cross revision drift only when a complete delta excludes it |
+| `@uN` | Supplemental UI-understanding node    | Read-only in the current observation and always invalid after revision drift                                |
+
+A3S Test still rejects refs from an older A3S observation. Within the latest observation, a missing delta, `reset_required`, legacy binding, changed target, removed target, or revision regression clears or rejects the affected `@cN` before input. This is a narrow targeting optimization, not permission to reuse screenshots, coordinates, or UI evidence.
 
 ## Budgets, truncation, and pagination
 
@@ -225,7 +257,7 @@ Installation options set ceilings. Each `snapshot()` request may only lower them
 | UI capture duration  | 32 ms   | 100 ms       |
 | Encoded UI record    | 256 KiB | 1 MiB        |
 
-When a response returns `truncated: true`, inspect `nextCursor` and continue on the same revision and scope. A cursor is bound to both and cannot be reused after the page changes.
+When a response returns `truncated: true`, inspect `nextCursor` and continue with the exact same request and revision. A cursor cannot be reused after the page changes or with different detail, scope, baseline, UI choice, or limits.
 
 The UI record has its own `budget.used`, truncation flag, and reasons. If UI projection cannot preserve graph integrity within its encoded budget, A3S Test omits that optional record and keeps the outer semantic observation. It never returns broken edges, cyclic containment, or a leaked private identity to fit a budget.
 
@@ -255,5 +287,6 @@ Private node IDs live in a `WeakMap` side table. Test Kit does not write IDs, co
 | `truncated` remains true         | Page exceeds installation or request budgets                       | Narrow scope, reduce detail, paginate, or raise the installation ceiling with evidence |
 | UI understanding is absent       | Request disabled it, installation disabled it, or admission failed | Inspect UI configuration and budgets; outer Page Context remains usable                |
 | A `@cN` action is rejected       | The ref is stale or no longer uniquely actionable                  | Observe again and prefer a fresh semantic locator                                      |
+| Diff returns `reset_required`    | Baseline was evicted or exact invalidation exceeded the byte budget | Discard old evidence and capture a fresh non-diff snapshot                              |
 
 Continue with [Add Web Test Kit](../guide/testkit.mdx) for integration or [Human review and repair](../guide/repairs.mdx) to see how Page Context accompanies an explicitly submitted finding into verification.

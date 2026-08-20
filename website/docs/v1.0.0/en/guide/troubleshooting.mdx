@@ -171,7 +171,7 @@ Do not increase the interval merely to make a flicker disappear from samples. Th
 
 ## A ref is stale or the target is rejected
 
-`@eN` and `@cN` are valid only in the latest observation that created them. Navigation, DOM changes, scrolling, viewport changes, focus, and browser-context switches can advance the revision.
+`@eN` and `@cN` are valid only in the latest observation that created them. Navigation, DOM changes, scrolling, viewport changes, focus, and browser-context switches can advance the revision. `@eN`, UI, screenshot, and coordinate evidence then expire. An `@cN` stable locator survives only when Test Kit 0.6.0 returns a complete revision delta that does not invalidate its private node ID; a changed or removed ID, `reset_required`, missing metadata, or an older Test Kit clears it.
 
 ```bash
 a3s-test agent observe --session smoke --interactive --json
@@ -181,7 +181,7 @@ a3s-test agent click @e3 \
   --json
 ```
 
-Observe again and resolve the target again after a stale-ref error. Do not rewrite an old observation ID or move old coordinates into a CSS target.
+Observe again and resolve the target again after a stale-ref error. If a custom integration receives `delta.status = "reset_required"`, discard the old baseline and take a normal snapshot before continuing. Do not rewrite an old observation ID or move old coordinates into a CSS target.
 
 `@uN` is permanently read-only. It can connect style, layout, or motion evidence but cannot target click, fill, drag, or an ACL action. Find a current `@eN`, a uniquely actionable `@cN`, or a stable semantic locator for the same node.
 

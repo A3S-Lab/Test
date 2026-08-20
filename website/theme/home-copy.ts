@@ -96,9 +96,9 @@ export const homeCopy: Record<Locale, LocalizedCopy> = {
             body: '可访问快照负责角色、名称和原生状态；Test Kit 补充组件、定位器、几何、布局、样式和动效。',
           },
           {
-            signal: 'REVISION · @eN · @cN · @uN',
+            signal: 'REVISION · DIFF · @cN',
             title: '观察绑定身份',
-            body: '页面变化推进单调修订。@eN 与 @cN 只在所属观察中可操作，@uN 永远只读。',
+            body: '页面变化推进单调修订；精确差异只保留未受影响节点的稳定定位器，缺失或超预算就要求全量重置。',
           },
           {
             signal: 'BOUNDARY · SOURCE MAP',
@@ -403,9 +403,9 @@ export const homeCopy: Record<Locale, LocalizedCopy> = {
             body: 'Accessibility owns roles, names, and native state. Test Kit adds components, locators, geometry, layout, style, and motion.',
           },
           {
-            signal: 'REVISION · @eN · @cN · @uN',
+            signal: 'REVISION · DIFF · @cN',
             title: 'Bind public identity to observation',
-            body: 'Page changes advance a monotonic revision. @eN and @cN are actionable only in their observation, while @uN is always read-only.',
+            body: 'Page changes advance a monotonic revision. Exact deltas retain only unaffected stable locators; missing or oversized history requires a full reset.',
           },
           {
             signal: 'BOUNDARY · SOURCE MAP',

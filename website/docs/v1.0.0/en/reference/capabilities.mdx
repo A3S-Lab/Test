@@ -183,12 +183,13 @@ Checked-in evidence covers 1,000/1,000 base Core geometry cases plus 2,000/2,000
 | Visual system         | `ui.style`                                    | Colors, typography, spacing, radii, shadows, z-index, and responsive conditions | Class names alone never establish a component                         |
 | State differences     | `ui.stateDiffs`                               | Interaction-state changes that the page actually produced                       | Test Kit does not trigger hover, focus, or click to sample            |
 | Motion profile        | `ui.motion`                                   | Transitions, animations, timelines, ranges, and reduced motion                  | An unresolved named timeline is not guessed as scroll or view         |
-| Scoped snapshot       | `snapshot({ detail, scope })`                 | Page, node, component, or region context                                        | Private node IDs do not persist across revisions                      |
-| Diff and pagination   | `sinceRevision`, `cursor`, `nextCursor`       | Removed nodes and the next page                                                 | A cursor mismatched to request, scope, or revision fails closed       |
+| Scoped snapshot       | `snapshot({ detail, scope })`                 | Page, node, component, or region context                                        | Private node IDs are never public or caller-persisted                 |
+| Exact revision diff   | `waitForDiff`, `sinceRevision`, `delta`       | Changed/removed nodes and components plus page, facts, and UI invalidation       | Missing history or oversized metadata returns `reset_required`       |
+| Bound pagination      | `cursor`, `nextCursor`                        | The next page against one unchanged request and baseline                        | Any request or revision mismatch fails instead of restarting         |
 | Budgets               | Provider ceilings and per-request `limits`    | Node, string, encoding, UI node, state, and duration use                        | A request can only reduce installation ceilings                       |
 | Redaction             | `redact` plus built-in sensitive-field rules  | Filtered text, attributes, form state, and facts                                | Cookies, storage, passwords, headers, and secrets stay out            |
 
-Public ref authority remains fixed. `@eN` comes from browser accessibility, and `@cN` represents a uniquely actionable Page Context node. Both are actionable only in the latest observation. `@uN` connects style, layout, state, and motion evidence and is always read-only.
+Public ref authority remains fixed. `@eN` comes from browser accessibility, and `@cN` represents a uniquely actionable Page Context node. Both are actionable only in the latest observation. Within that observation, a Rust-validated complete delta may retain the stable locator behind an unaffected `@cN`; changed, removed, reset, legacy, or uncertain bindings fail closed. `@uN` connects style, layout, state, and motion evidence and is always read-only.
 
 ## Human review and repair
 

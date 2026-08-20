@@ -200,7 +200,7 @@ publishes these tools:
 | --- | --- |
 | `test_session_start` | Open the host-configured surface |
 | `test_observe` | Return a new observation and observation ID |
-| `test_inspect` | Read bounded current Test Kit page, node, component, or region context |
+| `test_inspect` | Read bounded current Test Kit page, node, component, or region context, or wait for a revision-scoped diff |
 | `test_act` | Execute exactly one typed action |
 | `test_finish` | Record a result and close the exact owned surface |
 | `test_abort` | Abort and close the exact owned surface |

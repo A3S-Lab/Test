@@ -1511,7 +1511,7 @@ Unverified versions fail with `test.driver.web.version_unsupported`.
 range check. `a3s-test dev` performs the authoritative live browser admission
 before its `a3s.test.dev/1` `ready` event. It calls
 `a3s.test.testkit-handshake/1`, verifies the exact `@a3s-lab/testkit` package,
-SDK `>= 0.4.0, < 0.6.0`, Page Context protocol v1, a bounded canonical
+SDK `>= 0.4.0, < 0.7.0`, Page Context protocol v1, a bounded canonical
 capability set, and, for required profiles, the mounted Review Overlay open
 Shadow Root. Required profiles reject an absent bridge; optional profiles may
 admit absence but never a present incompatible bridge. Each boundary uses a
@@ -1539,6 +1539,64 @@ network discovery or fetch and drops `sourcesContent` before storing the map.
 Framework-private component state is outside the protocol. Source mapping is
 evidence for routing a repair and grants no filesystem or workspace mutation
 authority.
+
+Test Kit 0.6.0 may additionally advertise `revision_diff` and return
+`a3s.test.page-context-diff/1` under the optional snapshot `delta` field.
+`snapshot({ detail: "diff", sinceRevision })` requires a positive safe-integer
+baseline no newer than the current revision. `sinceRevision` is rejected for
+all other detail profiles. `waitForDiff` accepts the same snapshot projection
+plus an integer `timeoutMs` from 0 through 300,000. It returns immediately when
+the current revision already exceeds the baseline, returns `null` when the
+page remains unchanged through the timeout, and otherwise returns the first
+available current diff. Zero is an immediate check; values are never rounded
+or clamped.
+
+The delta contains protocol, positive ordered `fromRevision` and `toRevision`,
+`complete` or `reset_required` status, and an `invalidated` record. A complete
+delta sets `all = false`, names every changed or removed node in a strictly
+UTF-8-sorted unique `nodeIds` list, names changed or removed components in the
+same canonical form, and carries independent page and facts flags. Any
+revision advance sets `ui = true`; a same-revision complete delta has no
+payload or invalidation. Changed node payload and `removedNodeIds` must be
+disjoint and every ID they expose must occur in `invalidated.nodeIds`.
+
+`reset_required` must advance the revision, set `all`, `page`, `facts`, and
+`ui`, and expose no partial node or component IDs. It means that the exact
+baseline projection is outside bounded history or a complete invalidation set
+cannot fit the admitted encoded-byte budget. The consumer discards retained
+evidence and captures a fresh non-diff baseline. It must never treat reset as
+an empty complete change.
+
+The TypeScript runtime retains at most eight normalized projections and twelve
+revisions per projection. Projection identity includes semantic versus
+forensic shape, normalized scope, and admitted string budget. It computes at
+most 5,000 nodes. Continuation cursors bind the current revision and a local
+digest of detail, normalized scope, baseline, UI choice, and every normalized
+limit; stale or mismatched cursors fail instead of restarting pagination. A
+complete delta repeats one baseline across all pages. If the hard encoded-byte
+limit cannot preserve complete invalidation metadata, the runtime emits a
+bounded reset.
+
+The Web adapter independently validates delta protocol, revisions, status,
+canonical IDs, 10,000-ID ceilings, 256-byte ID ceilings, changed/removed
+disjointness, and invalidation coverage before the observation is admitted.
+Core retains each public `@cN` target together with a domain-separated SHA-256
+fingerprint of its driver-private node ID. Raw node IDs are not persisted in
+session metadata. Before dispatch on a newer revision, Core fingerprints the
+validated invalidation set and removes only matching refs. `reset_required`,
+missing delta metadata on a newer revision, or legacy bindings without
+fingerprints remove all retained context refs. A revision regression or
+malformed delta fails the action.
+Accessibility refs, UI evidence, screenshots, and coordinate evidence are not
+retained across this exception. `revision_diff` remains optional in the live
+handshake so the supported 0.4.x and 0.5.x Test Kit range keeps the prior exact
+revision fail-closed behavior.
+
+CLI `agent inspect --detail diff` and MCP `test_inspect` require a baseline as
+`--since-revision` or `since_revision` and optionally accept
+`--wait-timeout-ms` or `wait_timeout_ms`. The baseline and wait fields are
+rejected for non-diff profiles. CLI and MCP preserve the same 300,000 ms hard
+ceiling before the Web adapter evaluates the page.
 
 When the admitted handshake is present, `a3s-test dev` starts the in-process
 local repair bridge `a3s.test.local-repair-bridge/1`. It opens no additional

@@ -35,6 +35,8 @@ struct PageContextExecutor {
     invocations: Mutex<Vec<CommandInvocation>>,
     revisions: Mutex<Vec<u64>>,
     invalid_source_mapping: bool,
+    diff_from: Option<u64>,
+    invalid_delta: bool,
 }
 
 struct GroundingScreenshotExecutor {
@@ -62,6 +64,8 @@ impl PageContextExecutor {
             invocations: Mutex::new(Vec::new()),
             revisions: Mutex::new(vec![revision, revision]),
             invalid_source_mapping: false,
+            diff_from: None,
+            invalid_delta: false,
         }
     }
 
@@ -70,6 +74,8 @@ impl PageContextExecutor {
             invocations: Mutex::new(Vec::new()),
             revisions: Mutex::new(vec![1, 2, 3, 4]),
             invalid_source_mapping: false,
+            diff_from: None,
+            invalid_delta: false,
         }
     }
 
@@ -78,6 +84,18 @@ impl PageContextExecutor {
             invocations: Mutex::new(Vec::new()),
             revisions: Mutex::new(vec![7, 7]),
             invalid_source_mapping: true,
+            diff_from: None,
+            invalid_delta: false,
+        }
+    }
+
+    fn diff(from_revision: u64, to_revision: u64, invalid_delta: bool) -> Self {
+        Self {
+            invocations: Mutex::new(Vec::new()),
+            revisions: Mutex::new(vec![to_revision]),
+            invalid_source_mapping: false,
+            diff_from: Some(from_revision),
+            invalid_delta,
         }
     }
 }
@@ -217,7 +235,12 @@ impl CommandExecutor for PageContextExecutor {
             "agent-browser 0.26.0".to_string()
         } else if is_eval {
             let revision = self.revisions.lock().unwrap().remove(0);
-            page_context_response(revision, self.invalid_source_mapping)
+            self.diff_from.map_or_else(
+                || page_context_response(revision, self.invalid_source_mapping),
+                |from_revision| {
+                    page_context_diff_response(from_revision, revision, self.invalid_delta)
+                },
+            )
         } else {
             r#"{"success":true,"data":{"snapshot":"accessibility"}}"#.to_string()
         };
@@ -830,6 +853,90 @@ async fn rejects_an_invalid_ranked_source_mapping_from_the_page_bridge() {
     let error = session.observe().await.expect_err("invalid source mapping");
     assert_eq!(error.code(), "test.driver.web.source_mapping_invalid");
     session.close().await.expect("close");
+}
+
+#[tokio::test]
+async fn captures_and_validates_a_revision_scoped_page_context_delta() {
+    let temp = tempfile::tempdir().expect("tempdir");
+    let executor = Arc::new(PageContextExecutor::diff(7, 8, false));
+    let driver =
+        AgentBrowserDriver::with_executor(standalone_config("page-context-diff"), executor.clone());
+    let mut session = driver
+        .open(&ScenarioContext {
+            run_id: "run".to_string(),
+            scenario_id: "context-diff".to_string(),
+            artifacts_dir: temp.path().join("artifacts"),
+        })
+        .await
+        .expect("session");
+
+    let observation = session
+        .page_context_delta(7)
+        .await
+        .expect("context delta")
+        .expect("supported delta");
+    let delta = observation
+        .snapshot
+        .as_ref()
+        .and_then(|snapshot| snapshot.delta.as_ref())
+        .expect("typed delta");
+    assert_eq!(delta.from_revision, 7);
+    assert_eq!(delta.to_revision, 8);
+    assert_eq!(delta.invalidated.node_ids, ["n1"]);
+
+    let invocations = executor.invocations.lock().unwrap();
+    let script = strip_session_prefix(&invocations[1].args)[1]
+        .to_string_lossy()
+        .into_owned();
+    assert!(script.contains("bridge.waitForDiff"), "{script}");
+    assert!(script.contains("\"sinceRevision\":7"), "{script}");
+    assert!(script.contains("\"ui\":false"), "{script}");
+}
+
+#[tokio::test]
+async fn rejects_a_delta_that_omits_changed_node_invalidation() {
+    let temp = tempfile::tempdir().expect("tempdir");
+    let executor = Arc::new(PageContextExecutor::diff(7, 8, true));
+    let driver =
+        AgentBrowserDriver::with_executor(standalone_config("invalid-page-context-diff"), executor);
+    let mut session = driver
+        .open(&ScenarioContext {
+            run_id: "run".to_string(),
+            scenario_id: "invalid-context-diff".to_string(),
+            artifacts_dir: temp.path().join("artifacts"),
+        })
+        .await
+        .expect("session");
+
+    let error = session
+        .page_context_delta(7)
+        .await
+        .expect_err("invalid delta must fail");
+    assert_eq!(error.code(), "test.driver.web.page_context_diff_invalid");
+}
+
+#[tokio::test]
+async fn rejects_a_delta_for_a_different_requested_baseline() {
+    let temp = tempfile::tempdir().expect("tempdir");
+    let executor = Arc::new(PageContextExecutor::diff(6, 8, false));
+    let driver = AgentBrowserDriver::with_executor(
+        standalone_config("mismatched-page-context-diff"),
+        executor,
+    );
+    let mut session = driver
+        .open(&ScenarioContext {
+            run_id: "run".to_string(),
+            scenario_id: "mismatched-context-diff".to_string(),
+            artifacts_dir: temp.path().join("artifacts"),
+        })
+        .await
+        .expect("session");
+
+    let error = session
+        .page_context_delta(7)
+        .await
+        .expect_err("a mismatched baseline must fail");
+    assert_eq!(error.code(), "test.driver.web.page_context_diff_invalid");
 }
 
 #[tokio::test]
@@ -1759,6 +1866,26 @@ fn page_context_response(revision: u64, invalid_source_mapping: bool) -> String 
         response["data"]["result"]["nodes"][0]["sourceMapping"]["truncated"] =
             serde_json::json!(true);
     }
+    response.to_string()
+}
+
+fn page_context_diff_response(from_revision: u64, to_revision: u64, invalid_delta: bool) -> String {
+    let mut response: serde_json::Value =
+        serde_json::from_str(&page_context_response(to_revision, false)).expect("page context");
+    response["data"]["result"]["delta"] = serde_json::json!({
+        "protocol": "a3s.test.page-context-diff/1",
+        "fromRevision": from_revision,
+        "toRevision": to_revision,
+        "status": "complete",
+        "invalidated": {
+            "all": false,
+            "page": false,
+            "facts": false,
+            "ui": true,
+            "nodeIds": if invalid_delta { Vec::<String>::new() } else { vec!["n1".to_string()] },
+            "componentIds": []
+        }
+    });
     response.to_string()
 }
 

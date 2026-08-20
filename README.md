@@ -45,7 +45,7 @@ A3S Test closes those gaps with one evidence boundary:
 | Fundamental risk                                           | A3S Test mechanism                                                                  |
 | ---------------------------------------------------------- | ----------------------------------------------------------------------------------- |
 | The model acts on an old or imagined page                  | Fresh browser observations and monotonic page revisions                             |
-| A target moves, disappears, or changes identity            | Observation-bound `@eN` and `@cN` refs that expire with the page                    |
+| A target moves, disappears, or changes identity            | Revision-scoped diffs retain only unaffected `@cN` refs and reject every uncertain one |
 | Natural language reaches the browser unchecked             | Typed actions admitted through schema, capability, policy, and origin checks        |
 | The visible defect is disconnected from its implementation | Component boundaries and ranked rendered-node source spans                          |
 | A suggestion silently becomes a source edit                | Separate browser-fact, model-advice, human-authorization, and mutation authorities  |
@@ -110,11 +110,11 @@ Install Test Kit only when a page needs component ownership, source mapping,
 rendered geometry, or the in-page review surface:
 
 ```bash
-npm install --save-dev @a3s-lab/testkit@0.5.0
+npm install --save-dev @a3s-lab/testkit@0.6.0
 npm ls @a3s-lab/testkit
 ```
 
-`@a3s-lab/testkit` 0.5.0 is published on the official npm Registry with
+`@a3s-lab/testkit` 0.6.0 is published on the official npm Registry with
 GitHub OIDC provenance. Its version advances independently from the CLI
 release.
 
@@ -197,7 +197,8 @@ const testKitEnabled = import.meta.env.DEV;
 This adds two independent layers:
 
 - The headless Context Runtime publishes bounded, revisioned facts after the
-  browser has computed DOM, accessibility, layout, scrolling, and viewports.
+  browser has computed DOM, accessibility, layout, scrolling, and viewports;
+  `waitForDiff` reports only evidence invalidated by a newer revision.
 - The optional Review Overlay lets a person point, multi-select, draw a region,
   sketch an intended UI, or attach a browser-page crop in one right-side panel.
 
@@ -314,7 +315,7 @@ browser render + accessibility + Test Kit Page Context
 
 | Layer                   | Technical responsibility                                                                                                         |
 | ----------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
-| TypeScript Test Kit     | Derive bounded post-render context, component and source ownership, multi-space geometry, and optional human review              |
+| TypeScript Test Kit     | Derive bounded post-render context, exact revision deltas, component/source ownership, multi-space geometry, and optional review |
 | Rust Core               | Define `Action`, observation, session, policy, result, evidence, and lifecycle contracts without depending on a concrete surface |
 | Surface adapters        | Own Web browser, macOS GUI, or PTY execution and translate only supported typed actions                                          |
 | Session and evidence    | Bind refs to observations, retain append-only events, validate artifact paths, and report distinguishable failures               |

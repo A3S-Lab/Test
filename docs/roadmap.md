@@ -235,9 +235,10 @@ snapshot. Pages without the SDK retain the existing Web behavior.
       `agent observe` and `test_observe`
 - [x] Add scoped `agent inspect` and `test_inspect` operations that retrieve
       detail for one current context ref, component, or region
-- [x] Bind `@cN` context refs to the latest A3S observation and page revision;
-      navigation, revision changes, failed actions, and state-changing actions
-      must expire them before input dispatch
+- [x] Bind `@cN` context refs to the latest A3S observation and private node
+      identity; revision drift fails closed unless a later exact delta proves
+      that node unaffected, while failed and state-changing actions consume
+      the observation before another input dispatch
 - [x] Resolve context refs in the browser adapter without exposing arbitrary
       JavaScript evaluation as a public A3S Test action
 - [x] Prefer role, label, test ID, and placeholder locators when a stable
@@ -925,9 +926,12 @@ intent, or shorten verification do not belong in this loop.
 - [x] Map a selected rendered node to ranked, confidence-bearing source spans
       across framework boundaries, source maps, and explicit
       `A3STestBoundary` hints without reading undeclared framework state
-- [ ] Stream revision-scoped Page Context diffs and invalidate only evidence
-      affected by the latest source or DOM change instead of recapturing the
-      complete page after every edit
+- [x] Stream revision-scoped Page Context diffs and invalidate only evidence
+      affected by the latest source or DOM change; bind opaque cursors to the
+      complete request and revision, retain bounded projection history,
+      downgrade oversized or unavailable deltas to `reset_required`, validate
+      the protocol independently in Rust, and preserve only unaffected `@cN`
+      bindings before input dispatch
 - [ ] Generate and run the smallest deterministic verification slice from the
       finding, changed files, stable locator, browser-error delta, and prior
       proof; expand to broader regression only when impact evidence requires it
