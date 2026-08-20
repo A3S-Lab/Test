@@ -6,7 +6,7 @@ use url::Url;
 
 use super::*;
 use crate::workspace::config::{
-    BrowserProfile, DevServerProfile, ProjectBrowserDriver, TestKitProfile,
+    BrowserProfile, DevServerProfile, ProjectBrowserDriver, TestKitProfile, VerificationProfile,
 };
 
 #[tokio::test]
@@ -90,6 +90,7 @@ fn profile(root: PathBuf) -> ProjectProfile {
             idle_timeout_ms: 300_000,
         },
         testkit: TestKitProfile { required: true },
+        verification: VerificationProfile::default(),
         root,
     }
 }

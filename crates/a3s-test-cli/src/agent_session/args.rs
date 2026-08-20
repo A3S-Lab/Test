@@ -491,9 +491,12 @@ pub(super) struct RepairVerifyArgs {
     pub(super) success_criteria_passed: Option<bool>,
     #[arg(long = "changed-file")]
     pub(super) changed_files: Vec<String>,
-    /// JSON array of `{command,status,summary}` focused check results.
-    #[arg(long, default_value = "[]")]
-    pub(super) checks_json: String,
+    /// JSON array of caller-run `{command,status,summary}` results. Omit to run the project verification slice.
+    #[arg(long)]
+    pub(super) checks_json: Option<String>,
+    /// Project profile containing trusted focused and regression checks.
+    #[arg(long, default_value = crate::workspace::DEFAULT_CONFIG_PATH)]
+    pub(super) config: PathBuf,
     #[arg(long)]
     pub(super) acl_candidate: Option<String>,
     #[arg(long)]

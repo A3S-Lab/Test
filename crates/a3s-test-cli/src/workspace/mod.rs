@@ -5,6 +5,9 @@ mod doctor;
 mod init;
 mod process;
 mod repair_bridge;
+mod verification;
+
+pub(crate) use verification::{run_configured_checks, VerificationRun};
 
 use std::path::PathBuf;
 use std::process::ExitCode;

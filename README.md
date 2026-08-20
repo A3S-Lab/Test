@@ -49,6 +49,7 @@ A3S Test closes those gaps with one evidence boundary:
 | Natural language reaches the browser unchecked             | Typed actions admitted through schema, capability, policy, and origin checks        |
 | The visible defect is disconnected from its implementation | Component boundaries and ranked rendered-node source spans                          |
 | A suggestion silently becomes a source edit                | Separate browser-fact, model-advice, human-authorization, and mutation authorities  |
+| A repair reruns too much or accepts too little proof        | Source-bound verification slices with evidence-driven regression expansion          |
 | A successful exploration cannot be repeated                | The same action and evidence contracts can be preserved as deterministic ACL suites |
 
 ## The shortest trustworthy loop
@@ -59,7 +60,8 @@ intent
   -> smallest observable difference
   -> owning source span
   -> explicit repair authority
-  -> fresh affected evidence
+  -> smallest deterministic verification slice
+  -> fresh affected evidence and browser proof
   -> deterministic ACL regression
 ```
 
@@ -70,8 +72,10 @@ The loop is intentionally narrow:
 3. Choose one typed action or one explicit difference.
 4. Use Test Kit source mapping when the visible node must lead back to code.
 5. Require a person to submit the repair scope before workspace mutation.
-6. Verify the result from a newer page revision with owned evidence.
-7. Preserve the smallest proven path as ACL for local and CI runs.
+6. Select the smallest trusted project checks that cover the changed source.
+7. Verify from a newer page revision and expand only when observed impact
+   evidence requires broader regression.
+8. Preserve the smallest proven browser path as ACL for local and CI runs.
 
 ## Install
 
@@ -243,6 +247,46 @@ permission to read or edit a file.
 
 [Read the Test Kit guide](https://a3s-lab.github.io/Test/guide/testkit.html)
 
+## Verify only the observed impact
+
+`a3s-test init` writes the project profile but deliberately does not guess which
+package scripts are safe, deterministic tests. Projects that want automatic
+repair verification declare an explicit trusted catalog inside
+`.a3s-test/project.acl`:
+
+```acl
+verification {
+  check "component" {
+    tier = "focused"
+    executable = "npm"
+    args = ["run", "test:component"]
+    working_directory = "."
+    file_prefixes = ["src/components"]
+    timeout_ms = 120000
+    cleanup_timeout_ms = 10000
+  }
+
+  check "workspace" {
+    tier = "regression"
+    executable = "npm"
+    args = ["run", "test"]
+    working_directory = "."
+    file_prefixes = []
+    timeout_ms = 300000
+    cleanup_timeout_ms = 10000
+  }
+}
+```
+
+When `agent repair-verify` omits `--checks-json`, A3S Test maps the changed
+files to focused checks and runs a deterministic greedy coverage set. Missing
+source ownership, an unstable locator, an uncovered or cross-source change,
+new browser errors, or a failed prior ACL proof expands the slice to regression.
+The selected commands run without a shell in owned process trees, and the
+versioned slice is stored beside the before/after evidence and fresh ACL proof.
+
+[Read the repair verification guide](https://a3s-lab.github.io/Test/guide/repairs.html#how-a3s-test-verifies-a-repair)
+
 ## Preserve the proven path as ACL
 
 Agent sessions discover unknown paths. ACL repeats paths whose actions, waits,
@@ -318,7 +362,7 @@ browser render + accessibility + Test Kit Page Context
 | Browser facts + Test Kit  | Derive bounded post-render context, exact revision deltas, component/source ownership, multi-space geometry, and optional review |
 | Rust Core + Session       | Define typed actions, observation refs, policy, authority, persistent state, evidence, results, and lifecycle contracts          |
 | Review + Surface drivers  | Explicitly submit repair scope and own Web, GUI, or TUI perception, action dispatch, process trees, and cleanup                  |
-| Verification + ACL        | Read the changed surface, retain inspectable proof, admit a closed manifest, and repeat only explicit deterministic steps        |
+| Verification + ACL        | Plan source-bound project checks, expand from observed impact, retain fresh proof, and repeat only explicit deterministic steps  |
 
 The browser remains the source of rendered facts. Models can propose
 provenance-bound candidates, but they cannot set a verdict or authorize a

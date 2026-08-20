@@ -101,6 +101,10 @@ impl RepairSession {
         &self.state
     }
 
+    pub fn workspace(&self) -> &Path {
+        self.workspace.path()
+    }
+
     pub fn agent(&self, arguments: &[&str]) -> Output {
         Command::new(binary())
             .arg("agent")

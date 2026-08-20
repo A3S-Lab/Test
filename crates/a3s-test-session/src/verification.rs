@@ -2,9 +2,12 @@ use std::path::{Component, Path};
 
 use a3s_test_core::{
     PageContextSnapshot, RepairCheckStatus, RepairEvidenceBundle, RepairFinding,
-    RepairVerification, TestSuite,
+    RepairVerification, TestSuite, MAX_REPAIR_CHECK_COMMAND_BYTES, MAX_REPAIR_CHECK_SUMMARY_BYTES,
 };
 
+use crate::verification_plan::{
+    acl_locator, acl_string, plan_repair_verification_slice, RepairVerificationCheck,
+};
 use crate::{RepairVerifyRequest, SessionError};
 
 pub fn validate_repair_verification_request(
@@ -33,9 +36,9 @@ pub fn validate_repair_verification_request(
         })
         || request.checks.iter().any(|check| {
             check.command.trim().is_empty()
-                || check.command.len() > 4_096
+                || check.command.len() > MAX_REPAIR_CHECK_COMMAND_BYTES
                 || check.summary.trim().is_empty()
-                || check.summary.len() > 8_192
+                || check.summary.len() > MAX_REPAIR_CHECK_SUMMARY_BYTES
         })
         || request
             .acl_candidate
@@ -56,6 +59,26 @@ pub fn build_repair_verification(
     before_evidence: &RepairEvidenceBundle,
     after_evidence: &RepairEvidenceBundle,
     request: &RepairVerifyRequest,
+) -> Result<RepairVerification, SessionError> {
+    build_repair_verification_with_plan(
+        finding,
+        attempt_id,
+        before_evidence,
+        after_evidence,
+        request,
+        None,
+        &[],
+    )
+}
+
+pub fn build_repair_verification_with_plan(
+    finding: &RepairFinding,
+    attempt_id: &str,
+    before_evidence: &RepairEvidenceBundle,
+    after_evidence: &RepairEvidenceBundle,
+    request: &RepairVerifyRequest,
+    prior_acl_proof_passed: Option<bool>,
+    verification_checks: &[RepairVerificationCheck],
 ) -> Result<RepairVerification, SessionError> {
     validate_repair_verification_request(request)?;
     let snapshot = &after_evidence.context;
@@ -94,6 +117,14 @@ pub fn build_repair_verification(
     }
     let new_console_errors = console_errors.saturating_sub(before_evidence.console_errors);
     let new_page_errors = page_errors.saturating_sub(before_evidence.page_errors);
+    let verification_slice = plan_repair_verification_slice(
+        finding,
+        &request.changed_files,
+        new_console_errors,
+        new_page_errors,
+        prior_acl_proof_passed,
+        verification_checks,
+    )?;
     let checks_passed = request
         .checks
         .iter()
@@ -131,6 +162,7 @@ pub fn build_repair_verification(
         acl_proof: None,
         before_evidence: Some(before_evidence.clone()),
         after_evidence: Some(after_evidence.clone()),
+        verification_slice: Some(verification_slice),
         passed,
         summary: request.summary.clone(),
     })
@@ -229,41 +261,6 @@ fn generate_acl_candidate(finding: &RepairFinding) -> Option<String> {
     TestSuite::from_repair_acl(&candidate, &finding.url)
         .is_ok()
         .then_some(candidate)
-}
-
-fn acl_locator(value: &serde_json::Value) -> Option<String> {
-    match value.get("type")?.as_str()? {
-        "test_id" => value
-            .get("value")
-            .and_then(serde_json::Value::as_str)
-            .map(|value| format!("testid(\"{}\")", acl_string(value))),
-        "role" => Some(format!(
-            "role(\"{}\", \"{}\")",
-            acl_string(value.get("role")?.as_str()?),
-            acl_string(value.get("name")?.as_str()?)
-        )),
-        "label" => value
-            .get("value")
-            .and_then(serde_json::Value::as_str)
-            .map(|value| format!("label(\"{}\")", acl_string(value))),
-        "placeholder" => value
-            .get("value")
-            .and_then(serde_json::Value::as_str)
-            .map(|value| format!("placeholder(\"{}\")", acl_string(value))),
-        _ => None,
-    }
-}
-
-fn acl_string(value: &str) -> String {
-    value
-        .chars()
-        .flat_map(|character| match character {
-            '\\' => "\\\\".chars().collect::<Vec<_>>(),
-            '"' => "\\\"".chars().collect(),
-            '\n' | '\r' => " ".chars().collect(),
-            value => vec![value],
-        })
-        .collect()
 }
 
 #[cfg(test)]

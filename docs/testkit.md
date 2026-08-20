@@ -1209,12 +1209,13 @@ a3s-test mcp \
 
 The coding agent starts a Web session, calls `test_repair_watch`, claims one
 finding, reports `progress` before editing, reports `complete` when editing is
-done, and calls `test_repair_verify` with its focused check results. Claims
-default to a derived attempt ID and a five-minute lease. The returned attempt
-ID must be repeated on progress, reply, complete, and fail transitions. A watch
-call is bounded by both its requested timeout and the browser command deadline,
-and uses a short batch window to keep findings submitted together in stable
-order.
+done, and calls `test_repair_verify`. The generic MCP operation accepts
+caller-run focused check results. The workspace CLI can instead plan and run
+the trusted checks declared in `.a3s-test/project.acl`. Claims default to a
+derived attempt ID and a five-minute lease. The returned attempt ID must be
+repeated on progress, reply, complete, and fail transitions. A watch call is
+bounded by both its requested timeout and the browser command deadline, and
+uses a short batch window to keep findings submitted together in stable order.
 
 For direct CLI sessions, equivalent commands are available under
 `a3s-test agent repair-*`. The `next` field emitted after claim and progress
@@ -1275,7 +1276,85 @@ unbounded sleep:
 3. evaluate explicit browser-verifiable success criteria;
 4. compare console and page errors against the A3S Test-owned before baseline;
 5. capture and hash an A3S Test-owned after screenshot and bounded context;
-6. attach the coding agent's changed-file and focused-check report.
+6. derive a versioned verification slice from source ownership, changed files,
+   stable locators, browser-error deltas, and the latest prior ACL proof;
+7. run only the selected project checks, or attach explicitly caller-run check
+   results when the MCP or CLI caller supplies them;
+8. generate and prove the admitted ACL candidate in a fresh browser.
+
+### Project-owned verification catalog
+
+`a3s-test init` does not infer a test command. A package script may be a watch
+process, an interactive tool, or an effectful task, so automatic execution is
+admitted only from an explicit project ACL block:
+
+```acl
+verification {
+  check "component" {
+    tier = "focused"
+    executable = "npm"
+    args = ["run", "test:component"]
+    working_directory = "."
+    file_prefixes = ["src/components"]
+    timeout_ms = 120000
+    cleanup_timeout_ms = 10000
+  }
+
+  check "workspace" {
+    tier = "regression"
+    executable = "npm"
+    args = ["run", "test"]
+    working_directory = "."
+    file_prefixes = []
+    timeout_ms = 300000
+    cleanup_timeout_ms = 10000
+  }
+}
+```
+
+A focused check requires one or more contained project-relative file prefixes.
+A regression check accepts no prefixes. Check IDs are unique, configuration
+order is stable, working directories must already resolve inside the admitted
+project root, and executable plus arguments are dispatched directly without a
+shell.
+
+For a source-local repair, the planner repeatedly selects the focused check
+covering the largest number of still-uncovered changed files. Catalog order
+breaks equal-coverage ties, which makes the greedy slice deterministic. The
+scope expands to configured regression checks when any of these facts is
+observed:
+
+- source mapping, a stable locator, or changed-file reporting is unavailable;
+- a changed file falls outside the finding's source mapping;
+- no focused check covers a changed file;
+- the fresh page adds console or page errors;
+- the latest prior attempt has a failed ACL proof.
+
+If no regression check exists, an expanded slice selects the complete catalog.
+An expanded slice with no trusted check fails closed. Every selected command
+has an execution timeout and a cleanup timeout. Unix runs use a dedicated
+process group and host-death watchdog; Windows runs use a Job Object assigned
+before the child is resumed. A timeout, non-zero exit, surviving descendant,
+or cleanup failure becomes a failed repair check.
+
+The ledger stores the strict `a3s.test.repair-verification-slice/1` record:
+
+```json
+{
+  "protocol": "a3s.test.repair-verification-slice/1",
+  "scope": "focused",
+  "sourceFiles": ["src/components/Checkout.tsx"],
+  "stableLocator": true,
+  "priorAclProofPassed": null,
+  "selectedChecks": ["component"],
+  "expansionReasons": []
+}
+```
+
+For direct CLI use, omit `--checks-json` to run this configured slice. Supplying
+`--checks-json` preserves the caller-reported mode and does not execute project
+commands. The latter exists for orchestrators that already own check execution;
+it does not turn page content into command authority.
 
 Layout intent always requires an explicit success-criteria result. Placement
 also requires an addressable target region within the current viewport;

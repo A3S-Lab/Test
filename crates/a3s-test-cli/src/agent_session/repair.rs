@@ -1,11 +1,12 @@
 use std::process::ExitCode;
 
 use a3s_test_core::{
-    RepairActor, RepairEvidencePhase, RepairEvidenceRequest, RepairStatus, ACTION_PROTOCOL_REVISION,
+    RepairActor, RepairCheckResult, RepairEvidencePhase, RepairEvidenceRequest, RepairStatus,
+    ACTION_PROTOCOL_REVISION,
 };
 use a3s_test_session::{
-    build_repair_verification, validate_repair_verification_request, RepairLedger,
-    RepairTransition, RepairVerifyRequest,
+    build_repair_verification_with_plan, latest_prior_acl_proof_passed,
+    validate_repair_verification_request, RepairLedger, RepairTransition, RepairVerifyRequest,
 };
 use anyhow::{Context, Result};
 use serde_json::json;
@@ -91,14 +92,20 @@ pub(super) async fn transition(
 
 pub(super) async fn verify(args: RepairVerifyArgs) -> Result<ExitCode> {
     let json_output = args.json;
-    let checks = serde_json::from_str(&args.checks_json).context("checks JSON is invalid")?;
-    let request = RepairVerifyRequest {
+    let configured_checks = args.config.clone();
+    let manual_checks = args
+        .checks_json
+        .as_deref()
+        .map(serde_json::from_str::<Vec<RepairCheckResult>>)
+        .transpose()
+        .context("checks JSON is invalid")?;
+    let mut request = RepairVerifyRequest {
         session: args.session.clone(),
         finding_id: args.finding_id.clone(),
         request_id: args.request_id,
         success_criteria_passed: args.success_criteria_passed,
         changed_files: args.changed_files,
-        checks,
+        checks: manual_checks.clone().unwrap_or_default(),
         acl_candidate: args.acl_candidate,
         summary: args.summary,
     };
@@ -148,14 +155,55 @@ pub(super) async fn verify(args: RepairVerifyArgs) -> Result<ExitCode> {
             phase: RepairEvidencePhase::After,
         })
         .await?;
-    let mut verification = build_repair_verification(
+    let prior_acl_proof_passed = latest_prior_acl_proof_passed(&current.attempts, &attempt_id);
+    let automatic_run = if manual_checks.is_none() {
+        Some(
+            crate::workspace::run_configured_checks(
+                &workspace,
+                &configured_checks,
+                &current.finding,
+                &request.changed_files,
+                after_evidence
+                    .console_errors
+                    .saturating_sub(before_evidence.console_errors),
+                after_evidence
+                    .page_errors
+                    .saturating_sub(before_evidence.page_errors),
+                prior_acl_proof_passed,
+            )
+            .await?,
+        )
+    } else {
+        None
+    };
+    let (verification_checks, planned_slice) = match automatic_run {
+        Some(crate::workspace::VerificationRun {
+            catalog,
+            results,
+            slice,
+        }) => {
+            request.checks = results;
+            (catalog, Some(slice))
+        }
+        None => (Vec::new(), None),
+    };
+    validate_repair_verification_request(&request).map_err(anyhow::Error::new)?;
+    let mut verification = build_repair_verification_with_plan(
         &current.finding,
         &attempt_id,
         &before_evidence,
         &after_evidence,
         &request,
+        prior_acl_proof_passed,
+        &verification_checks,
     )
     .map_err(anyhow::Error::new)?;
+    if planned_slice
+        .as_ref()
+        .is_some_and(|planned| verification.verification_slice.as_ref() != Some(planned))
+    {
+        anyhow::bail!("verification slice changed between planning and execution");
+    }
     if verification.passed {
         match verification.acl_candidate.as_deref() {
             Some(candidate) => {

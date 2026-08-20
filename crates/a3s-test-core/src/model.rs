@@ -16,6 +16,9 @@ pub const ACTION_PROTOCOL_REVISION: u32 = 15;
 pub const PAGE_CONTEXT_PROTOCOL: &str = "a3s.test.page-context/1";
 pub const SOURCE_MAPPING_PROTOCOL: &str = "a3s.test.source-mapping/1";
 pub const REPAIR_PROTOCOL: &str = "a3s.test.repair/1";
+pub const REPAIR_VERIFICATION_SLICE_PROTOCOL: &str = "a3s.test.repair-verification-slice/1";
+pub const MAX_REPAIR_CHECK_COMMAND_BYTES: usize = 4_096;
+pub const MAX_REPAIR_CHECK_SUMMARY_BYTES: usize = 8_192;
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, Hash, JsonSchema, PartialEq, Serialize)]
 #[serde(rename_all = "lowercase")]
@@ -872,6 +875,42 @@ pub enum RepairCheckStatus {
     Skipped,
 }
 
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum RepairVerificationScope {
+    Focused,
+    Expanded,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum RepairVerificationExpansionReason {
+    SourceMappingUnavailable,
+    StableLocatorUnavailable,
+    ChangedFilesUnavailable,
+    ChangedFileOutsideSourceMapping,
+    ProjectCheckCoverageMissing,
+    NewBrowserErrors,
+    PriorProofFailed,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct RepairVerificationSlice {
+    pub protocol: String,
+    pub scope: RepairVerificationScope,
+    #[serde(rename = "sourceFiles")]
+    pub source_files: Vec<String>,
+    #[serde(rename = "stableLocator")]
+    pub stable_locator: bool,
+    #[serde(rename = "priorAclProofPassed")]
+    pub prior_acl_proof_passed: Option<bool>,
+    #[serde(rename = "selectedChecks")]
+    pub selected_checks: Vec<String>,
+    #[serde(rename = "expansionReasons")]
+    pub expansion_reasons: Vec<RepairVerificationExpansionReason>,
+}
+
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 pub struct RepairVerification {
     #[serde(rename = "findingId")]
@@ -906,6 +945,12 @@ pub struct RepairVerification {
     #[serde(rename = "afterEvidence")]
     #[serde(default)]
     pub after_evidence: Option<RepairEvidenceBundle>,
+    #[serde(
+        rename = "verificationSlice",
+        default,
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub verification_slice: Option<RepairVerificationSlice>,
     pub passed: bool,
     pub summary: String,
 }

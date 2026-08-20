@@ -190,7 +190,7 @@ MCP 修复工具和 `a3s-test agent repair-*` CLI 使用同一应用层。
 | 开始修改   | `test_repair_progress`                   | 在任何可能改动工作区的动作前报告 `repairing`            |
 | 请求澄清   | `test_repair_reply`                      | 说明缺失信息并进入 `needs_input`                        |
 | 完成修改   | `test_repair_complete`                   | 报告修改结束，进入 A3S Test 拥有的验证，不宣称 resolved |
-| 执行验证   | `test_repair_verify`                     | 在新页面修订上运行聚焦检查并记录证据                    |
+| 执行验证   | `test_repair_verify`                     | 在新修订上规划可信切片或附加调用方检查结果              |
 | 失败或取消 | `test_repair_fail`、`test_repair_cancel` | 保留原因与尝试历史                                      |
 
 默认 claim lease 为五分钟。claim 返回的 attempt ID 必须用于 progress、reply、complete 和 fail。执行者在开始编辑前消失时，lease 可以把 finding 安全放回队列；已经可能改动工作区后失联时，A3S Test 会进入 `needs_input`，不会把同一次尝试静默交给另一执行者。
@@ -206,7 +206,29 @@ MCP 修复工具和 `a3s-test agent repair-*` CLI 使用同一应用层。
 3. 执行明确、可由浏览器验证的 success criteria。
 4. 对比提交前由 A3S Test 记录的 console 和 page-error 基线。
 5. 捕获并哈希新的截图与有界 Page Context。
-6. 记录编码 Agent 报告的相对 changed files 和 focused checks。
+6. 根据源码归属、changed files、稳定定位器、浏览器错误差异和最近一次既有 ACL 证明，规划版本化验证切片。
+7. 只运行切片选中的可信项目检查，或保留调用方明确提供的检查结果。
+8. 在新浏览器中生成并证明通过准入的 ACL 候选。
+
+`agent repair-verify` 省略 `--checks-json` 时，工作区 CLI 会读取[安装页](./installation.mdx#声明可信验证检查)中的可信目录。源码局部变化保持 `focused`。确定性贪心选择每次覆盖最多未覆盖 changed files 的 focused 检查，覆盖数相同时以配置顺序决定。
+
+出现以下任一事实时，切片会扩大：缺少源码映射、稳定定位器或 changed files；changed file 位于映射源码之外或没有 focused 检查覆盖；新页面增加 console 或 page error；最近一次 ACL 证明失败。Expanded 范围优先选择已配置的 regression 检查；没有 regression 检查时选择整个目录。目录为空的 expanded 验证会失败关闭。
+
+Repair Ledger 中的每次验证都会保留严格且版本化的决策记录：
+
+```json
+{
+  "protocol": "a3s.test.repair-verification-slice/1",
+  "scope": "focused",
+  "sourceFiles": ["src/Checkout.tsx"],
+  "stableLocator": true,
+  "priorAclProofPassed": null,
+  "selectedChecks": ["checkout"],
+  "expansionReasons": []
+}
+```
+
+选中的命令直接派发，不经过 Shell。每条命令都有有界执行和清理时限，A3S Test 拥有对应的 Unix process group 或 Windows Job Object。超时、非零退出、残留后代进程或清理失败都会记录为检查失败。传入 `--checks-json` 会保留调用方报告模式，适合已经拥有命令执行权的 orchestrator，不会再执行项目目录。
 
 Layout Mode 的 placement 必须有当前视口内可寻址目标区域。Rearrange 要求原节点或稳定替代目标与目的区域相交。节点仍然存在不能单独证明布局修改成功。
 
@@ -244,6 +266,7 @@ Overlay 的线框、页面淡化、区域和目的位置都是 pointer-transpare
 | 编辑开始后执行者失联        | finding 进入 `needs_input`            | 检查工作区和实际改动，再决定继续或回滚       |
 | 新页面修订未 ready          | verify 返回可重试结果，不做无限 sleep | 等待应用完成渲染后再次做有界验证             |
 | console 或 page errors 增加 | 验证失败并保留前后基线                | 修复新增错误后重新排队                       |
+| expanded 切片没有可信检查   | 验证记录一条失败的项目检查            | 在项目 ACL 中声明有界 regression 检查        |
 | 成功条件无法由浏览器证明    | 不能进入 `review_ready`               | 补充可验证条件或由人明确处理不可自动验证部分 |
 
 查看[Page Context 字段与生命周期](../concepts/page-context.mdx)理解 finding 随附的页面事实，查看[权限与安全模型](../concepts/authority-and-safety.mdx)核对模型建议、人工授权和工作区修改之间的边界。

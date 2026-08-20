@@ -185,10 +185,26 @@ a3s-test agent inspect \
 | 开始编辑   | `repair-progress`              | attempt ID 必须匹配，状态进入 `repairing`                          |
 | 请求澄清   | `repair-reply`                 | 保存消息并进入 `needs_input`                                       |
 | 完成编辑   | `repair-complete`              | 进入 A3S Test 拥有的 `verifying`，不声明 resolved                  |
-| 运行验证   | `repair-verify`                | success criteria、changed files、checks JSON 与可选 ACL candidate  |
+| 运行验证   | `repair-verify`                | 新页面条件、changed files、可信项目切片与可选 ACL candidate        |
 | 失败或取消 | `repair-fail`、`repair-cancel` | 追加终止事件并保留 attempt 历史                                    |
 
 每次状态变化都需要新的幂等 request ID。claim 返回的 attempt ID 要沿用到 progress、reply、complete 和 fail。`repair-verify` 必须针对更新后的 ready 页面修订。
+
+省略 `--checks-json` 即可从 `.a3s-test/project.acl` 规划并运行最小配置切片：
+
+```bash
+a3s-test agent repair-verify finding-checkout \
+  --session dev \
+  --request-id verify-checkout-1 \
+  --success-criteria-passed true \
+  --changed-file src/Checkout.tsx \
+  --summary "已在新页面上验证 checkout 修复" \
+  --json
+```
+
+`--config` 可以更换项目 ACL 路径，默认值为 `.a3s-test/project.acl`。Focused 检查声明工程内相对 `file_prefixes`，regression 检查不声明前缀。结果会在 `verification.verificationSlice` 中保存协议、`focused` 或 `expanded` 范围、映射源码、定位器与既有证明状态、选中检查 ID 和扩大原因。选中的命令会在自有进程树中直接运行，执行与清理都有明确上限。
+
+只有外部 orchestrator 已经运行检查时，才传入 `--checks-json '[{"command":"npm test","status":"passed","summary":"检查通过"}]'`。传入后，本次调用不会自动执行项目检查，但浏览器证明和 ACL 证明门槛仍然保留。
 
 `repair-watch` 仍用于直接启动的 Agent session 做一次提取。`dev --json`
 session 已经运行本地 repair bridge，并会发出带修改前证据的 `repair_batch`，

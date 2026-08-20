@@ -932,9 +932,12 @@ intent, or shorten verification do not belong in this loop.
       downgrade oversized or unavailable deltas to `reset_required`, validate
       the protocol independently in Rust, and preserve only unaffected `@cN`
       bindings before input dispatch
-- [ ] Generate and run the smallest deterministic verification slice from the
+- [x] Generate and run the smallest deterministic verification slice from the
       finding, changed files, stable locator, browser-error delta, and prior
-      proof; expand to broader regression only when impact evidence requires it
+      proof; persist the versioned slice, select a deterministic greedy cover
+      from an explicit trusted ACL check catalog, expand to regression only for
+      observed impact evidence, execute only selected checks in owned process
+      trees, and require fresh browser and ACL proof
 - [ ] Preserve intent, source mapping, change, verification evidence, and ACL
       promotion as one inspectable loop record so a later agent can resume
       without reconstructing the task from chat history

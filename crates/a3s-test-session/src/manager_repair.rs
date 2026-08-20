@@ -402,12 +402,15 @@ impl AgentSessionManager {
             })
             .await
             .map_err(SessionError::from_driver)?;
-        let mut verification = build_repair_verification(
+        let prior_acl_proof_passed = latest_prior_acl_proof_passed(&current.attempts, &attempt_id);
+        let mut verification = build_repair_verification_with_plan(
             &current.finding,
             &attempt_id,
             &before_evidence,
             &after_evidence,
             &request,
+            prior_acl_proof_passed,
+            &[],
         )?;
         if verification.passed {
             match verification.acl_candidate.as_deref() {

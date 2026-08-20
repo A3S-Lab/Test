@@ -153,3 +153,45 @@ logs on stderr. Once the live Test Kit handshake passes, its in-process
 that same stream. Each event contains the generated session ID, so agent
 automation does not launch a second manually coordinated `repair-watch`
 process.
+
+### Add trusted verification checks
+
+`init` deliberately does not infer a test command. Package scripts may start a
+watcher, wait for input, or perform effects. To let `agent repair-verify` run
+project checks automatically, add an explicit catalog inside the generated
+`project` block:
+
+```acl
+verification {
+  check "component" {
+    tier = "focused"
+    executable = "npm"
+    args = ["run", "test:component"]
+    working_directory = "."
+    file_prefixes = ["src/components"]
+    timeout_ms = 120000
+    cleanup_timeout_ms = 10000
+  }
+
+  check "workspace" {
+    tier = "regression"
+    executable = "npm"
+    args = ["run", "test"]
+    working_directory = "."
+    file_prefixes = []
+    timeout_ms = 300000
+    cleanup_timeout_ms = 10000
+  }
+}
+```
+
+Focused checks map contained project-relative source prefixes to the smallest
+useful command. Regression checks have no prefixes and are selected only when
+source mapping, check coverage, browser-error deltas, or prior proof show that
+the repair may have broader impact. Commands run directly without a shell and
+inside an A3S Test-owned process tree with bounded execution and cleanup.
+
+Omit `--checks-json` from `agent repair-verify` to use this catalog. Supplying
+`--checks-json` keeps caller-reported mode for an orchestrator that already ran
+its own checks. An expanded verification with no trusted project check fails
+closed instead of claiming broad coverage.

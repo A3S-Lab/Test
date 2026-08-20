@@ -9,6 +9,7 @@ mod page_context;
 mod protocol;
 mod repair;
 mod verification;
+mod verification_plan;
 mod workspace_repair;
 
 use std::collections::{HashMap, HashSet};
@@ -39,7 +40,13 @@ pub use protocol::{
     StartSessionRequest,
 };
 pub use repair::{RepairEventRecord, RepairLedger, RepairRecord, RepairTransition};
-pub use verification::{build_repair_verification, validate_repair_verification_request};
+pub use verification::{
+    build_repair_verification, build_repair_verification_with_plan,
+    validate_repair_verification_request,
+};
+pub use verification_plan::{
+    latest_prior_acl_proof_passed, plan_repair_verification_slice, RepairVerificationCheck,
+};
 pub use workspace_repair::{RepairWorkspace, RepairWorkspaceLock};
 
 #[derive(Clone, Debug)]

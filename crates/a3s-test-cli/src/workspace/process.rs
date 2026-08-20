@@ -6,82 +6,175 @@ use anyhow::{Context, Result};
 use tokio::io::{AsyncRead, AsyncWriteExt as _};
 use tokio::process::{Child, Command};
 
-use super::config::DevServerProfile;
+use super::config::{DevServerProfile, VerificationCheckProfile};
 
 const PROCESS_POLL_INTERVAL: Duration = Duration::from_millis(10);
 
 pub(super) struct OwnedServer {
+    process: OwnedProcess,
+}
+
+pub(super) struct OwnedCheck {
+    process: OwnedProcess,
+}
+
+struct OwnedProcess {
     child: Child,
     tree: ProcessTree,
     output_tasks: Vec<tokio::task::JoinHandle<()>>,
+    label: &'static str,
 }
 
 impl OwnedServer {
     pub(super) fn spawn(profile: &DevServerProfile) -> Result<Self> {
-        let mut command = Command::new(&profile.executable);
+        Ok(Self {
+            process: OwnedProcess::spawn(
+                &profile.executable,
+                &profile.arguments,
+                &profile.working_directory,
+                "development server",
+            )?,
+        })
+    }
+
+    pub(super) fn try_wait(&mut self) -> io::Result<Option<ExitStatus>> {
+        self.process.try_wait()
+    }
+
+    pub(super) async fn wait(&mut self) -> io::Result<ExitStatus> {
+        self.process.wait().await
+    }
+
+    pub(super) async fn shutdown(self, timeout: Duration) -> Result<()> {
+        self.process.shutdown(timeout).await
+    }
+}
+
+impl OwnedCheck {
+    pub(super) fn spawn(profile: &VerificationCheckProfile) -> Result<Self> {
+        Ok(Self {
+            process: OwnedProcess::spawn(
+                &profile.executable,
+                &profile.arguments,
+                &profile.working_directory,
+                "verification check",
+            )?,
+        })
+    }
+
+    pub(super) async fn complete(
+        self,
+        timeout: Duration,
+        cleanup_timeout: Duration,
+    ) -> Result<ExitStatus> {
+        self.process.complete(timeout, cleanup_timeout).await
+    }
+}
+
+impl OwnedProcess {
+    fn spawn(
+        executable: &str,
+        arguments: &[String],
+        working_directory: &std::path::Path,
+        label: &'static str,
+    ) -> Result<Self> {
+        let mut command = Command::new(executable);
         command
-            .args(&profile.arguments)
-            .current_dir(&profile.working_directory)
+            .args(arguments)
+            .current_dir(working_directory)
             .stdin(Stdio::null())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .kill_on_drop(true);
         configure_owned_process(&mut command);
-        let mut child = command.spawn().with_context(|| {
-            format!(
-                "failed to start development server executable '{}'",
-                profile.executable
-            )
-        })?;
+        let mut child = command
+            .spawn()
+            .with_context(|| format!("failed to start {label} executable '{executable}'"))?;
         let tree = match ProcessTree::attach(&child) {
             Ok(tree) => tree,
             Err(error) => {
                 terminate_unattached(&mut child);
-                return Err(error).context("failed to contain the development server process tree");
+                return Err(error).with_context(|| format!("failed to contain the {label} tree"));
             }
         };
         let stdout = child
             .stdout
             .take()
-            .context("development server stdout pipe is unavailable")?;
+            .with_context(|| format!("{label} stdout pipe is unavailable"))?;
         let stderr = child
             .stderr
             .take()
-            .context("development server stderr pipe is unavailable")?;
+            .with_context(|| format!("{label} stderr pipe is unavailable"))?;
         Ok(Self {
             child,
             tree,
             output_tasks: vec![forward_to_stderr(stdout), forward_to_stderr(stderr)],
+            label,
         })
     }
 
-    pub(super) fn try_wait(&mut self) -> io::Result<Option<ExitStatus>> {
+    fn try_wait(&mut self) -> io::Result<Option<ExitStatus>> {
         self.child.try_wait()
     }
 
-    pub(super) async fn wait(&mut self) -> io::Result<ExitStatus> {
+    async fn wait(&mut self) -> io::Result<ExitStatus> {
         self.child.wait().await
     }
 
-    pub(super) async fn shutdown(mut self, timeout: Duration) -> Result<()> {
+    async fn shutdown(mut self, timeout: Duration) -> Result<()> {
         let deadline = Instant::now() + timeout;
         self.tree.request_graceful(&mut self.child)?;
         let graceful_budget = timeout.min(Duration::from_secs(5)) / 2;
         if !self.wait_until_stopped(graceful_budget).await? {
             self.tree.terminate_now()?;
             if !self.wait_until_stopped(remaining_until(deadline)).await? {
-                anyhow::bail!("development server process tree survived forced cleanup");
+                anyhow::bail!("{} tree survived forced cleanup", self.label);
             }
         }
         if self.child.try_wait()?.is_none() {
             let _ = self.child.start_kill();
             tokio::time::timeout(remaining_until(deadline), self.child.wait())
                 .await
-                .context("development server launcher did not exit before cleanup timeout")??;
+                .with_context(|| {
+                    format!(
+                        "{} launcher did not exit before cleanup timeout",
+                        self.label
+                    )
+                })??;
         }
         self.tree.disarm()?;
         self.finish_output_tasks(deadline).await;
         Ok(())
+    }
+
+    async fn complete(
+        mut self,
+        timeout: Duration,
+        cleanup_timeout: Duration,
+    ) -> Result<ExitStatus> {
+        let label = self.label;
+        let status = match tokio::time::timeout(timeout, self.child.wait()).await {
+            Ok(status) => status.with_context(|| format!("failed to wait for {label}"))?,
+            Err(_) => {
+                self.shutdown(cleanup_timeout)
+                    .await
+                    .with_context(|| format!("timed-out {label} cleanup failed"))?;
+                anyhow::bail!("{label} exceeded its execution timeout");
+            }
+        };
+        let deadline = Instant::now() + cleanup_timeout;
+        if !self.wait_until_stopped(Duration::ZERO).await? {
+            self.tree.terminate_now()?;
+            if !self.wait_until_stopped(remaining_until(deadline)).await? {
+                anyhow::bail!("{label} descendants survived forced cleanup");
+            }
+            self.tree.disarm()?;
+            self.finish_output_tasks(deadline).await;
+            anyhow::bail!("{label} left descendant processes after its launcher exited");
+        }
+        self.tree.disarm()?;
+        self.finish_output_tasks(deadline).await;
+        Ok(status)
     }
 
     async fn wait_until_stopped(&mut self, timeout: Duration) -> io::Result<bool> {
@@ -117,7 +210,7 @@ impl OwnedServer {
     }
 }
 
-impl Drop for OwnedServer {
+impl Drop for OwnedProcess {
     fn drop(&mut self) {
         let _ = self.tree.terminate_now();
         let _ = self.child.start_kill();
@@ -268,7 +361,7 @@ fn valid_process_id(child: &Child) -> io::Result<u32> {
         .ok_or_else(|| {
             io::Error::new(
                 io::ErrorKind::InvalidData,
-                "development server did not expose a valid process identifier",
+                "owned process did not expose a valid process identifier",
             )
         })
 }
@@ -303,16 +396,17 @@ mod unix {
                 .args([
                     "-c",
                     script,
-                    "a3s-test-dev-watchdog",
+                    "a3s-test-process-watchdog",
                     &process_group.to_string(),
                 ])
                 .stdin(Stdio::piped())
                 .stdout(Stdio::null())
                 .stderr(Stdio::null())
                 .spawn()?;
-            let input = child.stdin.take().ok_or_else(|| {
-                io::Error::other("development server watchdog stdin is unavailable")
-            })?;
+            let input = child
+                .stdin
+                .take()
+                .ok_or_else(|| io::Error::other("owned process watchdog stdin is unavailable"))?;
             Ok(Self {
                 input: Some(input),
                 child,
@@ -323,7 +417,7 @@ mod unix {
             let write = self
                 .input
                 .as_mut()
-                .ok_or_else(|| io::Error::other("development server watchdog is closed"))?
+                .ok_or_else(|| io::Error::other("owned process watchdog is closed"))?
                 .write_all(b"disarm\n");
             self.input.take();
             write.and(self.wait())
@@ -342,7 +436,7 @@ mod unix {
                         let _ = self.child.wait();
                         return Err(io::Error::new(
                             io::ErrorKind::TimedOut,
-                            "development server watchdog did not stop",
+                            "owned process watchdog did not stop",
                         ));
                     }
                 }
@@ -360,7 +454,7 @@ mod unix {
     pub(super) fn register(process_group: u32) -> io::Result<()> {
         active_groups()
             .lock()
-            .map_err(|_| io::Error::other("development server registry is unavailable"))?
+            .map_err(|_| io::Error::other("owned process registry is unavailable"))?
             .insert(process_group);
         Ok(())
     }
@@ -404,11 +498,11 @@ mod unix {
 
     fn admitted_group(process_group: u32) -> io::Result<i32> {
         let process_group = i32::try_from(process_group)
-            .map_err(|_| io::Error::other("development server process group is too large"))?;
+            .map_err(|_| io::Error::other("owned process group is too large"))?;
         if process_group <= 1 || process_group == getpgrp().as_raw() {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidInput,
-                "development server process group is unsafe",
+                "owned process group is unsafe",
             ));
         }
         Ok(process_group)

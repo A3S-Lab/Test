@@ -1,6 +1,8 @@
+use std::collections::HashSet;
 use std::path::{Component, Path, PathBuf};
 
 use a3s_acl::{Block, Value};
+use a3s_test_core::MAX_REPAIR_CHECK_COMMAND_BYTES;
 use anyhow::{Context, Result};
 use serde::Serialize;
 use url::Url;
@@ -25,6 +27,7 @@ pub(super) struct ProjectProfile {
     pub(super) dev_server: DevServerProfile,
     pub(super) browser: BrowserProfile,
     pub(super) testkit: TestKitProfile,
+    pub(super) verification: VerificationProfile,
 }
 
 #[derive(Debug)]
@@ -50,6 +53,29 @@ pub(super) struct BrowserProfile {
 #[derive(Debug)]
 pub(super) struct TestKitProfile {
     pub(super) required: bool,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum VerificationCheckTier {
+    Focused,
+    Regression,
+}
+
+#[derive(Clone, Debug, Default)]
+pub(crate) struct VerificationProfile {
+    pub(crate) checks: Vec<VerificationCheckProfile>,
+}
+
+#[derive(Clone, Debug)]
+pub(crate) struct VerificationCheckProfile {
+    pub(crate) id: String,
+    pub(crate) tier: VerificationCheckTier,
+    pub(crate) executable: String,
+    pub(crate) arguments: Vec<String>,
+    pub(crate) working_directory: PathBuf,
+    pub(crate) file_prefixes: Vec<String>,
+    pub(crate) timeout_ms: u64,
+    pub(crate) cleanup_timeout_ms: u64,
 }
 
 pub(super) async fn resolve_config_path(root: &Path, configured: &Path) -> Result<PathBuf> {
@@ -128,11 +154,17 @@ async fn parse(source: &str, config_path: PathBuf, admitted_root: &Path) -> Resu
     .await?;
     let browser = parse_browser(exactly_one_block(root_block, "browser", "project")?, &root)?;
     let testkit = parse_testkit(exactly_one_block(root_block, "testkit", "project")?)?;
-    if let Some(block) = root_block
-        .blocks
-        .iter()
-        .find(|block| !matches!(block.name.as_str(), "dev_server" | "browser" | "testkit"))
-    {
+    let verification = parse_verification(
+        zero_or_one_block(root_block, "verification", "project")?,
+        &root,
+    )
+    .await?;
+    if let Some(block) = root_block.blocks.iter().find(|block| {
+        !matches!(
+            block.name.as_str(),
+            "dev_server" | "browser" | "testkit" | "verification"
+        )
+    }) {
         anyhow::bail!("unsupported project block '{}'", block.name);
     }
     Ok(ProjectProfile {
@@ -142,6 +174,7 @@ async fn parse(source: &str, config_path: PathBuf, admitted_root: &Path) -> Resu
         dev_server,
         browser,
         testkit,
+        verification,
     })
 }
 
@@ -165,7 +198,12 @@ async fn parse_dev_server(block: &Block, root: &Path) -> Result<DevServerProfile
     }
     let arguments = required_string_list(block, "args", "project.dev_server", 64, 4096)?;
     let working_relative = required_string(block, "working_directory", "project.dev_server")?;
-    let working_directory = resolve_contained_directory(root, working_relative).await?;
+    let working_directory = resolve_contained_directory(
+        root,
+        working_relative,
+        "project.dev_server.working_directory",
+    )
+    .await?;
     let url = parse_web_url(required_string(block, "url", "project.dev_server")?)?;
     let startup_timeout_ms = bounded_timeout(
         optional_u64(block, "startup_timeout_ms", 120_000, "project.dev_server")?,
@@ -240,6 +278,135 @@ fn parse_testkit(block: &Block) -> Result<TestKitProfile> {
     })
 }
 
+async fn parse_verification(block: Option<&Block>, root: &Path) -> Result<VerificationProfile> {
+    let Some(block) = block else {
+        return Ok(VerificationProfile::default());
+    };
+    if !block.labels.is_empty() || !block.attributes.is_empty() {
+        anyhow::bail!("project.verification accepts only nested check blocks");
+    }
+    if block.blocks.len() > 50 {
+        anyhow::bail!("project.verification accepts at most 50 checks");
+    }
+    if let Some(child) = block.blocks.iter().find(|child| child.name != "check") {
+        anyhow::bail!("unsupported project.verification block '{}'", child.name);
+    }
+    let mut ids = HashSet::new();
+    let mut checks = Vec::with_capacity(block.blocks.len());
+    for check in &block.blocks {
+        let id = one_label(check, "project.verification.check")?.to_string();
+        validate_identifier(&id, "project.verification.check")?;
+        if !ids.insert(id.clone()) {
+            anyhow::bail!("project.verification check '{id}' is duplicated");
+        }
+        if !check.blocks.is_empty() {
+            anyhow::bail!("project.verification.check does not accept nested blocks");
+        }
+        ensure_attributes(
+            check,
+            &[
+                "tier",
+                "executable",
+                "args",
+                "working_directory",
+                "file_prefixes",
+                "timeout_ms",
+                "cleanup_timeout_ms",
+            ],
+            "project.verification.check",
+        )?;
+        let tier = match required_string(check, "tier", "project.verification.check")? {
+            "focused" => VerificationCheckTier::Focused,
+            "regression" => VerificationCheckTier::Regression,
+            value => anyhow::bail!("project.verification.check tier '{value}' is unsupported"),
+        };
+        let executable =
+            required_string(check, "executable", "project.verification.check")?.to_string();
+        if executable.len() > MAX_REPAIR_CHECK_COMMAND_BYTES || executable.contains('\0') {
+            anyhow::bail!("project.verification.check executable is invalid");
+        }
+        let arguments = required_string_list(
+            check,
+            "args",
+            "project.verification.check",
+            64,
+            MAX_REPAIR_CHECK_COMMAND_BYTES,
+        )?;
+        let encoded_command = serde_json::to_vec(
+            &std::iter::once(executable.as_str())
+                .chain(arguments.iter().map(String::as_str))
+                .collect::<Vec<_>>(),
+        )
+        .context("failed to encode project.verification.check command")?;
+        if encoded_command.len() > MAX_REPAIR_CHECK_COMMAND_BYTES {
+            anyhow::bail!(
+                "project.verification.check executable and args exceed the repair command limit"
+            );
+        }
+        let working_relative =
+            required_string(check, "working_directory", "project.verification.check")?;
+        let working_directory = resolve_contained_directory(
+            root,
+            working_relative,
+            "project.verification.check.working_directory",
+        )
+        .await?;
+        let file_prefixes = required_string_list(
+            check,
+            "file_prefixes",
+            "project.verification.check",
+            32,
+            1_024,
+        )?;
+        if file_prefixes.iter().any(|prefix| {
+            prefix.is_empty()
+                || Path::new(prefix).is_absolute()
+                || Path::new(prefix)
+                    .components()
+                    .any(|component| !matches!(component, Component::Normal(_)))
+        }) {
+            anyhow::bail!(
+                "project.verification.check file prefixes must be contained relative paths"
+            );
+        }
+        match tier {
+            VerificationCheckTier::Focused if file_prefixes.is_empty() => anyhow::bail!(
+                "focused project.verification checks require at least one file prefix"
+            ),
+            VerificationCheckTier::Regression if !file_prefixes.is_empty() => anyhow::bail!(
+                "regression project.verification checks must not declare file prefixes"
+            ),
+            _ => {}
+        }
+        let timeout_ms = bounded_timeout(
+            optional_u64(check, "timeout_ms", 120_000, "project.verification.check")?,
+            "project.verification.check.timeout_ms",
+            600_000,
+        )?;
+        let cleanup_timeout_ms = bounded_timeout(
+            optional_u64(
+                check,
+                "cleanup_timeout_ms",
+                10_000,
+                "project.verification.check",
+            )?,
+            "project.verification.check.cleanup_timeout_ms",
+            60_000,
+        )?;
+        checks.push(VerificationCheckProfile {
+            id,
+            tier,
+            executable,
+            arguments,
+            working_directory,
+            file_prefixes,
+            timeout_ms,
+            cleanup_timeout_ms,
+        });
+    }
+    Ok(VerificationProfile { checks })
+}
+
 async fn resolve_root(
     config_directory: &Path,
     value: &str,
@@ -262,7 +429,7 @@ async fn resolve_root(
     Ok(root)
 }
 
-async fn resolve_contained_directory(root: &Path, value: &str) -> Result<PathBuf> {
+async fn resolve_contained_directory(root: &Path, value: &str, label: &str) -> Result<PathBuf> {
     let path = Path::new(value);
     if value.trim().is_empty()
         || path.is_absolute()
@@ -270,13 +437,13 @@ async fn resolve_contained_directory(root: &Path, value: &str) -> Result<PathBuf
             .components()
             .any(|component| !matches!(component, Component::Normal(_) | Component::CurDir))
     {
-        anyhow::bail!("project.dev_server.working_directory must stay inside project.root");
+        anyhow::bail!("{label} must stay inside project.root");
     }
     let directory = tokio::fs::canonicalize(root.join(path))
         .await
-        .context("failed to resolve project.dev_server.working_directory")?;
+        .with_context(|| format!("failed to resolve {label}"))?;
     if !directory.starts_with(root) || !directory.is_dir() {
-        anyhow::bail!("project.dev_server.working_directory must be a contained directory");
+        anyhow::bail!("{label} must be a contained directory");
     }
     Ok(directory)
 }
@@ -363,6 +530,15 @@ fn exactly_one_block<'a>(parent: &'a Block, name: &str, path: &str) -> Result<&'
         [block] => Ok(*block),
         _ => anyhow::bail!("{path} requires exactly one {name} block"),
     }
+}
+
+fn zero_or_one_block<'a>(parent: &'a Block, name: &str, path: &str) -> Result<Option<&'a Block>> {
+    let mut matches = parent.blocks.iter().filter(|block| block.name == name);
+    let first = matches.next();
+    if matches.next().is_some() {
+        anyhow::bail!("{path} accepts at most one {name} block");
+    }
+    Ok(first)
 }
 
 fn no_labels_or_blocks(block: &Block, path: &str) -> Result<()> {

@@ -210,17 +210,33 @@ a3s-test agent inspect \
 
 ### Repair Ledger commands
 
-| Stage            | Command                        | Key arguments and result                                                           |
-| ---------------- | ------------------------------ | ---------------------------------------------------------------------------------- |
-| Pickup           | `repair-watch`                 | `--limit` defaults to 20, `--timeout-ms` to 30,000, and the batch window to 250 ms |
-| Claim            | `repair-claim`                 | Finding ID, idempotent request ID, attempt ID, and five-minute default lease       |
-| Start editing    | `repair-progress`              | Attempt ID must match, then state enters `repairing`                               |
-| Ask for input    | `repair-reply`                 | Retains the message and enters `needs_input`                                       |
-| Finish editing   | `repair-complete`              | Enters A3S Test-owned `verifying` without declaring resolved                       |
-| Run verification | `repair-verify`                | Success criteria, changed files, checks JSON, and optional ACL candidate           |
-| Fail or cancel   | `repair-fail`, `repair-cancel` | Appends a terminal event while retaining attempt history                           |
+| Stage            | Command                        | Key arguments and result                                                            |
+| ---------------- | ------------------------------ | ----------------------------------------------------------------------------------- |
+| Pickup           | `repair-watch`                 | `--limit` defaults to 20, `--timeout-ms` to 30,000, and the batch window to 250 ms  |
+| Claim            | `repair-claim`                 | Finding ID, idempotent request ID, attempt ID, and five-minute default lease        |
+| Start editing    | `repair-progress`              | Attempt ID must match, then state enters `repairing`                                |
+| Ask for input    | `repair-reply`                 | Retains the message and enters `needs_input`                                        |
+| Finish editing   | `repair-complete`              | Enters A3S Test-owned `verifying` without declaring resolved                        |
+| Run verification | `repair-verify`                | New-page criteria, changed files, trusted project slice, and optional ACL candidate |
+| Fail or cancel   | `repair-fail`, `repair-cancel` | Appends a terminal event while retaining attempt history                            |
 
 Every transition needs a new idempotent request ID. Reuse the attempt ID returned by claim for progress, reply, complete, and fail. `repair-verify` must target a newer ready page revision.
+
+Omit `--checks-json` to plan and run the smallest configured slice from `.a3s-test/project.acl`:
+
+```bash
+a3s-test agent repair-verify finding-checkout \
+  --session dev \
+  --request-id verify-checkout-1 \
+  --success-criteria-passed true \
+  --changed-file src/Checkout.tsx \
+  --summary "Checkout repair verified on a fresh page" \
+  --json
+```
+
+`--config` changes the project ACL path. The default is `.a3s-test/project.acl`. Focused checks declare project-relative `file_prefixes`; regression checks declare none. The result stores `verification.verificationSlice` with its protocol, `focused` or `expanded` scope, mapped source files, locator and prior-proof state, selected check IDs, and expansion reasons. Selected commands run directly in owned process trees with bounded execution and cleanup.
+
+Pass `--checks-json '[{"command":"npm test","status":"passed","summary":"Checks passed"}]'` only when an external orchestrator already ran the checks. Providing it disables automatic project-check execution for that invocation while preserving browser and ACL proof gates.
 
 `repair-watch` remains the one-shot pickup for directly started agent
 sessions. A `dev --json` session already runs the local repair bridge and

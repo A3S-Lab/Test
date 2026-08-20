@@ -121,6 +121,149 @@ async fn working_directories_cannot_traverse_outside_the_project() {
     assert!(error.to_string().contains("must stay inside"));
 }
 
+#[tokio::test]
+async fn verification_checks_are_typed_bounded_and_ordered() {
+    let temp = project_fixture();
+    write_profile(
+        temp.path(),
+        &valid_profile().replace(
+            "  testkit {",
+            r#"  verification {
+    check "component" {
+      tier = "focused"
+      executable = "npm"
+      args = ["run", "test:component"]
+      working_directory = "."
+      file_prefixes = ["src/components"]
+      timeout_ms = 120000
+      cleanup_timeout_ms = 10000
+    }
+
+    check "workspace" {
+      tier = "regression"
+      executable = "npm"
+      args = ["run", "test"]
+      working_directory = "."
+      file_prefixes = []
+      timeout_ms = 300000
+      cleanup_timeout_ms = 10000
+    }
+  }
+
+  testkit {"#,
+        ),
+    );
+
+    let profile = load(temp.path(), Path::new(".a3s-test/project.acl"))
+        .await
+        .expect("verification profile");
+
+    assert_eq!(profile.verification.checks.len(), 2);
+    assert_eq!(profile.verification.checks[0].id, "component");
+    assert_eq!(
+        profile.verification.checks[0].tier,
+        VerificationCheckTier::Focused
+    );
+    assert_eq!(
+        profile.verification.checks[0].file_prefixes,
+        ["src/components"]
+    );
+    assert_eq!(profile.verification.checks[1].id, "workspace");
+    assert_eq!(
+        profile.verification.checks[1].tier,
+        VerificationCheckTier::Regression
+    );
+}
+
+#[tokio::test]
+async fn verification_check_catalog_rejects_ambiguous_or_escaping_entries() {
+    for verification in [
+        r#"  verification {
+    check "same" {
+      tier = "focused"
+      executable = "npm"
+      args = ["test"]
+      working_directory = "."
+      file_prefixes = ["src"]
+    }
+    check "same" {
+      tier = "regression"
+      executable = "npm"
+      args = ["test"]
+      working_directory = "."
+      file_prefixes = []
+    }
+  }
+
+"#,
+        r#"  verification {
+    check "escape" {
+      tier = "focused"
+      executable = "npm"
+      args = ["test"]
+      working_directory = "."
+      file_prefixes = ["../outside"]
+    }
+  }
+
+"#,
+        r#"  verification {
+    check "unbounded" {
+      tier = "regression"
+      executable = "npm"
+      args = ["test"]
+      working_directory = "."
+      file_prefixes = ["src"]
+    }
+  }
+
+"#,
+    ] {
+        let temp = project_fixture();
+        write_profile(
+            temp.path(),
+            &valid_profile().replace("  testkit {", &format!("{verification}  testkit {{")),
+        );
+
+        let error = load(temp.path(), Path::new(".a3s-test/project.acl"))
+            .await
+            .expect_err("invalid verification catalog must fail");
+        assert!(
+            error.to_string().contains("verification"),
+            "unexpected error: {error:#}"
+        );
+    }
+}
+
+#[tokio::test]
+async fn verification_encoded_commands_fit_the_repair_protocol_limit() {
+    let temp = project_fixture();
+    let oversized = "x".repeat(a3s_test_core::MAX_REPAIR_CHECK_COMMAND_BYTES);
+    let verification = format!(
+        r#"  verification {{
+    check "oversized" {{
+      tier = "focused"
+      executable = "npm"
+      args = ["{oversized}"]
+      working_directory = "."
+      file_prefixes = ["src"]
+    }}
+  }}
+
+"#
+    );
+    write_profile(
+        temp.path(),
+        &valid_profile().replace("  testkit {", &format!("{verification}  testkit {{")),
+    );
+
+    let error = load(temp.path(), Path::new(".a3s-test/project.acl"))
+        .await
+        .expect_err("encoded check commands must fit the repair protocol");
+
+    assert!(error.to_string().contains("repair command limit"));
+}
+
 fn project_fixture() -> tempfile::TempDir {
     let temp = tempfile::tempdir().expect("tempdir");
     fs::create_dir(temp.path().join(".a3s-test")).expect("profile directory");

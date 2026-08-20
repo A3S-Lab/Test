@@ -19,6 +19,7 @@ fn single_repair_restart_recovery_and_acl_promotion_are_end_to_end() {
     };
     let (_bundle_workspace, fixture) = start_fixture();
     let mut session = RepairSession::start(&browser, &fixture, "repair-single");
+    write_verification_profile(&session);
     let target = target_node_ids(&session, &["repair-target"])
         .into_iter()
         .next()
@@ -62,13 +63,7 @@ fn single_repair_restart_recovery_and_acl_promotion_are_end_to_end() {
         ]),
     );
 
-    let verify = verify(
-        &session,
-        "finding-single",
-        "verify-single",
-        true,
-        r#"[{"command":"npm test","status":"passed","summary":"Focused TestKit checks passed"}]"#,
-    );
+    let verify = verify_automatic(&session, "finding-single", "verify-single", true);
     let verification = &verify["repair"]["verification"];
     assert_eq!(verify["repair"]["status"], "review_ready", "{verify:#}");
     assert_eq!(verification["passed"], true);
@@ -76,6 +71,16 @@ fn single_repair_restart_recovery_and_acl_promotion_are_end_to_end() {
         .as_u64()
         .is_some_and(|revision| revision > before_revision));
     assert_eq!(verification["aclProof"]["passed"], true);
+    assert_eq!(verification["verificationSlice"]["scope"], "focused");
+    assert_eq!(
+        verification["verificationSlice"]["sourceFiles"],
+        json!(["src/Fixture.tsx"])
+    );
+    assert_eq!(
+        verification["verificationSlice"]["selectedChecks"],
+        json!(["fixture"])
+    );
+    assert_eq!(verification["checks"][0]["status"], "passed");
     assert!(verification["aclCandidate"]
         .as_str()
         .is_some_and(|candidate| candidate.contains("testid(\"repair-target\")")));
@@ -713,6 +718,83 @@ fn verify(
             "--json",
         ]),
     )
+}
+
+fn verify_automatic(
+    session: &RepairSession,
+    finding_id: &str,
+    request_id: &str,
+    success_criteria_passed: bool,
+) -> Value {
+    json_output(
+        "verify repair with the configured deterministic slice",
+        &session.agent(&[
+            "repair-verify",
+            finding_id,
+            "--session",
+            session.state()["session"]
+                .as_str()
+                .expect("repair session ID"),
+            "--request-id",
+            request_id,
+            "--success-criteria-passed",
+            if success_criteria_passed {
+                "true"
+            } else {
+                "false"
+            },
+            "--changed-file",
+            "src/Fixture.tsx",
+            "--summary",
+            "A3S Test ran the smallest configured verification slice",
+            "--json",
+        ]),
+    )
+}
+
+fn write_verification_profile(session: &RepairSession) {
+    let profile = r#"project "repair-fixture" {
+  version = 1
+  root = ".."
+
+  dev_server {
+    executable = "rustc"
+    args = ["--version"]
+    working_directory = "."
+    url = "http://127.0.0.1:5173/"
+  }
+
+  browser {
+    driver = "standalone"
+    session = "dev"
+    headed = true
+  }
+
+  verification {
+    check "fixture" {
+      tier = "focused"
+      executable = "rustc"
+      args = ["--version"]
+      working_directory = "."
+      file_prefixes = ["src"]
+    }
+
+    check "workspace" {
+      tier = "regression"
+      executable = "rustc"
+      args = ["--version"]
+      working_directory = "."
+      file_prefixes = []
+    }
+  }
+
+  testkit {
+    required = true
+  }
+}
+"#;
+    std::fs::write(session.workspace().join(".a3s-test/project.acl"), profile)
+        .expect("verification profile");
 }
 
 fn submit_human_action(

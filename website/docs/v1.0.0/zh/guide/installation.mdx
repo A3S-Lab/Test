@@ -127,6 +127,38 @@ a3s-test dev --json
 
 实时 Test Kit 握手通过后，`dev --json` 会从同一条 stdout JSONL 流发出 `a3s.test.local-repair-bridge/1` 的 `repair_batch`。每个 finding 都会先保存到权威 repair ledger 并捕获修改前证据，事件也会带上生成的 session ID，因此 Agent 不需要再启动一个手工协调的 `repair-watch` 进程。开发服务器日志始终写入 stderr。
 
+### 声明可信验证检查
+
+`init` 不会猜测测试命令。项目脚本可能会启动 watch、等待输入或产生副作用。要让 `agent repair-verify` 自动运行项目检查，需要在生成的 `project` 块中显式加入可信目录：
+
+```acl
+verification {
+  check "component" {
+    tier = "focused"
+    executable = "npm"
+    args = ["run", "test:component"]
+    working_directory = "."
+    file_prefixes = ["src/components"]
+    timeout_ms = 120000
+    cleanup_timeout_ms = 10000
+  }
+
+  check "workspace" {
+    tier = "regression"
+    executable = "npm"
+    args = ["run", "test"]
+    working_directory = "."
+    file_prefixes = []
+    timeout_ms = 300000
+    cleanup_timeout_ms = 10000
+  }
+}
+```
+
+Focused 检查把工程内相对源码前缀映射到最小可用命令。Regression 检查不声明前缀，只在源码映射、检查覆盖、浏览器错误差异或既有证明显示影响可能扩大时选中。命令不经过 Shell，运行在 A3S Test 拥有的进程树中，执行和清理都有明确时限。
+
+调用 `agent repair-verify` 时省略 `--checks-json` 即使用这个目录。传入 `--checks-json` 会保留调用方报告模式，适合已经自行运行检查的 orchestrator。Expanded 验证找不到任何可信项目检查时会失败关闭，不会声称已经完成广泛验证。
+
 只使用浏览器可访问语义、明确不挂载页面评审侧栏的工程可以执行：
 
 ```bash
