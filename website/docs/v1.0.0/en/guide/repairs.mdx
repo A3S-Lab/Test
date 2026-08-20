@@ -1,6 +1,6 @@
 ---
 title: Human review and automated repair
-description: Configure Test Kit single and batch marking, same-origin submission, the repair queue, coding-agent handoff, fresh-page verification, and human acceptance.
+description: Configure Test Kit marking, durable repair discovery, coding-agent handoff, fresh-page verification, and human acceptance.
 ---
 
 # Human review and automated repair
@@ -186,6 +186,7 @@ The MCP repair tools and `a3s-test agent repair-*` CLI share one application lay
 
 | Phase          | MCP tool                                 | Coding-agent responsibility                                        |
 | -------------- | ---------------------------------------- | ------------------------------------------------------------------ |
+| Discover       | `test_repair_inbox`                      | Prioritize resumable work from the active session ledger           |
 | Wait           | `test_repair_watch`                      | Drain queued work, then perform one bounded wait and batch window  |
 | Inspect        | `test_repair_inspect`                    | Recover the complete loop state and typed next disposition         |
 | Claim          | `test_repair_claim`                      | Establish a lease and attempt ID for one finding                   |
@@ -203,7 +204,15 @@ When a normal observation is too broad, the coding agent may run forensic inspec
 
 ## Resume without chat history
 
-The append-only `repairs.jsonl` remains the only source of truth. A3S Test derives a read-only `a3s.test.repair-loop-record/1` view instead of creating another recovery database. Read it from an active or closed CLI session without starting or connecting to a browser.
+The append-only `repairs.jsonl` remains the only source of truth. Start by discovering the highest-priority durable work across active and closed CLI sessions. This does not start or connect to a browser.
+
+```bash
+a3s-test agent repair-inbox --json
+```
+
+The read-only `a3s.test.repair-inbox/1` view returns expired leases first, then active editing or verification, the oldest queued findings, human-blocked work, and inspect-only records. Terminal history is hidden unless `--include-terminal` is explicit. Use `--session <session>` to narrow the scan and `--limit <1-100>` to bound the returned prefix. Each item includes bounded intent, current lease state, and a typed next action.
+
+Inspect the selected loop for the complete recovery record.
 
 ```bash
 a3s-test agent repair-inspect finding-checkout \
@@ -211,9 +220,9 @@ a3s-test agent repair-inspect finding-checkout \
   --json
 ```
 
-The record joins the human instruction and success criteria, structured intent and target, Rust-validated source mappings, current lease and attempt, completion-time changed files, attempt replies, verification slice and results, compact evidence paths and SHA-256 digests, ACL candidate and proof state, and a typed next action. Full Page Context is not duplicated.
+The read-only `a3s.test.repair-loop-record/1` view joins the human instruction and success criteria, structured intent and target, Rust-validated source mappings, current lease and attempt, completion-time changed files, attempt replies, verification slice and results, compact evidence paths and SHA-256 digests, ACL candidate and proof state, and a typed next action. Full Page Context is not duplicated.
 
-An active MCP owner returns the same view through `test_repair_inspect`. The generated resume command uses only validated ledger identifiers and fixed placeholders. Page content, URLs, source mappings, and changed-file values never become command text. A passing ACL proof remains evidence for a candidate; it does not write or commit the candidate to the application repository.
+An active MCP owner returns its scoped Inbox through `test_repair_inbox` and the selected view through `test_repair_inspect`. The generated commands use only validated ledger identifiers and fixed placeholders. Page content, URLs, source mappings, and changed-file values never become command text. An expired mutation lease returns a `reconcile_lease` action instead of the stale edit command. A passing ACL proof remains evidence for a candidate; it does not write or commit the candidate to the application repository.
 
 ## How A3S Test verifies a repair
 
@@ -280,6 +289,7 @@ The overlay wireframe, page fade, selected region, and destination are pointer-t
 | Same-origin endpoint returns an error  | Browser queue retains the finding                         | Repair the endpoint and let the session drain it again                |
 | Hot reload expires the target          | Old node IDs and `@cN` are rejected                       | Observe again and bind through semantic locators                      |
 | Two findings declare a conflict        | Both enter `needs_input`                                  | A person keeps, edits, or cancels one                                 |
+| Inbox sees an expired mutation lease   | Stale edit and verify commands are withheld               | Run the projected bounded `repair-watch` reconciliation first         |
 | Claim expires before editing           | Finding can safely return to the queue                    | Claim a new attempt                                                   |
 | Worker disappears after editing starts | Finding enters `needs_input`                              | Inspect the workspace and actual edits before continuing or reverting |
 | New page revision is not ready         | Verify returns a retryable result without unbounded sleep | Let the application render, then run another bounded verification     |

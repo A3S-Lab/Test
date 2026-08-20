@@ -160,6 +160,24 @@ impl RepairLedger {
         session: &str,
         finding_id: &str,
     ) -> Result<RepairLoopRecord, SessionError> {
+        self.inspect_loop_inner(session, finding_id, None)
+    }
+
+    pub fn inspect_loop_at(
+        &self,
+        session: &str,
+        finding_id: &str,
+        now_ms: u64,
+    ) -> Result<RepairLoopRecord, SessionError> {
+        self.inspect_loop_inner(session, finding_id, Some(now_ms))
+    }
+
+    fn inspect_loop_inner(
+        &self,
+        session: &str,
+        finding_id: &str,
+        now_ms: Option<u64>,
+    ) -> Result<RepairLoopRecord, SessionError> {
         super::validate_component(session, "session id")?;
         super::validate_component(finding_id, "finding id")?;
         if let Some(owner) = self.session.as_deref() {
@@ -174,12 +192,12 @@ impl RepairLedger {
             .records
             .get(finding_id)
             .ok_or_else(|| super::not_found(finding_id))?;
-        Ok(RepairLoopRecord::from_record(session, record))
+        Ok(RepairLoopRecord::from_record(session, record, now_ms))
     }
 }
 
 impl RepairLoopRecord {
-    fn from_record(session: &str, record: &RepairRecord) -> Self {
+    fn from_record(session: &str, record: &RepairRecord, now_ms: Option<u64>) -> Self {
         let active_verification = record.verification.as_ref().filter(|verification| {
             record.attempt_id.as_deref() == Some(verification.attempt_id.as_str())
         });
@@ -216,7 +234,10 @@ impl RepairLoopRecord {
                     acl_promotion: acl_projection(attempt.verification.as_ref()),
                 })
                 .collect(),
-            resume: resume_projection(session, record),
+            resume: now_ms.map_or_else(
+                || resume_projection(session, record),
+                |now_ms| resume_projection_at(session, record, now_ms),
+            ),
         }
     }
 }
@@ -388,7 +409,7 @@ fn acl_projection(verification: Option<&RepairVerification>) -> RepairLoopAclPro
     }
 }
 
-fn resume_projection(session: &str, record: &RepairRecord) -> RepairLoopResume {
+pub(super) fn resume_projection(session: &str, record: &RepairRecord) -> RepairLoopResume {
     let finding = &record.finding.id;
     let attempt = record.attempt_id.as_deref().unwrap_or("<attempt-id>");
     match record.status {
@@ -484,6 +505,28 @@ fn resume_projection(session: &str, record: &RepairRecord) -> RepairLoopResume {
             "This transient state has no coding-agent mutation action.",
         ),
     }
+}
+
+fn resume_projection_at(session: &str, record: &RepairRecord, now_ms: u64) -> RepairLoopResume {
+    if matches!(
+        record.status,
+        RepairStatus::Claimed | RepairStatus::Repairing | RepairStatus::Verifying
+    ) && record
+        .lease_expires_at_ms
+        .is_none_or(|expires_at_ms| expires_at_ms <= now_ms)
+    {
+        return resume(
+            RepairLoopResumeAction::InspectOnly,
+            Some(RepairActor::A3sTest),
+            Some("test_repair_inbox"),
+            Some(format!(
+                "a3s-test agent repair-inbox --session {session} --json"
+            )),
+            false,
+            "The mutation lease expired; inspect the prioritized inbox and reconcile durable state before continuing this attempt.",
+        );
+    }
+    resume_projection(session, record)
 }
 
 fn resume(

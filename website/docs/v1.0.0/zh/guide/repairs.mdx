@@ -1,6 +1,6 @@
 ---
 title: 人工评审与自动修复
-description: 配置 Test Kit 单项与批量标记、同源提交、修复队列、编码 Agent 交接、新页面验证和人工验收。
+description: 配置 Test Kit 标记、持久修复发现、编码 Agent 交接、新页面验证和人工验收。
 ---
 
 # 人工评审与自动修复
@@ -185,6 +185,7 @@ MCP 修复工具和 `a3s-test agent repair-*` CLI 使用同一应用层。
 
 | 阶段       | MCP 工具                                 | 编码 Agent 的责任                                       |
 | ---------- | ---------------------------------------- | ------------------------------------------------------- |
+| 发现       | `test_repair_inbox`                      | 从活动会话 ledger 中排出最应恢复的工作                  |
 | 等待       | `test_repair_watch`                      | 先读取已排队项，再进行一次有界等待和批次收集            |
 | 检查       | `test_repair_inspect`                    | 恢复完整循环状态和类型化下一步                          |
 | 领取       | `test_repair_claim`                      | 建立 lease 和 attempt ID，只领取一项                    |
@@ -202,7 +203,15 @@ MCP 修复工具和 `a3s-test agent repair-*` CLI 使用同一应用层。
 
 ## 不依赖聊天历史恢复
 
-追加式 `repairs.jsonl` 始终是唯一事实源。A3S Test 从中派生只读的 `a3s.test.repair-loop-record/1` 视图，不创建第二个恢复数据库。CLI 可以在会话仍活动或已经关闭时读取它，全程不会启动或连接浏览器。
+追加式 `repairs.jsonl` 始终是唯一事实源。先在当前工作区发现最应该继续的持久任务。CLI 可以扫描活动或已经关闭的会话，全程不会启动或连接浏览器。
+
+```bash
+a3s-test agent repair-inbox --json
+```
+
+只读的 `a3s.test.repair-inbox/1` 会依次返回过期 lease、正在编辑或验证的任务、最早进入队列的 finding、等待人工处理的任务和只能检查的记录。终态历史默认隐藏，只有显式传入 `--include-terminal` 才会出现。可以用 `--session <session>` 缩小扫描范围，用 `--limit <1-100>` 限制返回前缀。每一项都包含有界意图、当前 lease 状态和类型化下一步。
+
+选定任务后，再读取完整恢复记录。
 
 ```bash
 a3s-test agent repair-inspect finding-checkout \
@@ -210,9 +219,9 @@ a3s-test agent repair-inspect finding-checkout \
   --json
 ```
 
-记录把人工指令和成功条件、结构化意图与目标、经过 Rust 校验的源码映射、当前 lease 和 attempt、完成修改时的 changed files、attempt 回复、验证切片与结果、紧凑的证据路径与 SHA-256、ACL 候选及证明状态，以及类型化下一步连成一条循环。完整 Page Context 不会被重复保存。
+只读的 `a3s.test.repair-loop-record/1` 把人工指令和成功条件、结构化意图与目标、经过 Rust 校验的源码映射、当前 lease 和 attempt、完成修改时的 changed files、attempt 回复、验证切片与结果、紧凑的证据路径与 SHA-256、ACL 候选及证明状态，以及类型化下一步连成一条循环。完整 Page Context 不会被重复保存。
 
-活动中的 MCP owner 可通过 `test_repair_inspect` 返回相同视图。生成的恢复命令只使用经过校验的 ledger 标识符和固定占位符；页面内容、URL、源码映射与 changed-file 值都不会成为命令文本。ACL 证明通过只代表候选在新浏览器中执行成功，不会把候选写入或提交到业务仓库。
+活动中的 MCP owner 可通过 `test_repair_inbox` 获取当前会话的 Inbox，再通过 `test_repair_inspect` 读取选中记录。生成的命令只使用经过校验的 ledger 标识符和固定占位符；页面内容、URL、源码映射与 changed-file 值都不会成为命令文本。过期的修改 lease 只返回 `reconcile_lease`，不会重放旧编辑命令。ACL 证明通过只代表候选在新浏览器中执行成功，不会把候选写入或提交到业务仓库。
 
 ## A3S Test 如何验证修复
 
@@ -279,6 +288,7 @@ Overlay 的线框、页面淡化、区域和目的位置都是 pointer-transpare
 | 同源端点返回错误            | 浏览器队列保留 finding                | 修复端点后由会话再次提取                     |
 | 页面热更新使目标过期        | 旧节点和 `@cN` 被拒绝                 | 重新观察并用语义定位器绑定                   |
 | 两项声明冲突                | 两项进入 `needs_input`                | 人工决定保留、修改或取消哪一项               |
+| Inbox 发现修改 lease 过期   | 不返回旧编辑或验证命令                | 先执行返回的有界 `repair-watch` 对账         |
 | claim 在编辑前过期          | finding 可安全回到队列                | 新 attempt 重新领取                          |
 | 编辑开始后执行者失联        | finding 进入 `needs_input`            | 检查工作区和实际改动，再决定继续或回滚       |
 | 新页面修订未 ready          | verify 返回可重试结果，不做无限 sleep | 等待应用完成渲染后再次做有界验证             |

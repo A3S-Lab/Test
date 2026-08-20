@@ -4,6 +4,19 @@
 
 ### Added
 
+- Added `a3s.test.repair-inbox/1`, a deterministic browserless projection that
+  discovers resumable repair loops from the existing append-only
+  `repairs.jsonl` ledgers. `a3s-test agent repair-inbox` prioritizes expired
+  leases, in-progress work, the oldest queued findings, human-blocked work,
+  inspect-only records, and optional terminal history across active or closed
+  workspace sessions; `test_repair_inbox` exposes the same bounded projection
+  for one active MCP session. Every item carries bounded intent, current lease
+  state, and a typed next disposition generated only from validated ledger
+  identifiers. Expired mutation leases require `repair-watch` reconciliation
+  instead of replaying stale editing commands. Workspace discovery fails
+  closed on linked or oversized session state and ledgers, caps session,
+  candidate, event, byte, and result budgets, and never connects to a browser
+  or creates a second repair database.
 - Added `a3s.test.repair-loop-record/1`, a deterministic projection of the
   authoritative Repair Ledger that keeps human intent, ranked source mapping,
   the exact completion-time changed-files report, compact digest-bound before

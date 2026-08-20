@@ -3,7 +3,7 @@ use std::process::ExitCode;
 use anyhow::Result;
 
 use super::args::RepairInspectArgs;
-use super::{canonical_workspace, emit, load_session_state, load_store};
+use super::{canonical_workspace, emit, load_session_state, load_store, unix_ms};
 use a3s_test_session::RepairLedger;
 
 pub(super) async fn execute(args: RepairInspectArgs) -> Result<ExitCode> {
@@ -12,7 +12,7 @@ pub(super) async fn execute(args: RepairInspectArgs) -> Result<ExitCode> {
     let state = load_session_state(&store, &workspace, &args.session).await?;
     let ledger = RepairLedger::load(store.root().join("repairs.jsonl")).await?;
     let record = ledger
-        .inspect_loop(&state.session, &args.finding_id)
+        .inspect_loop_at(&state.session, &args.finding_id, unix_ms())
         .map_err(anyhow::Error::new)?;
     let human = format!(
         "Repair '{}' is {:?}; resume with {:?}",

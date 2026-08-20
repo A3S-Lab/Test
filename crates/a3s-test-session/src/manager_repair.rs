@@ -315,7 +315,27 @@ impl AgentSessionManager {
         let managed = self.get(session).await?;
         let managed = managed.lock().await;
         ensure_active(&managed)?;
-        managed.repair_ledger.inspect_loop(session, finding_id)
+        managed
+            .repair_ledger
+            .inspect_loop_at(session, finding_id, unix_ms())
+    }
+
+    pub async fn repair_inbox(
+        &self,
+        session: &str,
+        include_terminal: bool,
+        limit: usize,
+    ) -> Result<RepairInbox, SessionError> {
+        let managed = self.get(session).await?;
+        let managed = managed.lock().await;
+        ensure_active(&managed)?;
+        RepairInbox::derive(
+            Some(session),
+            [(session, &managed.repair_ledger)],
+            unix_ms(),
+            include_terminal,
+            limit,
+        )
     }
 
     pub async fn transition_repair(

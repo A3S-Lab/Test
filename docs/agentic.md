@@ -206,6 +206,7 @@ publishes these tools:
 | `test_abort` | Abort and close the exact owned surface |
 | `test_schema` | Return action protocol revision 15 and its interactive JSON Schema |
 | `test_repair_watch` | Drain and perform one bounded pickup of submitted Test Kit findings |
+| `test_repair_inbox` | Prioritize resumable repair loops for one active owning session |
 | `test_repair_inspect` | Project one recoverable repair loop from the authoritative ledger |
 | `test_repair_claim`, `test_repair_progress`, `test_repair_reply` | Own one lease-bound repair attempt and report progress or required input |
 | `test_repair_complete`, `test_repair_verify` | Hand completed editing to A3S Test-owned browser verification |
@@ -214,13 +215,16 @@ publishes these tools:
 `test_repair_complete` persists the caller's exact ordered changed-file list at
 the edit boundary. `test_repair_verify` must submit the same list and fails
 with `test.session.repair_change_mismatch` before browser connection if it
-differs. `test_repair_inspect` returns the versioned
-`a3s.test.repair-loop-record/1` projection while the MCP session is active.
-The equivalent `agent repair-inspect` CLI command reads active or closed
-sessions without connecting to a browser. Both derive bounded intent, validated
-source mappings, completion, evidence digests, verification, ACL proof, attempt
-history, and a typed resume disposition from `repairs.jsonl`; neither creates a
-second state store or turns untrusted page context into a command.
+differs. `test_repair_inbox` returns the versioned
+`a3s.test.repair-inbox/1` priority projection for one active session;
+`test_repair_inspect` returns the selected
+`a3s.test.repair-loop-record/1`. The equivalent `agent repair-inbox` CLI
+command can discover active and closed sessions across the workspace, and
+`agent repair-inspect` expands one selected loop. Neither command connects to
+a browser. Both views derive bounded intent and state from `repairs.jsonl`;
+neither creates a second state store or turns untrusted page context into a
+command. An expired mutation lease yields a reconciliation disposition rather
+than a stale edit command.
 
 The server serializes turns within each session, bounds active sessions and
 request size, advertises only registered surfaces, and closes independent

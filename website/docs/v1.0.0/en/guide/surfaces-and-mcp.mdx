@@ -298,15 +298,16 @@ The server serializes turns per session while independent sessions run within th
 
 ### MCP tools
 
-| Group            | Tools                                                                                        | Purpose                                         |
-| ---------------- | -------------------------------------------------------------------------------------------- | ----------------------------------------------- |
-| Session          | `test_session_start`, `test_observe`, `test_act`, `test_finish`, `test_abort`, `test_schema` | Run the observe, decide, act loop               |
-| Page Context     | `test_inspect`                                                                               | Read a bounded page, node, component, or region |
-| Repair pickup    | `test_repair_watch`, `test_repair_claim`                                                     | Pick up human submissions and claim one attempt |
-| Repair lifecycle | `test_repair_progress`, `test_repair_reply`, `test_repair_complete`, `test_repair_verify`    | Report editing, ask for input, and verify       |
-| Repair terminal  | `test_repair_fail`, `test_repair_cancel`                                                     | Append failure or cancellation without erasure  |
+| Group            | Tools                                                                                        | Purpose                                                      |
+| ---------------- | -------------------------------------------------------------------------------------------- | ------------------------------------------------------------ |
+| Session          | `test_session_start`, `test_observe`, `test_act`, `test_finish`, `test_abort`, `test_schema` | Run the observe, decide, act loop                            |
+| Page Context     | `test_inspect`                                                                               | Read a bounded page, node, component, or region              |
+| Repair recovery  | `test_repair_inbox`, `test_repair_inspect`                                                   | Prioritize one active session, then inspect one durable loop |
+| Repair pickup    | `test_repair_watch`, `test_repair_claim`                                                     | Pick up human submissions and claim one attempt              |
+| Repair lifecycle | `test_repair_progress`, `test_repair_reply`, `test_repair_complete`, `test_repair_verify`    | Report editing, ask for input, and verify                    |
+| Repair terminal  | `test_repair_fail`, `test_repair_cancel`                                                     | Append failure or cancellation without erasure               |
 
-`test_schema` returns the current interactive Action JSON Schema and the actually registered surfaces. Runner-owned `verify_contract` is absent from that interactive schema. See [Human review and repair](./repairs.mdx) for attempt, lease, and verification rules.
+`test_schema` returns the current interactive Action JSON Schema and the actually registered surfaces. Runner-owned `verify_contract` is absent from that interactive schema. `test_repair_inbox` is a browserless read of the active owning session and returns a typed reconciliation action for an expired mutation lease; it never replays a stale edit command. See [Human review and repair](./repairs.mdx) for workspace-wide CLI discovery, attempt, lease, and verification rules.
 
 ### Cleanup is observable state
 

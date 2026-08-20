@@ -7,6 +7,7 @@ use serde::{Deserialize, Serialize};
 use tokio::io::AsyncWriteExt;
 
 pub(crate) const SESSION_SCHEMA_VERSION: u32 = 1;
+const MAX_SESSION_METADATA_BYTES: u64 = 256 * 1_024;
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -195,6 +196,26 @@ impl AgentSessionStore {
     }
 
     pub(crate) async fn load(&self) -> Result<AgentSessionState> {
+        let metadata = tokio::fs::symlink_metadata(&self.state_path)
+            .await
+            .with_context(|| {
+                format!(
+                    "failed to inspect agent session {}",
+                    self.state_path.display()
+                )
+            })?;
+        if !metadata.file_type().is_file() || is_link_like(&metadata) {
+            anyhow::bail!(
+                "agent session metadata must be a regular file: {}",
+                self.state_path.display()
+            );
+        }
+        if metadata.len() > MAX_SESSION_METADATA_BYTES {
+            anyhow::bail!(
+                "agent session metadata exceeds {MAX_SESSION_METADATA_BYTES} bytes: {}",
+                self.state_path.display()
+            );
+        }
         let bytes = tokio::fs::read(&self.state_path).await.with_context(|| {
             format!("failed to read agent session {}", self.state_path.display())
         })?;
@@ -212,6 +233,42 @@ impl AgentSessionStore {
             );
         }
         Ok(state)
+    }
+
+    pub(crate) async fn validate_for_workspace(&self, workspace: &Path) -> Result<()> {
+        let state_root = workspace.join(".a3s-test");
+        let sessions_root = Self::sessions_root(workspace);
+        for path in [
+            state_root.as_path(),
+            sessions_root.as_path(),
+            self.root.as_path(),
+        ] {
+            let metadata = tokio::fs::symlink_metadata(path).await.with_context(|| {
+                format!(
+                    "failed to inspect agent session directory {}",
+                    path.display()
+                )
+            })?;
+            if is_link_like(&metadata) || !metadata.file_type().is_dir() {
+                anyhow::bail!(
+                    "agent session directory must not be a link or non-directory: {}",
+                    path.display()
+                );
+            }
+        }
+        let canonical = tokio::fs::canonicalize(&self.root).await.with_context(|| {
+            format!(
+                "failed to resolve agent session directory {}",
+                self.root.display()
+            )
+        })?;
+        if !canonical.starts_with(workspace) {
+            anyhow::bail!(
+                "agent session directory escapes the current workspace: {}",
+                self.root.display()
+            );
+        }
+        Ok(())
     }
 
     pub(crate) async fn save(&self, state: &AgentSessionState) -> Result<()> {
@@ -278,6 +335,23 @@ impl AgentSessionStore {
                     self.report_path.display()
                 )
             })
+    }
+}
+
+pub(crate) fn is_link_like(metadata: &std::fs::Metadata) -> bool {
+    if metadata.file_type().is_symlink() {
+        return true;
+    }
+    #[cfg(windows)]
+    {
+        use std::os::windows::fs::MetadataExt as _;
+
+        const FILE_ATTRIBUTE_REPARSE_POINT: u32 = 0x0400;
+        metadata.file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT != 0
+    }
+    #[cfg(not(windows))]
+    {
+        false
     }
 }
 

@@ -201,6 +201,7 @@ Web 在一次页面求值中解析两个目标并读取两个矩形。CSS 保留
 | 草稿恢复       | `repairStorage`                                      | memory、session 或 local 草稿                    | 保存草稿不进入 Repair Ledger                        |
 | 单项与批量发送 | Overlay send 或 bridge queue                         | 稳定顺序的 `a3s.test.repair/1` finding 与 batch  | 只有显式发送才授权已连接 Agent 处理列出范围         |
 | 同源 adapter   | `repairEndpoint`                                     | 有界 POST 与浏览器侧重试队列                     | 不能接收工作区、Shell、Git、MCP 或模型凭据          |
+| 恢复发现       | `repair-inbox`、`test_repair_inbox`                  | 排好优先级的活动或关闭持久循环与类型化下一步     | 不连接浏览器；过期 lease 必须先对账                 |
 | 领取           | `repair-watch`、`repair-claim`                       | queued finding、lease 与 attempt ID              | 一个工作区同一时间只允许一次可能修改                |
 | 报告修改阶段   | `repair-progress`、`repair-reply`、`repair-complete` | repairing、needs_input 或 verifying              | attempt 与 lease 不匹配时不推进状态                 |
 | A3S Test 验证  | `repair-verify`                                      | 前后证据、聚焦检查、可选 ACL 候选与 review_ready | 必须出现更新后的 ready 修订，失败不能自动解决       |

@@ -225,6 +225,9 @@ async fn projects_the_session_application_layer_over_mcp() {
             .iter()
             .any(|tool| tool["name"] == "test_repair_inspect")
     }));
+    assert!(listed["result"]["tools"]
+        .as_array()
+        .is_some_and(|tools| { tools.iter().any(|tool| tool["name"] == "test_repair_inbox") }));
     let start_tool = listed["result"]["tools"]
         .as_array()
         .and_then(|tools| {
@@ -593,6 +596,35 @@ async fn mcp_web_ingests_claims_and_completes_a_page_repair_durably() {
     assert_eq!(
         watched["result"]["structuredContent"]["repairs"][0]["finding"]["id"],
         "finding-1"
+    );
+
+    let inbox = call(
+        &mut client_writer,
+        &mut client_reader,
+        30,
+        "test_repair_inbox",
+        json!({ "session": "web-repair" }),
+    )
+    .await;
+    let inbox = &inbox["result"]["structuredContent"];
+    assert_eq!(inbox["protocol"], "a3s.test.repair-inbox/1");
+    assert_eq!(inbox["scope"], "session");
+    assert_eq!(inbox["total"], 1);
+    assert_eq!(inbox["items"][0]["finding_id"], "finding-1");
+    assert_eq!(inbox["items"][0]["next"]["action"], "claim");
+
+    let invalid_inbox = call(
+        &mut client_writer,
+        &mut client_reader,
+        31,
+        "test_repair_inbox",
+        json!({ "session": "web-repair", "limit": 101 }),
+    )
+    .await;
+    assert_eq!(invalid_inbox["result"]["isError"], true);
+    assert_eq!(
+        invalid_inbox["result"]["structuredContent"]["code"],
+        "test.session.repair_inbox_invalid"
     );
 
     let claimed = call(

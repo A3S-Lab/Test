@@ -1191,6 +1191,7 @@ draft also removes references to that draft before submission.
 The MCP repair surface is:
 
 - `test_repair_watch`
+- `test_repair_inbox`
 - `test_repair_inspect`
 - `test_repair_claim`
 - `test_repair_progress`
@@ -1228,13 +1229,27 @@ For direct CLI sessions, equivalent commands are available under
 `a3s-test agent repair-*`. The `next` field emitted after claim and progress
 contains the active `--attempt-id` so a coding agent can continue safely.
 
-### Recoverable repair loop record
+### Recoverable repair inbox and loop record
 
 `repairs.jsonl` remains the only authoritative repair store. A3S Test derives
-the read-only `a3s.test.repair-loop-record/1` projection from the current
-`RepairRecord`; it does not maintain a second database or copy full Page
-Context into another log. Read it from an active or closed CLI session without
-starting or connecting to a browser:
+the read-only `a3s.test.repair-inbox/1` and
+`a3s.test.repair-loop-record/1` projections; it does not maintain a second
+database or copy full Page Context into another log. First discover the
+highest-priority loop across active and closed CLI sessions without starting
+or connecting to a browser:
+
+```bash
+a3s-test agent repair-inbox --json
+```
+
+Use `--session <session>` to narrow discovery, `--limit <1-100>` to bound the
+returned prefix, and `--include-terminal` only when resolved, dismissed,
+cancelled, or failed history is relevant. Inbox orders expired leases first,
+then active editing and verification, oldest queued findings, human-blocked
+work, inspect-only records, and optional terminal history. Every item contains
+bounded intent, current lease state, and a typed next disposition.
+
+Then expand the selected finding:
 
 ```bash
 a3s-test agent repair-inspect finding-checkout \
@@ -1242,21 +1257,24 @@ a3s-test agent repair-inspect finding-checkout \
   --json
 ```
 
-An active MCP owner exposes the same projection through
-`test_repair_inspect`. The record keeps the human instruction, success
-criteria, structured intent and target, Rust-validated component and target
-source mappings, current lease and attempt, completion-time changed files,
-attempt history and replies, the selected verification slice and results,
-compact before/after evidence paths and SHA-256 digests, and ACL candidate and
-proof state. Full Page Context is deliberately not duplicated.
+An active MCP owner exposes its scoped inbox through `test_repair_inbox` and
+the selected record through `test_repair_inspect`. The record keeps the human
+instruction, success criteria, structured intent and target, Rust-validated
+component and target source mappings, current lease and attempt,
+completion-time changed files, attempt history and replies, the selected
+verification slice and results, compact before/after evidence paths and
+SHA-256 digests, and ACL candidate and proof state. Full Page Context is
+deliberately not duplicated.
 
 The `resume` field is derived from the persisted state machine and contains a
 typed next action, responsible actor, MCP tool, CLI command, active-session
 requirement, and reason. Its command is generated only from validated ledger
 identifiers. Page text, source mappings, URLs, and other untrusted context are
-never interpolated into it. A `proof_passed` ACL state means the candidate ran
-successfully in a fresh browser; it does not write or commit that candidate to
-the application repository.
+never interpolated into it. An expired `claimed`, `repairing`, or `verifying`
+lease returns a reconciliation action instead of the old mutation command. A
+`proof_passed` ACL state means the candidate ran successfully in a fresh
+browser; it does not write or commit that candidate to the application
+repository.
 
 Use bounded scoped inspection when the normal observation is too broad:
 
@@ -1524,6 +1542,14 @@ slot. Browser evidence capture and fresh-browser ACL proof run without holding
 the OS lock; verification reacquires it, reloads the ledger, and confirms the
 same `verifying` attempt before committing its result. No separate hidden test
 session, database, or model loop owns repair state.
+
+Browserless Inbox discovery refuses linked or reparse-point session roots,
+metadata, and Repair Ledgers. Session metadata is capped at 256 KiB; each
+ledger is capped at 64 MiB and 100,000 events; one workspace scan is capped at
+4,096 sessions and 64 MiB total ledger data. Derivation considers at most
+10,000 matching findings and returns at most 100. Ledger append repeats its
+regular-file, event-count, and byte-size checks so a path replacement after
+load fails closed.
 
 ## License boundary
 

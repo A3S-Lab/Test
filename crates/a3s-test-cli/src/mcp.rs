@@ -254,6 +254,13 @@ async fn call_tool(
                 .await
                 .map(|value| tool_success("durable repair loop inspected", value))
         }
+        "test_repair_inbox" => {
+            let request = parse_value::<RepairInboxArgument>(arguments, "repair inbox arguments")?;
+            manager
+                .repair_inbox(&request.session, request.include_terminal, request.limit())
+                .await
+                .map(|value| tool_success("repair inbox inspected", value))
+        }
         "test_repair_claim" => {
             repair_transition(manager, arguments, RepairStatus::Claimed, "repair claimed").await
         }
@@ -510,6 +517,7 @@ fn tool_definitions(surfaces: &[a3s_test_core::Surface]) -> Vec<Value> {
             false,
         ),
         tool_definition("test_repair_watch", "Drain already queued Test Kit findings, then perform one bounded page pickup.", repair_watch_schema(), true, false),
+        tool_definition("test_repair_inbox", "Read the prioritized repair inbox for one active session without observing or mutating the page.", repair_inbox_schema(), true, false),
         tool_definition("test_repair_inspect", "Read one versioned durable repair loop without observing or mutating the page.", repair_inspect_schema(), true, false),
         tool_definition("test_repair_claim", "Claim one queued repair with an explicit attempt and lease.", repair_transition_schema(), false, false),
         tool_definition("test_repair_progress", "Report that workspace editing has begun for the claimed attempt.", repair_transition_schema(), false, false),
@@ -542,6 +550,19 @@ fn repair_inspect_schema() -> Value {
         "properties": {
             "session": { "type": "string" },
             "finding_id": { "type": "string" }
+        },
+        "additionalProperties": false
+    })
+}
+
+fn repair_inbox_schema() -> Value {
+    json!({
+        "type": "object",
+        "required": ["session"],
+        "properties": {
+            "session": { "type": "string" },
+            "limit": { "type": "integer", "minimum": 1, "maximum": 100, "default": 20 },
+            "include_terminal": { "type": "boolean", "default": false }
         },
         "additionalProperties": false
     })
@@ -841,6 +862,21 @@ struct RepairWatchArgument {
 struct RepairInspectArgument {
     session: String,
     finding_id: String,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct RepairInboxArgument {
+    session: String,
+    limit: Option<usize>,
+    #[serde(default)]
+    include_terminal: bool,
+}
+
+impl RepairInboxArgument {
+    fn limit(&self) -> usize {
+        self.limit.unwrap_or(20)
+    }
 }
 
 impl RepairWatchArgument {

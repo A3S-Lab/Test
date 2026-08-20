@@ -40,10 +40,13 @@ pub use protocol::{
     StartSessionRequest,
 };
 pub use repair::{
-    validate_repair_verification_change, RepairEventRecord, RepairLedger, RepairLoopAclPromotion,
-    RepairLoopAclStatus, RepairLoopAttempt, RepairLoopChange, RepairLoopEvidence, RepairLoopIntent,
-    RepairLoopRecord, RepairLoopResume, RepairLoopResumeAction, RepairLoopSourceMapping,
-    RepairLoopSourceTarget, RepairLoopVerification, RepairRecord, RepairTransition,
+    validate_repair_verification_change, RepairEventRecord, RepairInbox, RepairInboxIntent,
+    RepairInboxItem, RepairInboxLeaseState, RepairInboxNext, RepairInboxNextAction,
+    RepairInboxScope, RepairLedger, RepairLoopAclPromotion, RepairLoopAclStatus, RepairLoopAttempt,
+    RepairLoopChange, RepairLoopEvidence, RepairLoopIntent, RepairLoopRecord, RepairLoopResume,
+    RepairLoopResumeAction, RepairLoopSourceMapping, RepairLoopSourceTarget,
+    RepairLoopVerification, RepairRecord, RepairTransition, MAX_REPAIR_INBOX_ITEMS,
+    MAX_REPAIR_INBOX_SESSIONS, MAX_REPAIR_LEDGER_BYTES, REPAIR_INBOX_PROTOCOL,
     REPAIR_LOOP_PROTOCOL,
 };
 pub use verification::{

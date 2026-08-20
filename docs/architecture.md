@@ -134,6 +134,36 @@ The selected node's repair context may already contain ranked
 turn while keeping authority unchanged: the mapping suggests likely files and
 spans, but only the workspace-owning coding agent can read or edit them.
 
+### Workspace repair inbox
+
+Recovery begins with discovery, not a remembered chat identifier. The CLI
+walks `.a3s-test/agent-sessions/` in the current canonical workspace and loads
+the existing session metadata plus `repairs.jsonl` for every admitted session.
+It does not initialize a driver, reconnect to a browser, or create a workspace
+index. Active and closed sessions therefore share the same recovery path.
+
+`RepairInbox::derive` projects `a3s.test.repair-inbox/1` from those in-memory
+ledgers. Its stable priority is expired mutation leases, active editing or
+verification, oldest queued work, human-blocked work, inspect-only records,
+then explicitly requested terminal history. The item includes bounded human
+intent, current attempt and lease state, and one typed next action. A selected
+item can then be expanded through the existing per-finding loop projection.
+
+Expired leases are an ownership ambiguity, not permission to continue. Inbox
+projects a fixed `repair-watch` reconciliation command instead of the prior
+edit or verification command. The command is constructed only from an admitted
+session identifier; page text, source paths, URLs, summaries, and messages
+cannot enter it. MCP applies the same projection to one active owning session
+through `test_repair_inbox`.
+
+Discovery is deliberately bounded and fail-closed. Session metadata is capped
+at 256 KiB; one ledger is capped at 64 MiB and 100,000 events; a workspace scan
+is capped at 4,096 sessions and 64 MiB of ledger data; derivation admits at most
+10,000 matching findings and returns at most 100. Session roots, metadata, and
+ledgers must be regular non-link paths inside the workspace. These checks also
+cover Windows reparse points at the storage layer and are repeated before a
+loaded ledger appends another event.
+
 ### Recoverable repair projection
 
 The append-only `repairs.jsonl` ledger is also the source of truth for agent

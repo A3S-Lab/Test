@@ -941,3 +941,32 @@ intent, or shorten verification do not belong in this loop.
 - [x] Preserve intent, source mapping, change, verification evidence, and ACL
       promotion as one inspectable loop record so a later agent can resume
       without reconstructing the task from chat history
+
+## M29: Workspace Repair Inbox
+
+This milestone removes the remaining recovery prerequisite from the Vibe Loop.
+An agent that has lost chat context should not need to remember a session ID or
+finding ID before it can discover the next safe unit of work.
+
+- [x] Derive `a3s.test.repair-inbox/1` directly from the authoritative
+      append-only `repairs.jsonl` ledgers without adding a browser connection,
+      hidden session, model loop, or second database
+- [x] Add workspace-wide CLI discovery across active and closed sessions, plus
+      optional session scope, terminal-history inclusion, deterministic
+      truncation, and a result limit from 1 through 100
+- [x] Prioritize expired leases, active editing and verification, oldest queued
+      findings, human-blocked work, inspect-only records, and optional terminal
+      history in that order with stable session and finding tie-breakers
+- [x] Project bounded intent, lease state, and one typed next action for every
+      item; require ledger reconciliation before any expired mutation lease can
+      resume or return to the queue
+- [x] Expose `a3s-test agent repair-inbox` for browserless workspace recovery
+      and `test_repair_inbox` for one active MCP session while retaining
+      `repair-inspect` as the complete per-finding projection
+- [x] Fail closed on linked or reparse-point session paths, metadata, and
+      ledgers; cap metadata, ledger bytes, ledger events, workspace scan bytes,
+      session count, candidate count, text fields, and returned items
+- [x] Prove closed-session discovery, deterministic priority, terminal
+      filtering, expired-lease handling, command-text isolation, invalid
+      limits, storage bounds, linked-path rejection, CLI integration, and MCP
+      lifecycle behavior without starting a browser

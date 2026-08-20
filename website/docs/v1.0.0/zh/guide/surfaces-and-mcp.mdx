@@ -302,11 +302,12 @@ initialize
 | --------------- | -------------------------------------------------------------------------------------------- | ----------------------------------------- |
 | 会话            | `test_session_start`、`test_observe`、`test_act`、`test_finish`、`test_abort`、`test_schema` | 完成 observe、decide、act 循环            |
 | Page Context    | `test_inspect`                                                                               | 读取有界 page、node、component 或 region  |
+| Repair 恢复     | `test_repair_inbox`、`test_repair_inspect`                                                   | 先排列一个活动会话，再读取一条持久循环    |
 | Repair 提取     | `test_repair_watch`、`test_repair_claim`                                                     | 提取人工提交并领取一个带 lease 的 attempt |
 | Repair 生命周期 | `test_repair_progress`、`test_repair_reply`、`test_repair_complete`、`test_repair_verify`    | 报告编辑阶段、请求澄清并进入本地验证      |
 | Repair 终止     | `test_repair_fail`、`test_repair_cancel`                                                     | 追加失败或取消终态，同时保留历史          |
 
-`test_schema` 返回当前 interactive Action JSON Schema 和实际注册 surface。Runner 专用 `verify_contract` 不会出现在 interactive Schema 中。Repair Ledger 的 attempt、lease 和验证规则见[人工评审与自动修复](./repairs.mdx)。
+`test_schema` 返回当前 interactive Action JSON Schema 和实际注册 surface。Runner 专用 `verify_contract` 不会出现在 interactive Schema 中。`test_repair_inbox` 不连接浏览器，只读取当前活动 owner 的 ledger；修改 lease 过期时会返回类型化对账动作，不会重放旧编辑命令。工作区级 CLI 发现、Repair Ledger 的 attempt、lease 和验证规则见[人工评审与自动修复](./repairs.mdx)。
 
 ### Cleanup 是可观察状态
 

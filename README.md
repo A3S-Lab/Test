@@ -49,6 +49,7 @@ A3S Test closes those gaps with one evidence boundary:
 | Natural language reaches the browser unchecked             | Typed actions admitted through schema, capability, policy, and origin checks        |
 | The visible defect is disconnected from its implementation | Component boundaries and ranked rendered-node source spans                          |
 | A suggestion silently becomes a source edit                | Separate browser-fact, model-advice, human-authorization, and mutation authorities  |
+| Context loss hides which repair should resume               | A workspace Repair Inbox derived from the authoritative append-only ledger          |
 | A repair reruns too much or accepts too little proof        | Source-bound verification slices with evidence-driven regression expansion          |
 | A successful exploration cannot be repeated                | The same action and evidence contracts can be preserved as deterministic ACL suites |
 
@@ -289,7 +290,29 @@ versioned slice is stored beside the before/after evidence and fresh ACL proof.
 
 ## Resume a repair without chat history
 
-Report the exact workspace-relative change when editing finishes:
+Discover the highest-priority durable work before relying on a remembered
+session or finding ID:
+
+```bash
+a3s-test agent repair-inbox --json
+```
+
+The browserless `a3s.test.repair-inbox/1` projection scans active and closed
+session ledgers in the current workspace. It returns expired leases first,
+then in-progress work, the oldest queued findings, human-blocked work, and
+inspect-only records. Resolved, dismissed, cancelled, and failed records are
+hidden unless `--include-terminal` is explicit. Each item contains bounded
+intent, lease state, and a typed `next` disposition generated only from
+validated ledger identifiers. Narrow discovery with `--session <session>` or
+`--limit <1-100>` when needed.
+
+Inspect the selected loop for its complete recovery context:
+
+```bash
+a3s-test agent repair-inspect finding-checkout --session dev --json
+```
+
+Then report the exact workspace-relative change when editing finishes:
 
 ```bash
 a3s-test agent repair-complete finding-checkout \
@@ -298,13 +321,6 @@ a3s-test agent repair-complete finding-checkout \
   --attempt-id attempt-1 \
   --changed-file src/Checkout.tsx \
   --json
-```
-
-Then inspect the durable loop at any time, including after the browser session
-has closed:
-
-```bash
-a3s-test agent repair-inspect finding-checkout --session dev --json
 ```
 
 The `a3s.test.repair-loop-record/1` response deterministically projects the
@@ -317,9 +333,11 @@ ledger or repeat complete Page Context snapshots. Verification must report the
 same changed files recorded at completion, so an interrupted agent cannot
 silently redefine the scope on resume.
 
-MCP clients use `test_repair_inspect` for the same projection while the owning
-session is active. A passing ACL proof means the candidate is ready for review;
-it does not commit that candidate to the application repository.
+MCP clients use `test_repair_inbox` to prioritize one active owning session and
+`test_repair_inspect` for the selected record. An expired mutation lease never
+returns a stale edit command: its next action requires bounded `repair-watch`
+reconciliation first. A passing ACL proof means the candidate is ready for
+review; it does not commit that candidate to the application repository.
 
 ## Preserve the proven path as ACL
 

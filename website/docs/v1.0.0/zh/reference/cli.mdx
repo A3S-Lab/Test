@@ -180,6 +180,7 @@ a3s-test agent inspect \
 
 | 阶段       | 命令                           | 关键参数和结果                                                      |
 | ---------- | ------------------------------ | ------------------------------------------------------------------- |
+| 发现       | `repair-inbox`                 | 可选 session、1 到 100 条结果上限和可选终态历史                     |
 | 提取       | `repair-watch`                 | `--limit` 默认 20，`--timeout-ms` 默认 30,000，批次窗口默认 250 ms  |
 | 检查       | `repair-inspect`               | finding ID 和 session；无需连接浏览器即可读取活动或关闭的状态       |
 | 领取       | `repair-claim`                 | finding ID、幂等 request ID、attempt ID 与默认五分钟 lease          |
@@ -191,7 +192,15 @@ a3s-test agent inspect \
 
 每次状态变化都需要新的幂等 request ID。claim 返回的 attempt ID 要沿用到 progress、reply、complete 和 fail。`repair-complete` 会保存精确且有顺序的 `--changed-file` 列表，包括空报告。`repair-verify` 必须重复同一列表并针对更新后的 ready 页面修订；列表不同会在连接浏览器前失败。
 
-任何阶段都可以检查可恢复的完整循环，包括会话浏览器已经关闭之后：
+忘记 session 或 finding ID 时，先在当前工作区发现可恢复任务：
+
+```bash
+a3s-test agent repair-inbox --json
+```
+
+`a3s.test.repair-inbox/1` 无需连接浏览器即可扫描活动和已关闭会话，并依次排列过期 lease、正在修改的任务、最早 queued finding、等待人工处理的任务和只能检查的记录。终态历史默认不返回。需要时可以添加 `--session dev`、`--limit 20` 或 `--include-terminal`。`total` 是应用 limit 前的有效匹配数，`truncated` 表示返回前缀是否不完整。
+
+选定任务后再检查完整循环，会话浏览器已经关闭也可以读取：
 
 ```bash
 a3s-test agent repair-inspect finding-checkout \
@@ -200,6 +209,8 @@ a3s-test agent repair-inspect finding-checkout \
 ```
 
 版本化的 `a3s.test.repair-loop-record/1` 结果包含有界意图、经过校验的源码映射、完成修改时的变更、紧凑证据摘要、验证、ACL 证明、attempt 历史和类型化下一步。它从 `repairs.jsonl` 派生，不连接浏览器，也不会把不可信 Page Context 变成恢复命令。
+
+`claimed`、`repairing` 或 `verifying` 的 lease 过期时，只返回类型化对账动作，不会返回旧编辑或验证命令。继续该 attempt 或领取下一项前，先执行投影给出的有界 `repair-watch`。
 
 省略 `--checks-json` 即可从 `.a3s-test/project.acl` 规划并运行最小配置切片：
 

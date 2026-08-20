@@ -7,6 +7,7 @@ mod grounding;
 mod inspect;
 mod policy;
 mod repair;
+mod repair_inbox;
 mod repair_inspect;
 mod repair_watch;
 mod runtime;
@@ -252,6 +253,7 @@ pub(crate) async fn execute(args: AgentArgs) -> Result<ExitCode> {
             .await
         }
         AgentCommand::RepairWatch(args) => repair_watch::watch(args).await,
+        AgentCommand::RepairInbox(args) => repair_inbox::execute(args).await,
         AgentCommand::RepairInspect(args) => repair_inspect::execute(args).await,
         AgentCommand::RepairClaim(args) => repair::transition(args, RepairStatus::Claimed).await,
         AgentCommand::RepairProgress(args) => {
@@ -863,6 +865,7 @@ async fn load_session_state(
     workspace: &Path,
     session: &str,
 ) -> Result<AgentSessionState> {
+    store.validate_for_workspace(workspace).await?;
     let state = store.load().await?;
     if state.workspace != workspace
         || state.session != session

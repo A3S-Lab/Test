@@ -65,6 +65,8 @@ pub(super) enum AgentCommand {
     Screenshot(ScreenshotArgs),
     /// Pick up queued Test Kit findings and persist them in this session.
     RepairWatch(RepairWatchArgs),
+    /// Discover resumable repair loops across this workspace without a browser.
+    RepairInbox(RepairInboxArgs),
     /// Inspect one durable repair loop without connecting to its browser.
     RepairInspect(RepairInspectArgs),
     /// Claim one queued repair finding.
@@ -456,6 +458,22 @@ pub(super) struct RepairWatchArgs {
     /// Short window used to collect findings submitted together.
     #[arg(long, default_value_t = 250)]
     pub(super) batch_window_ms: u64,
+    #[arg(long)]
+    pub(super) json: bool,
+}
+
+#[derive(Debug, Args)]
+pub(super) struct RepairInboxArgs {
+    /// Restrict discovery to one active or closed session.
+    #[arg(long)]
+    pub(super) session: Option<String>,
+    /// Maximum repair summaries returned after deterministic prioritization.
+    #[arg(long, default_value_t = 20)]
+    pub(super) limit: usize,
+    /// Include resolved, dismissed, cancelled, and failed loops after open work.
+    #[arg(long)]
+    pub(super) include_terminal: bool,
+    /// Emit the versioned inbox as JSON.
     #[arg(long)]
     pub(super) json: bool,
 }

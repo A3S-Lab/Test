@@ -13,6 +13,8 @@ use crate::RepairWorkspaceLock;
 use crate::SessionError;
 
 const MAX_CLAIM_LEASE_MS: u64 = 15 * 60 * 1_000;
+pub const MAX_REPAIR_LEDGER_BYTES: u64 = 64 * 1_024 * 1_024;
+const MAX_REPAIR_LEDGER_EVENTS: usize = 100_000;
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 pub struct RepairRecord {
@@ -40,6 +42,7 @@ pub struct RepairLedger {
     records: HashMap<String, RepairRecord>,
     order: Vec<String>,
     request_events: HashMap<String, RepairEventRecord>,
+    event_count: usize,
 }
 
 impl RepairLedger {
@@ -50,17 +53,46 @@ impl RepairLedger {
             records: HashMap::new(),
             order: Vec::new(),
             request_events: HashMap::new(),
+            event_count: 0,
         }
     }
 
     pub async fn load(path: PathBuf) -> Result<Self, SessionError> {
         let mut ledger = Self::empty(path.clone());
-        let contents = match tokio::fs::read_to_string(&path).await {
-            Ok(contents) => contents,
+        let metadata = match tokio::fs::symlink_metadata(&path).await {
+            Ok(metadata) => metadata,
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(ledger),
             Err(error) => return Err(storage_error(&path, error)),
         };
+        if !metadata.file_type().is_file() || is_link_like(&metadata) {
+            return Err(SessionError::new(
+                "test.session.repair_ledger_invalid",
+                format!("repair ledger must be a regular file: {}", path.display()),
+            ));
+        }
+        if metadata.len() > MAX_REPAIR_LEDGER_BYTES {
+            return Err(SessionError::new(
+                "test.session.repair_ledger_invalid",
+                format!(
+                    "repair ledger exceeds the {MAX_REPAIR_LEDGER_BYTES} byte limit: {}",
+                    path.display()
+                ),
+            ));
+        }
+        let contents = match tokio::fs::read_to_string(&path).await {
+            Ok(contents) => contents,
+            Err(error) => return Err(storage_error(&path, error)),
+        };
         for (line_number, line) in contents.lines().enumerate() {
+            if line_number >= MAX_REPAIR_LEDGER_EVENTS {
+                return Err(SessionError::new(
+                    "test.session.repair_ledger_invalid",
+                    format!(
+                        "repair ledger exceeds {MAX_REPAIR_LEDGER_EVENTS} events: {}",
+                        path.display()
+                    ),
+                ));
+            }
             let event: StoredLedgerEvent = serde_json::from_str(line).map_err(|error| {
                 SessionError::new(
                     "test.session.repair_ledger_invalid",
@@ -72,6 +104,7 @@ impl RepairLedger {
                 )
             })?;
             ledger.replay(event)?;
+            ledger.event_count += 1;
         }
         Ok(ledger)
     }
@@ -813,7 +846,16 @@ impl RepairLedger {
         self.apply_human_action(session, action, now_ms).await
     }
 
-    async fn append(&self, event: &StoredLedgerEvent) -> Result<(), SessionError> {
+    async fn append(&mut self, event: &StoredLedgerEvent) -> Result<(), SessionError> {
+        if self.event_count >= MAX_REPAIR_LEDGER_EVENTS {
+            return Err(SessionError::new(
+                "test.session.repair_ledger_invalid",
+                format!(
+                    "repair ledger exceeds {MAX_REPAIR_LEDGER_EVENTS} events: {}",
+                    self.path.display()
+                ),
+            ));
+        }
         if let Some(parent) = self.path.parent() {
             tokio::fs::create_dir_all(parent)
                 .await
@@ -826,6 +868,40 @@ impl RepairLedger {
             )
         })?;
         encoded.push(b'\n');
+        match tokio::fs::symlink_metadata(&self.path).await {
+            Ok(metadata) if metadata.file_type().is_file() && !is_link_like(&metadata) => {
+                let encoded_len = u64::try_from(encoded.len()).map_err(|_| {
+                    SessionError::new(
+                        "test.session.repair_ledger_invalid",
+                        "encoded repair event length exceeds the platform range",
+                    )
+                })?;
+                if metadata
+                    .len()
+                    .checked_add(encoded_len)
+                    .is_none_or(|length| length > MAX_REPAIR_LEDGER_BYTES)
+                {
+                    return Err(SessionError::new(
+                            "test.session.repair_ledger_invalid",
+                            format!(
+                                "repair ledger would exceed the {MAX_REPAIR_LEDGER_BYTES} byte limit: {}",
+                                self.path.display()
+                            ),
+                        ));
+                }
+            }
+            Ok(_) => {
+                return Err(SessionError::new(
+                    "test.session.repair_ledger_invalid",
+                    format!(
+                        "repair ledger must be a regular file: {}",
+                        self.path.display()
+                    ),
+                ));
+            }
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+            Err(error) => return Err(storage_error(&self.path, error)),
+        }
         let mut file = tokio::fs::OpenOptions::new()
             .create(true)
             .append(true)
@@ -837,7 +913,9 @@ impl RepairLedger {
             .map_err(|error| storage_error(&self.path, error))?;
         file.flush()
             .await
-            .map_err(|error| storage_error(&self.path, error))
+            .map_err(|error| storage_error(&self.path, error))?;
+        self.event_count += 1;
+        Ok(())
     }
 
     fn replay(&mut self, event: StoredLedgerEvent) -> Result<(), SessionError> {
@@ -883,6 +961,16 @@ impl RepairLedger {
             StoredLedgerEvent::Transition { event } => {
                 let event = *event;
                 self.admit_session(&event.session)?;
+                validate_transition_text(event.summary.as_deref(), event.message.as_deref())
+                    .map_err(|error| {
+                        SessionError::new(
+                            "test.session.repair_ledger_invalid",
+                            format!(
+                                "invalid repair transition text in ledger: {}",
+                                error.message()
+                            ),
+                        )
+                    })?;
                 if self.request_events.contains_key(&event.request_id) {
                     return Err(SessionError::new(
                         "test.session.repair_ledger_invalid",
@@ -952,6 +1040,23 @@ impl RepairLedger {
     }
 }
 
+fn is_link_like(metadata: &std::fs::Metadata) -> bool {
+    if metadata.file_type().is_symlink() {
+        return true;
+    }
+    #[cfg(windows)]
+    {
+        use std::os::windows::fs::MetadataExt as _;
+
+        const FILE_ATTRIBUTE_REPARSE_POINT: u32 = 0x0400;
+        metadata.file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT != 0
+    }
+    #[cfg(not(windows))]
+    {
+        false
+    }
+}
+
 #[path = "repair_event.rs"]
 mod event;
 use event::StoredLedgerEvent;
@@ -960,6 +1065,10 @@ pub use event::{RepairEventRecord, RepairTransition};
 #[path = "repair_loop.rs"]
 mod loop_record;
 pub use loop_record::*;
+
+#[path = "repair_inbox.rs"]
+mod inbox;
+pub use inbox::*;
 
 #[path = "repair_state.rs"]
 mod state;

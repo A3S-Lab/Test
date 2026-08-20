@@ -2207,6 +2207,77 @@ An eventual retryable close failure restores the same driver session in
 `test.session.cleanup_required`; only `finish` or `abort` may retry cleanup.
 Success or a non-retryable cleanup failure releases the session identifier.
 
+### Workspace repair inbox
+
+The repair inbox protocol identifier is `a3s.test.repair-inbox/1`. It MUST be a
+read-only projection of the authoritative session Repair Ledgers and MUST NOT
+connect to a browser, observe a page, create a hidden session, or persist a
+second index. The CLI command is:
+
+```text
+a3s-test agent repair-inbox [--session <session>] [--limit <1-100>]
+                            [--include-terminal] --json
+```
+
+Without `--session`, the command MUST discover admitted active and terminal
+session stores under the current canonical workspace. With `--session`, it
+MUST load only that active or terminal store. `test_repair_inbox` MUST require
+an active owning MCP `session`; its optional `limit` defaults to 20 and its
+optional `include_terminal` defaults to false.
+
+The response contains `protocol`, `scope`, optional `session`,
+`include_terminal`, `sessions_scanned`, pre-limit `total`, `truncated`, and
+ordered `items`. Each item contains session, finding and batch identity,
+ledger sequence, current status and timestamp, attempt and lease fields,
+`lease_state`, optional bounded summary and message, bounded instruction and
+success criteria plus typed intent and severity, and one `next` projection.
+The `next` projection contains an enum action, optional actor, optional MCP
+tool, optional CLI command, active-session requirement, and reason.
+
+Default discovery MUST omit `resolved`, `dismissed`, `cancelled`, and `failed`.
+When terminal history is included, derivation MUST use this stable priority:
+
+| Priority | Projected next action |
+| --- | --- |
+| 1 | `reconcile_lease` for an expired `claimed`, `repairing`, or `verifying` lease |
+| 2 | `start_editing`, `report_change`, or `verify` for active mutation work |
+| 3 | `claim` for queued work |
+| 4 | `await_input`, `await_review`, or `reopen_or_stop` for human-dependent work |
+| 5 | `inspect_only` |
+| 6 | `complete` for terminal history |
+
+Within priorities 1 through 5, older `updated_at_ms` sorts first. Terminal
+history sorts newest first. Equal timestamps MUST use session then finding ID
+as ascending tie-breakers. `total` MUST describe the complete admitted match
+set before `limit`, and `truncated` MUST report whether items were omitted.
+
+An expired mutation lease MUST project `lease_state: "expired"` and a
+`reconcile_lease` next action. It MUST NOT return the stale attempt's edit,
+completion, or verification command. Reconciliation uses the fixed
+`test_repair_watch` operation or a fixed CLI command containing only the
+validated session ID and constant arguments, and requires an active session.
+Time-aware `repair-inspect` MUST direct an expired mutation attempt back to the
+Inbox before exposing another resume operation.
+
+Session IDs, finding IDs, and ledger ownership MUST pass the normal component
+admission rules before they can appear in generated commands. Page context,
+URLs, instructions, summaries, messages, source mappings, and changed files
+MUST NOT be interpolated into those commands. Repair instructions, success
+criteria, transition summaries, and transition messages MUST each contain
+1 through 8,192 bytes when present.
+
+One session ledger MUST be a regular non-link file no larger than 64 MiB and
+100,000 events. Session metadata MUST be a regular non-link file no larger
+than 256 KiB. Workspace discovery MUST admit at most 4,096 regular non-link
+session directories and 64 MiB total ledger bytes. Derivation MUST admit at
+most 10,000 matching findings and return at most 100. Session roots and
+discovery roots MUST remain inside the canonical workspace. Link-like paths,
+including Windows reparse points where the storage layer can observe them,
+oversized state, repeated sessions, owner mismatch, and invalid limits MUST
+fail closed before returning a partial inbox. Ledger append MUST revalidate the
+path, event count, and resulting byte size so replacement after load cannot
+redirect a later write.
+
 ### Repair loop projection
 
 The authoritative repair state is the append-only session `repairs.jsonl`.

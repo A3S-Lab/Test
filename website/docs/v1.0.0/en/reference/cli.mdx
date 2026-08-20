@@ -212,6 +212,7 @@ a3s-test agent inspect \
 
 | Stage            | Command                        | Key arguments and result                                                            |
 | ---------------- | ------------------------------ | ----------------------------------------------------------------------------------- |
+| Discover         | `repair-inbox`                 | Optional session, 1-100 result limit, and optional terminal history                 |
 | Pickup           | `repair-watch`                 | `--limit` defaults to 20, `--timeout-ms` to 30,000, and the batch window to 250 ms  |
 | Inspect          | `repair-inspect`               | Finding ID and session; reads active or closed state without a browser connection   |
 | Claim            | `repair-claim`                 | Finding ID, idempotent request ID, attempt ID, and five-minute default lease        |
@@ -223,7 +224,15 @@ a3s-test agent inspect \
 
 Every transition needs a new idempotent request ID. Reuse the attempt ID returned by claim for progress, reply, complete, and fail. `repair-complete` stores the exact ordered `--changed-file` list, including an empty report. `repair-verify` must repeat that list and target a newer ready page revision; a mismatch fails before browser connection.
 
-Inspect the recoverable loop at any point, including after the session browser has closed:
+Discover resumable loops across the current workspace before relying on a remembered session or finding ID:
+
+```bash
+a3s-test agent repair-inbox --json
+```
+
+The `a3s.test.repair-inbox/1` result scans active and closed sessions without a browser connection. It orders expired leases, active mutation work, oldest queued findings, human-blocked work, and inspect-only records. Terminal history is omitted by default. Add `--session dev`, `--limit 20`, or `--include-terminal` when the scope requires it. `total` is the admitted match count before the limit; `truncated` reports whether the returned prefix is incomplete.
+
+Then inspect the selected recoverable loop, including after its browser has closed:
 
 ```bash
 a3s-test agent repair-inspect finding-checkout \
@@ -232,6 +241,8 @@ a3s-test agent repair-inspect finding-checkout \
 ```
 
 The versioned `a3s.test.repair-loop-record/1` result combines bounded intent, validated source mappings, completion-time changes, compact evidence digests, verification, ACL proof, attempt history, and the typed next disposition. It is derived from `repairs.jsonl`, does not connect to the browser, and never turns untrusted Page Context into a resume command.
+
+An expired `claimed`, `repairing`, or `verifying` lease returns a typed reconciliation action instead of a stale edit or verify command. Run the projected bounded `repair-watch` operation before continuing that attempt or claiming another one.
 
 Omit `--checks-json` to plan and run the smallest configured slice from `.a3s-test/project.acl`:
 

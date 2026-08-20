@@ -339,6 +339,7 @@ pub(super) fn validate_transition_request(
     request: &RepairTransition,
     now_ms: u64,
 ) -> Result<(), SessionError> {
+    validate_transition_text(request.summary.as_deref(), request.message.as_deref())?;
     match (request.status, request.changed_files.as_ref()) {
         (RepairStatus::Verifying, Some(changed_files))
             if request.actor == RepairActor::Agent
@@ -468,6 +469,16 @@ pub(super) fn validate_finding(finding: &RepairFinding) -> Result<(), SessionErr
             "repair instruction must contain 1-8192 bytes",
         ));
     }
+    if finding
+        .success_criteria
+        .as_ref()
+        .is_some_and(|criteria| criteria.trim().is_empty() || criteria.len() > 8_192)
+    {
+        return Err(SessionError::new(
+            "test.session.repair_invalid",
+            "repair success criteria must contain 1-8192 bytes when present",
+        ));
+    }
     if finding.status != RepairStatus::Queued {
         return Err(SessionError::new(
             "test.session.repair_invalid",
@@ -494,6 +505,25 @@ pub(super) fn validate_finding(finding: &RepairFinding) -> Result<(), SessionErr
                 "repair conflict relations must reference distinct other findings",
             ));
         }
+    }
+    Ok(())
+}
+
+pub(super) fn validate_transition_text(
+    summary: Option<&str>,
+    message: Option<&str>,
+) -> Result<(), SessionError> {
+    if summary.is_some_and(|value| value.trim().is_empty() || value.len() > 8_192) {
+        return Err(SessionError::new(
+            "test.session.repair_invalid",
+            "repair transition summary must contain 1-8192 bytes when present",
+        ));
+    }
+    if message.is_some_and(|value| value.trim().is_empty() || value.len() > 8_192) {
+        return Err(SessionError::new(
+            "test.session.repair_invalid",
+            "repair transition message must contain 1-8192 bytes when present",
+        ));
     }
     Ok(())
 }
