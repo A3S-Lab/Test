@@ -1,23 +1,30 @@
 use std::ffi::c_void;
 use std::io;
-use std::mem::{size_of, MaybeUninit};
+use std::mem::size_of;
 use std::os::windows::io::{AsRawHandle, FromRawHandle, OwnedHandle};
 
 use tokio::process::Child;
-use windows_sys::Win32::Foundation::INVALID_HANDLE_VALUE;
+use windows_sys::Win32::Foundation::{ERROR_MORE_DATA, INVALID_HANDLE_VALUE};
 use windows_sys::Win32::System::Diagnostics::ToolHelp::{
     CreateToolhelp32Snapshot, Thread32First, Thread32Next, TH32CS_SNAPTHREAD, THREADENTRY32,
 };
 use windows_sys::Win32::System::JobObjects::{
-    AssignProcessToJobObject, CreateJobObjectW, JobObjectBasicAccountingInformation,
+    AssignProcessToJobObject, CreateJobObjectW, JobObjectBasicProcessIdList,
     JobObjectExtendedLimitInformation, QueryInformationJobObject, SetInformationJobObject,
-    TerminateJobObject, JOBOBJECT_BASIC_ACCOUNTING_INFORMATION,
-    JOBOBJECT_EXTENDED_LIMIT_INFORMATION, JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE,
+    TerminateJobObject, JOBOBJECT_EXTENDED_LIMIT_INFORMATION, JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE,
 };
 use windows_sys::Win32::System::Threading::{OpenThread, ResumeThread, THREAD_SUSPEND_RESUME};
 
 pub(super) struct Job {
     handle: OwnedHandle,
+    root_process_id: u32,
+}
+
+#[repr(C)]
+struct ProcessIdListBuffer {
+    assigned_processes: u32,
+    listed_processes: u32,
+    process_ids: [usize; 2],
 }
 
 impl Job {
@@ -37,7 +44,10 @@ impl Job {
         if unsafe { AssignProcessToJobObject(handle.as_raw_handle(), child_handle) } == 0 {
             return Err(io::Error::last_os_error());
         }
-        let job = Self { handle };
+        let job = Self {
+            handle,
+            root_process_id: process_id,
+        };
         if let Err(error) = resume_process(process_id) {
             let _ = job.terminate();
             return Err(error);
@@ -52,23 +62,47 @@ impl Job {
         Ok(())
     }
 
-    pub(super) fn is_empty(&self) -> io::Result<bool> {
-        let mut value = MaybeUninit::<JOBOBJECT_BASIC_ACCOUNTING_INFORMATION>::uninit();
-        let length = u32::try_from(size_of::<JOBOBJECT_BASIC_ACCOUNTING_INFORMATION>())
-            .map_err(|_| io::Error::other("Windows Job accounting is too large"))?;
+    pub(super) fn is_empty(&self, root_exited: bool) -> io::Result<bool> {
+        let mut value = ProcessIdListBuffer {
+            assigned_processes: 0,
+            listed_processes: 0,
+            process_ids: [0; 2],
+        };
+        let length = u32::try_from(size_of::<ProcessIdListBuffer>())
+            .map_err(|_| io::Error::other("Windows Job process list is too large"))?;
         if unsafe {
             QueryInformationJobObject(
                 self.handle.as_raw_handle(),
-                JobObjectBasicAccountingInformation,
-                value.as_mut_ptr().cast::<c_void>(),
+                JobObjectBasicProcessIdList,
+                (&raw mut value).cast::<c_void>(),
                 length,
                 std::ptr::null_mut(),
             )
         } == 0
         {
-            return Err(io::Error::last_os_error());
+            let error = io::Error::last_os_error();
+            if error.raw_os_error() == Some(ERROR_MORE_DATA as i32) {
+                return Ok(false);
+            }
+            return Err(error);
         }
-        Ok(unsafe { value.assume_init() }.ActiveProcesses == 0)
+        if value.assigned_processes == 0 {
+            return Ok(true);
+        }
+        let listed_processes = usize::try_from(value.listed_processes)
+            .map_err(|_| io::Error::other("Windows Job process count is too large"))?;
+        if listed_processes == 0
+            || listed_processes > value.process_ids.len()
+            || value.assigned_processes != value.listed_processes
+        {
+            return Ok(false);
+        }
+        let root_process_id = usize::try_from(self.root_process_id)
+            .map_err(|_| io::Error::other("Windows Job root process ID is too large"))?;
+        Ok(root_exited
+            && value.process_ids[..listed_processes]
+                .iter()
+                .all(|process_id| *process_id == root_process_id))
     }
 
     pub(super) fn disarm(&self) -> io::Result<()> {

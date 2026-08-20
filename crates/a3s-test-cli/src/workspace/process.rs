@@ -180,8 +180,8 @@ impl OwnedProcess {
     async fn wait_until_stopped(&mut self, timeout: Duration) -> io::Result<bool> {
         let deadline = Instant::now() + timeout;
         loop {
-            let _ = self.child.try_wait()?;
-            if self.tree.is_empty()? {
+            let root_exited = self.child.try_wait()?.is_some();
+            if self.tree.is_empty(root_exited)? {
                 return Ok(true);
             }
             if Instant::now() >= deadline {
@@ -316,12 +316,12 @@ impl ProcessTree {
         Ok(())
     }
 
-    fn is_empty(&self) -> io::Result<bool> {
+    fn is_empty(&self, _root_exited: bool) -> io::Result<bool> {
         #[cfg(unix)]
         return unix::group_is_empty(self.process_group);
 
         #[cfg(windows)]
-        return self.job.is_empty();
+        return self.job.is_empty(_root_exited);
 
         #[cfg(not(any(unix, windows)))]
         Ok(true)
