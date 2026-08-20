@@ -16,10 +16,19 @@ A3S Test installs terminal testing and in-page review separately. Choose the pat
 Run this command in the frontend project:
 
 ```bash
-npm install --save-dev https://github.com/A3S-Lab/Test/releases/download/v1.0.0/a3s-testkit.tgz
+npm install --save-dev @a3s-lab/testkit@0.4.1
 ```
 
-`@a3s-lab/testkit` is not published to the npm Registry yet, so the current command installs the `.tgz` attached to the GitHub Release. npm still records it as a development dependency named `@a3s-lab/testkit` and stores integrity data in the lockfile. Do not run `npm install @a3s-lab/testkit` by itself until Registry publishing is available.
+Use the matching command when the project already uses another package manager:
+
+| Package manager | Command                                         |
+| --------------- | ----------------------------------------------- |
+| npm             | `npm install --save-dev @a3s-lab/testkit@0.4.1` |
+| pnpm            | `pnpm add --save-dev @a3s-lab/testkit@0.4.1`    |
+| Yarn            | `yarn add --dev @a3s-lab/testkit@0.4.1`         |
+| Bun             | `bun add --dev @a3s-lab/testkit@0.4.1`          |
+
+`@a3s-lab/testkit` 0.4.1 is published on the official npm Registry with GitHub OIDC provenance. Pinning the version keeps installation reproducible, and the package manager stores its integrity in the project lockfile.
 
 Verify the installed dependency:
 
@@ -27,7 +36,7 @@ Verify the installed dependency:
 npm ls @a3s-lab/testkit
 ```
 
-The Test Kit package version advances independently from the A3S Test Release tag, so the two version numbers do not need to match. Continue with the [three-step Web Test Kit setup](./testkit.mdx#three-step-react-setup). The v1.0.0 Release includes the design board and page-region capture inside Test Kit, without a separate drawing library or screenshot plugin.
+The Test Kit package version advances independently from the A3S Test Release tag, so the two version numbers do not need to match. Continue with the [three-step Web Test Kit setup](./testkit.mdx#three-step-react-setup). Test Kit 0.4.1 includes the design board and page-region capture without a separate drawing library or screenshot plugin.
 
 ## Install the CLI and Agent Skill
 

@@ -8,8 +8,7 @@ use url::Url;
 use super::TestKitRequirementArg;
 
 pub(super) const TESTKIT_PACKAGE: &str = "@a3s-lab/testkit";
-pub(super) const TESTKIT_RELEASE_INSTALL: &str =
-    "https://github.com/A3S-Lab/Test/releases/latest/download/a3s-testkit.tgz";
+pub(super) const TESTKIT_INSTALL_SPEC: &str = "@a3s-lab/testkit@^0.4.0";
 const MAX_PACKAGE_JSON_BYTES: u64 = 1024 * 1024;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
@@ -41,12 +40,26 @@ impl PackageManager {
 
     pub(super) fn install_command(self) -> String {
         match self {
-            Self::Npm => format!("npm install --save-dev {TESTKIT_RELEASE_INSTALL}"),
-            Self::Pnpm => format!("pnpm add --save-dev {TESTKIT_RELEASE_INSTALL}"),
-            Self::Yarn => format!("yarn add --dev {TESTKIT_RELEASE_INSTALL}"),
-            Self::Bun => format!("bun add --dev {TESTKIT_RELEASE_INSTALL}"),
+            Self::Npm => format!("npm install --save-dev {TESTKIT_INSTALL_SPEC}"),
+            Self::Pnpm => format!("pnpm add --save-dev {TESTKIT_INSTALL_SPEC}"),
+            Self::Yarn => format!("yarn add --dev {TESTKIT_INSTALL_SPEC}"),
+            Self::Bun => format!("bun add --dev {TESTKIT_INSTALL_SPEC}"),
         }
     }
+}
+
+pub(super) fn testkit_install_command(executable: &str) -> String {
+    let package_manager = match Path::new(executable)
+        .file_stem()
+        .and_then(|value| value.to_str())
+        .unwrap_or(executable)
+    {
+        "pnpm" => PackageManager::Pnpm,
+        "yarn" => PackageManager::Yarn,
+        "bun" => PackageManager::Bun,
+        _ => PackageManager::Npm,
+    };
+    package_manager.install_command()
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
@@ -320,6 +333,30 @@ mod tests {
             .expect("declared package manager");
 
         assert_eq!(manager, PackageManager::Pnpm);
+    }
+
+    #[test]
+    fn package_managers_install_the_supported_registry_range() {
+        assert_eq!(
+            PackageManager::Npm.install_command(),
+            "npm install --save-dev @a3s-lab/testkit@^0.4.0"
+        );
+        assert_eq!(
+            PackageManager::Pnpm.install_command(),
+            "pnpm add --save-dev @a3s-lab/testkit@^0.4.0"
+        );
+        assert_eq!(
+            PackageManager::Yarn.install_command(),
+            "yarn add --dev @a3s-lab/testkit@^0.4.0"
+        );
+        assert_eq!(
+            PackageManager::Bun.install_command(),
+            "bun add --dev @a3s-lab/testkit@^0.4.0"
+        );
+        assert_eq!(
+            testkit_install_command("/workspace/node_modules/.bin/pnpm"),
+            "pnpm add --save-dev @a3s-lab/testkit@^0.4.0"
+        );
     }
 
     #[test]

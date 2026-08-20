@@ -4,6 +4,10 @@
 
 ### Added
 
+- Published `@a3s-lab/testkit` to the official npm Registry with GitHub OIDC
+  provenance. The 0.4.1 package corrects the Registry-facing installation
+  guide, while `init` and `doctor` print the compatible install range for npm,
+  pnpm, Yarn, and Bun.
 - Added a manually authorized, immutable-source Test Kit npm publication workflow
   with public package metadata, the official Registry, complete package gates,
   an environment-scoped token, and GitHub OIDC provenance. Registry publication

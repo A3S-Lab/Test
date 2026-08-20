@@ -609,13 +609,12 @@ Development frontends can embed `@a3s-lab/testkit` so A3S Test can read the
 rendered page without relying on pixels alone:
 
 ```bash
-npm install --save-dev https://github.com/A3S-Lab/Test/releases/latest/download/a3s-testkit.tgz
+npm install --save-dev @a3s-lab/testkit@0.4.1
 ```
 
-The package is not published to the npm Registry yet. npm installs the
-GitHub Release asset under the expected `@a3s-lab/testkit` package name and
-records its integrity in the project lockfile. Confirm the dependency with
-`npm ls @a3s-lab/testkit`.
+Test Kit 0.4.1 is published on the official npm Registry with GitHub OIDC
+provenance. The pinned command records the package integrity in the project
+lockfile. Confirm the dependency with `npm ls @a3s-lab/testkit`.
 
 ```tsx
 import { A3SReviewOverlay, A3STestKit } from "@a3s-lab/testkit/react";

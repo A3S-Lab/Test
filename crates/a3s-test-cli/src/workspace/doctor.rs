@@ -7,7 +7,7 @@ use semver::{Version, VersionReq};
 use serde::Serialize;
 
 use super::config::{self, ProjectBrowserDriver, ProjectProfile};
-use super::discovery::{read_package, TESTKIT_PACKAGE, TESTKIT_RELEASE_INSTALL};
+use super::discovery::{read_package, testkit_install_command, TESTKIT_PACKAGE};
 use super::DoctorArgs;
 
 const TESTKIT_COMPATIBILITY: &str = ">=0.4.0, <0.5.0";
@@ -256,7 +256,7 @@ async fn check_testkit(
                 .and_then(|dependencies| dependencies.get(TESTKIT_PACKAGE))
                 .is_some()
     });
-    let install = install_command(&profile.dev_server.executable);
+    let install = testkit_install_command(&profile.dev_server.executable);
     if declared {
         checks.push(passed(
             "testkit.dependency",
@@ -437,19 +437,6 @@ fn executable_file(path: &Path) -> bool {
     #[cfg(not(unix))]
     {
         true
-    }
-}
-
-fn install_command(executable: &str) -> String {
-    match Path::new(executable)
-        .file_stem()
-        .and_then(|value| value.to_str())
-        .unwrap_or(executable)
-    {
-        "pnpm" => format!("pnpm add --save-dev {TESTKIT_RELEASE_INSTALL}"),
-        "yarn" => format!("yarn add --dev {TESTKIT_RELEASE_INSTALL}"),
-        "bun" => format!("bun add --dev {TESTKIT_RELEASE_INSTALL}"),
-        _ => format!("npm install --save-dev {TESTKIT_RELEASE_INSTALL}"),
     }
 }
 

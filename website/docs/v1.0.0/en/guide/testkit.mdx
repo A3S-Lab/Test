@@ -14,10 +14,10 @@ If the goal is to select an element, drag over a region, sketch the intended UI,
 Run the version-pinned command in the frontend project:
 
 ```bash
-npm install --save-dev https://github.com/A3S-Lab/Test/releases/download/v1.0.0/a3s-testkit.tgz
+npm install --save-dev @a3s-lab/testkit@0.4.1
 ```
 
-The package is not published to the npm Registry yet, so this installs the `.tgz` attached to the GitHub Release. npm still records the dependency as `@a3s-lab/testkit`. The command above installs the Test Kit `0.4.0` package from the v1.0.0 Release, including the design board and page-region capture without a separate drawing or screenshot package.
+The package is published on the official npm Registry with GitHub OIDC provenance. The pinned 0.4.1 package includes the design board and page-region capture without a separate drawing or screenshot package.
 
 Verify that the dependency belongs to the current project:
 
@@ -354,7 +354,7 @@ Verification screenshots remain A3S Test evidence. A screenshot deliberately att
 
 ## Human marking and batch repair
 
-Test Kit 0.4.0 keeps review work in one fixed side panel. The shortest path is
+Test Kit 0.4.1 keeps review work in one fixed side panel. The shortest path is
 select a target, describe the change, then save or send. New feedback,
 findings, and preferences are three peer views. Marking tools are visible
 directly; selecting a target replaces them with the editor in the same panel,

@@ -913,7 +913,7 @@ intent, or shorten verification do not belong in this loop.
 - [x] Contain development servers in Unix process groups with a host-death
       watchdog and in suspended-before-assignment Windows Job Objects; cover
       late descendants, early server exit, Ctrl+C, and SIGKILL recovery
-- [ ] Publish `@a3s-lab/testkit` to the npm Registry with provenance,
+- [x] Publish `@a3s-lab/testkit` to the npm Registry with provenance,
       immutable release metadata, and one supported install command per
       package manager
 - [ ] Replace package-version inference with an explicit CLI, browser adapter,

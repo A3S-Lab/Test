@@ -35,10 +35,10 @@ async fn incompatible_installed_testkit_versions_fail_with_a_fix() {
     let installed = check(&checks, "testkit.installed");
     assert_eq!(installed.status, CheckStatus::Failed);
     assert!(installed.summary.contains(">=0.4.0, <0.5.0"));
-    assert!(installed
-        .fix
-        .as_deref()
-        .is_some_and(|fix| fix.contains("a3s-testkit.tgz")));
+    assert_eq!(
+        installed.fix.as_deref(),
+        Some("npm install --save-dev @a3s-lab/testkit@^0.4.0")
+    );
 }
 
 fn check<'a>(checks: &'a [DoctorCheck], id: &str) -> &'a DoctorCheck {

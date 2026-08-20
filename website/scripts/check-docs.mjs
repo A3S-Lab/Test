@@ -9,20 +9,31 @@ const repositoryRoot = path.resolve(websiteRoot, '..');
 const docsRoot = path.join(websiteRoot, 'docs');
 const failures = [];
 
-const [websiteReadme, websiteRegressionSuite, repositoryReadme, testKitReadme] =
-  await Promise.all([
-    readFile(path.join(websiteRoot, 'README.md'), 'utf8'),
-    readFile(
-      path.join(repositoryRoot, 'tests', 'e2e', 'website-testkit.acl'),
-      'utf8',
-    ),
-    readFile(path.join(repositoryRoot, 'README.md'), 'utf8'),
-    readFile(
-      path.join(repositoryRoot, 'packages', 'testkit', 'README.md'),
-      'utf8',
-    ),
-  ]);
+const [
+  websiteReadme,
+  websiteRegressionSuite,
+  repositoryReadme,
+  testKitReadme,
+  testKitManifestContents,
+] = await Promise.all([
+  readFile(path.join(websiteRoot, 'README.md'), 'utf8'),
+  readFile(
+    path.join(repositoryRoot, 'tests', 'e2e', 'website-testkit.acl'),
+    'utf8',
+  ),
+  readFile(path.join(repositoryRoot, 'README.md'), 'utf8'),
+  readFile(
+    path.join(repositoryRoot, 'packages', 'testkit', 'README.md'),
+    'utf8',
+  ),
+  readFile(
+    path.join(repositoryRoot, 'packages', 'testkit', 'package.json'),
+    'utf8',
+  ),
+]);
 const normalizedWebsiteReadme = websiteReadme.replace(/\s+/g, ' ');
+const testKitManifest = JSON.parse(testKitManifestContents);
+const currentRegistrySpec = `@a3s-lab/testkit@${testKitManifest.version}`;
 
 const requiredRegressionActions = [
   ['screenshot', 'review-screenshot-evidence'],
@@ -63,7 +74,7 @@ for (const [label, contents] of [
   ['Test Kit README', testKitReadme],
 ]) {
   for (const installDetail of [
-    'npm install --save-dev',
+    `npm install --save-dev ${currentRegistrySpec}`,
     'npm ls @a3s-lab/testkit',
     'npm Registry',
   ]) {
@@ -213,33 +224,58 @@ for (const version of versions) {
     const versionedPackageUrl =
       `https://github.com/A3S-Lab/Test/releases/download/${installVersion}/` +
       'a3s-testkit.tgz';
+    const snapshot =
+      version === defaultVersion
+        ? snapshots.current
+        : snapshots.archives.find((entry) => entry.version === version);
+    const registrySpec = `@a3s-lab/testkit@${snapshot?.testkitVersion}`;
+    const registryInstall = `npm install --save-dev ${registrySpec}`;
     if (
       version === defaultVersion &&
-      (!installationGuide.includes(
-        `npm install --save-dev ${versionedPackageUrl}`,
-      ) ||
+      (!installationGuide.includes(registryInstall) ||
         !installationGuide.includes('./testkit.mdx'))
     ) {
       failures.push(
         `${version} ${locale} installation guide lacks the current Test Kit install path.`,
       );
     }
+    if (version === defaultVersion) {
+      for (const command of [
+        `npm install --save-dev ${registrySpec}`,
+        `pnpm add --save-dev ${registrySpec}`,
+        `yarn add --dev ${registrySpec}`,
+        `bun add --dev ${registrySpec}`,
+      ]) {
+        if (!installationGuide.includes(command)) {
+          failures.push(
+            `${version} ${locale} installation guide lacks package-manager command: ${command}.`,
+          );
+        }
+      }
+      if (installationGuide.includes('a3s-testkit.tgz')) {
+        failures.push(
+          `${version} ${locale} installation guide retains the obsolete Release tarball install.`,
+        );
+      }
+    }
     const testKitGuide = await readFile(
       path.join(docsRoot, version, locale, 'guide', 'testkit.mdx'),
       'utf8',
     );
-    if (!testKitGuide.includes(versionedPackageUrl)) {
+    if (
+      version !== defaultVersion &&
+      !testKitGuide.includes(versionedPackageUrl)
+    ) {
       failures.push(
         `${version} ${locale} Test Kit guide does not pin ${versionedPackageUrl}.`,
       );
     }
     if (
       version === defaultVersion &&
-      (!testKitGuide.includes(
-        `npm install --save-dev ${versionedPackageUrl}`,
-      ) ||
+      (!testKitGuide.includes(registryInstall) ||
         !testKitGuide.includes('npm ls @a3s-lab/testkit') ||
-        !testKitGuide.includes('npm Registry'))
+        !testKitGuide.includes('npm Registry') ||
+        !testKitGuide.includes('GitHub OIDC provenance'))
     ) {
       failures.push(
         `${version} ${locale} Test Kit guide lacks the install, verification, or distribution explanation.`,

@@ -5,15 +5,14 @@ Development-only page context and human review SDK for A3S Test.
 ## Install
 
 ```bash
-npm install --save-dev https://github.com/A3S-Lab/Test/releases/latest/download/a3s-testkit.tgz
+npm install --save-dev @a3s-lab/testkit@0.4.1
 ```
 
-`@a3s-lab/testkit` is not published to the npm Registry yet. The command above
-installs the package attached to the latest GitHub Release, records it under
-the expected package name, and locks its integrity in the project lockfile.
-Use a versioned Release URL instead of `latest` when builds must be
-reproducible. The latest Release can lag the package on `main`; use the
-versioned documentation to distinguish published and staged features.
+`@a3s-lab/testkit` 0.4.1 is published on the official npm Registry with GitHub
+OIDC provenance. The pinned command keeps installation reproducible and locks
+the package integrity in the project lockfile. The package can lag features on
+`main`; use the versioned documentation to distinguish published and staged
+behavior.
 
 Verify that the current project can resolve the package:
 

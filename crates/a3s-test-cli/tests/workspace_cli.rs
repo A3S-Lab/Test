@@ -8,7 +8,7 @@ fn binary() -> PathBuf {
 
 fn write_vite_project(root: &Path, include_testkit: bool) {
     let testkit = if include_testkit {
-        r#", "@a3s-lab/testkit": "https://github.com/A3S-Lab/Test/releases/download/v1.0.0/a3s-testkit.tgz""#
+        r#", "@a3s-lab/testkit": "^0.4.0""#
     } else {
         ""
     };
@@ -121,10 +121,8 @@ fn doctor_returns_a_machine_readable_fix_for_a_missing_testkit() {
         .find(|check| check["id"] == "testkit.dependency")
         .expect("Test Kit dependency check");
     assert_eq!(testkit["status"], "failed");
-    assert!(
-        testkit["fix"]
-            .as_str()
-            .is_some_and(|fix| fix.contains("a3s-testkit.tgz")),
+    assert_eq!(
+        testkit["fix"], "npm install --save-dev @a3s-lab/testkit@^0.4.0",
         "{testkit}"
     );
 }
