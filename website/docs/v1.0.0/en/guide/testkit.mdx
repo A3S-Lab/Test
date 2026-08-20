@@ -16,7 +16,7 @@ Test Kit connects a rendered page to its implementation without turning the page
 | Let an agent read the page beyond a screenshot | A headless Context Runtime derives bounded facts after DOM, accessibility, style, and layout are computed                  |
 | Let a person point at the exact problem        | One right-side Review Overlay supports element, text, multi-select, region, drawing, board, and browser-page capture flows |
 | Lead a selected node back to code              | Explicit component boundaries, DOM ownership registration, and optional Source Map v3 produce ranked source spans          |
-| Prevent an old target from reaching a new page | Exact revision deltas retain only unaffected context targets; every uncertain binding fails closed                        |
+| Prevent an old target from reaching a new page | Exact revision deltas retain only unaffected context targets; every uncertain binding fails closed                         |
 | Keep review separate from source mutation      | Saving stays local; only explicit submission enters the A3S Test repair ledger                                             |
 
 ```text
@@ -431,11 +431,11 @@ MutationObserver, ResizeObserver, scrolling, viewport, and navigation signals ad
 
 ## Distinguish actionable refs from read-only evidence
 
-| Ref   | Meaning                                             | Authority                                                                |
-| ----- | --------------------------------------------------- | ------------------------------------------------------------------------ |
-| `@eN` | Accessible semantic node in the browser observation | Actionable only in the observation that produced it                      |
+| Ref   | Meaning                                             | Authority                                                                                  |
+| ----- | --------------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| `@eN` | Accessible semantic node in the browser observation | Actionable only in the observation that produced it                                        |
 | `@cN` | Uniquely actionable node in current Page Context    | Actionable in that observation; only an unaffected stable locator may cross revision drift |
-| `@uN` | Evidence node in UI understanding                   | Read-only and only connects style, layout, state, and motion facts       |
+| `@uN` | Evidence node in UI understanding                   | Read-only and only connects style, layout, state, and motion facts                         |
 
 Public observations never expose Test Kit's private node IDs, and persistent session metadata stores only domain-separated SHA-256 node fingerprints. A uniquely actionable UI node reuses `@cN`; other evidence nodes project to `@uN`. Any `@uN` action is rejected during ACL admission or before driver dispatch. If projection cannot preserve both graph integrity and the encoded byte budget, A3S Test omits the optional UI evidence.
 

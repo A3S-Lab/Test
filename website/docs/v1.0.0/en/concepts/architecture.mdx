@@ -58,14 +58,14 @@ No arrow is implicit. An observation cannot authorize an edit. A model candidate
 
 ## Implementation layers
 
-| Layer                         | Repository owner                                   | Responsibility                                                                                            |
-| ----------------------------- | -------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| Layer                         | Repository owner                                   | Responsibility                                                                                             |
+| ----------------------------- | -------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
 | Embedded page context         | `packages/testkit`                                 | Post-render context, exact revision deltas, source mapping, bounded UI evidence, and optional human review |
-| Surface-independent contracts | `crates/a3s-test-core`                             | Typed actions, targets, observations, policy inputs, evidence records, results, and driver traits         |
-| Persistent interaction state  | `crates/a3s-test-session`                          | Session lifecycle, observation-bound refs, action admission, append-only state, and verification bindings |
-| Concrete execution            | `crates/a3s-test-driver-web`, GUI, and TUI drivers | Surface perception, action dispatch, evidence capture, and exact runtime cleanup                          |
-| User and agent entry points   | `crates/a3s-test-cli` and MCP adapters             | CLI commands, JSON contracts, project loop, repair coordination, and protocol-facing validation           |
-| Deterministic regression      | ACL compiler and runner                            | Static admission followed by bounded actions, waits, assertions, evidence, and cleanup                    |
+| Surface-independent contracts | `crates/a3s-test-core`                             | Typed actions, targets, observations, policy inputs, evidence records, results, and driver traits          |
+| Persistent interaction state  | `crates/a3s-test-session`                          | Session lifecycle, observation-bound refs, action admission, append-only state, and verification bindings  |
+| Concrete execution            | `crates/a3s-test-driver-web`, GUI, and TUI drivers | Surface perception, action dispatch, evidence capture, and exact runtime cleanup                           |
+| User and agent entry points   | `crates/a3s-test-cli` and MCP adapters             | CLI commands, JSON contracts, project loop, repair coordination, and protocol-facing validation            |
+| Deterministic regression      | ACL compiler and runner                            | Static admission followed by bounded actions, waits, assertions, evidence, and cleanup                     |
 
 The Core never branches on a backend name. A deployment injects a typed `SurfaceDriver`; the adapter owns only the capabilities it can prove. Unsupported behavior fails closed.
 
@@ -89,11 +89,11 @@ Protocol `a3s.test.page-context/1` is exposed through a non-enumerable, Symbol-a
 
 Public refs express authority instead of leaking private identity:
 
-| Ref   | Meaning                                                                      |
-| ----- | ---------------------------------------------------------------------------- |
-| `@eN` | Browser semantic target, actionable only in its observation                  |
+| Ref   | Meaning                                                                                                   |
+| ----- | --------------------------------------------------------------------------------------------------------- |
+| `@eN` | Browser semantic target, actionable only in its observation                                               |
 | `@cN` | Unique Page Context target; in its observation, only a proven unaffected locator may cross revision drift |
-| `@uN` | Supplemental style, layout, state, or motion evidence, permanently read-only |
+| `@uN` | Supplemental style, layout, state, or motion evidence, permanently read-only                              |
 
 Rendered-node source mapping follows the same rule. `A3STestBoundary` may provide a coarse source hint. Framework adapters may explicitly register a DOM owner and an encoded Source Map v3. Test Kit ranks the resulting candidates but never reads framework private state, downloads a source map, or grants file authority.
 
