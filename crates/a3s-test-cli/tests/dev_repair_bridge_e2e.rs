@@ -8,11 +8,8 @@ use std::sync::mpsc;
 use std::thread;
 use std::time::Duration;
 
-use serde_json::{json, Value};
-use support::repair_fixture::{
-    admitted_browser, assert_process_success, binary, start_fixture, submit_findings_in_browser,
-    target_node_ids_in_browser,
-};
+use serde_json::Value;
+use support::repair_fixture::{admitted_browser, assert_process_success, binary, start_fixture};
 
 #[test]
 #[ignore = "requires Node esbuild and the exact standalone agent-browser 0.26.x runtime"]
@@ -23,7 +20,11 @@ fn dev_repair_bridge_delivers_real_browser_findings_without_manual_watch() {
     };
     let (_bundle_workspace, fixture) = start_fixture();
     let workspace = tempfile::tempdir().expect("temporary development bridge workspace");
-    write_project(workspace.path(), &fixture.origin(), &browser);
+    write_project(
+        workspace.path(),
+        &format!("{}#a3s-auto-repair=dev-bridge", fixture.origin()),
+        &browser,
+    );
     let mut dev = DevHost::spawn(workspace.path());
 
     let ready = dev.next_event("ready");
@@ -34,35 +35,6 @@ fn dev_repair_bridge_delivers_real_browser_findings_without_manual_watch() {
         "a3s.test.local-repair-bridge/1"
     );
     let session = ready["session"].as_str().expect("development session");
-    let state_path = workspace
-        .path()
-        .join(".a3s-test/agent-sessions")
-        .join(session)
-        .join("session.json");
-    let state: Value = serde_json::from_slice(&fs::read(&state_path).expect("session state"))
-        .expect("session state JSON");
-    let target = target_node_ids_in_browser(&browser, &state, &["repair-target"])
-        .into_iter()
-        .next()
-        .expect("repair target node ID");
-    let finding = json!({
-        "id": "finding-dev-real",
-        "instruction": "Make the primary action easier to see",
-        "successCriteria": "The primary action is visually prominent",
-        "intent": "change",
-        "severity": "important",
-        "target": {
-            "kind": "node",
-            "nodeIds": [target]
-        },
-        "createdAt": "2026-08-20T00:00:00.000Z"
-    });
-    let submitted = submit_findings_in_browser(
-        &browser,
-        &state,
-        &serde_json::to_string(&[finding]).expect("finding JSON"),
-    );
-    assert_eq!(submitted.len(), 1);
 
     let batch = dev.next_event("repair_batch");
     assert_eq!(batch["protocol"], "a3s.test.local-repair-bridge/1");

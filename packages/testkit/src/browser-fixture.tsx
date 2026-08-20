@@ -45,6 +45,48 @@ let setVirtualRow: ((value: string) => void) | undefined;
 let setRepairedState: ((value: boolean) => void) | undefined;
 let fixtureEventSequence = Date.now();
 
+function scheduleDevelopmentBridgeFinding(): () => void {
+  const mode = new URLSearchParams(location.hash.slice(1)).get(
+    "a3s-auto-repair",
+  );
+  if (mode !== "dev-bridge") return () => undefined;
+
+  let cancelled = false;
+  let frame = 0;
+  let handle = 0;
+  const submit = () => {
+    if (cancelled || frame++ >= 300) return;
+    const bridge = getPageContextBridge();
+    const nodeId = bridge
+      ?.snapshot({ detail: "forensic" })
+      .nodes.find((node) => node.testId === "repair-target")?.id;
+    if (!bridge || !nodeId) {
+      handle = requestAnimationFrame(submit);
+      return;
+    }
+    if (bridge.listRepairs().some((repair) => repair.id === "finding-dev-real"))
+      return;
+    bridge.submitRepair({
+      findings: [
+        {
+          id: "finding-dev-real",
+          instruction: "Make the primary action easier to see",
+          successCriteria: "The primary action is visually prominent",
+          intent: "change",
+          severity: "important",
+          target: { kind: "node", nodeIds: [nodeId] },
+          createdAt: "2026-08-20T00:00:00.000Z",
+        },
+      ],
+    });
+  };
+  handle = requestAnimationFrame(submit);
+  return () => {
+    cancelled = true;
+    cancelAnimationFrame(handle);
+  };
+}
+
 const AUDIT_REPAIR_TRANSITIONS: Record<RepairStatus, readonly RepairStatus[]> =
   {
     draft: ["queued", "cancelled"],
@@ -203,6 +245,7 @@ function Fixture() {
     setVirtualRow = setRow;
     setRepairedState = setRepaired;
     document.documentElement.dataset.hydrated = "true";
+    const cancelDevelopmentBridgeFinding = scheduleDevelopmentBridgeFinding();
     const host = document.querySelector<HTMLElement>("#shadow-host");
     if (host && !host.shadowRoot) {
       const shadow = host.attachShadow({ mode: "open" });
@@ -211,6 +254,7 @@ function Fixture() {
     return () => {
       setVirtualRow = undefined;
       setRepairedState = undefined;
+      cancelDevelopmentBridgeFinding();
       document.documentElement.dataset.hydrated = "false";
     };
   }, []);
