@@ -270,6 +270,10 @@ jobs:
             real_standalone_browser_waits_for_a_delayed_live_testkit_handshake \
             --locked -- --ignored --exact --nocapture
           bash .github/scripts/run-cargo-test.sh \
+            cargo test -p a3s-test-cli --test dev_repair_bridge_e2e \
+            dev_repair_bridge_delivers_real_browser_findings_without_manual_watch \
+            --locked -- --ignored --exact --nocapture
+          bash .github/scripts/run-cargo-test.sh \
             cargo test -p a3s-test-cli --test hidden_visibility_e2e \
             real_agent_browser_runs_hidden_visibility_suite \
             --locked -- --ignored --exact --nocapture
@@ -322,6 +326,9 @@ jobs:
           $env:A3S_TEST_AGENT_BROWSER = $browser
           cargo test -p a3s-test-driver-web --test testkit_handshake_e2e `
             real_standalone_browser_waits_for_a_delayed_live_testkit_handshake `
+            --locked -- --ignored --exact --nocapture
+          cargo test -p a3s-test-cli --test dev_repair_bridge_e2e `
+            dev_repair_bridge_delivers_real_browser_findings_without_manual_watch `
             --locked -- --ignored --exact --nocapture
           cargo test -p a3s-test-cli --test hidden_visibility_e2e `
             real_agent_browser_runs_hidden_visibility_suite `

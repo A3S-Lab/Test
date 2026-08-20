@@ -1520,6 +1520,57 @@ cleans only a development server owned by the command. Successful `ready`
 events serialize the admitted handshake under `testkit`, or `null` for an
 optional absent bridge.
 
+When the admitted handshake is present, `a3s-test dev` starts the in-process
+local repair bridge `a3s.test.local-repair-bridge/1`. It opens no additional
+listener and creates no second session or ledger. The `a3s.test.dev/1` ready
+event contains:
+
+```json
+{
+  "repair_bridge": {
+    "protocol": "a3s.test.local-repair-bridge/1",
+    "state": "watching",
+    "event": "repair_batch"
+  }
+}
+```
+
+An optional profile with no live Test Kit bridge serializes
+`repair_bridge: null` and performs no repair polling. For an active bridge,
+each bounded turn reloads the existing session `repairs.jsonl`, recovers
+expired leases, replays authoritative status to the page, ingests bounded
+human actions, resolves declared conflicts, and captures any missing owned
+before evidence. It then waits at most one second for a page submission and
+uses a 250 ms batch window. Existing `agent repair-watch` commands call the
+same application operation but retain their queued-first one-shot behavior.
+
+Only queued records that have not already been delivered at the same finding
+ID and ledger sequence are emitted. A later authoritative requeue has a newer
+sequence and is therefore deliverable again. The compact JSONL event is:
+
+```json
+{
+  "protocol": "a3s.test.local-repair-bridge/1",
+  "event": "repair_batch",
+  "project": "checkout",
+  "protocol_revision": 15,
+  "session": "dev",
+  "repairs": [],
+  "batches": [],
+  "ledger_path": "/workspace/.a3s-test/agent-sessions/dev/repairs.jsonl"
+}
+```
+
+`repairs` contains complete queued `RepairRecord` values with A3S Test-owned
+before evidence; `batches` is limited to the batches touched by those emitted
+records. The generated session ID is sufficient for subsequent typed
+`agent repair-*` commands, so no manual repair-watch/session coordination is
+required. Cancellation drops the bounded browser command and enters the same
+exact browser and owned-server cleanup path. A bridge failure emits a final
+`a3s.test.dev/1` stopped event with `reason: "repair_bridge_error"`, performs
+that cleanup, and returns a startup/infrastructure failure instead of leaving
+the review session alive.
+
 Persistent agent sessions derive a browser exact-origin policy from the
 initial URL and each `--allow-origin`. `--allow-origin` also permits explicit
 navigation to that exact HTTP(S) origin. `--allow-domain` adds a hostname or a

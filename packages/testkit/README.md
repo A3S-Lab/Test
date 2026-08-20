@@ -72,6 +72,14 @@ range, Page Context protocol, required capabilities, and Review Overlay before
 it reports a ready review session. The older `probe()` operation remains for
 Page Context feature discovery; it is not the CLI compatibility decision.
 
+Once admitted, the same `a3s-test dev --json` process exposes
+`a3s.test.local-repair-bridge/1`. A finding explicitly sent from the Review
+Overlay is persisted with A3S Test-owned before evidence and emitted once as a
+`repair_batch` JSONL event containing the generated session ID. The coding
+agent therefore does not need a separate manually coordinated
+`repair-watch --session ...` process. The bridge reuses the existing repair
+ledger and projects later agent or human state back into this page.
+
 The review UI supports `locale="auto" | "en" | "zh-CN"`. `auto` is the
 default and observes `<html lang>` while mounted, resolving every `zh-*` page
 language to Simplified Chinese and other page languages to English. Set the

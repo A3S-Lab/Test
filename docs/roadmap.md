@@ -919,7 +919,7 @@ intent, or shorten verification do not belong in this loop.
 - [x] Replace package-version inference with an explicit CLI, browser adapter,
       and live Test Kit protocol handshake that reports the incompatible
       boundary and exact upgrade path
-- [ ] Add a local repair bridge that lets an ordinary development browser and
+- [x] Add a local repair bridge that lets an ordinary development browser and
       the workspace-owning coding agent exchange submitted findings without a
       manually coordinated session command
 - [ ] Map a selected rendered node to ranked, confidence-bearing source spans

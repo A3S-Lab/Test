@@ -75,6 +75,15 @@ the live Review Overlay. Its `ready` event contains the admitted handshake.
 If a required boundary is missing or incompatible, A3S Test aborts only the
 browser session it opened and prints the exact install or mount repair.
 
+After admission, `dev --json` also reports
+`a3s.test.local-repair-bridge/1` under `ready.repair_bridge`. Send a finding
+from the ordinary Review Overlay and the same stdout stream emits a
+`repair_batch` only after the existing repair ledger and owned before evidence
+are durable. The event includes the generated session ID, so the coding agent
+can claim it without starting a separately coordinated `repair-watch`
+process. An optional page with no Test Kit reports `repair_bridge: null` and
+does not poll.
+
 ## Most projects can stop here
 
 Choose additional configuration only when the workflow needs it.

@@ -7,6 +7,7 @@ mod grounding;
 mod inspect;
 mod policy;
 mod repair;
+mod repair_watch;
 mod runtime;
 mod schema;
 mod store;
@@ -39,6 +40,9 @@ pub(crate) use self::dev::{abort_dev_session, start_dev_session, DevSession, Dev
 use self::events::{append_success_event, append_terminal_event, record_failure};
 use self::policy::{
     browser_network_policy, validate_action, validate_observation_origin, web_origin,
+};
+pub(crate) use self::repair_watch::{
+    watch_session, RepairPickup, RepairWatchRequest, RepairWatchResult,
 };
 use self::runtime::{
     create_runtime_directory, driver_session_id, remove_runtime_directory, session_namespace,
@@ -244,7 +248,7 @@ pub(crate) async fn execute(args: AgentArgs) -> Result<ExitCode> {
             )
             .await
         }
-        AgentCommand::RepairWatch(args) => repair::watch(args).await,
+        AgentCommand::RepairWatch(args) => repair_watch::watch(args).await,
         AgentCommand::RepairClaim(args) => repair::transition(args, RepairStatus::Claimed).await,
         AgentCommand::RepairProgress(args) => {
             repair::transition(args, RepairStatus::Repairing).await

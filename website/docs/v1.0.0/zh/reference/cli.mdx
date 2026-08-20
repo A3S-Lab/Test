@@ -27,6 +27,36 @@ a3s-test distributed schema
 
 Provider schema 描述请求、响应、来源和权限字段，不代表仓库捆绑了某个推理后端。
 
+## 项目 Vibe Loop
+
+这些命令已经进入 `main`，会随下一版本发布；已发布的 v1.0.0 二进制尚不包含它们。
+
+| 命令     | 作用                                                         |
+| -------- | ------------------------------------------------------------ |
+| `init`   | 发现前端工程并写入 `.a3s-test/project.acl`。                 |
+| `doctor` | 检查配置、可执行文件、包、Test Kit 与可选 URL 连通性。       |
+| `dev`    | 打开一个有界页面评审会话，并持续转交用户明确发送的 finding。 |
+
+```bash
+a3s-test init --root . --json
+a3s-test doctor --root . --json
+a3s-test dev --root . --json
+```
+
+`init` 默认要求 Test Kit，只做发现与配置，不会安装依赖或启动进程。`doctor --connect` 会额外探测 URL；`--strict` 会把 warning 视为失败。
+
+`dev` 先执行静态检查。配置 URL 已可访问时标记为 `server: "existing"`，退出时不会终止它；否则直接启动配置中的命令并拥有其进程树。开发服务器日志只写入 stderr，stdout 保持为紧凑 JSONL：
+
+```json
+{"protocol":"a3s.test.dev/1","event":"ready","project":"checkout","url":"http://127.0.0.1:5173/","server":"started","session":"dev","repair_bridge":{"protocol":"a3s.test.local-repair-bridge/1","state":"watching","event":"repair_batch"}}
+{"protocol":"a3s.test.local-repair-bridge/1","event":"repair_batch","project":"checkout","protocol_revision":15,"session":"dev","repairs":["..."],"batches":["..."],"ledger_path":".../repairs.jsonl"}
+{"protocol":"a3s.test.dev/1","event":"stopped","project":"checkout","url":"http://127.0.0.1:5173/","server":"started","session":"dev","reason":"interrupt","cleanup":"complete"}
+```
+
+实时 Test Kit 握手通过后，页面评审侧栏明确发送的 finding 会先写入权威 `repairs.jsonl` 并捕获 A3S Test 自有的修改前证据，再按 finding ID 与 ledger sequence 去重后发出 `repair_batch`。事件已经包含生成的 session ID，coding agent 不需要再手工协调一个 `repair-watch --session ...` 进程。Test Kit 可选且页面中完全不存在时，`repair_bridge` 为 `null`，不会启动轮询。
+
+按 Ctrl+C 会在精确关闭浏览器和自有开发服务器后返回 130。自有服务器异常退出会返回 1。启动、配置或 bridge 失败会返回 2；bridge 失败的停止原因为 `repair_bridge_error`，同样先完成精确清理。
+
 ## Agent 会话
 
 | 命令                              | 作用                                              |
@@ -146,6 +176,10 @@ a3s-test agent inspect \
 | 失败或取消 | `repair-fail`、`repair-cancel` | 追加终止事件并保留 attempt 历史                                    |
 
 每次状态变化都需要新的幂等 request ID。claim 返回的 attempt ID 要沿用到 progress、reply、complete 和 fail。`repair-verify` 必须针对更新后的 ready 页面修订。
+
+`repair-watch` 仍用于直接启动的 Agent session 做一次提取。`dev --json`
+session 已经运行本地 repair bridge，并会发出带修改前证据的 `repair_batch`，
+不要再为它附加第二个 watch loop。
 
 ### 会话终态与文件
 

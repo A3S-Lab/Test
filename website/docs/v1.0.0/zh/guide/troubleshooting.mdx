@@ -207,6 +207,10 @@ UI 记录因图不完整而被整体省略时，外层 Page Context 仍可能有
 
 先区分草稿和发送。保存本地草稿、复制 Markdown 或打开建议都不会进入 Repair Ledger。
 
+工程已经通过 `a3s-test dev --json` 启动时，不要并行执行下面的命令。先确认
+`ready.repair_bridge.state` 为 `watching`，再从现有 dev stdout 流读取
+`repair_batch`。手工 watch 只用于直接启动的 Agent session 或一次明确的有界回放。
+
 ```bash
 a3s-test agent repair-watch \
   --session smoke \

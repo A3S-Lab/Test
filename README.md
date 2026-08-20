@@ -94,6 +94,16 @@ required bridge or an incompatible mounted bridge aborts that exact browser
 session and reports the failed boundary with the package-manager-specific
 repair command.
 
+An admitted Test Kit also activates `a3s.test.local-repair-bridge/1` inside
+the same `dev` process. The `ready.repair_bridge` field announces the bridge;
+each finding sent from the ordinary Review Overlay then appears once as a
+`repair_batch` JSONL event after A3S Test has persisted it to `repairs.jsonl`
+and captured owned before evidence. The event already carries the generated
+session ID, so a coding agent running `dev --json` does not need a separately
+coordinated `agent repair-watch --session ...` command. Claim, progress,
+verification, human replies, conflict handling, and overlay status replay
+continue to use the existing authoritative repair ledger.
+
 Use `a3s-test init --testkit optional` only when browser semantics are enough
 and the in-page review overlay is deliberately absent.
 

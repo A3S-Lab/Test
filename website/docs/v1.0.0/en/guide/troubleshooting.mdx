@@ -245,6 +245,11 @@ When keyboard tools do not respond, confirm that focus is outside text fields an
 
 Separate draft state from submission. Saving a local draft, copying Markdown, and opening advice do not enter the Repair Ledger.
 
+For a project started with `a3s-test dev --json`, do not run the command below
+in parallel. Confirm that `ready.repair_bridge.state` is `watching`, then read
+the `repair_batch` event from the existing dev stdout stream. The manual watch
+command is for a directly started agent session or an explicit bounded replay.
+
 ```bash
 a3s-test agent repair-watch \
   --session smoke \

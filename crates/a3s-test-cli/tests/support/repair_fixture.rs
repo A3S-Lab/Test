@@ -111,53 +111,7 @@ impl RepairSession {
     }
 
     pub fn browser(&self, arguments: &[&str]) -> Output {
-        let namespace = self.state["namespace"].as_str().expect("browser namespace");
-        let driver_session = self.state["driver_session"]
-            .as_str()
-            .expect("browser session id");
-        let runtime_dir = self.state["runtime_dir"]
-            .as_str()
-            .expect("browser runtime directory");
-        let mut allowed_domains = self.state["browser_allowed_origins"]
-            .as_array()
-            .expect("browser allowed origins")
-            .iter()
-            .filter_map(|origin| {
-                url::Url::parse(origin.as_str().expect("allowed origin"))
-                    .ok()
-                    .and_then(|url| url.host_str().map(str::to_string))
-            })
-            .collect::<Vec<_>>();
-        allowed_domains.extend(
-            self.state["browser_allowed_domains"]
-                .as_array()
-                .expect("browser allowed domains")
-                .iter()
-                .map(|domain| domain.as_str().expect("allowed domain").to_string()),
-        );
-        allowed_domains.sort();
-        allowed_domains.dedup();
-        let allowed_domains = allowed_domains.join(",");
-        let mut command = Command::new(&self.browser);
-        command
-            .env("AGENT_BROWSER_NAMESPACE", namespace)
-            .env("AGENT_BROWSER_SOCKET_DIR", runtime_dir)
-            .env("AGENT_BROWSER_IDLE_TIMEOUT_MS", "60000")
-            .env("AGENT_BROWSER_ALLOWED_DOMAINS", &allowed_domains)
-            .env("AGENT_BROWSER_ARGS", "--headless=new")
-            .args([
-                "--session",
-                driver_session,
-                "--json",
-                "--headed",
-                "false",
-                "--allowed-domains",
-                &allowed_domains,
-                "--engine",
-                "chrome",
-            ])
-            .args(arguments);
-        bounded_output(&mut command, "run command against the owned repair browser")
+        browser_command(&self.browser, &self.state, arguments)
     }
 
     pub fn watch(&self) -> Value {
@@ -238,10 +192,18 @@ impl Drop for RepairSession {
 }
 
 pub fn submit_findings(session: &RepairSession, findings_json: &str) -> Vec<Value> {
+    submit_findings_in_browser(&session.browser, &session.state, findings_json)
+}
+
+pub fn submit_findings_in_browser(
+    browser: &Path,
+    state: &Value,
+    findings_json: &str,
+) -> Vec<Value> {
     let script = format!(
         "JSON.stringify(window[Symbol.for('a3s.test.page-context')].submitRepair({{findings:{findings_json}}}))"
     );
-    let output = session.browser(&["eval", &script]);
+    let output = browser_command(browser, state, &["eval", &script]);
     assert_process_success("submit repair findings through the page bridge", &output);
     let encoded = browser_eval_result(&output);
     serde_json::from_str(&encoded).expect("browser repair submission JSON")
@@ -258,14 +220,68 @@ pub fn submit_layout_findings_from_overlay(session: &RepairSession) -> Value {
 }
 
 pub fn target_node_ids(session: &RepairSession, test_ids: &[&str]) -> Vec<String> {
+    target_node_ids_in_browser(&session.browser, &session.state, test_ids)
+}
+
+pub fn target_node_ids_in_browser(browser: &Path, state: &Value, test_ids: &[&str]) -> Vec<String> {
     let test_ids = serde_json::to_string(test_ids).expect("test IDs JSON");
     let script = format!(
         "JSON.stringify((()=>{{const ids=new Set({test_ids});return window[Symbol.for('a3s.test.page-context')].snapshot({{detail:'forensic'}}).nodes.filter(node=>ids.has(node.testId)).map(node=>node.id)}})())"
     );
-    let output = session.browser(&["eval", &script]);
+    let output = browser_command(browser, state, &["eval", &script]);
     assert_process_success("capture repair target node IDs", &output);
     let encoded = browser_eval_result(&output);
     serde_json::from_str(&encoded).expect("browser node ID JSON")
+}
+
+pub fn browser_command(browser: &Path, state: &Value, arguments: &[&str]) -> Output {
+    let namespace = state["namespace"].as_str().expect("browser namespace");
+    let driver_session = state["driver_session"]
+        .as_str()
+        .expect("browser session id");
+    let runtime_dir = state["runtime_dir"]
+        .as_str()
+        .expect("browser runtime directory");
+    let mut allowed_domains = state["browser_allowed_origins"]
+        .as_array()
+        .expect("browser allowed origins")
+        .iter()
+        .filter_map(|origin| {
+            url::Url::parse(origin.as_str().expect("allowed origin"))
+                .ok()
+                .and_then(|url| url.host_str().map(str::to_string))
+        })
+        .collect::<Vec<_>>();
+    allowed_domains.extend(
+        state["browser_allowed_domains"]
+            .as_array()
+            .expect("browser allowed domains")
+            .iter()
+            .map(|domain| domain.as_str().expect("allowed domain").to_string()),
+    );
+    allowed_domains.sort();
+    allowed_domains.dedup();
+    let allowed_domains = allowed_domains.join(",");
+    let mut command = Command::new(browser);
+    command
+        .env("AGENT_BROWSER_NAMESPACE", namespace)
+        .env("AGENT_BROWSER_SOCKET_DIR", runtime_dir)
+        .env("AGENT_BROWSER_IDLE_TIMEOUT_MS", "60000")
+        .env("AGENT_BROWSER_ALLOWED_DOMAINS", &allowed_domains)
+        .env("AGENT_BROWSER_ARGS", "--headless=new")
+        .args([
+            "--session",
+            driver_session,
+            "--json",
+            "--headed",
+            "false",
+            "--allowed-domains",
+            &allowed_domains,
+            "--engine",
+            "chrome",
+        ])
+        .args(arguments);
+    bounded_output(&mut command, "run command against the owned repair browser")
 }
 
 pub fn json_output(context: &str, output: &Output) -> Value {

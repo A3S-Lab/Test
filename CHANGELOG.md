@@ -4,6 +4,17 @@
 
 ### Added
 
+- Added `a3s.test.local-repair-bridge/1` to `a3s-test dev`. An admitted Test
+  Kit now feeds explicitly submitted Review Overlay findings into the existing
+  authoritative repair ledger, captures owned before evidence, and emits each
+  queued finding once per ledger sequence as a compact `repair_batch` JSONL
+  event with the generated session ID. Coding agents no longer need a
+  separately coordinated `repair-watch` command for the local project loop.
+  The bridge reuses lease recovery, conflict handling, human actions, and page
+  status projection; optional absent Test Kit profiles do not poll. Ctrl+C,
+  server exit, and bridge failure retain exact browser and owned-process-tree
+  cleanup, with hermetic fake-driver coverage and a real standalone Chromium
+  E2E on macOS and Windows.
 - Published `@a3s-lab/testkit` to the official npm Registry with GitHub OIDC
   provenance. The 0.4.1 package corrects the Registry-facing installation
   guide, while `init` and `doctor` print the compatible install range for npm,

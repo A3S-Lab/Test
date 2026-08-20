@@ -1,14 +1,17 @@
+use std::future::pending;
 use std::process::{ExitCode, ExitStatus};
 use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result};
 use reqwest::Client;
+use serde::Serialize;
 use serde_json::{json, Value};
 use tokio_util::sync::CancellationToken;
 
 use super::config::{ProjectBrowserDriver, ProjectProfile};
 use super::discovery::testkit_install_command;
 use super::process::OwnedServer;
+use super::repair_bridge::{LocalRepairBridge, RepairBridgeBatch, RepairBridgeEvent};
 use super::{config, doctor, DevArgs};
 use crate::agent_session::{abort_dev_session, start_dev_session, DevSession, DevSessionRequest};
 use crate::BrowserDriverKind;
@@ -117,6 +120,11 @@ async fn run(
             return Err(error.context("failed to start the development review browser"));
         }
     };
+    let repair_bridge = session
+        .testkit
+        .as_ref()
+        .map(|_| LocalRepairBridge::new(profile.root.clone(), session.session.clone()));
+    let repair_bridge_metadata = repair_bridge.as_ref().map(LocalRepairBridge::metadata);
     let stop = if cancellation.is_cancelled() {
         Stop::Interrupted
     } else {
@@ -131,24 +139,21 @@ async fn run(
                 "session": session.session,
                 "artifacts_dir": session.artifacts_dir,
                 "testkit": session.testkit,
+                "repair_bridge": repair_bridge_metadata,
             }),
             &format!(
                 "A3S Test review is ready at {} (session '{}')",
                 profile.dev_server.url, session.session
             ),
         )?;
-        match owned_server.as_mut() {
-            Some(server) => {
-                tokio::select! {
-                    _ = cancellation.cancelled() => Stop::Interrupted,
-                    status = server.wait() => Stop::ServerExited(status?),
-                }
-            }
-            None => {
-                cancellation.cancelled().await;
-                Stop::Interrupted
-            }
-        }
+        monitor_review(
+            &profile,
+            json_output,
+            &cancellation,
+            &mut owned_server,
+            repair_bridge,
+        )
+        .await
     };
 
     let browser_cleanup = abort_dev_session(&profile.root, &session.session).await;
@@ -161,7 +166,7 @@ async fn run(
         None => Ok(()),
     };
     let cleanup_complete = browser_cleanup.is_ok() && server_cleanup.is_ok();
-    match stop {
+    match &stop {
         Stop::Interrupted => emit(
             json_output,
             json!({
@@ -181,16 +186,94 @@ async fn run(
                 json_output,
                 &profile,
                 Some(&session),
-                status,
+                *status,
                 cleanup_complete,
             )?;
         }
+        Stop::RepairBridgeFailed(_) => emit_monitor_failure(
+            json_output,
+            &profile,
+            &session,
+            server_kind,
+            "repair_bridge_error",
+            cleanup_complete,
+            "Local repair bridge stopped unexpectedly",
+        )?,
+        Stop::ServerWaitFailed(_) => emit_monitor_failure(
+            json_output,
+            &profile,
+            &session,
+            server_kind,
+            "server_wait_error",
+            cleanup_complete,
+            "Development server monitoring stopped unexpectedly",
+        )?,
     }
-    finish_cleanup(browser_cleanup, server_cleanup)?;
-    Ok(match stop {
-        Stop::Interrupted => ExitCode::from(130),
-        Stop::ServerExited(_) => ExitCode::from(1),
-    })
+    let cleanup = finish_cleanup(browser_cleanup, server_cleanup);
+    match (stop, cleanup) {
+        (Stop::Interrupted, Ok(())) => Ok(ExitCode::from(130)),
+        (Stop::ServerExited(_), Ok(())) => Ok(ExitCode::from(1)),
+        (Stop::RepairBridgeFailed(error), Ok(())) => {
+            Err(error.context("local repair bridge failed"))
+        }
+        (Stop::ServerWaitFailed(error), Ok(())) => {
+            Err(error.context("development server monitoring failed"))
+        }
+        (Stop::RepairBridgeFailed(error), Err(cleanup)) => anyhow::bail!(
+            "local repair bridge failed ({error:#}); development review cleanup also failed: {cleanup:#}"
+        ),
+        (Stop::ServerWaitFailed(error), Err(cleanup)) => anyhow::bail!(
+            "development server monitoring failed ({error:#}); development review cleanup also failed: {cleanup:#}"
+        ),
+        (_, Err(cleanup)) => Err(cleanup),
+    }
+}
+
+async fn monitor_review(
+    profile: &ProjectProfile,
+    json_output: bool,
+    cancellation: &CancellationToken,
+    owned_server: &mut Option<OwnedServer>,
+    mut repair_bridge: Option<LocalRepairBridge>,
+) -> Stop {
+    loop {
+        tokio::select! {
+            _ = cancellation.cancelled() => return Stop::Interrupted,
+            status = wait_for_owned_server(owned_server) => {
+                return match status {
+                    Ok(status) => Stop::ServerExited(status),
+                    Err(error) => Stop::ServerWaitFailed(error),
+                };
+            }
+            batch = next_repair_batch(&mut repair_bridge) => {
+                match batch {
+                    Ok(Some(batch)) => {
+                        if let Err(error) = emit_repair_batch(json_output, &profile.id, batch) {
+                            return Stop::RepairBridgeFailed(error);
+                        }
+                    }
+                    Ok(None) => {}
+                    Err(error) => return Stop::RepairBridgeFailed(error),
+                }
+            }
+        }
+    }
+}
+
+async fn wait_for_owned_server(server: &mut Option<OwnedServer>) -> Result<ExitStatus> {
+    match server.as_mut() {
+        Some(server) => server.wait().await.map_err(anyhow::Error::new),
+        None => pending().await,
+    }
+}
+
+async fn next_repair_batch(
+    bridge: &mut Option<LocalRepairBridge>,
+) -> Result<Option<RepairBridgeBatch>> {
+    match bridge.as_mut() {
+        Some(bridge) => bridge.next().await,
+        None => pending().await,
+    }
 }
 
 async fn start_browser_session(profile: &ProjectProfile) -> Result<DevSession> {
@@ -285,7 +368,42 @@ fn emit_server_exit(
     )
 }
 
-fn emit(json_output: bool, event: Value, human: &str) -> Result<()> {
+fn emit_monitor_failure(
+    json_output: bool,
+    profile: &ProjectProfile,
+    session: &DevSession,
+    server_kind: &str,
+    reason: &str,
+    cleanup_complete: bool,
+    human: &str,
+) -> Result<()> {
+    emit(
+        json_output,
+        json!({
+            "protocol": "a3s.test.dev/1",
+            "event": "stopped",
+            "project": profile.id,
+            "url": profile.dev_server.url.to_string(),
+            "server": server_kind,
+            "session": session.session,
+            "reason": reason,
+            "cleanup": if cleanup_complete { "complete" } else { "failed" },
+        }),
+        human,
+    )
+}
+
+fn emit_repair_batch(json_output: bool, project: &str, batch: RepairBridgeBatch) -> Result<()> {
+    let count = batch.repairs.len();
+    let session = batch.session.clone();
+    emit(
+        json_output,
+        RepairBridgeEvent::new(project, &batch),
+        &format!("Received {count} submitted review finding(s) in session '{session}'"),
+    )
+}
+
+fn emit<T: Serialize>(json_output: bool, event: T, human: &str) -> Result<()> {
     if json_output {
         println!("{}", serde_json::to_string(&event)?);
     } else {
@@ -301,8 +419,9 @@ enum Startup {
     TimedOut,
 }
 
-#[derive(Clone, Copy)]
 enum Stop {
     Interrupted,
     ServerExited(ExitStatus),
+    RepairBridgeFailed(anyhow::Error),
+    ServerWaitFailed(anyhow::Error),
 }

@@ -103,3 +103,25 @@ cargo install --git https://github.com/A3S-Lab/Test \
 ```
 
 每个发布还包含可手动安装的 `a3s-test.skill`、各平台归档、校验文件、Test Kit 包和 Linux runner 镜像引用。不要跳过校验文件或用未固定的镜像标签代替发布的 digest。
+
+## 启动一次本地页面评审
+
+本节命令已经进入 `main`，会随下一版本发布；已发布的 v1.0.0 二进制尚不包含它们。
+
+前端挂载 Test Kit 后，在工程根目录执行：
+
+```bash
+a3s-test init
+a3s-test doctor
+a3s-test dev --json
+```
+
+`init` 只发现包管理器、开发脚本、端口和 Test Kit 声明，再写入 `.a3s-test/project.acl`，不会自动安装或启动。`doctor` 区分未声明、未安装和版本不兼容。`dev` 会复用已经可访问的 URL；否则拥有并启动配置中的开发进程，然后打开一个页面评审浏览器。按 Ctrl+C 时，它只关闭自己打开的浏览器和自己启动的服务器。
+
+实时 Test Kit 握手通过后，`dev --json` 会从同一条 stdout JSONL 流发出 `a3s.test.local-repair-bridge/1` 的 `repair_batch`。每个 finding 都会先保存到权威 repair ledger 并捕获修改前证据，事件也会带上生成的 session ID，因此 Agent 不需要再启动一个手工协调的 `repair-watch` 进程。开发服务器日志始终写入 stderr。
+
+只使用浏览器可访问语义、明确不挂载页面评审侧栏的工程可以执行：
+
+```bash
+a3s-test init --testkit optional
+```

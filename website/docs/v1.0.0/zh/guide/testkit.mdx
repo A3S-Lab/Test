@@ -74,6 +74,13 @@ Context 协议、必需能力和实际 Review Overlay。`ready` 事件会带上�
 握手结果。必需边界缺失或不兼容时，A3S Test 只中止自己打开的浏览器
 session，并给出精确的安装或挂载修复命令。
 
+准入成功后，`dev --json` 还会在 `ready.repair_bridge` 中报告
+`a3s.test.local-repair-bridge/1`。用户从普通页面评审侧栏发送 finding 后，
+A3S Test 会先写入现有 repair ledger 并保存自有的修改前证据，再从同一条
+stdout JSONL 流发出 `repair_batch`。事件已经包含生成的 session ID，coding
+agent 可以直接领取，不需要另行协调一个 `repair-watch` 进程。Test Kit
+设为可选且页面中完全不存在时，`repair_bridge` 为 `null`，不会启动轮询。
+
 ## 大多数项目到这里就够了
 
 继续配置前，先按实际目标选择所需能力。

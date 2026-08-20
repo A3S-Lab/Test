@@ -119,6 +119,33 @@ capabilities, and Review Overlay mount state. The CLI appends the exact
 package-manager or component-mount repair and aborts its exact browser session
 before emitting a `ready` event.
 
+### Local repair bridge
+
+After a successful live handshake, `a3s-test dev` activates
+`a3s.test.local-repair-bridge/1` in the same process and browser session. The
+bridge does not expose a local HTTP port, add a browser credential, or create
+a second repair store. It continuously reuses the session's append-only
+`repairs.jsonl`, existing workspace mutation lock, browser evidence capture,
+lease recovery, conflict resolution, human-action ingestion, and status
+projection.
+
+With `dev --json`, the `ready` event identifies the active bridge under
+`repair_bridge`. A human can use the ordinary Review Overlay to select, draw,
+attach, and send a finding. Once the finding and its A3S Test-owned before
+context and screenshot are durable, the same stdout stream emits one compact
+`repair_batch` event with the generated session ID, queued records, affected
+batch state, and ledger path. The workspace-owning coding agent can claim that
+record immediately; it does not first run a separately coordinated
+`a3s-test agent repair-watch --session ...` command.
+
+The bridge suppresses repeated delivery of an unchanged queued finding. Lease
+recovery or a human retry produces a newer ledger sequence and may deliver the
+finding again. Agent transitions still write the authoritative ledger and
+project their state to the overlay. An optional Test Kit profile with a
+completely absent bridge reports `repair_bridge: null` and starts no polling.
+Ctrl+C, owned-server exit, and bridge failure all use the same exact session
+cleanup path.
+
 ### Snapshot request
 
 ```json
@@ -1089,6 +1116,7 @@ independent scenarios prove:
 | Verification failure | explicit failed criteria and project checks produce `verification_failed`, never `resolved`, and permit human retry |
 | Restart recovery | independent CLI processes replay the append-only ledger without duplicating events |
 | ACL promotion | a generated candidate is persisted and passes in a fresh same-origin browser before `review_ready` |
+| Development bridge | an ordinary Test Kit page submission reaches `dev --json` without a manual watch command, with durable before evidence and no duplicate batch event |
 
 Run the matrix from the crate workspace with the admitted browser executable
 and its Chromium path configured:

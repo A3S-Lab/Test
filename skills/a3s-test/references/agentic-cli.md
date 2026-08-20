@@ -207,6 +207,15 @@ supplied ACL candidate in a fresh browser. Human acceptance is the default;
 `--auto-resolve-repairs` is session-scoped and resolves only after all gates
 pass and `review_ready` has been persisted.
 
+For the workspace-local review loop, prefer `a3s-test dev --json`. After its
+live Test Kit handshake, `a3s.test.local-repair-bridge/1` emits submitted,
+evidence-backed findings as `repair_batch` events on the same JSONL stream and
+includes the generated session ID. Do not start a second coordinated
+`repair-watch` process for that dev session. Use the one-shot
+`agent repair-watch --session ...` command for directly started agent sessions
+or an explicit bounded replay. Treat finding ID plus ledger sequence as the
+delivery identity; a newer requeue sequence is new work.
+
 Workspace mutation ownership is shared across sessions and processes through
 `.a3s-test/repair-workspace.lock` and `.a3s-test/repair-workspace.json`. An
 expired pre-edit claim can return to the queue. An attempt that may have edited

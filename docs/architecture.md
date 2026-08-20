@@ -92,6 +92,43 @@ This decomposition keeps the fast path deterministic. Browser facts are used
 before probabilistic perception, and a model can propose expected structure or
 visual candidates without acquiring verdict or mutation authority.
 
+### Local development repair bridge
+
+The low-friction development loop composes existing owners instead of adding a
+new service boundary:
+
+```text
+ordinary headed development browser
+              |
+     explicit Review Overlay send
+              |
+              v
+  a3s-test dev local repair bridge
+       |          |           |
+       |          |           +-- owned before evidence
+       |          +-------------- authoritative repairs.jsonl
+       +------------------------- compact repair_batch JSONL
+                                      |
+                                      v
+                         workspace-owning coding agent
+```
+
+Protocol `a3s.test.local-repair-bridge/1` runs inside the process that already
+owns the development browser. It calls the same repair-watch application
+operation used by the direct CLI, preserving lease recovery, human actions,
+conflict resolution, evidence ownership, and status projection. Continuous
+mode waits for new page submissions even while older queued records remain;
+the one-shot CLI keeps queued-first semantics. A process-local cursor emits a
+queued finding only once per ledger sequence, while authoritative retry or
+lease recovery remains visible through its newer sequence.
+
+The bridge owns no source editor and accepts no commands from page text. Its
+output gives the already authorized coding agent the generated session ID and
+ledger-backed finding; subsequent claim and verification commands remain
+typed session operations. A missing optional Test Kit creates no bridge.
+Cancellation or failure drops the bounded browser command before exact
+session and owned-server cleanup.
+
 ### Source-to-contract generation
 
 Source interpretation is an adapter concern in `a3s-test-agent`, not a Core

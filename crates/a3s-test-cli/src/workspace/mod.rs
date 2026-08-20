@@ -4,6 +4,7 @@ mod discovery;
 mod doctor;
 mod init;
 mod process;
+mod repair_bridge;
 
 use std::path::PathBuf;
 use std::process::ExitCode;
