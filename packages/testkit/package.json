@@ -2,7 +2,27 @@
   "name": "@a3s-lab/testkit",
   "version": "0.4.0",
   "description": "Embedded page context and human review SDK for A3S Test",
+  "keywords": [
+    "a3s",
+    "agentic-testing",
+    "browser-testing",
+    "human-review",
+    "vibe-coding"
+  ],
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/A3S-Lab/Test.git",
+    "directory": "packages/testkit"
+  },
+  "homepage": "https://a3s-lab.github.io/Test/guide/testkit.html",
+  "bugs": {
+    "url": "https://github.com/A3S-Lab/Test/issues"
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  },
   "type": "module",
   "sideEffects": false,
   "main": "./dist/index.cjs",

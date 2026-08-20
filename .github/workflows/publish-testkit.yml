@@ -1,0 +1,74 @@
+name: Publish Test Kit
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_ref:
+        description: Existing release tag or full commit containing the package
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: publish-testkit-${{ inputs.source_ref }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: Publish ${{ inputs.source_ref }} package
+    runs-on: ubuntu-latest
+    environment: npm
+
+    steps:
+      - name: Admit the immutable source reference
+        env:
+          SOURCE_REF: ${{ inputs.source_ref }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$SOURCE_REF" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([+-][0-9A-Za-z.-]+)?$ || "$SOURCE_REF" =~ ^[0-9a-f]{40}$ ]]
+
+      - name: Check out the release source
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.source_ref }}
+
+      - name: Install Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: packages/testkit/package-lock.json
+          registry-url: https://registry.npmjs.org
+
+      - name: Verify release and package metadata
+        env:
+          SOURCE_REF: ${{ inputs.source_ref }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$(git rev-parse "$SOURCE_REF^{commit}")"
+          if [[ "$SOURCE_REF" == v* ]]; then
+            node scripts/check-release-metadata.mjs --tag "$SOURCE_REF"
+          else
+            test "$(git rev-parse HEAD)" = "$SOURCE_REF"
+            node scripts/check-release-metadata.mjs
+          fi
+
+      - name: Build and verify Test Kit
+        working-directory: packages/testkit
+        run: |
+          npm ci
+          npm run typecheck
+          npm test
+          npm run build
+          npm run check:package
+
+      - name: Publish the immutable public package with provenance
+        working-directory: packages/testkit
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: npm publish --access public --provenance

@@ -4,6 +4,11 @@
 
 ### Added
 
+- Added a manually authorized, immutable-source Test Kit npm publication workflow
+  with public package metadata, the official Registry, complete package gates,
+  an environment-scoped token, and GitHub OIDC provenance. Registry publication
+  remains an explicit maintainer action rather than a side effect of a CLI
+  release.
 - Added the typed local project loop: `a3s-test init` discovers a bounded Web
   project profile, `a3s-test doctor` reports static and optional connection
   diagnostics with exact fixes, and `a3s-test dev` reuses or owns the
