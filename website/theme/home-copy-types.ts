@@ -1,7 +1,6 @@
 export type Locale = 'zh' | 'en';
 
-export type CapabilityGroupId =
-  'context' | 'safety' | 'repair' | 'execution' | 'contracts' | 'evidence';
+export type CapabilityGroupId = 'context' | 'core' | 'execution' | 'evidence';
 
 export type ExperienceCopy = {
   stageAria: string;
@@ -92,25 +91,6 @@ export type LocalizedCopy = {
   copy: string;
   copied: string;
   copyError: string;
-  proofTitle: string;
-  proofBody: string;
-  contractPanelLabel: string;
-  contractExpectedLabel: string;
-  contractObservedLabel: string;
-  contractPrdTitle: string;
-  contractPrdBody: string;
-  contractDesignTitle: string;
-  contractDesignBody: string;
-  contractPageTitle: string;
-  contractPageBody: string;
-  contractReviewTitle: string;
-  contractReviewBody: string;
-  contractCompareTitle: string;
-  contractCompareBody: string;
-  contractReportTitle: string;
-  contractReportBody: string;
-  contractDisclaimer: string;
-  contractGuide: string;
   capabilitiesTitle: string;
   capabilitiesBody: string;
   capabilities: Array<{ title: string; body: string; code: string }>;
@@ -139,29 +119,10 @@ export type LocalizedCopy = {
   workflowDecide: string;
   workflowAct: string;
   workflowProve: string;
-  boundaryTitle: string;
-  boundaryBody: string;
-  boundaryFacts: string;
-  boundaryFactsBody: string;
-  boundaryAdvice: string;
-  boundaryAdviceBody: string;
-  boundaryHuman: string;
-  boundaryHumanBody: string;
-  boundaryRepair: string;
-  boundaryRepairBody: string;
-  surfacesTitle: string;
-  surfacesBody: string;
-  surfaceWeb: string;
-  surfaceWebBody: string;
-  surfaceGui: string;
-  surfaceGuiBody: string;
-  surfaceTui: string;
-  surfaceTuiBody: string;
   ctaTitle: string;
   ctaBody: string;
   quickStart: string;
   testkitGuide: string;
-  architecture: string;
   footer: string;
   experience: ExperienceCopy;
 };

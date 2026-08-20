@@ -1,7 +1,6 @@
 import { useLang, useSite, useVersion, withBase } from '@rspress/core/runtime';
 import { ArrowRight, ArrowUpRight, CaretDown } from '@phosphor-icons/react';
 import { useState } from 'react';
-import { ContractPanel } from './ContractPanel';
 import { InstallSwitcher, installCommandFor } from './InstallSwitcher';
 import { TestKitExperience } from './TestKitExperience';
 import { homeCopy, type CapabilityGroupId, type Locale } from '../home-copy';
@@ -9,10 +8,8 @@ import { publishedVersion } from '../../versions.mjs';
 
 const archivedCapabilityHrefs: Record<CapabilityGroupId, string> = {
   context: '/guide/testkit.html',
-  safety: '/concepts/architecture.html',
-  repair: '/guide/testkit.html',
+  core: '/concepts/architecture.html',
   execution: '/reference/cli.html',
-  contracts: '/guide/contracts.html',
   evidence: '/guide/workflows.html',
 };
 
@@ -44,21 +41,6 @@ function MarkdownHome({
       <pre>
         <code>{windowsInstall}</code>
       </pre>
-      <h2>{copy.proofTitle}</h2>
-      <p>{copy.proofBody}</p>
-      <h3>PRD · {copy.contractPrdTitle}</h3>
-      <p>{copy.contractPrdBody}</p>
-      <h3>Design · {copy.contractDesignTitle}</h3>
-      <p>{copy.contractDesignBody}</p>
-      <h3>Page Context · {copy.contractPageTitle}</h3>
-      <p>{copy.contractPageBody}</p>
-      <h3>{copy.contractReviewTitle}</h3>
-      <p>{copy.contractReviewBody}</p>
-      <h3>{copy.contractCompareTitle}</h3>
-      <p>{copy.contractCompareBody}</p>
-      <h3>{copy.contractReportTitle}</h3>
-      <p>{copy.contractReportBody}</p>
-      <p>{copy.contractDisclaimer}</p>
       <h2>{copy.experience.contextTitle}</h2>
       <p>{copy.experience.localOnly}</p>
       <h2>{copy.capabilitiesTitle}</h2>
@@ -88,10 +70,6 @@ function MarkdownHome({
       ))}
       <h2>{copy.workflowTitle}</h2>
       <p>{copy.workflowBody}</p>
-      <h2>{copy.boundaryTitle}</h2>
-      <p>{copy.boundaryBody}</p>
-      <h2>{copy.surfacesTitle}</h2>
-      <p>{copy.surfacesBody}</p>
     </main>
   );
 }
@@ -194,18 +172,6 @@ export function HomeLayout() {
             labels={copy}
           />
         </div>
-      </section>
-
-      <section className="test-section test-proof">
-        <div className="test-section-copy">
-          <h2>{copy.proofTitle}</h2>
-          <p>{copy.proofBody}</p>
-          <a href={route('/guide/contracts.html')}>
-            {copy.contractGuide}{' '}
-            <ArrowRight aria-hidden="true" size={15} weight="bold" />
-          </a>
-        </div>
-        <ContractPanel labels={copy} />
       </section>
 
       <section className="test-section test-capabilities">
@@ -350,51 +316,6 @@ export function HomeLayout() {
             </a>
           </article>
         </div>
-      </section>
-
-      <section className="test-section test-boundary">
-        <div className="test-boundary-copy">
-          <h2>{copy.boundaryTitle}</h2>
-          <p>{copy.boundaryBody}</p>
-          <a href={route('/concepts/architecture.html')}>
-            {copy.architecture}{' '}
-            <ArrowRight aria-hidden="true" size={15} weight="bold" />
-          </a>
-        </div>
-        <ol className="test-authority-layers">
-          {[
-            [copy.boundaryFacts, copy.boundaryFactsBody],
-            [copy.boundaryAdvice, copy.boundaryAdviceBody],
-            [copy.boundaryHuman, copy.boundaryHumanBody],
-            [copy.boundaryRepair, copy.boundaryRepairBody],
-          ].map(([title, body]) => (
-            <li key={title}>
-              <strong>{title}</strong>
-              <span>{body}</span>
-            </li>
-          ))}
-        </ol>
-      </section>
-
-      <section className="test-section test-surfaces">
-        <header>
-          <h2>{copy.surfacesTitle}</h2>
-          <p>{copy.surfacesBody}</p>
-        </header>
-        <dl>
-          <div className="is-primary">
-            <dt>{copy.surfaceWeb}</dt>
-            <dd>{copy.surfaceWebBody}</dd>
-          </div>
-          <div>
-            <dt>{copy.surfaceGui}</dt>
-            <dd>{copy.surfaceGuiBody}</dd>
-          </div>
-          <div>
-            <dt>{copy.surfaceTui}</dt>
-            <dd>{copy.surfaceTuiBody}</dd>
-          </div>
-        </dl>
       </section>
 
       <section className="test-cta">

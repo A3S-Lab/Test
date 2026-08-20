@@ -56,18 +56,16 @@ browser render + accessibility + Test Kit
 
 No arrow is implicit. An observation cannot authorize an edit. A model candidate cannot set a verdict. A source span cannot prove that the new page is correct. Verification must read the changed page again.
 
-## Implementation layers
+## Four implementation layers
 
-| Layer                         | Repository owner                                   | Responsibility                                                                                             |
-| ----------------------------- | -------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
-| Embedded page context         | `packages/testkit`                                 | Post-render context, exact revision deltas, source mapping, bounded UI evidence, and optional human review |
-| Surface-independent contracts | `crates/a3s-test-core`                             | Typed actions, targets, observations, policy inputs, evidence records, results, and driver traits          |
-| Persistent interaction state  | `crates/a3s-test-session`                          | Session lifecycle, observation-bound refs, action admission, append-only state, and verification bindings  |
-| Concrete execution            | `crates/a3s-test-driver-web`, GUI, and TUI drivers | Surface perception, action dispatch, evidence capture, and exact runtime cleanup                           |
-| User and agent entry points   | `crates/a3s-test-cli` and MCP adapters             | CLI commands, JSON contracts, project loop, repair coordination, and protocol-facing validation            |
-| Deterministic regression      | ACL compiler and runner                            | Static admission followed by bounded actions, waits, assertions, evidence, and cleanup                     |
+| Layer                       | Implementation                                                                                                                                                 |
+| --------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Post-render fact layer      | `packages/testkit` and the Web adapter atomically combine browser semantics, Page Context, exact revision deltas, source mapping, and bounded UI evidence      |
+| Typed control layer         | `crates/a3s-test-core` and `crates/a3s-test-session` define actions, observation refs, policy, authority, session state, results, and driver contracts         |
+| Review and execution layer  | Review Overlay, `crates/a3s-test-cli`, and each Surface Driver submit explicit repair scope, dispatch admitted actions, and own runtime and cleanup boundaries |
+| Verification and regression | Session verification, the ACL compiler, and the Runner retain changed-surface evidence, statically admit suites, and repeat bounded actions and assertions     |
 
-The Core never branches on a backend name. A deployment injects a typed `SurfaceDriver`; the adapter owns only the capabilities it can prove. Unsupported behavior fails closed.
+CLI and MCP are entry points into these layers, not new authorities. Core never branches on a backend name. A deployment injects a typed `SurfaceDriver`; the adapter owns only the capabilities it can prove. Unsupported behavior fails closed.
 
 ## Understanding happens after rendering
 

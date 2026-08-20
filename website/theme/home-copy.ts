@@ -8,9 +8,9 @@ export type {
 
 export const homeCopy: Record<Locale, LocalizedCopy> = {
   zh: {
-    heroTitle: ['基于真实页面行动', '把结果固化为回归'],
+    heroTitle: ['让 Agent 看懂真实界面', '找到源码，留下回归'],
     heroBody:
-      'A3S Test 把当前浏览器修订、类型化动作、节点到源码映射和验证证据连成一条可信闭环。编码 Agent 先看清页面，再执行最小动作，最后把跑通路径写成 ACL。',
+      '高效 vibe coding 依赖一条可信反馈闭环：页面现在是什么、哪段源码负责、修改是否真的有效。A3S Test 用当前浏览器修订、类型化动作和可复查证据回答这三个问题。',
     startExperience: '在本页标记一个问题',
     readDocs: '运行第一个测试',
     installTitle: '只安装当前需要的部分',
@@ -25,155 +25,125 @@ export const homeCopy: Record<Locale, LocalizedCopy> = {
     copy: '复制命令',
     copied: '命令已复制',
     copyError: '复制失败，请手动选择命令',
-    proofTitle: '先分清期望与事实',
-    proofBody:
-      'PRD 和设计稿描述应该发生什么，浏览器只证明当前实际渲染了什么。人工审阅后，Surface Contract 才能把两者变成可核对的明确期望；A3S Test 为每个差异保留来源、页面修订和证据。',
-    contractPanelLabel: '产品期望与当前页面的核对路径',
-    contractExpectedLabel: '产品期望',
-    contractObservedLabel: '当前事实',
-    contractPrdTitle: '应该完成什么',
-    contractPrdBody: '用户结果、文案、业务约束与尚待决定的事项。',
-    contractDesignTitle: '应该如何呈现',
-    contractDesignBody: '区域层级、相互关系、尺寸、位置与视觉约束。',
-    contractPageTitle: '现在实际呈现什么',
-    contractPageBody: '本次修订的语义、状态、组件、定位器与几何。',
-    contractReviewTitle: '人工确认候选',
-    contractReviewBody: '选择可采纳的要求，处理冲突与未决事项。',
-    contractCompareTitle: '核对真实页面',
-    contractCompareBody: '逐项检查已确认期望与真实页面。',
-    contractReportTitle: '保留可复查差异',
-    contractReportBody: '记录来源、决定、页面修订与证据。',
-    contractDisclaimer:
-      'PRD 和设计稿产生的是期望候选，不是浏览器可访问树。只有经人工审阅的候选才能进入 Surface Contract，页面事实仍由当前浏览器修订提供。',
-    contractGuide: '了解界面契约如何生成',
-    capabilitiesTitle: '从页面事实到 ACL 的最短可信闭环',
+    capabilitiesTitle: 'A3S Test 只解决三个关键问题',
     capabilitiesBody:
-      '每一步只承担一种责任。页面提供当前事实，Core 准入动作，Test Kit 在需要时连接源码，验证读取更新后的页面，最后才把稳定路径固化为回归。',
+      '先理解当前界面，再把问题交到负责它的源码，最后用更新后的页面证明修改并留下回归。其他能力都服务于这条闭环。',
     capabilities: [
       {
-        title: '读取渲染后事实',
-        body: '组合浏览器可访问语义与有界 Page Context，生成绑定当前修订的观察。',
-        code: '01 · OBSERVE',
+        title: '看懂当前界面',
+        body: '组合浏览器语义与有界 Page Context，得到绑定当前页面修订的组件、状态、定位器和几何。',
+        code: 'OBSERVE · REVISION',
       },
       {
-        title: '准入一个类型化动作',
-        body: '用 Schema、目标类型、会话能力、来源和策略检查动作，再交给界面驱动。',
-        code: '02 · ADMIT',
+        title: '找到负责源码',
+        body: '把点选、框选、截图或草图与组件归属、排序后的源码跨度和人工期望一起提交。',
+        code: 'REVIEW · SOURCE',
       },
       {
-        title: '定位负责源码',
-        body: '需要修改时，用显式组件归属和排序后的源码跨度连接可见节点与实现。',
-        code: '03 · SOURCE',
-      },
-      {
-        title: '验证更新后的页面',
-        body: '重新读取更高页面修订，只保存能证明成功条件的断言与自有证据。',
-        code: '04 · VERIFY',
-      },
-      {
-        title: '固化为 ACL',
-        body: '把跑通路径的最小动作、等待、断言和证据写成可重复套件。',
-        code: '05 · PRESERVE',
+        title: '证明修改并防止回退',
+        body: '从更高页面修订验证成功条件，再把最小动作、断言和证据固化为可重复 ACL。',
+        code: 'VERIFY · ACL',
       },
     ],
-    capabilityLedgerTitle: '四个技术机制支撑整条闭环',
+    capabilityLedgerTitle: '四层技术实现支撑这三个结果',
     capabilityLedgerBody:
-      '这里展示决定 A3S Test 工作方式的实现边界。具体动作、字段和错误行为继续放在完整能力参考中按需查询。',
+      '每层只拥有一种责任，并通过版本化、有界、失败关闭的契约连接。展开即可查看实现，不需要先读完整协议。',
     capabilityReference: '查看完整能力的入口、输出、证据和失败边界',
-    capabilityItemCount: '项核心实现',
+    capabilityItemCount: '项实现',
     capabilityGroups: [
       {
         id: 'context',
-        code: 'RENDERED FACTS',
-        title: '渲染后页面上下文',
-        summary: '从浏览器已经计算出的语义、布局和状态中生成有界事实。',
+        code: 'BROWSER + TEST KIT',
+        title: '渲染后事实层',
+        summary: '读取浏览器已经计算出的语义、布局和状态，不从截图重新猜页面。',
         href: '/concepts/page-context.html',
         linkLabel: '查看 Page Context 字段、预算与失效规则',
         items: [
           {
             signal: 'AX · DOM · LAYOUT',
-            title: '组合浏览器事实',
+            title: '组合浏览器语义与页面上下文',
             body: '可访问快照负责角色、名称和原生状态；Test Kit 补充组件、定位器、几何、布局、样式和动效。',
           },
           {
             signal: 'REVISION · DIFF · @cN',
-            title: '观察绑定身份',
+            title: '用页面修订绑定节点身份',
             body: '页面变化推进单调修订；精确差异只保留未受影响节点的稳定定位器，缺失或超预算就要求全量重置。',
           },
           {
             signal: 'BOUNDARY · SOURCE MAP',
-            title: '显式源码归属',
+            title: '显式声明源码归属',
             body: '组件边界、DOM owner 与可选 Source Map v3 生成排序后的源码候选，不读取框架私有状态。',
           },
         ],
       },
       {
-        id: 'safety',
-        code: 'TYPED CORE',
-        title: '类型化准入与失败关闭',
-        summary: '自然语言不能直接获得浏览器、网络、证据或工作区权限。',
+        id: 'core',
+        code: 'RUST CORE + SESSION',
+        title: '类型化控制层',
+        summary: '把观察、动作、权限和会话状态变成可校验契约。',
         href: '/concepts/authority-and-safety.html',
         linkLabel: '查看权限、安全和失败关闭规则',
         items: [
           {
             signal: 'ACTION · SCHEMA · POLICY',
-            title: '一个动作一个边界',
+            title: '先准入，再执行动作',
             body: '动作先校验封闭类型、字段、目标、能力和策略，未知字段或不支持行为不会到达驱动。',
           },
           {
-            signal: 'FACT · ADVICE · HUMAN · EDIT',
-            title: '四层独立权限',
-            body: '浏览器事实、模型建议、人工授权和源码修改彼此不能冒充，verdict 仍由确定性规则负责。',
+            signal: 'OBSERVATION · REF · SESSION',
+            title: '引用只属于当前观察',
+            body: '会话把目标引用绑定到观察和页面修订；过期、歧义或无法证明未变化的目标直接失效。',
           },
           {
-            signal: 'PROCESS · ORIGIN · ARTIFACT',
-            title: '精确运行时所有权',
-            body: '来源、网络、进程树和证据目录分别准入，只清理本次运行创建的资源。',
+            signal: 'FACT · ADVICE · HUMAN · EDIT',
+            title: '四种权限互不冒充',
+            body: '浏览器事实、模型建议、人工授权和源码修改相互独立，测试 verdict 始终由确定性规则负责。',
           },
         ],
       },
       {
-        id: 'repair',
-        code: 'SOURCE-AWARE REVIEW',
-        title: '源码感知的人工修复',
-        summary: '评审者指出真实页面问题，明确发送后才交给拥有工作区的 Agent。',
-        href: '/guide/repairs.html',
-        linkLabel: '查看标记、发送、修复与验收流程',
+        id: 'execution',
+        code: 'REVIEW + SURFACE DRIVERS',
+        title: '评审与界面执行层',
+        summary:
+          '把人工指出的问题交给工作区 Agent，并由对应界面驱动执行已准入动作。',
+        href: '/concepts/architecture.html',
+        linkLabel: '查看修复桥、界面驱动与运行时边界',
         items: [
           {
             signal: 'ELEMENT · REGION · DRAW · CAPTURE',
-            title: '一个右侧评审界面',
+            title: '在一个右侧界面完成标记',
             body: '点选、文本、多选、框选、手绘、画板和浏览器内容截图都在同一侧栏完成，不堆叠弹窗。',
           },
           {
-            signal: 'CONTEXT · SOURCE · EXPLICIT SEND',
-            title: '发送时绑定最新上下文',
-            body: 'finding 在明确发送时附带当前修订、组件、定位器、几何、源码候选和有界附近证据。',
+            signal: 'CONTEXT · SOURCE · REPAIR',
+            title: '明确发送才进入修复链路',
+            body: 'finding 绑定当前修订、组件、定位器、几何与源码候选，保存草稿或打开编辑器都不会授权修改。',
           },
           {
-            signal: 'BEFORE · AFTER · ACCEPT',
-            title: '新页面验证与人工验收',
-            body: '修改后重新定位目标并比较断言、截图、console 和 page errors，最后由人接受或重新打开。',
+            signal: 'WEB · GUI · TUI · PROCESS',
+            title: '驱动只实现能够证明的能力',
+            body: 'Web、GUI 与 TUI 共享 Core 契约，各自拥有感知、派发和清理；不支持的能力失败关闭。',
           },
         ],
       },
       {
         id: 'evidence',
-        code: 'EVIDENCE & ACL',
-        title: '可审计证据与确定性回归',
-        summary: '让探索结果可解释、可复现，并最终脱离临时 Agent 决策。',
+        code: 'EVIDENCE + ACL',
+        title: '验证与回归层',
+        summary: '从更新后的界面证明结果，并把探索收敛为确定性测试。',
         href: '/guide/workflows.html',
         linkLabel: '查看 Agent 会话与 ACL 回归工作流',
         items: [
           {
-            signal: 'SESSION · EVENTS · REPORT',
-            title: '追加式会话记录',
-            body: '目标、观察、类型化动作、证据和终态报告保留在会话目录，失败归属可以复查。',
+            signal: 'BEFORE · AFTER · ERRORS',
+            title: '用更新后的页面验证修改',
+            body: '重新定位目标并比较成功条件、截图、console 与 page errors；旧修订的证据不能冒充新结果。',
           },
           {
-            signal: 'ASSERT · STABILITY · EVIDENCE',
-            title: '最小确定性验证',
-            body: '断言读取浏览器实际状态，稳定窗口只重复只读断言，不自动重放普通动作。',
+            signal: 'EVENTS · REPORT · ARTIFACT',
+            title: '保留可复查的最小证据',
+            body: '观察、动作、断言、失败归属和自有工件写入追加式会话记录与终态报告。',
           },
           {
             signal: 'CHECK · RUN · CI',
@@ -183,7 +153,7 @@ export const homeCopy: Record<Locale, LocalizedCopy> = {
         ],
       },
     ],
-    workflowTitle: '先探索，再回归',
+    workflowTitle: '同一个执行核心，两个使用阶段',
     workflowBody:
       '路径未知时，Agent 会话保留浏览器状态并从最新观察选择下一步。路径证明后，只把最小稳定形式写入 ACL。',
     workflowAgent: '探索未知路径',
@@ -198,37 +168,11 @@ export const homeCopy: Record<Locale, LocalizedCopy> = {
     workflowDecide: '类型化动作',
     workflowAct: '新页面证据',
     workflowProve: 'ACL 回归',
-    boundaryTitle: '事实、建议、授权与修改互不冒充',
-    boundaryBody:
-      '浏览器提供当前事实，模型只能提出带来源候选，人决定是否发送修复，拥有工作区的编码 Agent 才能改源码，A3S Test 最后从更新后的页面验证。',
-    boundaryFacts: '浏览器事实',
-    boundaryFactsBody: '当前 DOM、可访问语义、状态、几何、组件与断言结果。',
-    boundaryAdvice: '模型建议',
-    boundaryAdviceBody:
-      '视觉定位和设计审查给出带来源、置信度和预算的候选，不决定测试结果。',
-    boundaryHuman: '人工授权',
-    boundaryHumanBody: '确认目标、期望结果、冲突关系，以及单项或批量发送范围。',
-    boundaryRepair: '修改与验收',
-    boundaryRepairBody:
-      '编码 Agent 只在授权范围内修改，A3S Test 用新页面验证，再交回人工验收。',
-    surfacesTitle: '一个 Core，三类界面驱动',
-    surfacesBody:
-      'Core 统一动作、策略、证据、结果和生命周期。Web、GUI 与 TUI 驱动分别拥有感知、执行和清理，不支持的能力直接关闭失败。',
-    surfaceWeb: 'Web',
-    surfaceWebBody:
-      'Agent 会话与 ACL 通过 A3S Browser 或兼容独立浏览器运行，并可接入 Test Kit Page Context。',
-    surfaceGui: 'GUI',
-    surfaceGuiBody:
-      'macOS CUA 已在真实 arm64 主机验证感知、权限与清理。其他桌面后端仍在独立审核。',
-    surfaceTui: 'TUI',
-    surfaceTuiBody:
-      'ACL 通过自有 PTY / ConPTY 进程树运行，并使用有界终端语义与清理规则。',
     ctaTitle: '从一个真实页面开始',
     ctaBody:
       '先用 CLI 跑通一个带可观察成功条件的会话。需要组件、源码、坐标或人工标记时再接入 Test Kit，最后把证明过的路径写成 ACL。',
     quickStart: '运行第一个测试',
     testkitGuide: '接入 Test Kit',
-    architecture: '查看技术架构',
     footer: '依据当前页面行动，把证明过的路径变成回归。',
     experience: {
       stageAria: 'A3S Test Kit 实时体验',
@@ -306,9 +250,12 @@ export const homeCopy: Record<Locale, LocalizedCopy> = {
     },
   },
   en: {
-    heroTitle: ['Act on what rendered.', 'Preserve what worked.'],
+    heroTitle: [
+      'Understand the real interface.',
+      'Find the source. Keep the proof.',
+    ],
     heroBody:
-      'A3S Test connects the current browser revision, typed actions, rendered-node source mapping, and verification evidence in one trustworthy loop. A coding agent reads the page first, makes the smallest move, then preserves the proven path as ACL.',
+      'Fast vibe coding depends on a trustworthy feedback loop: what the page renders now, which source owns it, and whether a change truly worked. A3S Test answers all three with current browser revisions, typed actions, and inspectable evidence.',
     startExperience: 'Mark an issue on this page',
     readDocs: 'Run your first test',
     installTitle: 'Install only what this task needs',
@@ -324,166 +271,130 @@ export const homeCopy: Record<Locale, LocalizedCopy> = {
     copy: 'Copy command',
     copied: 'Command copied',
     copyError: 'Copy failed. Select the command manually.',
-    proofTitle: 'Separate expectations from facts first',
-    proofBody:
-      'A PRD or design describes what should happen. The browser proves only what rendered now. After human review, a Surface Contract turns expectations into explicit checks, and A3S Test retains the source, page revision, and evidence for every difference.',
-    contractPanelLabel: 'Path from product expectation to current page fact',
-    contractExpectedLabel: 'Product expectation',
-    contractObservedLabel: 'Current fact',
-    contractPrdTitle: 'What should the user accomplish?',
-    contractPrdBody:
-      'User outcomes, copy, business constraints, and open decisions.',
-    contractDesignTitle: 'How should it appear?',
-    contractDesignBody:
-      'Region hierarchy, relationships, dimensions, position, and visual constraints.',
-    contractPageTitle: 'What renders now?',
-    contractPageBody:
-      'Semantics, state, components, locators, and geometry for this revision.',
-    contractReviewTitle: 'Review the candidates',
-    contractReviewBody:
-      'Admit valid requirements and resolve conflicts or open decisions.',
-    contractCompareTitle: 'Compare the rendered page',
-    contractCompareBody:
-      'Check each reviewed expectation against current browser facts.',
-    contractReportTitle: 'Retain inspectable differences',
-    contractReportBody:
-      'Record provenance, decisions, page revision, and evidence.',
-    contractDisclaimer:
-      'PRDs and designs produce expectation candidates, not a browser accessibility tree. Only reviewed candidates enter a Surface Contract, and current rendered facts still come from the browser revision.',
-    contractGuide: 'Learn how interface contracts are generated',
-    capabilitiesTitle: 'The shortest trustworthy path from page fact to ACL',
+    capabilitiesTitle: 'A3S Test solves three essential problems',
     capabilitiesBody:
-      'Each stage owns one responsibility. The page supplies current facts, Core admits an action, Test Kit connects source when needed, verification reads the changed page, and only then does the stable path become regression coverage.',
+      'Understand the current interface, connect a problem to the source that owns it, then prove the changed page and preserve a regression. Every other capability serves this loop.',
     capabilities: [
       {
-        title: 'Read post-render facts',
-        body: 'Combine browser accessibility semantics with bounded Page Context in one revision-bound observation.',
-        code: '01 · OBSERVE',
+        title: 'Understand the current interface',
+        body: 'Combine browser semantics with bounded Page Context for revision-bound components, state, locators, and geometry.',
+        code: 'OBSERVE · REVISION',
       },
       {
-        title: 'Admit one typed action',
-        body: 'Validate schema, target type, session capability, origin, and policy before a surface driver runs.',
-        code: '02 · ADMIT',
+        title: 'Find the source that owns it',
+        body: 'Submit a selected element, region, page capture, or sketch with component ownership, ranked source spans, and human intent.',
+        code: 'REVIEW · SOURCE',
       },
       {
-        title: 'Find the owning source',
-        body: 'When code must change, connect the visible node to explicit component ownership and ranked source spans.',
-        code: '03 · SOURCE',
-      },
-      {
-        title: 'Verify the changed page',
-        body: 'Read a newer page revision and retain only the assertions and owned evidence that prove success.',
-        code: '04 · VERIFY',
-      },
-      {
-        title: 'Preserve it as ACL',
-        body: 'Encode the smallest proven actions, waits, assertions, and evidence as a repeatable suite.',
-        code: '05 · PRESERVE',
+        title: 'Prove the change and prevent drift',
+        body: 'Verify success against a newer page revision, then preserve the smallest actions, assertions, and evidence as ACL.',
+        code: 'VERIFY · ACL',
       },
     ],
-    capabilityLedgerTitle: 'Four technical mechanisms support the loop',
+    capabilityLedgerTitle: 'Four implementation layers produce those results',
     capabilityLedgerBody:
-      'These are the implementation boundaries that define how A3S Test works. Use the complete capability reference only when you need exact actions, fields, and failure behavior.',
+      'Each layer owns one responsibility and connects through versioned, bounded, fail-closed contracts. Expand a layer for implementation detail without reading the full protocol first.',
     capabilityReference:
       'Inspect every capability entry point, output, evidence rule, and failure boundary',
-    capabilityItemCount: 'core mechanisms',
+    capabilityItemCount: 'details',
     capabilityGroups: [
       {
         id: 'context',
-        code: 'RENDERED FACTS',
-        title: 'Post-render page context',
+        code: 'BROWSER + TEST KIT',
+        title: 'Post-render fact layer',
         summary:
-          'Derive bounded facts from semantics, layout, and state the browser already computed.',
+          'Read semantics, layout, and state the browser already computed instead of reconstructing a page from screenshots.',
         href: '/concepts/page-context.html',
         linkLabel: 'Inspect Page Context fields, budgets, and expiry rules',
         items: [
           {
             signal: 'AX · DOM · LAYOUT',
-            title: 'Combine browser facts',
+            title: 'Combine browser semantics and page context',
             body: 'Accessibility owns roles, names, and native state. Test Kit adds components, locators, geometry, layout, style, and motion.',
           },
           {
             signal: 'REVISION · DIFF · @cN',
-            title: 'Bind public identity to observation',
+            title: 'Bind node identity to a page revision',
             body: 'Page changes advance a monotonic revision. Exact deltas retain only unaffected stable locators; missing or oversized history requires a full reset.',
           },
           {
             signal: 'BOUNDARY · SOURCE MAP',
-            title: 'Declare source ownership',
+            title: 'Declare source ownership explicitly',
             body: 'Component boundaries, DOM owners, and optional Source Map v3 produce ranked candidates without reading framework private state.',
           },
         ],
       },
       {
-        id: 'safety',
-        code: 'TYPED CORE',
-        title: 'Typed admission and fail-closed safety',
+        id: 'core',
+        code: 'RUST CORE + SESSION',
+        title: 'Typed control layer',
         summary:
-          'Natural language never directly acquires browser, network, evidence, or workspace authority.',
+          'Turn observations, actions, authority, and persistent session state into validated contracts.',
         href: '/concepts/authority-and-safety.html',
         linkLabel: 'Inspect authority, safety, and fail-closed behavior',
         items: [
           {
             signal: 'ACTION · SCHEMA · POLICY',
-            title: 'One action, one boundary',
+            title: 'Admit an action before execution',
             body: 'Closed variants validate fields, targets, capabilities, and policy before unsupported or unknown input can reach a driver.',
+          },
+          {
+            signal: 'OBSERVATION · REF · SESSION',
+            title: 'Keep refs inside the current observation',
+            body: 'Sessions bind target refs to an observation and page revision. Stale, ambiguous, or unproven targets expire instead of drifting.',
           },
           {
             signal: 'FACT · ADVICE · HUMAN · EDIT',
             title: 'Keep four authorities independent',
             body: 'Browser facts, model advice, human authorization, and source mutation cannot impersonate one another. Deterministic rules own verdicts.',
           },
-          {
-            signal: 'PROCESS · ORIGIN · ARTIFACT',
-            title: 'Own runtime resources exactly',
-            body: 'Origins, network, process trees, and artifact roots are admitted separately, and cleanup touches only run-owned resources.',
-          },
         ],
       },
       {
-        id: 'repair',
-        code: 'SOURCE-AWARE REVIEW',
-        title: 'Source-aware human repair',
+        id: 'execution',
+        code: 'REVIEW + SURFACE DRIVERS',
+        title: 'Review and surface execution layer',
         summary:
-          'A reviewer identifies a real page problem before a workspace-owning agent receives it.',
-        href: '/guide/repairs.html',
-        linkLabel: 'Inspect marking, submission, repair, and acceptance',
+          'Send a human-identified problem to the workspace agent, then execute admitted actions through the owning surface driver.',
+        href: '/concepts/architecture.html',
+        linkLabel:
+          'Inspect the repair bridge, surface drivers, and runtime boundaries',
         items: [
           {
             signal: 'ELEMENT · REGION · DRAW · CAPTURE',
-            title: 'Use one right-side review surface',
+            title: 'Keep marking in one right-side surface',
             body: 'Element, text, multi-select, region, freehand, board, and browser-page capture stay in one panel without stacked dialogs.',
           },
           {
-            signal: 'CONTEXT · SOURCE · EXPLICIT SEND',
-            title: 'Bind current context at submission',
-            body: 'An explicitly sent finding carries the current revision, component, locator, geometry, source candidates, and bounded nearby evidence.',
+            signal: 'CONTEXT · SOURCE · REPAIR',
+            title: 'Enter repair only on explicit submission',
+            body: 'A finding binds the current revision, component, locator, geometry, and source candidates. Saving a draft or opening an editor grants no edit authority.',
           },
           {
-            signal: 'BEFORE · AFTER · ACCEPT',
-            title: 'Verify fresh and return to a person',
-            body: 'Repair re-resolves the target and compares assertions, screenshots, console, and page errors before human acceptance or reopening.',
+            signal: 'WEB · GUI · TUI · PROCESS',
+            title: 'Implement only provable driver capability',
+            body: 'Web, GUI, and TUI share Core contracts but separately own perception, dispatch, and cleanup. Unsupported behavior fails closed.',
           },
         ],
       },
       {
         id: 'evidence',
-        code: 'EVIDENCE & ACL',
-        title: 'Auditable evidence and deterministic regression',
+        code: 'EVIDENCE + ACL',
+        title: 'Verification and regression layer',
         summary:
-          'Make exploration explainable and reproducible, then remove dependence on temporary agent decisions.',
+          'Prove the result from the changed surface, then turn exploration into deterministic coverage.',
         href: '/guide/workflows.html',
         linkLabel: 'Inspect agent-session and ACL regression workflows',
         items: [
           {
-            signal: 'SESSION · EVENTS · REPORT',
-            title: 'Retain an append-only session record',
-            body: 'Goals, observations, typed actions, evidence, and the terminal report remain inspectable with clear failure ownership.',
+            signal: 'BEFORE · AFTER · ERRORS',
+            title: 'Verify against the changed page',
+            body: 'Re-resolve the target and compare success criteria, screenshots, console, and page errors. Old-revision evidence cannot prove the new result.',
           },
           {
-            signal: 'ASSERT · STABILITY · EVIDENCE',
-            title: 'Verify the smallest deterministic claim',
-            body: 'Assertions read browser state directly. Stability windows repeat only read-only assertions and never replay ordinary actions automatically.',
+            signal: 'EVENTS · REPORT · ARTIFACT',
+            title: 'Retain the smallest inspectable proof',
+            body: 'Observations, actions, assertions, failure ownership, and owned artifacts remain in an append-only session record and terminal report.',
           },
           {
             signal: 'CHECK · RUN · CI',
@@ -493,7 +404,7 @@ export const homeCopy: Record<Locale, LocalizedCopy> = {
         ],
       },
     ],
-    workflowTitle: 'Explore first. Regress second.',
+    workflowTitle: 'One execution core, two stages of use',
     workflowBody:
       'When the path is unknown, an agent session keeps browser state and chooses from each current observation. After proof, preserve only the smallest stable form as ACL.',
     workflowAgent: 'Explore an unknown path',
@@ -508,39 +419,11 @@ export const homeCopy: Record<Locale, LocalizedCopy> = {
     workflowDecide: 'Typed action',
     workflowAct: 'Fresh evidence',
     workflowProve: 'ACL regression',
-    boundaryTitle: 'Facts, advice, authority, and edits stay distinct',
-    boundaryBody:
-      'The browser supplies current facts. Models can only propose sourced candidates. A person decides whether to submit a repair. The workspace-owning coding agent edits source, and A3S Test verifies the changed page.',
-    boundaryFacts: 'Browser facts',
-    boundaryFactsBody:
-      'Current DOM, accessible semantics, state, geometry, components, and assertion results.',
-    boundaryAdvice: 'Model advice',
-    boundaryAdviceBody:
-      'Visual grounding and design review return candidates with provenance, confidence, and budgets. They never set the verdict.',
-    boundaryHuman: 'Human authorization',
-    boundaryHumanBody:
-      'Confirm the target, expected result, conflicts, and the single or batch submission scope.',
-    boundaryRepair: 'Edits and acceptance',
-    boundaryRepairBody:
-      'The coding agent edits only within scope, A3S Test verifies a newer page, and the reviewer accepts or reopens the result.',
-    surfacesTitle: 'One Core, three surface drivers',
-    surfacesBody:
-      'Core unifies actions, policy, evidence, results, and lifecycle. Web, GUI, and TUI drivers separately own perception, execution, and cleanup, and unsupported capability fails closed.',
-    surfaceWeb: 'Web',
-    surfaceWebBody:
-      'Agent sessions and ACL run through A3S Browser or a compatible standalone browser, with optional Test Kit Page Context.',
-    surfaceGui: 'GUI',
-    surfaceGuiBody:
-      'macOS CUA perception, permissions, and cleanup are verified on a real arm64 host. Other desktop backends remain under separate review.',
-    surfaceTui: 'TUI',
-    surfaceTuiBody:
-      'ACL runs through owned PTY / ConPTY process trees with bounded terminal semantics and cleanup.',
     ctaTitle: 'Start with one real page',
     ctaBody:
       'Use the CLI to prove one session with an observable success condition. Add Test Kit only for components, source, geometry, or human marking, then preserve the proven path as ACL.',
     quickStart: 'Run your first test',
     testkitGuide: 'Add Test Kit',
-    architecture: 'Review the technical architecture',
     footer: 'Act from the current page. Turn proven paths into regressions.',
     experience: {
       stageAria: 'Live A3S Test Kit experience',

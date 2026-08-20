@@ -10,11 +10,11 @@
   <a href="./LICENSE"><img src="https://img.shields.io/badge/license-MIT-56657b?style=flat-square" alt="MIT License"></a>
 </p>
 
-<h3 align="center">Ground vibe coding in the interface that actually rendered.</h3>
+<h3 align="center">Understand the rendered interface. Find the owning source. Keep the proof.</h3>
 
 <p align="center">
-  A3S Test gives coding agents fresh browser facts, admits one typed action at a time,<br>
-  maps visible nodes back to source, and preserves proven paths as deterministic ACL regressions.
+  A3S Test closes the feedback loop from current browser facts to source-aware repair,<br>
+  fresh verification, and deterministic ACL regression.
 </p>
 
 <p align="center">
@@ -28,12 +28,12 @@
 
 ## Why A3S Test exists
 
-Fast coding is useful only when the agent can answer four questions reliably:
+Fast code generation is not enough. A coding agent needs a trustworthy
+feedback loop that answers three questions:
 
 1. What did the current interface actually render?
-2. Which action is valid in that exact state?
-3. Which source code owns the visible result?
-4. What evidence proves the change worked, and what regression will detect drift?
+2. Which source code owns the visible result?
+3. What proves the change worked, and what regression will detect drift?
 
 Ordinary browser automation answers only part of this. Screenshots lose DOM
 semantics and source ownership. Raw DOM dumps lose layout and revision context.
@@ -313,13 +313,12 @@ browser render + accessibility + Test Kit Page Context
  fresh verification -> ACL regression
 ```
 
-| Layer                   | Technical responsibility                                                                                                         |
-| ----------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
-| TypeScript Test Kit     | Derive bounded post-render context, exact revision deltas, component/source ownership, multi-space geometry, and optional review |
-| Rust Core               | Define `Action`, observation, session, policy, result, evidence, and lifecycle contracts without depending on a concrete surface |
-| Surface adapters        | Own Web browser, macOS GUI, or PTY execution and translate only supported typed actions                                          |
-| Session and evidence    | Bind refs to observations, retain append-only events, validate artifact paths, and report distinguishable failures               |
-| ACL compiler and runner | Admit a closed manifest before execution and repeat only explicit actions, waits, assertions, and evidence steps                 |
+| Layer                     | Technical responsibility                                                                                                         |
+| ------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| Browser facts + Test Kit  | Derive bounded post-render context, exact revision deltas, component/source ownership, multi-space geometry, and optional review |
+| Rust Core + Session       | Define typed actions, observation refs, policy, authority, persistent state, evidence, results, and lifecycle contracts          |
+| Review + Surface drivers  | Explicitly submit repair scope and own Web, GUI, or TUI perception, action dispatch, process trees, and cleanup                  |
+| Verification + ACL        | Read the changed surface, retain inspectable proof, admit a closed manifest, and repeat only explicit deterministic steps        |
 
 The browser remains the source of rendered facts. Models can propose
 provenance-bound candidates, but they cannot set a verdict or authorize a

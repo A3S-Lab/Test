@@ -1,20 +1,26 @@
 ---
-title: From intent to a repeatable Web test
-description: Ground one coding-agent action in the current browser revision, retain the result as evidence, and preserve the proven path as ACL.
+title: From a page problem to repeatable regression
+description: Help a coding agent read the current page, find the owning source, verify the change, and preserve the proven path as ACL.
 ---
 
-# From intent to a repeatable Web test
+# From a page problem to repeatable regression
 
-A3S Test turns a vague instruction into a short, checkable loop. The browser provides current facts. The coding agent chooses one typed action. A3S Test admits that action, records what happened, and lets a stable path become an ACL regression.
+From first principles, a trustworthy interface change must answer three questions.
 
-## The mental model
+| Question                       | A3S Test output                                                               |
+| ------------------------------ | ----------------------------------------------------------------------------- |
+| What does the page render now? | An observation bound to the current browser revision, semantics, and geometry |
+| Which source owns that result? | A stable locator, component ownership, and ranked source spans                |
+| Did the change truly work?     | Assertions and evidence from the changed page, plus an ACL regression         |
+
+A3S Test connects those results in one short, checkable loop. The browser supplies current facts. The coding agent chooses one typed action or explicit difference. Core admits it, verification reads the changed page again, and only then does the stable path become ACL.
+
+## The shortest trustworthy path
 
 ```text
-observable intent
-  -> current browser revision
-  -> smallest useful action or difference
-  -> owning source when needed
-  -> explicit repair authorization
+current page facts
+  -> one typed action or explicit difference
+  -> source ownership and human repair authority when needed
   -> evidence from the changed page
   -> deterministic ACL regression
 ```
