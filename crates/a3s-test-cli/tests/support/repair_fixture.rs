@@ -201,7 +201,7 @@ pub fn submit_findings_in_browser(
     findings_json: &str,
 ) -> Vec<Value> {
     let script = format!(
-        "JSON.stringify(window[Symbol.for('a3s.test.page-context')].submitRepair({{findings:{findings_json}}}))"
+        "(async()=>{{const deadline=Date.now()+5000;while(Date.now()<deadline){{const bridge=window[Symbol.for('a3s.test.page-context')];if(typeof bridge?.submitRepair==='function')return JSON.stringify(bridge.submitRepair({{findings:{findings_json}}}));await new Promise(resolve=>setTimeout(resolve,25));}}throw new Error('timed out waiting for the Test Kit repair bridge')}})()"
     );
     let output = browser_command(browser, state, &["eval", &script]);
     assert_process_success("submit repair findings through the page bridge", &output);
@@ -226,7 +226,7 @@ pub fn target_node_ids(session: &RepairSession, test_ids: &[&str]) -> Vec<String
 pub fn target_node_ids_in_browser(browser: &Path, state: &Value, test_ids: &[&str]) -> Vec<String> {
     let test_ids = serde_json::to_string(test_ids).expect("test IDs JSON");
     let script = format!(
-        "JSON.stringify((()=>{{const ids=new Set({test_ids});return window[Symbol.for('a3s.test.page-context')].snapshot({{detail:'forensic'}}).nodes.filter(node=>ids.has(node.testId)).map(node=>node.id)}})())"
+        "(async()=>{{const deadline=Date.now()+5000;while(Date.now()<deadline){{const bridge=window[Symbol.for('a3s.test.page-context')];if(typeof bridge?.snapshot==='function'){{const ids=new Set({test_ids});return JSON.stringify(bridge.snapshot({{detail:'forensic'}}).nodes.filter(node=>ids.has(node.testId)).map(node=>node.id));}}await new Promise(resolve=>setTimeout(resolve,25));}}throw new Error('timed out waiting for the Test Kit page-context bridge')}})()"
     );
     let output = browser_command(browser, state, &["eval", &script]);
     assert_process_success("capture repair target node IDs", &output);
