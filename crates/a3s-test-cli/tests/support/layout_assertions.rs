@@ -1,7 +1,5 @@
-use std::net::TcpStream;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
-use std::time::Duration;
 
 mod acl;
 
@@ -87,7 +85,7 @@ fn real_agent_browser_verifies_and_classifies_layout_assertions() {
     );
 
     let fixture = WebFixture::start().expect("start layout assertion Web fixture");
-    let fixture_address = fixture.address();
+    let fixture_shutdown = fixture.shutdown_probe();
     let temp = tempfile::tempdir().expect("temporary layout assertion E2E workspace");
     let runtime_directories_before = private_runtime_directories();
 
@@ -97,7 +95,7 @@ fn real_agent_browser_verifies_and_classifies_layout_assertions() {
 
     drop(fixture);
     assert!(
-        TcpStream::connect_timeout(&fixture_address, Duration::from_millis(250)).is_err(),
+        fixture_shutdown.is_closed(),
         "layout assertion fixture listener must be closed"
     );
 }

@@ -11,6 +11,7 @@ This guide starts with a local page that is already running. When you finish, yo
 
 | What you need to do                               | Start here                                                         |
 | ------------------------------------------------- | ------------------------------------------------------------------ |
+| Open a local page for in-place review             | Run `a3s-test init`, `doctor`, then `dev`                          |
 | Explore an unfamiliar page or reproduce an issue  | Continue here with a persistent agent session                      |
 | Repeat a workflow you already understand          | [Exploration and regression workflows](./workflows.mdx)            |
 | Look up every action, wait, and evidence output   | [Actions, waits, and evidence](./actions-and-evidence.mdx)         |
@@ -27,6 +28,22 @@ This guide starts with a local page that is already running. When you finish, yo
 | Diagnose a failure from its code and evidence     | [Troubleshooting](./troubleshooting.mdx)                           |
 
 The example assumes that your product runs at `http://127.0.0.1:3000/checkout` and that the confirmation page exposes an observable heading. Replace the URL, goal, and success condition with facts from your project.
+
+For a frontend that already mounts Test Kit, the shorter reviewer-facing path
+discovers and starts the local environment for you:
+
+```bash
+a3s-test init
+a3s-test doctor
+a3s-test dev
+```
+
+The project-loop commands are staged on `main` for the next release; the
+published v1.0.0 binary predates them.
+
+Continue below when the coding agent needs to drive each observation and
+action directly, or see [Installation](./installation.mdx#start-one-local-review-loop)
+for the project-loop ownership rules.
 
 ## Install the CLI and Agent Skill
 

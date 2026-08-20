@@ -259,7 +259,23 @@ pub(crate) async fn execute(args: AgentArgs) -> Result<ExitCode> {
     }
 }
 
+struct StartSessionOutput {
+    state: AgentSessionState,
+    output: StepOutput,
+    url: String,
+}
+
 async fn start(args: StartArgs) -> Result<ExitCode> {
+    let json_output = args.json;
+    let result = start_session(args, None).await?;
+    emit_start(&result, json_output)?;
+    Ok(ExitCode::SUCCESS)
+}
+
+async fn start_session(
+    args: StartArgs,
+    workspace_override: Option<&Path>,
+) -> Result<StartSessionOutput> {
     validate_session_id(&args.session)?;
     validate_timeout(args.command_timeout_ms, "command timeout")?;
     validate_timeout(args.idle_timeout_ms, "idle timeout")?;
@@ -274,7 +290,10 @@ async fn start(args: StartArgs) -> Result<ExitCode> {
         anyhow::bail!("success criteria must not be empty");
     }
 
-    let workspace = canonical_workspace().await?;
+    let workspace = match workspace_override {
+        Some(workspace) => workspace.to_path_buf(),
+        None => canonical_workspace().await?,
+    };
     let store = AgentSessionStore::for_workspace(&workspace, &args.session);
     if store.exists() {
         let existing = load_session_state(&store, &workspace, &args.session).await?;
@@ -415,29 +434,112 @@ async fn start(args: StartArgs) -> Result<ExitCode> {
         return Err(error);
     }
 
+    Ok(StartSessionOutput {
+        state,
+        output,
+        url: args.url,
+    })
+}
+
+fn emit_start(result: &StartSessionOutput, json_output: bool) -> Result<()> {
     emit(
-        args.json,
+        json_output,
         json!({
             "protocol_revision": ACTION_PROTOCOL_REVISION,
-            "session": state.session,
-            "status": state.status,
-            "goal": state.goal,
-            "success_criteria": state.success_criteria,
-            "auto_resolve_repairs": state.auto_resolve_repairs,
-            "allowed_origins": state.allowed_origins,
-            "browser_containment": state.browser_containment,
-            "browser_allowed_origins": state.browser_allowed_origins,
-            "browser_allowed_domains": state.browser_allowed_domains,
-            "output": output,
-            "artifacts_dir": state.artifacts_dir,
-            "next": format!("a3s-test agent observe --session {} --interactive --json", state.session),
+            "session": result.state.session,
+            "status": result.state.status,
+            "goal": result.state.goal,
+            "success_criteria": result.state.success_criteria,
+            "auto_resolve_repairs": result.state.auto_resolve_repairs,
+            "allowed_origins": result.state.allowed_origins,
+            "browser_containment": result.state.browser_containment,
+            "browser_allowed_origins": result.state.browser_allowed_origins,
+            "browser_allowed_domains": result.state.browser_allowed_domains,
+            "output": result.output,
+            "artifacts_dir": result.state.artifacts_dir,
+            "next": format!("a3s-test agent observe --session {} --interactive --json", result.state.session),
         }),
         format!(
             "Started agent test session '{}' for {}",
-            state.session, args.url
+            result.state.session, result.url
         ),
-    )?;
-    Ok(ExitCode::SUCCESS)
+    )
+}
+
+pub(crate) struct DevSessionRequest {
+    pub(crate) workspace: PathBuf,
+    pub(crate) url: String,
+    pub(crate) session_prefix: String,
+    pub(crate) browser_driver: BrowserDriverKind,
+    pub(crate) browser_executable: Option<PathBuf>,
+    pub(crate) headed: bool,
+    pub(crate) command_timeout_ms: u64,
+    pub(crate) idle_timeout_ms: u64,
+}
+
+#[derive(Debug, Serialize)]
+pub(crate) struct DevSession {
+    pub(crate) session: String,
+    pub(crate) artifacts_dir: PathBuf,
+}
+
+pub(crate) async fn start_dev_session(request: DevSessionRequest) -> Result<DevSession> {
+    let session = next_dev_session_id(&request.workspace, &request.session_prefix)?;
+    let result = start_session(
+        StartArgs {
+            url: request.url,
+            session: session.clone(),
+            goal: "Process explicitly submitted Web review findings".to_string(),
+            success_criteria: vec![
+                "Every claimed finding reaches a verified, clarified, failed, or cancelled state"
+                    .to_string(),
+            ],
+            auto_resolve_repairs: false,
+            allowed_origins: Vec::new(),
+            allowed_domains: Vec::new(),
+            browser_driver: request.browser_driver,
+            browser_executable: request.browser_executable,
+            browser_microphone: super::BrowserMicrophoneArg::Disabled,
+            headed: request.headed,
+            command_timeout_ms: request.command_timeout_ms,
+            idle_timeout_ms: request.idle_timeout_ms,
+            json: false,
+        },
+        Some(&request.workspace),
+    )
+    .await?;
+    Ok(DevSession {
+        session,
+        artifacts_dir: result.state.artifacts_dir,
+    })
+}
+
+pub(crate) async fn abort_dev_session(workspace: &Path, session: &str) -> Result<()> {
+    let result = abort_session(session, Some(workspace)).await?;
+    match result.cleanup_error {
+        Some(error) => Err(anyhow::Error::new(error)),
+        None => Ok(()),
+    }
+}
+
+fn next_dev_session_id(workspace: &Path, prefix: &str) -> Result<String> {
+    let direct = AgentSessionStore::for_workspace(workspace, prefix);
+    if !direct.exists() {
+        return Ok(prefix.to_string());
+    }
+    let prefix = prefix.chars().take(42).collect::<String>();
+    let timestamp = unix_ms();
+    for attempt in 0..1_000_u16 {
+        let candidate = if attempt == 0 {
+            format!("{prefix}-{timestamp}")
+        } else {
+            format!("{prefix}-{timestamp}-{attempt}")
+        };
+        if !AgentSessionStore::for_workspace(workspace, &candidate).exists() {
+            return Ok(candidate);
+        }
+    }
+    anyhow::bail!("could not allocate a unique development session identifier")
 }
 
 async fn observe(args: ObserveArgs) -> Result<ExitCode> {
@@ -677,10 +779,31 @@ async fn finish(args: FinishArgs) -> Result<ExitCode> {
     })
 }
 
+struct AbortSessionOutput {
+    state: AgentSessionState,
+    cleanup_error: Option<DriverError>,
+}
+
 async fn abort(args: SessionArgs) -> Result<ExitCode> {
-    let workspace = canonical_workspace().await?;
-    let store = load_store(&workspace, &args.session)?;
-    let mut state = load_session_state(&store, &workspace, &args.session).await?;
+    let result = abort_session(&args.session, None).await?;
+    emit_abort(&result, args.json)?;
+    Ok(if result.cleanup_error.is_some() {
+        ExitCode::from(1)
+    } else {
+        ExitCode::SUCCESS
+    })
+}
+
+async fn abort_session(
+    session: &str,
+    workspace_override: Option<&Path>,
+) -> Result<AbortSessionOutput> {
+    let workspace = match workspace_override {
+        Some(workspace) => workspace.to_path_buf(),
+        None => canonical_workspace().await?,
+    };
+    let store = load_store(&workspace, session)?;
+    let mut state = load_session_state(&store, &workspace, session).await?;
     repair::interrupt_for_session_close(&store, &state).await?;
     let cleanup_error = if state.runtime_dir.exists() {
         let mut browser = connect(&state, BrowserConnectionPurpose::Cleanup).await?;
@@ -702,27 +825,29 @@ async fn abort(args: SessionArgs) -> Result<ExitCode> {
         state.summary = Some("Agent session abort cleanup failed".to_string());
         record_failure(&store, &mut state, "abort", None, error).await?;
     }
+    Ok(AbortSessionOutput {
+        state,
+        cleanup_error,
+    })
+}
+
+fn emit_abort(result: &AbortSessionOutput, json_output: bool) -> Result<()> {
     emit(
-        args.json,
+        json_output,
         json!({
             "protocol_revision": ACTION_PROTOCOL_REVISION,
-            "session": state.session,
-            "status": state.status,
-            "cleanup_error": cleanup_error.as_ref().map(|error| AgentSessionError {
+            "session": result.state.session,
+            "status": result.state.status,
+            "cleanup_error": result.cleanup_error.as_ref().map(|error| AgentSessionError {
                 code: error.code().to_string(),
                 message: error.message().to_string(),
             }),
         }),
         format!(
             "Agent test session '{}' is {:?}",
-            state.session, state.status
+            result.state.session, result.state.status
         ),
-    )?;
-    Ok(if cleanup_error.is_some() {
-        ExitCode::from(1)
-    } else {
-        ExitCode::SUCCESS
-    })
+    )
 }
 
 async fn show(args: SessionArgs) -> Result<ExitCode> {

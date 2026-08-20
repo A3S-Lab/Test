@@ -1,7 +1,5 @@
-use std::net::TcpStream;
 use std::path::{Path, PathBuf};
 use std::process::Command;
-use std::time::Duration;
 
 use super::assertion_stability::assert_passed_stability;
 use super::browser_process::{
@@ -64,7 +62,7 @@ fn real_agent_browser_verifies_and_classifies_focus_ownership() {
     );
 
     let fixture = WebFixture::start().expect("start focus ownership Web fixture");
-    let fixture_address = fixture.address();
+    let fixture_shutdown = fixture.shutdown_probe();
     let temp = tempfile::tempdir().expect("temporary focus ownership E2E workspace");
     let runtime_directories_before = private_runtime_directories();
 
@@ -74,7 +72,7 @@ fn real_agent_browser_verifies_and_classifies_focus_ownership() {
 
     drop(fixture);
     assert!(
-        TcpStream::connect_timeout(&fixture_address, Duration::from_millis(250)).is_err(),
+        fixture_shutdown.is_closed(),
         "focus ownership fixture listener must be closed"
     );
 }

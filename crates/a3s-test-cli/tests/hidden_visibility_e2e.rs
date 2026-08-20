@@ -1,9 +1,7 @@
 mod support;
 
-use std::net::TcpStream;
 use std::path::PathBuf;
 use std::process::Command;
-use std::time::Duration;
 
 use support::assertion_stability::run_hidden_visibility_e2e;
 use support::browser_process::{
@@ -38,7 +36,7 @@ fn real_agent_browser_runs_hidden_visibility_suite() {
     );
 
     let fixture = WebFixture::start().expect("start Web fixture");
-    let fixture_address = fixture.address();
+    let fixture_shutdown = fixture.shutdown_probe();
     let temp = tempfile::tempdir().expect("temporary hidden visibility E2E workspace");
     let runtime_directories_before = private_runtime_directories();
 
@@ -47,7 +45,7 @@ fn real_agent_browser_runs_hidden_visibility_suite() {
     assert_no_new_private_runtime_directories(&runtime_directories_before);
     drop(fixture);
     assert!(
-        TcpStream::connect_timeout(&fixture_address, Duration::from_millis(250)).is_err(),
+        fixture_shutdown.is_closed(),
         "hidden visibility fixture listener must be closed on drop"
     );
 }

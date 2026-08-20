@@ -27,6 +27,55 @@ a3s-test distributed schema
 
 Provider schemas describe request, response, provenance, and authority fields. They do not mean the repository bundles an inference backend.
 
+## Project Vibe Loop
+
+These commands are staged on `main` for the next release and are not present
+in the published v1.0.0 binary.
+
+The project commands remove manual environment setup without hiding authority
+or process ownership.
+
+| Command  | Purpose                                                                      |
+| -------- | ---------------------------------------------------------------------------- |
+| `init`   | Discover a frontend and write a typed `.a3s-test/project.acl` profile.       |
+| `doctor` | Diagnose profile, executable, package, Test Kit, and optional URL readiness. |
+| `dev`    | Reuse or start the development URL and open one headed review session.       |
+
+```bash
+a3s-test init --root . --json
+a3s-test doctor --root . --json
+a3s-test dev --root . --json
+```
+
+`init` prefers `packageManager`, rejects conflicting lockfile heuristics, uses
+the selected `dev` or `start` script, and recognizes explicit `--port`,
+`--port=<n>`, or `-p` script arguments. `--script` and `--url` override those
+two discoveries. `--testkit required` is the default; `optional` turns missing
+Test Kit into a warning. Existing profiles are never replaced unless
+`--force` names a regular non-link file inside the project root.
+
+`doctor --connect` probes the configured HTTP(S) URL. Without it, URL status
+is a warning because the server may not be running yet. `--strict` makes any
+warning fail. Exit code 2 means a diagnostic or configuration boundary failed.
+
+`dev` performs the static preflight first. A reachable URL is marked
+`server: "existing"` and is never terminated. Otherwise `dev` starts the
+profile's executable and argument vector without a shell, forwards both server
+streams to stderr, and waits up to `startup_timeout_ms`. Its stdout protocol
+contains compact `ready` and `stopped` events:
+
+```json
+{"protocol":"a3s.test.dev/1","event":"ready","project":"checkout","url":"http://127.0.0.1:5173/","server":"started","session":"dev","artifacts_dir":"..."}
+{"protocol":"a3s.test.dev/1","event":"stopped","project":"checkout","url":"http://127.0.0.1:5173/","server":"started","session":"dev","reason":"interrupt","cleanup":"complete"}
+```
+
+Ctrl+C returns 130 after exact browser and owned-server cleanup. An owned
+server that exits unexpectedly produces `reason: "server_exit"` and returns
+
+1. Startup or configuration failures return 2. Unix uses a separate process
+   group and host-death watchdog; Windows assigns a suspended launcher to a
+   kill-on-close Job Object before resuming it.
+
 ## Agent sessions
 
 | Command                                   | Purpose                                                                              |

@@ -35,6 +35,7 @@ mod mcp;
 mod mcp_web;
 mod provider_schema;
 mod worker_command;
+mod workspace;
 
 #[derive(Debug, Parser)]
 #[command(
@@ -57,12 +58,18 @@ enum Commands {
     Capabilities(CapabilitiesArgs),
     /// Generate and explicitly review source-bound Expected Surface Contracts.
     Contract(contract_workflow::ContractArgs),
+    /// Start the configured development server and A3S Test review session.
+    Dev(workspace::DevArgs),
+    /// Diagnose the local project profile and Vibe Loop prerequisites.
+    Doctor(workspace::DoctorArgs),
     /// Plan and execute authenticated distributed test shards.
     Distributed(distributed_command::DistributedArgs),
     /// Print the locked GUI platform and endpoint certification matrix.
     GuiCertification(gui_certification::GuiCertificationArgs),
     /// Exercise one real GUI profile and verify observation plus owned cleanup.
     GuiCertify(gui_certification::GuiCertifyArgs),
+    /// Detect a Web project and create a typed A3S Test project profile.
+    Init(workspace::InitArgs),
     /// Serve surface-neutral agent sessions over MCP stdio.
     Mcp(McpArgs),
     /// Inspect versioned contracts for deployment-supplied model providers.
@@ -83,7 +90,7 @@ struct CheckArgs {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, ValueEnum)]
-enum BrowserDriverKind {
+pub(crate) enum BrowserDriverKind {
     /// Run the browser capability through `a3s use browser`.
     A3s,
     /// Run a standalone `agent-browser` compatible executable.
@@ -91,7 +98,7 @@ enum BrowserDriverKind {
 }
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq, ValueEnum)]
-enum BrowserMicrophoneArg {
+pub(crate) enum BrowserMicrophoneArg {
     #[default]
     Disabled,
     Synthetic,
@@ -294,11 +301,14 @@ pub fn execute(cli: Cli) -> Pin<Box<dyn Future<Output = Result<ExitCode>>>> {
         Commands::Check(args) => Box::pin(check(args)),
         Commands::Capabilities(args) => Box::pin(capabilities(args)),
         Commands::Contract(args) => Box::pin(contract_workflow::execute(args)),
+        Commands::Dev(args) => Box::pin(workspace::dev(args)),
+        Commands::Doctor(args) => Box::pin(workspace::doctor(args)),
         Commands::Distributed(args) => Box::pin(distributed_command::execute(args)),
         Commands::GuiCertification(args) => {
             Box::pin(async move { gui_certification::print_matrix(args) })
         }
         Commands::GuiCertify(args) => Box::pin(gui_certification::certify(args)),
+        Commands::Init(args) => Box::pin(workspace::init(args)),
         Commands::Mcp(args) => Box::pin(serve_mcp(args)),
         Commands::Provider(args) => Box::pin(async move { provider_schema::execute(args) }),
         Commands::Run(args) => Box::pin(run(args)),
@@ -828,6 +838,7 @@ fn install_interrupt_handler(cancellation: CancellationToken) -> tokio::task::Jo
             terminate_active_cua_processes();
             terminate_active_tui_processes();
             terminate_active_commands();
+            workspace::terminate_active_dev_servers();
             std::process::exit(130);
         }
     })

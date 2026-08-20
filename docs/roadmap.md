@@ -892,3 +892,45 @@ The completion work intentionally preserves these product boundaries:
       one-pixel intersection, four-sided clipping, oversized and offscreen
       targets, open Shadow DOM, accessibility-hidden differences, transient
       geometry, exact fixture cleanup, and no private runtime leak
+
+## M28: Low-friction Vibe Loop
+
+This milestone starts from the shortest useful feedback cycle: express intent,
+observe the rendered product, identify the smallest mismatch, change only the
+owning source, and rerun only the evidence needed to accept or reject that
+change. Features that do not remove a step, improve the observation, preserve
+intent, or shorten verification do not belong in this loop.
+
+- [x] Add `a3s-test init` with bounded package-manager, script, framework,
+      port, and Test Kit discovery plus a typed workspace-local ACL profile;
+      never mutate dependencies or start a process during discovery
+- [x] Add `a3s-test doctor` with machine-readable project, executable,
+      declared-versus-installed Test Kit, semver compatibility, and optional
+      URL diagnostics with exact repair commands
+- [x] Add `a3s-test dev` with existing-server reuse, bounded readiness,
+      headed review-session startup, compact JSONL lifecycle events, stderr
+      log isolation, exact browser abort, and ownership-safe server cleanup
+- [x] Contain development servers in Unix process groups with a host-death
+      watchdog and in suspended-before-assignment Windows Job Objects; cover
+      late descendants, early server exit, Ctrl+C, and SIGKILL recovery
+- [ ] Publish `@a3s-lab/testkit` to the npm Registry with provenance,
+      immutable release metadata, and one supported install command per
+      package manager
+- [ ] Replace package-version inference with an explicit CLI, browser adapter,
+      and live Test Kit protocol handshake that reports the incompatible
+      boundary and exact upgrade path
+- [ ] Add a local repair bridge that lets an ordinary development browser and
+      the workspace-owning coding agent exchange submitted findings without a
+      manually coordinated session command
+- [ ] Map a selected rendered node to ranked, confidence-bearing source spans
+      across framework boundaries, source maps, and explicit
+      `A3STestBoundary` hints without reading undeclared framework state
+- [ ] Stream revision-scoped Page Context diffs and invalidate only evidence
+      affected by the latest source or DOM change instead of recapturing the
+      complete page after every edit
+- [ ] Generate and run the smallest deterministic verification slice from the
+      finding, changed files, stable locator, browser-error delta, and prior
+      proof; expand to broader regression only when impact evidence requires it
+- [ ] Preserve intent, source mapping, change, verification evidence, and ACL
+      promotion as one inspectable loop record so a later agent can resume
+      without reconstructing the task from chat history

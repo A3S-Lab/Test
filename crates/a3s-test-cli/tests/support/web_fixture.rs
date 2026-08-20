@@ -41,6 +41,19 @@ pub struct WebFixture {
     blocked: FixtureServer,
 }
 
+#[derive(Clone)]
+pub struct FixtureShutdownProbe {
+    closed: Vec<Arc<AtomicBool>>,
+}
+
+impl FixtureShutdownProbe {
+    pub fn is_closed(&self) -> bool {
+        self.closed
+            .iter()
+            .all(|closed| closed.load(Ordering::Acquire))
+    }
+}
+
 impl WebFixture {
     pub fn start() -> io::Result<Self> {
         let blocked = FixtureServer::start(Site::Blocked)?;
@@ -58,8 +71,13 @@ impl WebFixture {
         self.blocked.sentinel_origin()
     }
 
-    pub fn address(&self) -> SocketAddr {
-        self.primary.address
+    pub fn shutdown_probe(&self) -> FixtureShutdownProbe {
+        FixtureShutdownProbe {
+            closed: vec![
+                Arc::clone(&self.primary.closed),
+                Arc::clone(&self.blocked.closed),
+            ],
+        }
     }
 
     pub fn primary_requests(&self) -> Vec<RecordedRequest> {
@@ -137,8 +155,8 @@ impl StaticSiteFixture {
         self.server.origin()
     }
 
-    pub fn address(&self) -> SocketAddr {
-        self.server.address
+    pub fn shutdown_probe(&self) -> FixtureShutdownProbe {
+        self.server.shutdown_probe()
     }
 }
 
@@ -174,6 +192,7 @@ struct FixtureServer {
     address: SocketAddr,
     requests: Arc<Mutex<Vec<RecordedRequest>>>,
     stop: Arc<AtomicBool>,
+    closed: Arc<AtomicBool>,
     worker: Option<JoinHandle<io::Result<()>>>,
 }
 
@@ -184,16 +203,23 @@ impl FixtureServer {
 
         let requests = Arc::new(Mutex::new(Vec::new()));
         let stop = Arc::new(AtomicBool::new(false));
+        let closed = Arc::new(AtomicBool::new(false));
         let worker_requests = Arc::clone(&requests);
         let worker_stop = Arc::clone(&stop);
+        let worker_closed = Arc::clone(&closed);
         let worker = thread::Builder::new()
             .name(format!("a3s-test-http-fixture-{}", address.port()))
-            .spawn(move || serve(listener, site, &worker_requests, &worker_stop))?;
+            .spawn(move || {
+                let result = serve(listener, site, &worker_requests, &worker_stop);
+                worker_closed.store(true, Ordering::Release);
+                result
+            })?;
 
         Ok(Self {
             address,
             requests,
             stop,
+            closed,
             worker: Some(worker),
         })
     }
@@ -218,6 +244,12 @@ impl FixtureServer {
             .lock()
             .expect("Web fixture request log must not be poisoned")
             .clear();
+    }
+
+    fn shutdown_probe(&self) -> FixtureShutdownProbe {
+        FixtureShutdownProbe {
+            closed: vec![Arc::clone(&self.closed)],
+        }
     }
 }
 

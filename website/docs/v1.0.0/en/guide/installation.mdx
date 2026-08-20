@@ -94,3 +94,42 @@ cargo install --git https://github.com/A3S-Lab/Test \
 ```
 
 Each release also contains `a3s-test.skill`, platform archives, checksum files, the Test Kit package, and an immutable Linux runner image reference. Do not bypass checksums or replace the released image digest with a floating tag.
+
+## Start one local review loop
+
+The project-loop commands in this section are staged on `main` for the next
+release. The published v1.0.0 binary predates them; build the CLI from `main`
+only when evaluating unreleased behavior.
+
+After mounting Test Kit in the frontend, run these commands from the project
+root:
+
+```bash
+a3s-test init
+a3s-test doctor
+a3s-test dev
+```
+
+`init` detects the package manager, `dev` or `start` script, framework port,
+and Test Kit declaration, then writes `.a3s-test/project.acl`. It does not
+install packages or start processes. When Test Kit is missing, run the exact
+install command printed by `init`, mount the provider and overlay, then run
+`doctor` again.
+
+`doctor` separates a missing declaration from a declared but uninstalled
+package and rejects Test Kit versions outside the CLI compatibility range.
+`dev` reuses the configured URL when it already responds. Otherwise it owns
+the configured development process, waits for the URL, and opens one headed
+review browser. Ctrl+C closes the exact browser session and only the server
+that `dev` started.
+
+For a project that intentionally uses browser accessibility without the
+in-page overlay, initialize with:
+
+```bash
+a3s-test init --testkit optional
+```
+
+Use `--json` on all three commands in agent automation. `dev --json` emits one
+compact `a3s.test.dev/1` event per stdout line and keeps development-server
+logs on stderr.

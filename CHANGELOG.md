@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+### Added
+
+- Added the typed local project loop: `a3s-test init` discovers a bounded Web
+  project profile, `a3s-test doctor` reports static and optional connection
+  diagnostics with exact fixes, and `a3s-test dev` reuses or owns the
+  development server before opening one headed review session. Owned servers
+  use complete process-tree containment, host-death cleanup, bounded
+  readiness and shutdown, exact browser abort, and compact
+  `a3s.test.dev/1` JSONL lifecycle events without mixing server logs into
+  stdout.
+
 ## 1.0.0 - 2026-08-20
 
 A3S Test 1.0.0 establishes the first stable release line for the documented

@@ -1,7 +1,5 @@
-use std::net::TcpStream;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
-use std::time::Duration;
 
 mod acl;
 
@@ -96,7 +94,7 @@ fn real_agent_browser_verifies_and_classifies_semantic_state() {
     );
 
     let fixture = WebFixture::start().expect("start semantic state Web fixture");
-    let fixture_address = fixture.address();
+    let fixture_shutdown = fixture.shutdown_probe();
     let temp = tempfile::tempdir().expect("temporary semantic state E2E workspace");
     let runtime_directories_before = private_runtime_directories();
 
@@ -106,7 +104,7 @@ fn real_agent_browser_verifies_and_classifies_semantic_state() {
 
     drop(fixture);
     assert!(
-        TcpStream::connect_timeout(&fixture_address, Duration::from_millis(250)).is_err(),
+        fixture_shutdown.is_closed(),
         "semantic state fixture listener must be closed"
     );
 }

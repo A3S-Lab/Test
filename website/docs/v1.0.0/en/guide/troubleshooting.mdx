@@ -32,6 +32,42 @@ Do not copy cookies, authorization headers, browser storage, production data, or
 
 When JSON output contains both a root failure and a cleanup failure, retain both. A cleanup failure does not erase the product failure, and an assertion failure cannot hide incomplete cleanup.
 
+## The local Vibe Loop does not start
+
+Run the static diagnosis before changing the application:
+
+```bash
+a3s-test doctor --json
+a3s-test doctor --connect --json
+```
+
+Use the first command when no server is expected to be running. The unprobed
+URL is only a warning. Use `--connect` when validating an existing server.
+Apply the exact `fix` attached to each failed check; a missing Test Kit
+declaration, a declared but uninstalled package, and an incompatible installed
+version are separate failures.
+
+If discovery selected the wrong script or port, regenerate deliberately:
+
+```bash
+a3s-test init --script dev:web --url http://127.0.0.1:4317 --force
+```
+
+Inspect `.a3s-test/project.acl` before running `dev`. The development command
+is an executable plus an argument list, not a shell expression. Keep custom
+environment preparation in the declared package script.
+
+With `a3s-test dev --json`, parse stdout only as JSONL and send stderr to the
+developer log. A `ready` event with `server: "existing"` means A3S Test did
+not start and will not stop that server. `server: "started"` means the CLI
+owns the complete process tree. `reason: "server_exit"` identifies a server
+that stopped before Ctrl+C and includes its exit code when available.
+
+Do not kill all Node or browser processes by name. Press Ctrl+C once and let
+bounded cleanup abort the exact browser session and owned server tree. A
+second interrupt is emergency cleanup. Unix also uses an EOF watchdog if the
+host is killed; Windows relies on a kill-on-close Job Object.
+
 ## A session cannot start
 
 Read the installed version and protocol first.

@@ -61,6 +61,35 @@ installation targets. See the
 for every option, or download a prebuilt archive from
 [Releases](https://github.com/A3S-Lab/Test/releases/latest).
 
+## Start the local review loop
+
+These project-loop commands are currently available from `main` and are
+recorded under [Unreleased](CHANGELOG.md); the v1.0.0 binary predates them.
+
+From a frontend project that already mounts Test Kit, let A3S Test discover
+the package manager, development script, framework port, and browser profile:
+
+```bash
+a3s-test init
+a3s-test doctor
+a3s-test dev
+```
+
+`init` writes `.a3s-test/project.acl` and prints an exact Test Kit install
+command when the dependency is missing. It never installs or starts anything
+implicitly. `doctor` validates the profile, executables, package metadata, and
+compatible installed Test Kit version. `dev` then reuses an already reachable
+URL or starts the declared development command, waits for readiness, and opens
+one headed review session.
+
+Press Ctrl+C to abort that exact browser session. A development server started
+by A3S Test is stopped with its complete process tree; a server that was
+already running remains untouched. Pass `--json` to `dev` for compact
+`a3s.test.dev/1` JSONL lifecycle events while server logs remain on stderr.
+
+Use `a3s-test init --testkit optional` only when browser semantics are enough
+and the in-page review overlay is deliberately absent.
+
 ## Prove one real path
 
 Start a persistent Web session against a local product and define an

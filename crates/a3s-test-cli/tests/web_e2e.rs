@@ -1,6 +1,5 @@
 mod support;
 
-use std::net::TcpStream;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::time::Duration;
@@ -44,7 +43,7 @@ fn local_web_fixture_has_deterministic_routes_and_owned_lifecycle() {
     let fixture = WebFixture::start().expect("start Web fixture");
     let origin = fixture.origin();
     let blocked_origin = fixture.blocked_origin();
-    let address = fixture.address();
+    let shutdown = fixture.shutdown_probe();
 
     assert_blocked_sentinel_reachable(&fixture);
 
@@ -133,7 +132,7 @@ fn local_web_fixture_has_deterministic_routes_and_owned_lifecycle() {
 
     drop(fixture);
     assert!(
-        TcpStream::connect_timeout(&address, Duration::from_millis(250)).is_err(),
+        shutdown.is_closed(),
         "fixture listener must be closed on drop"
     );
 }
@@ -224,7 +223,7 @@ fn real_agent_browser_runs_the_website_testkit_suite() {
     let website = build_website("build website Test Kit fixture");
     let fixture =
         start_static_site_fixture(&website, "/Test/").expect("start built website fixture");
-    let fixture_address = fixture.address();
+    let fixture_shutdown = fixture.shutdown_probe();
     let homepage = get(&fixture.origin(), "/Test/").expect("built website homepage");
     assert_eq!(homepage.status, 200);
     assert!(
@@ -336,7 +335,7 @@ fn real_agent_browser_runs_the_website_testkit_suite() {
 
     drop(fixture);
     assert!(
-        TcpStream::connect_timeout(&fixture_address, Duration::from_millis(250)).is_err(),
+        fixture_shutdown.is_closed(),
         "website fixture listener must be closed on drop"
     );
 }
@@ -365,7 +364,7 @@ fn real_agent_browser_runs_the_hermetic_web_suite() {
 
     let fixture = WebFixture::start().expect("start Web fixture");
     assert_blocked_sentinel_reachable(&fixture);
-    let fixture_address = fixture.address();
+    let fixture_shutdown = fixture.shutdown_probe();
     let temp = tempfile::tempdir().expect("temporary E2E workspace");
     let manifest = temp.path().join("hermetic-web-e2e.acl");
     std::fs::write(&manifest, suite(&fixture.origin())).expect("write E2E suite");
@@ -438,7 +437,7 @@ fn real_agent_browser_runs_the_hermetic_web_suite() {
 
     drop(fixture);
     assert!(
-        TcpStream::connect_timeout(&fixture_address, Duration::from_millis(250)).is_err(),
+        fixture_shutdown.is_closed(),
         "real E2E fixture listener must be closed"
     );
 }
