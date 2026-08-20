@@ -7,35 +7,29 @@ description: 分清 CLI、Agent Skill 与 Web Test Kit，按使用场景安装�
 
 A3S Test 包含两个独立版本的安装部分，因为它们负责不同的信任边界。
 
-| 部分               | 安装位置                             | 负责内容                                        |
-| ------------------ | ------------------------------------ | ----------------------------------------------- |
-| CLI 与 Agent Skill | 开发者机器和编码 Agent 的 Skill 目录 | 会话、类型化动作、ACL、证据、修复协调与自有清理 |
-| Web Test Kit       | 前端工程的开发依赖                   | 渲染后 Page Context、源码映射与可选页面评审界面 |
+- **Web Test Kit** 安装为前端开发依赖，提供渲染后的 Page Context、源码映射与可选页面评审界面。
+- **CLI 与 Agent Skill** 安装在开发者机器和编码 Agent 的 Skill 目录中，负责会话、类型化动作、ACL、证据、修复协调与进程清理。
 
-只安装当前任务需要的部分：
-
-- **在开发页面点选、框选、截图或画草图：** 安装 [Web Test Kit](#安装-web-test-kit)。
-- **从终端探索页面或运行 ACL：** 安装 [CLI 与 Agent Skill](#安装-cli-与-agent-skill)。
-- **把页面问题交给编码 Agent 修复并验证：** 两者都安装。
+页面点选、框选、截图或草图只需安装 [Web Test Kit](#安装-web-test-kit)，终端探索与 ACL 使用 [CLI 与 Agent Skill](#安装-cli-与-agent-skill)。要把页面问题交给编码 Agent 修复并验证，两者都安装。
 
 ## 安装 Web Test Kit
 
 在前端工程目录执行：
 
 ```bash
-npm install --save-dev @a3s-lab/testkit@0.6.0
+npm install --save-dev @a3s-lab/testkit@0.6.1
 ```
 
 项目使用其他包管理器时，执行对应的一条命令即可：
 
 | 包管理器 | 命令                                            |
 | -------- | ----------------------------------------------- |
-| npm      | `npm install --save-dev @a3s-lab/testkit@0.6.0` |
-| pnpm     | `pnpm add --save-dev @a3s-lab/testkit@0.6.0`    |
-| Yarn     | `yarn add --dev @a3s-lab/testkit@0.6.0`         |
-| Bun      | `bun add --dev @a3s-lab/testkit@0.6.0`          |
+| npm      | `npm install --save-dev @a3s-lab/testkit@0.6.1` |
+| pnpm     | `pnpm add --save-dev @a3s-lab/testkit@0.6.1`    |
+| Yarn     | `yarn add --dev @a3s-lab/testkit@0.6.1`         |
+| Bun      | `bun add --dev @a3s-lab/testkit@0.6.1`          |
 
-`@a3s-lab/testkit` 0.6.0 已通过 GitHub OIDC provenance 发布到官方 npm Registry。固定版本可以让安装结果可复现，包管理器也会把完整性信息写入项目 lockfile。
+`@a3s-lab/testkit` 0.6.1 已通过 GitHub OIDC provenance 发布到官方 npm Registry。固定版本可以让安装结果可复现，包管理器也会把完整性信息写入项目 lockfile。
 
 确认安装结果：
 
@@ -43,7 +37,7 @@ npm install --save-dev @a3s-lab/testkit@0.6.0
 npm ls @a3s-lab/testkit
 ```
 
-Test Kit 的包版本独立于 A3S Test 的 Release 标签，因此两个版本号不必相同。安装完成后，按[三步接入 Web Test Kit](./testkit.mdx#三步完成-react-接入)挂载评审界面。Test Kit 0.6.0 已包含画板、页面区域截图、CLI 实时兼容握手、渲染节点源码映射和修订级 Page Context 差异，不需要另装绘图库或截图插件。
+Test Kit 的包版本独立于 A3S Test 的 Release 标签，因此两个版本号不必相同。安装完成后，按[三步接入 Web Test Kit](./testkit.mdx#三步完成-react-接入)挂载评审界面。Test Kit 0.6.1 已包含简化评审侧栏、有界 SVG 画板、页面内框选截图、CLI 实时兼容握手、渲染节点源码映射和修订级 Page Context 差异，不需要浏览器扩展、绘图库、截图插件或屏幕共享权限。
 
 ## 安装 CLI 与 Agent Skill
 

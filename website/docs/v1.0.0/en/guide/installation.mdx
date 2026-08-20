@@ -7,35 +7,29 @@ description: Choose the CLI, Agent Skill, or Web Test Kit for your task, then in
 
 A3S Test has two separately versioned installable parts because they own different trust boundaries.
 
-| Part                | Install location                                   | Owns                                                                              |
-| ------------------- | -------------------------------------------------- | --------------------------------------------------------------------------------- |
-| CLI and Agent Skill | Developer machine and coding-agent skill directory | Sessions, typed actions, ACL, evidence, repair coordination, and owned cleanup    |
-| Web Test Kit        | Frontend project development dependencies          | Post-render Page Context, source mapping, and the optional in-page review surface |
+- **Web Test Kit** is a frontend development dependency. It provides post-render Page Context, source mapping, and the optional in-page review surface.
+- **CLI and Agent Skill** run on the developer machine and in the coding agent's Skill directory. They own sessions, typed actions, ACL, evidence, repair coordination, and process cleanup.
 
-Choose only what the current task needs:
-
-- **Mark, select, capture, or sketch on a development page:** install [Web Test Kit](#install-web-test-kit).
-- **Explore a page or run ACL from the terminal:** install the [CLI and Agent Skill](#install-the-cli-and-agent-skill).
-- **Send a page finding to a coding agent and verify the repair:** install both.
+Install [Web Test Kit](#install-web-test-kit) for in-page marking, capture, or sketching. Use the [CLI and Agent Skill](#install-the-cli-and-agent-skill) for terminal exploration and ACL. Install both when a coding agent must receive a page finding and verify the repair.
 
 ## Install Web Test Kit
 
 Run this command in the frontend project:
 
 ```bash
-npm install --save-dev @a3s-lab/testkit@0.6.0
+npm install --save-dev @a3s-lab/testkit@0.6.1
 ```
 
 Use the matching command when the project already uses another package manager:
 
 | Package manager | Command                                         |
 | --------------- | ----------------------------------------------- |
-| npm             | `npm install --save-dev @a3s-lab/testkit@0.6.0` |
-| pnpm            | `pnpm add --save-dev @a3s-lab/testkit@0.6.0`    |
-| Yarn            | `yarn add --dev @a3s-lab/testkit@0.6.0`         |
-| Bun             | `bun add --dev @a3s-lab/testkit@0.6.0`          |
+| npm             | `npm install --save-dev @a3s-lab/testkit@0.6.1` |
+| pnpm            | `pnpm add --save-dev @a3s-lab/testkit@0.6.1`    |
+| Yarn            | `yarn add --dev @a3s-lab/testkit@0.6.1`         |
+| Bun             | `bun add --dev @a3s-lab/testkit@0.6.1`          |
 
-`@a3s-lab/testkit` 0.6.0 is published on the official npm Registry with GitHub OIDC provenance. Pinning the version keeps installation reproducible, and the package manager stores its integrity in the project lockfile.
+`@a3s-lab/testkit` 0.6.1 is published on the official npm Registry with GitHub OIDC provenance. Pinning the version keeps installation reproducible, and the package manager stores its integrity in the project lockfile.
 
 Verify the installed dependency:
 
@@ -43,7 +37,7 @@ Verify the installed dependency:
 npm ls @a3s-lab/testkit
 ```
 
-The Test Kit package version advances independently from the A3S Test Release tag, so the two version numbers do not need to match. Continue with the [three-step Web Test Kit setup](./testkit.mdx#three-step-react-setup). Test Kit 0.6.0 includes the design board, page-region capture, live CLI compatibility handshake, ranked rendered-node source mapping, and revision-scoped Page Context diffs without separate drawing or screenshot packages.
+The Test Kit package version advances independently from the A3S Test Release tag, so the two version numbers do not need to match. Continue with the [three-step Web Test Kit setup](./testkit.mdx#three-step-react-setup). Test Kit 0.6.1 includes the simplified review panel, bounded SVG design board, in-page region capture, live CLI compatibility handshake, ranked rendered-node source mapping, and revision-scoped Page Context diffs without a browser extension, drawing SDK, screenshot plug-in, or screen-sharing permission.
 
 ## Install the CLI and Agent Skill
 

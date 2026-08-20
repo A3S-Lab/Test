@@ -39,7 +39,7 @@ export function DesignAuditCandidates({ reports, onReview, onDismiss }: DesignAu
     </div>
     {reports.flatMap((report) => report.findings.map((finding) => (
       <article key={`${report.id}:${finding.id}`} className="a3s-quality-item">
-        <span className={`a3s-status status-${prioritySeverity(finding.priority)}`}>{t(finding.priority === "high" ? "priorityHigh" : finding.priority === "medium" ? "priorityMedium" : "priorityLow")}</span>
+        <span className={`a3s-status status-badge status-${prioritySeverity(finding.priority)}`}>{t(finding.priority === "high" ? "priorityHigh" : finding.priority === "medium" ? "priorityMedium" : "priorityLow")}</span>
         <strong>{finding.summary}</strong>
         <p>{finding.rationale}</p>
         <small>

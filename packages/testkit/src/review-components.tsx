@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useId, useState } from "react";
 import type { RepairDesignReference, RepairIntent, RepairSeverity, Rect } from "./types";
 import { type LayoutCanvas, type LayoutSource, type SelectionMode } from "./review-model";
 import { validLayoutRect } from "./review-utils";
@@ -22,12 +22,14 @@ export function ReviewPanelHeader({ idPrefix, view, findingCount, onClose, onVie
     <header className="a3s-panel-header">
       <span className="a3s-panel-mark" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.4" /><path d="m7.3 16 3.9-9.2c.3-.8 1.4-.8 1.8 0l3.8 9.2M9.2 12.5h5.7" /><path d="M4.8 15.4c3-2.5 6.3-2.8 9.7-.9 1.7.9 3.4.3 5.2-1.3-1 4.7-4 7.1-8.5 7.1" /></svg></span>
       <span><strong id={`${idPrefix}-review-title`} className="a3s-panel-title">{t("reviewTitle")}</strong><small id={`${idPrefix}-review-description`} className="a3s-panel-description">{t("reviewDescription")}</small></span>
-      <button type="button" className="a3s-close" onClick={onClose} aria-label={t("closeReviewOverlay")}><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3.5 3.5 12.5 12.5M12.5 3.5 3.5 12.5" /></svg></button>
+      <div className="a3s-panel-actions">
+        <button type="button" className={`a3s-header-settings${view === "settings" ? " selected" : ""}`} aria-label={t("reviewPreferences")} aria-pressed={view === "settings"} title={t("reviewPreferences")} onClick={() => onView("settings")}><ToolGlyph name="settings" /><span className="a3s-sr-only">{t("preferences")}</span></button>
+        <button type="button" className="a3s-close" onClick={onClose} aria-label={t("closeReviewOverlay")}><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3.5 3.5 12.5 12.5M12.5 3.5 3.5 12.5" /></svg></button>
+      </div>
     </header>
-    <nav className="a3s-panel-tabs" aria-label={t("reviewViews")} role="tablist">
-      <button type="button" role="tab" aria-selected={view === "compose"} className={view === "compose" ? "selected" : ""} onClick={() => onView("compose")}><ToolGlyph name="element" /><span>{t("newFeedback")}</span></button>
-      <button type="button" role="tab" aria-selected={view === "findings"} className={view === "findings" ? "selected" : ""} onClick={() => onView("findings")}><ToolGlyph name="inbox" /><span>{t("findings")}</span>{findingCount > 0 && <b aria-label={t("inThisPage", { count: findingCount })}>{findingCount}</b>}</button>
-      <button type="button" role="tab" aria-selected={view === "settings"} aria-label={t("reviewPreferences")} className={view === "settings" ? "selected" : ""} onClick={() => onView("settings")}><ToolGlyph name="settings" /><span>{t("preferences")}</span></button>
+    <nav className="a3s-panel-tabs toolbar" aria-label={t("reviewViews")}>
+      <button type="button" aria-pressed={view === "compose"} className={view === "compose" ? "selected" : ""} onClick={() => onView("compose")}><ToolGlyph name="element" /><span>{t("newFeedback")}</span></button>
+      <button type="button" aria-pressed={view === "findings"} className={view === "findings" ? "selected" : ""} onClick={() => onView("findings")}><ToolGlyph name="inbox" /><span>{t("findings")}</span>{findingCount > 0 && <b aria-label={t("inThisPage", { count: findingCount })}>{findingCount}</b>}</button>
     </nav>
   </>;
 }
@@ -43,39 +45,49 @@ export type ReviewMarkingToolbarProps = {
 
 export function ReviewMarkingToolbar(props: ReviewMarkingToolbarProps) {
   const { t } = useReviewI18n();
-  const modes = ["element", "area", "text", "multi", "draw"] as const;
+  const [moreOpen, setMoreOpen] = useState(false);
+  const secondaryToolsId = useId();
+  const primaryModes = ["element", "area"] as const;
+  const secondaryModes = ["text", "multi", "draw"] as const;
+  const secondaryActive = props.layoutMode || (props.marking && secondaryModes.includes(props.mode as typeof secondaryModes[number]));
+  const showSecondary = moreOpen || secondaryActive;
+  const renderMode = (value: typeof primaryModes[number] | typeof secondaryModes[number]) => {
+    const label = reviewModeLabel(t, value);
+    const actionLabel = label.toLocaleLowerCase("en-US");
+    return <ToolButton
+      key={value}
+      label={label}
+      ariaLabel={t("markAction", { mode: actionLabel })}
+      icon={value}
+      pressed={props.marking && props.mode === value}
+      keyShortcut={REVIEW_KEY_SHORTCUTS[value]}
+      title={t("markActionWithShortcut", { mode: actionLabel, shortcut: REVIEW_KEY_SHORTCUTS[value] })}
+      showLabel
+      onClick={() => props.onStartMarking(value)}
+    />;
+  };
 
   return <section className="a3s-tools" aria-label={t("markPage")}>
     <div className="a3s-tools-heading">
       <span><strong>{t("chooseTarget")}</strong><small>{t("chooseTargetHelp")}</small></span>
       {props.marking && <button type="button" className="quiet danger a3s-cancel-marking" onClick={props.onCancelMarking}><ToolGlyph name="close" /><span>{t("cancel")}</span></button>}
     </div>
-    <div className="a3s-selection-grid">
-      {modes.map((value) => {
-        const label = reviewModeLabel(t, value);
-        const actionLabel = label.toLocaleLowerCase("en-US");
-        return <ToolButton
-          key={value}
-          label={label}
-          ariaLabel={t("markAction", { mode: actionLabel })}
-          icon={value}
-          pressed={props.marking && props.mode === value}
-          keyShortcut={REVIEW_KEY_SHORTCUTS[value]}
-          title={t("markActionWithShortcut", { mode: actionLabel, shortcut: REVIEW_KEY_SHORTCUTS[value] })}
-          showLabel
-          onClick={() => props.onStartMarking(value)}
-        />;
-      })}
+    <div className="a3s-selection-grid a3s-primary-tools">
+      {primaryModes.map(renderMode)}
+    </div>
+    <button type="button" className="quiet a3s-more-tools" aria-expanded={showSecondary} aria-controls={secondaryToolsId} aria-label={t("moreReviewTools")} onClick={() => setMoreOpen((current) => !current)}><ToolGlyph name="more" /><span>{t("moreTools")}</span><i aria-hidden="true" /></button>
+    <div id={secondaryToolsId} className="a3s-selection-grid a3s-secondary-tools" hidden={!showSecondary}>
+      {secondaryModes.map(renderMode)}
       <ToolButton
-        label={t("layout")}
-        ariaLabel={t("layout")}
-        icon="layout"
-        pressed={props.layoutMode}
-        title={t("toggleLayoutMode")}
-        keyShortcut={REVIEW_KEY_SHORTCUTS.layout}
-        showLabel
-        onClick={props.onToggleLayout}
-      />
+          label={t("layout")}
+          ariaLabel={t("layout")}
+          icon="layout"
+          pressed={props.layoutMode}
+          title={t("toggleLayoutMode")}
+          keyShortcut={REVIEW_KEY_SHORTCUTS.layout}
+          showLabel
+          onClick={props.onToggleLayout}
+        />
     </div>
   </section>;
 }
@@ -146,6 +158,7 @@ export function FindingEditor(props: FindingEditorProps) {
       <span><strong>{t(props.editing ? "editFinding" : "newFinding")}</strong><small className="a3s-editor-target" title={props.label}>{props.label}</small></span>
     </header>
     <div className="a3s-editor-scroll">
+      <label className="a3s-editor-request">{t("requestedFix")}<textarea autoFocus maxLength={8192} value={props.instruction} onChange={(event) => props.onInstruction(event.target.value)} placeholder={t("describeChange")} /></label>
       <div className={`a3s-design-reference${props.designReference ? " has-reference" : ""}`}>
         {props.designReference ? <>
           {props.designReference.image.kind === "inline" && <img src={props.designReference.image.dataUrl} alt={designT(props.designReference.kind === "sketch" ? "referenceSketchAlt" : "referenceScreenshotAlt")} />}
@@ -158,7 +171,6 @@ export function FindingEditor(props: FindingEditorProps) {
           <button type="button" className="a3s-design-reference-open" onClick={props.onOpenDesignBoard}><DesignGlyph name="draw" /><span>{designT("openBoard")}</span></button>
         </>}
       </div>
-      <label className="a3s-editor-request">{t("requestedFix")}<textarea autoFocus maxLength={8192} value={props.instruction} onChange={(event) => props.onInstruction(event.target.value)} placeholder={t("describeChange")} /></label>
       <button type="button" className="a3s-editor-details" aria-expanded={detailsOpen} onClick={() => setDetailsOpen((current) => !current)}><span>{t("details")}</span><small>{t("detailsSummary")}</small><i aria-hidden="true" /></button>
       {detailsOpen && <div className="a3s-editor-options">
         <label>{t("successCriteria")} <span>{t("optional")}</span><textarea maxLength={4096} value={props.successCriteria} onChange={(event) => props.onSuccessCriteria(event.target.value)} placeholder={t("successCriteriaPlaceholder")} /></label>

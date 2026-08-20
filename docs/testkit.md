@@ -758,23 +758,26 @@ and severity. Region, drawing, and layout targets retain the page scroll
 offset captured with their viewport rectangle so visible markers stay aligned
 as the page scrolls.
 
-The overlay is one side panel, not a second application shell. Its primary flow
-is select a target, describe the change, then save or send. New feedback,
-findings, and preferences are peer views in the same panel. Marking tools are
-visible directly; after selection the editor replaces them in place, and
-saving switches to the findings view. The header stays one line, explanatory
-copy truncates, and findings use compact separators instead of nested cards.
-No target-attached editor, secondary tray, or nested modal is created. Severity
-always has a text label, and quality markers use a distinct dashed treatment so
-color is not the sole distinction. Preferences remain scrollable within short
-desktop viewports. On mobile, starting a marking mode temporarily hides the
-full-width panel, exposes the page for direct touch input, and retains a compact
-finish/cancel bar. Controls use 44-CSS-pixel touch targets and 16-pixel form
-text to avoid accidental zoom.
+The overlay is one side panel, not a second application shell. Its default path
+has two decisions: select an element or area, then describe the requested
+result. The first screen exposes only **Element** and **Area**. Text,
+multi-select, drawing, and Layout are progressively disclosed under **More
+tools**. Selecting a target replaces the tools with the editor in place;
+saving or sending is the final action. **New feedback** and **Findings** are the
+only top-level views, while preferences live in the header. The header stays
+one line, explanatory copy truncates, and findings use compact separators
+instead of nested cards. No target-attached editor, secondary tray, or nested
+modal is created. Severity always has a text label, and quality markers use a
+distinct dashed treatment so color is not the sole distinction. On mobile,
+starting a marking mode temporarily hides the full-width panel, exposes the
+page for direct touch input, and retains a compact finish/cancel bar. Controls
+use 44-CSS-pixel touch targets and 16-pixel form text to avoid accidental zoom.
 
-Node and text markers are recomputed from live DOM rectangles after window or
-nested-container scrolling. Region markers retain the scroll origin captured
-with their viewport rectangle. All page markers are removed from the rendered
+Node and text markers, including the active candidate, are recomputed from live
+DOM rectangles after window or nested-container scrolling. The transient hover
+rectangle is cleared when selection completes so it cannot remain fixed at an
+old viewport coordinate. Region markers retain the scroll origin captured with
+their viewport rectangle. All page markers are removed from the rendered
 overlay whenever the review panel closes.
 
 ### Desired-UI design references
@@ -814,6 +817,15 @@ key, watermark, or CDN dependency. A restrictive CSP or offline development
 environment therefore does not need canvas-specific asset overrides. The
 overlay should still normally be enabled only during development because it
 exposes review authoring controls.
+
+Test Kit reuses the A3S UI visual contract at build time rather than importing
+a runtime component tree into the host page. The pinned `@a3s-lab/ui` package
+exports foundation tokens plus `task-pane`, `toolbar`, and `status-badge` CSS.
+`npm run sync:a3s-ui` reads those files, scopes the root and dark selectors to
+the overlay, and generates TypeScript constants that are concatenated into the
+Shadow DOM stylesheet. This keeps the documentation, product UI, and embedded
+review surface visually aligned without exposing global selectors or adding a
+consumer-side stylesheet dependency.
 
 Attaching the board adds one optional `designReference` to the same finding;
 it does not create a second finding or change the selected target:

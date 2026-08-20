@@ -115,11 +115,11 @@ Install Test Kit only when a page needs component ownership, source mapping,
 rendered geometry, or the in-page review surface:
 
 ```bash
-npm install --save-dev @a3s-lab/testkit@0.6.0
+npm install --save-dev @a3s-lab/testkit@0.6.1
 npm ls @a3s-lab/testkit
 ```
 
-`@a3s-lab/testkit` 0.6.0 is published on the official npm Registry with
+`@a3s-lab/testkit` 0.6.1 is published on the official npm Registry with
 GitHub OIDC provenance. Its version advances independently from the CLI
 release.
 
@@ -204,13 +204,18 @@ This adds two independent layers:
 - The headless Context Runtime publishes bounded, revisioned facts after the
   browser has computed DOM, accessibility, layout, scrolling, and viewports;
   `waitForDiff` reports only evidence invalidated by a newer revision.
-- The optional Review Overlay lets a person point, multi-select, draw a region,
-  sketch an intended UI, or attach a browser-page crop in one right-side panel.
+- The optional Review Overlay keeps the default feedback path to two decisions:
+  choose an element or area, then describe the requested result. Text,
+  multi-select, drawing, and Layout stay available under **More tools**; the
+  right-side design board can add a sketch or browser-page crop without a
+  screen-sharing prompt.
 
 Test Kit does not need a drawing SDK, screen-sharing permission, framework
-private state, workspace credential, or source-editing capability. The page
-bridge is non-enumerable and Symbol-addressed; private node IDs stay in a
-`WeakMap`; observer and navigation signals advance the page revision.
+private state, workspace credential, or source-editing capability. Its Shadow
+DOM surface bundles the A3S UI foundation, task-pane, toolbar, and status
+contracts at build time, while the page bridge stays non-enumerable and
+Symbol-addressed. Private node IDs remain in a `WeakMap`; observer and
+navigation signals advance the page revision.
 
 When the CLI from `main` is used for the staged local review loop, it validates
 the live `a3s.test.testkit-handshake/1` before reporting ready:

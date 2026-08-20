@@ -60,10 +60,10 @@ describe("React adapter and review overlay", () => {
     expect(shadowQuery(".a3s-panel-title").textContent).toBe("页面评审");
     expect(shadowButton("元素")).toBeTruthy();
     expect(shadowButton("元素").getAttribute("aria-label")).toBe("标记元素");
-    expect(shadowButton("新反馈").getAttribute("aria-selected")).toBe("true");
+    expect(shadowButton("新反馈").getAttribute("aria-pressed")).toBe("true");
     expect(shadowQuery(".a3s-panel").querySelector(".a3s-tool-tray")).toBeNull();
     fireEvent.click(shadowButton("问题"));
-    expect(shadowButton("问题").getAttribute("aria-selected")).toBe("true");
+    expect(shadowButton("问题").getAttribute("aria-pressed")).toBe("true");
     fireEvent.click(shadowButton("偏好设置"));
     expect(shadowQuery("[aria-label='评审主题']")).toBeTruthy();
     fireEvent.click(shadowButton("新反馈"));
@@ -334,7 +334,7 @@ describe("React adapter and review overlay", () => {
     await waitFor(() => expect(shadowQuery(".a3s-design-status").textContent).toContain("Screenshot."));
   });
 
-  it("mounts the dependency-free design tools inside the Test Kit shadow root", async () => {
+  it("mounts the native design tools inside the Test Kit shadow root", async () => {
     render(<A3STestKit enabled page={{ id: "native-design-tools" }} repairStorage="memory"><button id="native-design-target">Old panel</button><A3SReviewOverlay enabled defaultOpen /></A3STestKit>);
     await waitFor(() => expect(shadowQuery(".a3s-panel")).toBeTruthy());
     const target = document.querySelector<HTMLElement>("#native-design-target")!;
@@ -346,6 +346,10 @@ describe("React adapter and review overlay", () => {
     expect(shadowQuery("[data-testid='design-tool-draw']")).toBeTruthy();
     expect(shadowQuery("[data-testid='design-tool-rectangle']")).toBeTruthy();
     expect(shadowQuery("[data-testid='design-tool-text']")).toBeTruthy();
+    expect(document.querySelector<HTMLElement>("[data-a3s-testkit-overlay]")!.shadowRoot!.querySelector(".a3s-design-history")).toBeNull();
+    expect(document.querySelector<HTMLElement>("[data-a3s-testkit-overlay]")!.shadowRoot!.querySelector(".a3s-design-style")).toBeNull();
+    fireEvent.click(shadowQuery("[data-testid='design-tool-draw']"));
+    expect(shadowQuery(".a3s-design-style")).toBeTruthy();
     expect(document.querySelector<HTMLElement>("[data-a3s-testkit-overlay]")!.shadowRoot!.querySelector("style")!.textContent).toContain(".a3s-design-canvas-surface");
   });
 
@@ -617,14 +621,23 @@ describe("React adapter and review overlay", () => {
     Object.defineProperty(target, "getClientRects", { configurable: true, value: () => [rect] });
 
     fireEvent.click(shadowButton("Element"));
+    target.dispatchEvent(pointerEvent("pointermove", target, 40, 190));
+    await waitFor(() => expect(shadowQuery(".a3s-root").querySelector(".a3s-highlight:not(.is-candidate)")).toBeTruthy());
     target.dispatchEvent(pointerEventWithPath(target, 40, 190));
-    fireEvent.change(await waitFor(() => shadowQuery(".a3s-editor textarea")), { target: { value: "Keep this marker aligned while scrolling" } });
-    fireEvent.click(shadowButton("Add draft"));
-    await waitFor(() => expect(shadowQuery(".a3s-marker").style.top).toBe("180px"));
+    await waitFor(() => expect(shadowQuery(".a3s-highlight.is-candidate").style.top).toBe("180px"));
+    expect(shadowQuery(".a3s-root").querySelector(".a3s-highlight:not(.is-candidate)")).toBeNull();
 
     rect = DOMRect.fromRect({ x: 24, y: 60, width: 140, height: 36 });
     fireEvent.scroll(window);
+    await waitFor(() => expect(shadowQuery(".a3s-highlight.is-candidate").style.top).toBe("60px"));
+
+    fireEvent.change(await waitFor(() => shadowQuery(".a3s-editor textarea")), { target: { value: "Keep this marker aligned while scrolling" } });
+    fireEvent.click(shadowButton("Add draft"));
     await waitFor(() => expect(shadowQuery(".a3s-marker").style.top).toBe("60px"));
+
+    rect = DOMRect.fromRect({ x: 24, y: 24, width: 140, height: 36 });
+    fireEvent.scroll(window);
+    await waitFor(() => expect(shadowQuery(".a3s-marker").style.top).toBe("24px"));
   });
 
   it("restores page-local drafts and semantic targets after a React reload", async () => {
@@ -659,7 +672,7 @@ describe("React adapter and review overlay", () => {
     await waitFor(() => expect(shadowQuery(".a3s-list").textContent).toContain("Profile-only draft"));
 
     window.history.pushState(null, "", "/security");
-    await waitFor(() => expect(shadowButton("New feedback").getAttribute("aria-selected")).toBe("true"));
+    await waitFor(() => expect(shadowButton("New feedback").getAttribute("aria-pressed")).toBe("true"));
     fireEvent.click(shadowButton("Findings"));
     expect(shadowQuery(".a3s-list").textContent).not.toContain("Profile-only draft");
     window.history.pushState(null, "", "/profile");
@@ -957,9 +970,9 @@ describe("React adapter and review overlay", () => {
 
     const preferencesToggle = shadowQuery("[aria-label='Review preferences']");
     expect(preferencesToggle.getAttribute("aria-label")).toBe("Review preferences");
-    expect(preferencesToggle.getAttribute("aria-selected")).toBe("false");
+    expect(preferencesToggle.getAttribute("aria-pressed")).toBe("false");
     fireEvent.click(preferencesToggle);
-    expect(preferencesToggle.getAttribute("aria-selected")).toBe("true");
+    expect(preferencesToggle.getAttribute("aria-pressed")).toBe("true");
     fireEvent.change(shadowQuery("[aria-label='Overlay theme']"), { target: { value: "dark" } });
     fireEvent.change(shadowQuery("[aria-label='Marker color']"), { target: { value: "#2563eb" } });
     fireEvent.click(shadowQuery("[aria-label='Clear drafts after copy']"));
@@ -1135,7 +1148,15 @@ describe("React adapter and review overlay", () => {
     expect(panel.querySelector("[role='dialog']")).toBeNull();
     expect(panel.querySelector(".a3s-tool-tray")).toBeNull();
     expect(panel.querySelector(".a3s-editor-popover")).toBeNull();
+    expect(panel.classList.contains("task-pane")).toBe(true);
+    expect(panel.querySelectorAll(".a3s-panel-tabs > button")).toHaveLength(2);
+    expect(panel.querySelector(".a3s-panel-header [aria-label='Review preferences']")).toBeTruthy();
+    expect(shadowQuery(".a3s-more-tools").getAttribute("aria-expanded")).toBe("false");
+    expect(shadowQuery(".a3s-secondary-tools").hasAttribute("hidden")).toBe(true);
+    fireEvent.click(shadowButton("More tools"));
+    expect(shadowQuery(".a3s-secondary-tools").hasAttribute("hidden")).toBe(false);
     expect(shadowButton("Layout").getAttribute("aria-label")).toBe("Layout");
+    expect(document.querySelector<HTMLElement>("[data-a3s-testkit-overlay]")!.shadowRoot!.querySelector("style")!.textContent).toContain("--a3s-control-height");
     expect(shadowQuery(".a3s-announcer").getAttribute("aria-atomic")).toBe("true");
     fireEvent.click(shadowButton("Findings"));
     expect(shadowQuery(".a3s-list").hasAttribute("aria-live")).toBe(false);

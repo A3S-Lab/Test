@@ -13,7 +13,7 @@ const provider: reactTestkit.A3STestKitProps = {
 const handshake: testkit.TestKitHandshake = {
   protocol: testkit.TESTKIT_HANDSHAKE_PROTOCOL,
   packageName: testkit.TESTKIT_PACKAGE_NAME,
-  sdkVersion: "0.6.0",
+  sdkVersion: "0.6.1",
   pageContextProtocol: "a3s.test.page-context/1",
   capabilities: ["bounded_snapshot"],
 };

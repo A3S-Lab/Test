@@ -75,6 +75,8 @@ export function DesignBoard({
   const statusId = `${idPrefix}-design-board-status`;
   const busy = busyAction !== null;
   const summaryLabel = designSummaryLabel(t, summary);
+  const showHistory = history.past.length > 0 || history.future.length > 0 || Boolean(summary.kind);
+  const showStyles = tool !== "select";
 
   useEffect(() => {
     dialogRef.current?.querySelector<HTMLButtonElement>("[data-testid='design-tool-select']")?.focus();
@@ -284,7 +286,7 @@ export function DesignBoard({
         </button>
       </div>
       <div className="a3s-design-body">
-        <div className="a3s-design-toolbar" role="toolbar" aria-label={t("boardActions")}>
+        <div className="a3s-design-toolbar toolbar" role="toolbar" aria-label={t("boardActions")}>
           <div className="a3s-design-tool-group" aria-label={t("tools")}>
             {tools.map((value) => {
               const label = designToolLabel(t, value);
@@ -311,28 +313,30 @@ export function DesignBoard({
             </button>
             <input ref={fileInputRef} aria-label={t("screenshotInput")} hidden type="file" accept="image/png,image/jpeg" onChange={(event) => void importFile(event.target.files?.[0])} />
           </div>
-          <span className="a3s-design-divider" aria-hidden="true" />
-          <div className="a3s-design-history" aria-label={t("history")}>
-            <IconButton icon="undo" label={t("undo")} disabled={busy || history.past.length === 0} onClick={undo} />
-            <IconButton icon="redo" label={t("redo")} disabled={busy || history.future.length === 0} onClick={redo} />
-            <IconButton icon="trash" label={t("clearBoard")} disabled={busy || !summary.kind} onClick={clearBoard} />
-          </div>
-          <div className="a3s-design-style" aria-label={t("styles")}>
+          {showHistory && <>
+            <span className="a3s-design-divider" aria-hidden="true" />
+            <div className="a3s-design-history" aria-label={t("history")}>
+              <IconButton icon="undo" label={t("undo")} disabled={busy || history.past.length === 0} onClick={undo} />
+              <IconButton icon="redo" label={t("redo")} disabled={busy || history.future.length === 0} onClick={redo} />
+              <IconButton icon="trash" label={t("clearBoard")} disabled={busy || !summary.kind} onClick={clearBoard} />
+            </div>
+          </>}
+          {showStyles && <div className="a3s-design-style" aria-label={t("styles")}>
             <label className="a3s-design-color" title={t("strokeColor")}>
               <span className="a3s-sr-only">{t("strokeColor")}</span>
               <input aria-label={t("strokeColor")} type="color" value={color} disabled={busy} onChange={(event) => setColor(event.target.value)} />
             </label>
-            <label><span>{t("shapeFill")}</span><select aria-label={t("shapeFill")} value={fill} disabled={busy || tool !== "rectangle"} onChange={(event) => setFill(event.target.value)}>
+            {tool === "rectangle" && <label><span>{t("shapeFill")}</span><select aria-label={t("shapeFill")} value={fill} disabled={busy} onChange={(event) => setFill(event.target.value)}>
               <option value="transparent">{t("fillNone")}</option>
               <option value="#e0f2fe">{t("fillBlue")}</option>
               <option value="#fef3c7">{t("fillAmber")}</option>
               <option value="#dcfce7">{t("fillGreen")}</option>
               <option value="#fce7f3">{t("fillPink")}</option>
-            </select></label>
-            <label><span>{t("strokeWidth")}</span><select aria-label={t("strokeWidth")} value={strokeWidth} disabled={busy || tool === "select" || tool === "text"} onChange={(event) => setStrokeWidth(Number(event.target.value))}>
+            </select></label>}
+            {tool !== "text" && <label><span>{t("strokeWidth")}</span><select aria-label={t("strokeWidth")} value={strokeWidth} disabled={busy} onChange={(event) => setStrokeWidth(Number(event.target.value))}>
               <option value="2">{t("widthSmall")}</option><option value="4">{t("widthMedium")}</option><option value="8">{t("widthLarge")}</option>
-            </select></label>
-          </div>
+            </select></label>}
+          </div>}
         </div>
         <div className="a3s-design-stage" data-content={summaryLabel}>
           <div className="a3s-design-canvas">

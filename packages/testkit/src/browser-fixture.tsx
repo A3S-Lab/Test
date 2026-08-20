@@ -235,6 +235,7 @@ async function seedReviewCandidates(): Promise<boolean> {
 
 function Fixture() {
   const [row, setRow] = useState("Virtual row 1");
+  const [portal, setPortal] = useState<HTMLElement | null>(null);
   const [repaired, setRepaired] = useState(
     () => window.testkitInitialRepaired === true,
   );
@@ -244,6 +245,7 @@ function Fixture() {
   useEffect(() => {
     setVirtualRow = setRow;
     setRepairedState = setRepaired;
+    setPortal(document.querySelector<HTMLElement>("#portal"));
     document.documentElement.dataset.hydrated = "true";
     const cancelDevelopmentBridgeFinding = scheduleDevelopmentBridgeFinding();
     const host = document.querySelector<HTMLElement>("#shadow-host");
@@ -258,7 +260,6 @@ function Fixture() {
       document.documentElement.dataset.hydrated = "false";
     };
   }, []);
-  const portal = document.querySelector<HTMLElement>("#portal");
   window.testkitHostClicks ??= 0;
   return (
     <A3STestKit

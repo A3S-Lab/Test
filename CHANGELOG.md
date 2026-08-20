@@ -52,7 +52,7 @@
   map, and discards `sourcesContent`; TypeScript and Rust independently bound
   and validate registrations, maps, spans, ranking, deduplication, and
   truncation. New `init` and `doctor` repairs point every supported package
-  manager to the reproducible `@a3s-lab/testkit@0.6.0` install.
+  manager to the reproducible `@a3s-lab/testkit@0.6.1` install.
 - Added `a3s.test.local-repair-bridge/1` to `a3s-test dev`. An admitted Test
   Kit now feeds explicitly submitted Review Overlay findings into the existing
   authoritative repair ledger, captures owned before evidence, and emits each
@@ -90,6 +90,29 @@
   readiness and shutdown, exact browser abort, and compact
   `a3s.test.dev/1` JSONL lifecycle events without mixing server logs into
   stdout.
+
+### Changed
+
+- Simplified the `@a3s-lab/testkit` 0.6.1 Review Overlay around a two-decision
+  default path: choose an element or area, then describe the requested result.
+  Text, multi-select, drawing, and Layout now stay under More tools; feedback
+  and findings are the only top-level views; preferences live in the header;
+  the design board replaces the right panel with one transition instead of
+  opening another modal.
+- Aligned the Test Kit surface with A3S UI by extracting the pinned foundation,
+  task-pane, toolbar, and status-badge CSS during the package build, scoping it
+  to the Shadow DOM, and shipping generated constants without adding a runtime
+  UI dependency to consuming applications.
+
+### Fixed
+
+- Cleared the transient hover rectangle as soon as a review target is selected,
+  recomputed active candidates and stored node markers from live DOM geometry
+  after window or nested-container scrolling, retained captured scroll origins
+  for area targets, and stopped rendering every page marker while Test Kit is
+  closed.
+- Deferred the browser fixture portal until hydration so the real Review
+  Overlay fixture no longer reports a React server/client markup mismatch.
 
 ## 1.0.0 - 2026-08-20
 

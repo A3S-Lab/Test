@@ -598,6 +598,7 @@ export function A3SReviewOverlay({
     setPendingCandidateSource(null);
     setCandidateSource(source);
     setEditingDraftId(null);
+    setHighlight(null);
     setCandidate(target);
     designReference.clear();
     setCandidateLabel(label);
@@ -935,9 +936,9 @@ export function A3SReviewOverlay({
       </button>
       <div className="a3s-announcer" role="status" aria-live="polite" aria-atomic="true">{announcement}</div>
       <ReviewDesignReferenceBoard active={candidate !== null} design={designReference} idPrefix={idPrefix} theme={preferences.theme} onAnnounce={announce} />
-      {open && !designReference.boardOpen && <aside ref={panelRef} id={`${idPrefix}-review-panel`} className={`a3s-panel${marking ? " is-marking" : ""}`} aria-labelledby={`${idPrefix}-review-title`} aria-describedby={`${idPrefix}-review-description`} aria-keyshortcuts={REVIEW_KEY_SHORTCUTS.escape} role="region" tabIndex={-1}>
+      {open && !designReference.boardOpen && <aside ref={panelRef} id={`${idPrefix}-review-panel`} className={`a3s-panel task-pane${marking ? " is-marking" : ""}`} data-responsive="overlay" aria-labelledby={`${idPrefix}-review-title`} aria-describedby={`${idPrefix}-review-description`} aria-keyshortcuts={REVIEW_KEY_SHORTCUTS.escape} role="region" tabIndex={-1}>
         <ReviewPanelHeader idPrefix={idPrefix} view={panelView} findingCount={findingCount} onClose={closeOverlayFromControl} onView={showPanelView} />
-        <div className="a3s-panel-body" role="tabpanel">
+        <div className="a3s-panel-body">
           {panelView === "compose" && <section className="a3s-compose" aria-label={t("newFeedback")}>
             {candidate ? <FindingEditor
               label={candidateLabel || t(candidate.nodeIds.length === 1 ? "selectedElementsOne" : "selectedElementsMany", { count: candidate.nodeIds.length })}
@@ -969,7 +970,7 @@ export function A3SReviewOverlay({
                 onDrawDestination={() => startMarking("layout_destination")}
                 onTarget={(field, value) => setLayoutTarget((current) => ({ ...current, [field]: value }))}
                 onCreateRearrange={createRearrangeCandidate}
-              /> : !marking && <div className="a3s-compose-empty"><span aria-hidden="true"><ToolGlyph name="element" /></span><strong>{t("simpleFlowTitle")}</strong><p>{t("simpleFlowHelp")}</p></div>}
+              /> : null}
             </>}
           </section>}
           {panelView === "findings" && <ReviewWorkspace

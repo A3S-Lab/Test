@@ -1,6 +1,6 @@
 {
   "name": "@a3s-lab/testkit",
-  "version": "0.6.0",
+  "version": "0.6.1",
   "description": "Embedded page context and human review SDK for A3S Test",
   "keywords": [
     "a3s",
@@ -48,7 +48,9 @@
     "audit:check": "node scripts/check-screen-reader-audit.mjs",
     "audit:screen-reader": "node scripts/serve-screen-reader-audit.mjs",
     "build": "tsup",
+    "prebuild": "npm run sync:a3s-ui",
     "check:package": "node scripts/check-package.mjs && tsc -p scripts/tsconfig.json",
+    "sync:a3s-ui": "node scripts/sync-a3s-ui-style.mjs",
     "test": "npm run test:node && vitest run src",
     "test:node": "node --test scripts/*.test.mjs",
     "test:watch": "vitest",
@@ -67,6 +69,7 @@
     }
   },
   "devDependencies": {
+    "@a3s-lab/ui": "0.3.0",
     "@testing-library/react": "^16.3.0",
     "@types/react": "^18.3.0",
     "@types/react-dom": "^18.3.0",

@@ -293,6 +293,17 @@ snapshot. Pages without the SDK retain the existing Web behavior.
       names on one typed message catalog; observe live page-language changes
       and localize plus search all built-in Layout catalog entries without
       rewriting project-specific free-form component values
+- [x] Reduce the default review path to two decisions: choose an element or
+      area, then describe the requested result; disclose text, multi-select,
+      drawing, and Layout under one More tools control, keep only feedback and
+      findings as top-level views, and move preferences into the panel header
+- [x] Reuse the pinned A3S UI foundation, task-pane, toolbar, and status-badge
+      CSS contracts at package build time, scope them to the Test Kit Shadow
+      DOM, and ship generated constants without a consumer-side UI dependency
+- [x] Recompute active candidates and stored node markers from live DOM
+      rectangles after window or nested-container scrolling, clear transient
+      hover geometry when selection completes, retain area scroll origins, and
+      render no page markers while the review panel is closed
 - [ ] Complete and independently audit every review workflow with a screen
       reader
 

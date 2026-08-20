@@ -6,14 +6,15 @@ SDK for A3S Test.
 The browser already knows what it rendered. Test Kit turns that result into a
 bounded, revisioned record that a coding agent can inspect without scraping
 framework internals or guessing from a screenshot. Its optional right-side
-Review Overlay lets a person point at a problem, sketch the intended UI, or
-attach a browser-page crop before explicitly sending a repair.
+Review Overlay reduces the normal feedback path to two decisions: choose the
+page content that needs attention, then describe the requested result. A sketch
+or browser-page crop remains one optional addition before explicit submission.
 
 | Layer           | Responsibility                                                                                                 |
 | --------------- | -------------------------------------------------------------------------------------------------------------- |
 | Context Runtime | Publish semantics, exact revision deltas, components, locators, geometry, layout, state, motion, and controlled facts after rendering |
 | Source mapping  | Rank explicit component, DOM-owner, and Source Map v3 spans for a selected rendered node                       |
-| Review Overlay  | Keep element, text, multi-select, region, drawing, board, and capture flows in one localized side panel        |
+| Review Overlay  | Keep a two-step element/area flow visible and disclose text, multi-select, drawing, Layout, board, and capture only when needed |
 | Repair handoff  | Bind a submitted finding to the current page revision without granting workspace or source-edit authority      |
 
 Test Kit is not a browser driver, test runner, coding agent, or source editor.
@@ -23,14 +24,12 @@ verification, and cleanup.
 ## Install
 
 ```bash
-npm install --save-dev @a3s-lab/testkit@0.6.0
+npm install --save-dev @a3s-lab/testkit@0.6.1
 ```
 
-`@a3s-lab/testkit` 0.6.0 is published on the official npm Registry with GitHub
+`@a3s-lab/testkit` 0.6.1 is published on the official npm Registry with GitHub
 OIDC provenance. The pinned command keeps installation reproducible and locks
-the package integrity in the project lockfile. The package can lag features on
-`main`; use the versioned documentation to distinguish published and staged
-behavior.
+the package integrity in the project lockfile.
 
 Verify that the current project can resolve the package:
 
@@ -281,7 +280,7 @@ click/drag multi-selection, rectangular and freehand findings, persistent
 markers, draft editing/hiding, animation pause, system/light/dark themes,
 bounded structured copy, finding-level design references, and typed Layout
 Mode. After selecting an element or region, a reviewer can open the design
-board. Its built-in, dependency-free SVG editor uses a constrained 960 × 600
+board. Its built-in SVG editor uses a constrained 960 × 600
 surface with freehand, rectangle, text, selection, movement, resize, styling,
 keyboard, and history tools, and admits at most 250 objects. It can also
 open a viewport selection layer so the reviewer can drag over one visible page
@@ -299,6 +298,13 @@ runs entirely inside the Test Kit Shadow DOM. It does not load a drawing SDK,
 remote fonts, icons, translations, or other canvas assets, and it has no
 license-key or watermark requirement. The overlay should still remain
 development-only because it exposes review authoring controls.
+
+The visual contract comes from `@a3s-lab/ui` without creating a runtime UI
+dependency. `npm run sync:a3s-ui` reads the pinned foundation, `task-pane`,
+`toolbar`, and `status-badge` CSS exports, scopes root and dark-theme selectors
+to `.a3s-root`, and generates TypeScript string constants that ship inside the
+Shadow DOM bundle. Host CSS therefore cannot leak in, and consumers do not
+load a second stylesheet or UI package at runtime.
 
 The board exports a bounded `designReference` with the finding. Imported files
 may be at most 8 MiB; inline PNG/JPEG data URLs are limited to 384 KiB, and the
@@ -318,21 +324,26 @@ style application DOM itself.
 Submitted findings support human/agent replies, accept/reject/reopen review
 actions, and per-finding lifecycle projection.
 
-The review flow stays inside one fixed side panel: choose a target, describe
-the change, then save or send it. New feedback, findings, and preferences are
-three peer views in that panel. Marking tools are shown directly, the editor
-replaces them after selection, and saving switches to the findings view. No
-target-attached editor or secondary floating tray is opened. The design board
-temporarily replaces the panel and returns to the same editor when closed.
+The review flow stays inside one fixed side panel. The first screen exposes
+only **Element** and **Area**; **Text**, **Multi**, **Draw**, and **Layout** are
+progressively disclosed under **More tools**. Selecting a target replaces the
+tools with the requested-fix field in the same panel. **New feedback** and
+**Findings** remain the two top-level views, while preferences move to the
+header control. No target-attached editor, secondary floating tray, or nested
+modal is opened. Saving or sending is the final action, not another navigation
+step. The design board temporarily replaces the panel and returns to the same
+editor when closed.
 Short viewports keep panel content internally scrollable. On mobile, starting
 a marking mode uses the same compact finish/cancel bar as desktop. At every
 viewport size, the side panel temporarily yields the page so covered targets
 remain visible and directly selectable. Mobile controls use touch-sized targets
 and 16-pixel form text.
 
-Visible markers resolve live DOM rectangles after page or nested-container
-scrolling and disappear whenever the review panel is closed. This keeps page
-annotations aligned without leaving review chrome behind after Test Kit closes.
+Visible markers and the active candidate resolve live DOM rectangles after
+page or nested-container scrolling and disappear whenever the review panel is
+closed. Transient hover geometry is discarded as soon as a target is selected,
+so a stale fixed-position outline cannot survive a scroll. Stored region
+targets retain their captured scroll origin.
 
 Animation pause is ownership-safe: Test Kit freezes running and newly started
 page motion while pause is active, then resumes only animations and media it

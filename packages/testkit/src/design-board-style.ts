@@ -175,6 +175,7 @@ ${DESIGN_REFERENCE_CSS}
   pointer-events: auto;
   flex-direction: column;
   animation: a3s-design-drawer-enter 260ms cubic-bezier(.16, 1, .3, 1);
+  container-type: inline-size;
 }
 
 @keyframes a3s-design-drawer-enter {
@@ -252,14 +253,16 @@ ${DESIGN_REFERENCE_CSS}
 }
 
 .a3s-design-toolbar {
-  display: flex;
+  height: auto;
   min-height: 48px;
   padding: 6px;
+  overflow: visible;
   border: 1px solid var(--a3s-line);
   border-radius: 10px;
   background: var(--a3s-panel-raised);
   align-items: center;
   flex: 0 0 auto;
+  flex-wrap: wrap;
   gap: 5px;
 }
 
@@ -267,6 +270,7 @@ ${DESIGN_REFERENCE_CSS}
 .a3s-design-history,
 .a3s-design-style {
   display: flex;
+  flex: 0 0 auto;
   align-items: center;
   gap: 4px;
 }
@@ -279,6 +283,7 @@ ${DESIGN_REFERENCE_CSS}
   justify-content: center;
   gap: 5px;
   font-size: 10.5px;
+  white-space: nowrap;
 }
 
 .a3s-design-toolbar button svg,
@@ -313,7 +318,11 @@ ${DESIGN_REFERENCE_CSS}
 }
 
 .a3s-design-style {
-  margin-left: auto;
+  width: 100%;
+  margin-left: 0;
+  padding-top: 6px;
+  border-top: 1px solid var(--a3s-line);
+  justify-content: flex-end;
 }
 
 .a3s-design-style label {
@@ -446,7 +455,7 @@ ${DESIGN_REFERENCE_CSS}
 
 .a3s-design-selection rect {
   fill: none;
-  stroke: #1264ff;
+  stroke: var(--a3s-blue);
   stroke-width: 2;
   stroke-dasharray: 6 4;
   pointer-events: none;
@@ -454,7 +463,7 @@ ${DESIGN_REFERENCE_CSS}
 
 .a3s-design-selection circle {
   fill: #ffffff;
-  stroke: #1264ff;
+  stroke: var(--a3s-blue);
   stroke-width: 2;
   cursor: nwse-resize;
   pointer-events: all;
@@ -468,7 +477,7 @@ ${DESIGN_REFERENCE_CSS}
   width: 100%;
   height: 38px;
   padding: 7px 9px;
-  border: 2px solid #1264ff;
+  border: 2px solid var(--a3s-blue);
   border-radius: 5px;
   background: #ffffff;
   color: #111827;
@@ -521,21 +530,6 @@ ${DESIGN_REFERENCE_CSS}
 .a3s-design-attach:hover {
   border-color: var(--a3s-blue-strong);
   background: var(--a3s-blue-strong);
-}
-
-@media (max-width: 860px) {
-  .a3s-design-toolbar {
-    align-items: stretch;
-    flex-wrap: wrap;
-  }
-
-  .a3s-design-style {
-    width: 100%;
-    margin-left: 0;
-    padding-top: 5px;
-    border-top: 1px solid var(--a3s-line);
-    justify-content: flex-end;
-  }
 }
 
 @media (max-width: 600px) {

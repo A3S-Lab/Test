@@ -146,7 +146,7 @@ suite "website-testkit-experience" {
         }
 
         click "open-first-batch-feedback" {
-            target = role("tab", "新反馈")
+            target = role("button", "新反馈")
         }
 
         click "mark-first-batch-item" {
@@ -183,7 +183,7 @@ suite "website-testkit-experience" {
         }
 
         click "open-second-batch-feedback" {
-            target = role("tab", "新反馈")
+            target = role("button", "新反馈")
         }
 
         click "mark-second-batch-item" {

@@ -94,7 +94,7 @@ export function ReviewWorkspace(props: ReviewWorkspaceProps) {
         {props.repairs.map((repair) => {
           const replies = props.bridge.listRepairReplies(repair.id);
           return <article key={repair.id} className="a3s-item submitted">
-            <span className={`a3s-status status-${repair.status}`}>{reviewStatusLabel(t, repair.status)}</span>
+            <span className={`a3s-status status-badge status-${repair.status}`}>{reviewStatusLabel(t, repair.status)}</span>
             <strong>{repair.instruction}</strong>
             <small>{reviewTargetSummary(t, repair.target)}{repair.designReference ? ` · ${t(repair.designReference.kind === "sketch" ? "sketchReference" : "screenshotReference")}` : ""} · {t("revision", { revision: repair.contextRevision })}</small>
             {replies.length > 0 && <ol className="a3s-thread" aria-label={t("repairConversation", { message: repair.instruction })}>
