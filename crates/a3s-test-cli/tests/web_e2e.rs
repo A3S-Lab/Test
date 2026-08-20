@@ -534,13 +534,12 @@ fn real_agent_browser_runs_the_embedded_testkit_suite() {
     let accessibility = String::from_utf8_lossy(&accessibility.stdout);
     for expected in [
         "region \"Review\"",
-        "tab \"New feedback\"",
-        "tab \"Findings\"",
-        "tab \"Review preferences\"",
+        "button \"New feedback\"",
+        "button \"Findings\"",
+        "button \"Review preferences\"",
         "button \"Mark element\"",
-        "button \"Mark multi\"",
-        "button \"Mark text\"",
-        "button \"Layout\"",
+        "button \"Mark area\"",
+        "button \"More review tools\"",
         "button \"Close review overlay\"",
         "heading \"Screen-reader audit controls\"",
         "button \"Seed contract and design candidates\"",
@@ -554,11 +553,44 @@ fn real_agent_browser_runs_the_embedded_testkit_suite() {
             "TestKit accessibility tree missing {expected:?}: {accessibility}"
         );
     }
+    for hidden_by_default in [
+        "button \"Mark multi\"",
+        "button \"Mark text\"",
+        "button \"Layout\"",
+    ] {
+        assert!(
+            !accessibility.contains(hidden_by_default),
+            "TestKit advanced tool should be collapsed by default {hidden_by_default:?}: {accessibility}"
+        );
+    }
+
+    click_accessible(
+        &command,
+        "open the advanced TestKit review tools",
+        "button",
+        "More review tools",
+    );
+    let advanced_accessibility = command(&["snapshot"]);
+    assert_process_success(
+        "capture the advanced TestKit review tools",
+        &advanced_accessibility,
+    );
+    let advanced_accessibility = String::from_utf8_lossy(&advanced_accessibility.stdout);
+    for expected in [
+        "button \"Mark multi\"",
+        "button \"Mark text\"",
+        "button \"Layout\"",
+    ] {
+        assert!(
+            advanced_accessibility.contains(expected),
+            "TestKit advanced review tools missing {expected:?}: {advanced_accessibility}"
+        );
+    }
 
     click_accessible(
         &command,
         "open the TestKit review preferences",
-        "tab",
+        "button",
         "Review preferences",
     );
     let tool_accessibility = command(&["snapshot"]);
@@ -707,7 +739,7 @@ fn real_agent_browser_runs_the_embedded_testkit_suite() {
     click_accessible(
         &command,
         "return to new feedback for keyboard marking",
-        "tab",
+        "button",
         "New feedback",
     );
     click_accessible(

@@ -9,6 +9,7 @@ const EDITED_DRAFT: &str = "Edit this restored draft from its marker";
 
 pub fn run_review_workflow(command: &impl Fn(&[&str]) -> Output) {
     verify_shortcut_discoverability(command);
+    open_more_review_tools(command, "open advanced tools for keyboard multi-selection");
     exercise_keyboard_multi_selection(command);
     create_and_restore_draft(command);
     edit_draft_from_spatial_marker(command);
@@ -144,6 +145,10 @@ fn exercise_keyboard_multi_selection(command: &impl Fn(&[&str]) -> Output) {
         "(()=>{const shadow=document.querySelector('[data-a3s-testkit-overlay]').shadowRoot;return !shadow.querySelector('.a3s-editor')&&shadow.activeElement?.classList.contains('a3s-panel')})()",
     );
 
+    open_more_review_tools(
+        command,
+        "reopen advanced tools for keyboard multi-selection cancellation",
+    );
     run(
         command,
         "focus before cancelling keyboard multi-selection",
@@ -546,6 +551,7 @@ fn exercise_host_interaction_blocking(command: &impl Fn(&[&str]) -> Output) {
 
 fn author_searchable_layout_placement(command: &impl Fn(&[&str]) -> Output) {
     open_new_feedback(command, "open new feedback for Layout placement");
+    open_more_review_tools(command, "open advanced tools for Layout placement");
     let layout_open = eval(
         command,
         "inspect the Layout composer before placement",
@@ -737,16 +743,16 @@ fn open_review_preferences(command: &impl Fn(&[&str]) -> Output, context: &str) 
     let selected = eval(
         command,
         &format!("inspect before {context}"),
-        "document.querySelector('[data-a3s-testkit-overlay]').shadowRoot.querySelector('[role=\"tab\"][aria-label=\"Review preferences\"]')?.getAttribute('aria-selected')==='true'",
+        "document.querySelector('[data-a3s-testkit-overlay]').shadowRoot.querySelector('[aria-label=\"Review preferences\"]')?.getAttribute('aria-pressed')==='true'",
     );
     if selected == true {
         return;
     }
-    activate_accessible_with_enter(command, context, "tab", "Review preferences");
+    activate_accessible_with_enter(command, context, "button", "Review preferences");
     wait_for(
         command,
         &format!("wait after {context}"),
-        "(()=>{const shadow=document.querySelector('[data-a3s-testkit-overlay]').shadowRoot;return shadow.querySelector('[role=\"tab\"][aria-label=\"Review preferences\"]')?.getAttribute('aria-selected')==='true'&&Boolean(shadow.querySelector('.a3s-settings-content'))})()",
+        "(()=>{const shadow=document.querySelector('[data-a3s-testkit-overlay]').shadowRoot;return shadow.querySelector('[aria-label=\"Review preferences\"]')?.getAttribute('aria-pressed')==='true'&&Boolean(shadow.querySelector('.a3s-settings-content'))})()",
     );
 }
 
@@ -754,16 +760,33 @@ fn open_new_feedback(command: &impl Fn(&[&str]) -> Output, context: &str) {
     let selected = eval(
         command,
         &format!("inspect before {context}"),
-        "document.querySelector('[data-a3s-testkit-overlay]').shadowRoot.querySelector('[role=\"tab\"]')?.getAttribute('aria-selected')==='true'",
+        "document.querySelector('[data-a3s-testkit-overlay]').shadowRoot.querySelector('.a3s-panel-tabs button')?.getAttribute('aria-pressed')==='true'",
     );
     if selected == true {
         return;
     }
-    activate_accessible_with_enter(command, context, "tab", "New feedback");
+    activate_accessible_with_enter(command, context, "button", "New feedback");
     wait_for(
         command,
         &format!("wait after {context}"),
-        "(()=>{const shadow=document.querySelector('[data-a3s-testkit-overlay]').shadowRoot;const tab=[...shadow.querySelectorAll('[role=\"tab\"]')].find(candidate=>candidate.textContent.trim()==='New feedback');return tab?.getAttribute('aria-selected')==='true'&&Boolean(shadow.querySelector('.a3s-compose'))})()",
+        "(()=>{const shadow=document.querySelector('[data-a3s-testkit-overlay]').shadowRoot;const button=[...shadow.querySelectorAll('.a3s-panel-tabs button')].find(candidate=>candidate.textContent.trim()==='New feedback');return button?.getAttribute('aria-pressed')==='true'&&Boolean(shadow.querySelector('.a3s-compose'))})()",
+    );
+}
+
+fn open_more_review_tools(command: &impl Fn(&[&str]) -> Output, context: &str) {
+    let expanded = eval(
+        command,
+        &format!("inspect before {context}"),
+        "document.querySelector('[data-a3s-testkit-overlay]').shadowRoot.querySelector('[aria-label=\"More review tools\"]')?.getAttribute('aria-expanded')==='true'",
+    );
+    if expanded == true {
+        return;
+    }
+    activate_accessible_with_enter(command, context, "button", "More review tools");
+    wait_for(
+        command,
+        &format!("wait after {context}"),
+        "(()=>{const shadow=document.querySelector('[data-a3s-testkit-overlay]').shadowRoot;return shadow.querySelector('[aria-label=\"More review tools\"]')?.getAttribute('aria-expanded')==='true'&&Boolean(shadow.querySelector('.a3s-secondary-tools:not([hidden])'))})()",
     );
 }
 

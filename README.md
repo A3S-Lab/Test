@@ -115,11 +115,11 @@ Install Test Kit only when a page needs component ownership, source mapping,
 rendered geometry, or the in-page review surface:
 
 ```bash
-npm install --save-dev @a3s-lab/testkit@0.6.1
+npm install --save-dev @a3s-lab/testkit@0.6.2
 npm ls @a3s-lab/testkit
 ```
 
-`@a3s-lab/testkit` 0.6.1 is published on the official npm Registry with
+`@a3s-lab/testkit` 0.6.2 is published on the official npm Registry with
 GitHub OIDC provenance. Its version advances independently from the CLI
 release.
 

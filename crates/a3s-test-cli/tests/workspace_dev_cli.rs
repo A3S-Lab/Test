@@ -251,7 +251,7 @@ fn required_testkit_missing_aborts_the_browser_without_stopping_an_existing_serv
     );
     assert!(
         dev.stderr()
-            .contains("npm install --save-dev @a3s-lab/testkit@0.6.1"),
+            .contains("npm install --save-dev @a3s-lab/testkit@0.6.2"),
         "{}",
         dev.stderr()
     );
@@ -472,12 +472,12 @@ fn incompatible_live_testkit_boundaries_fail_with_exact_repairs() {
         (
             "incompatible_version",
             "test.driver.web.testkit_sdk_version_unsupported",
-            "npm install --save-dev @a3s-lab/testkit@0.6.1",
+            "npm install --save-dev @a3s-lab/testkit@0.6.2",
         ),
         (
             "missing_capability",
             "test.driver.web.testkit_capability_missing",
-            "npm install --save-dev @a3s-lab/testkit@0.6.1",
+            "npm install --save-dev @a3s-lab/testkit@0.6.2",
         ),
         (
             "overlay_missing",

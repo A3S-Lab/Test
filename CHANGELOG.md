@@ -52,7 +52,7 @@
   map, and discards `sourcesContent`; TypeScript and Rust independently bound
   and validate registrations, maps, spans, ranking, deduplication, and
   truncation. New `init` and `doctor` repairs point every supported package
-  manager to the reproducible `@a3s-lab/testkit@0.6.1` install.
+  manager to the reproducible `@a3s-lab/testkit@0.6.2` install.
 - Added `a3s.test.local-repair-bridge/1` to `a3s-test dev`. An admitted Test
   Kit now feeds explicitly submitted Review Overlay findings into the existing
   authoritative repair ledger, captures owned before evidence, and emits each
@@ -93,7 +93,7 @@
 
 ### Changed
 
-- Simplified the `@a3s-lab/testkit` 0.6.1 Review Overlay around a two-decision
+- Simplified the `@a3s-lab/testkit` 0.6.2 Review Overlay around a two-decision
   default path: choose an element or area, then describe the requested result.
   Text, multi-select, drawing, and Layout now stay under More tools; feedback
   and findings are the only top-level views; preferences live in the header;
@@ -106,6 +106,10 @@
 
 ### Fixed
 
+- Raised the Test Kit 0.6.2 semantic blue, muted, warning, danger, and success
+  text contrast across A3S UI light and dark surfaces, and updated the real
+  browser regression to verify button semantics plus the collapsed More tools
+  disclosure instead of the removed tab and always-visible tool model.
 - Cleared the transient hover rectangle as soon as a review target is selected,
   recomputed active candidates and stored node markers from live DOM geometry
   after window or nested-container scrolling, retained captured scroll origins

@@ -41,7 +41,7 @@ async fn incompatible_installed_testkit_versions_fail_with_a_fix() {
     assert!(installed.summary.contains(">=0.4.0, <0.7.0"));
     assert_eq!(
         installed.fix.as_deref(),
-        Some("npm install --save-dev @a3s-lab/testkit@0.6.1")
+        Some("npm install --save-dev @a3s-lab/testkit@0.6.2")
     );
 }
 

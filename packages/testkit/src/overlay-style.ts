@@ -563,7 +563,7 @@ ${OVERLAY_MARKING_CSS}
 
 .status-important {
   background: var(--a3s-warning-soft);
-  color: var(--a3s-warning);
+  color: var(--a3s-warning-ink);
 }
 
 .status-suggestion {
@@ -574,7 +574,7 @@ ${OVERLAY_MARKING_CSS}
 .status-resolved,
 .status-review_ready {
   background: var(--a3s-green-soft);
-  color: var(--a3s-green);
+  color: var(--a3s-green-ink);
 }
 
 .a3s-empty {

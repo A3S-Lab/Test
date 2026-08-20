@@ -8,7 +8,7 @@ use url::Url;
 use super::TestKitRequirementArg;
 
 pub(super) const TESTKIT_PACKAGE: &str = "@a3s-lab/testkit";
-pub(super) const TESTKIT_INSTALL_SPEC: &str = "@a3s-lab/testkit@0.6.1";
+pub(super) const TESTKIT_INSTALL_SPEC: &str = "@a3s-lab/testkit@0.6.2";
 const MAX_PACKAGE_JSON_BYTES: u64 = 1024 * 1024;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
@@ -339,23 +339,23 @@ mod tests {
     fn package_managers_install_the_pinned_registry_version() {
         assert_eq!(
             PackageManager::Npm.install_command(),
-            "npm install --save-dev @a3s-lab/testkit@0.6.1"
+            "npm install --save-dev @a3s-lab/testkit@0.6.2"
         );
         assert_eq!(
             PackageManager::Pnpm.install_command(),
-            "pnpm add --save-dev @a3s-lab/testkit@0.6.1"
+            "pnpm add --save-dev @a3s-lab/testkit@0.6.2"
         );
         assert_eq!(
             PackageManager::Yarn.install_command(),
-            "yarn add --dev @a3s-lab/testkit@0.6.1"
+            "yarn add --dev @a3s-lab/testkit@0.6.2"
         );
         assert_eq!(
             PackageManager::Bun.install_command(),
-            "bun add --dev @a3s-lab/testkit@0.6.1"
+            "bun add --dev @a3s-lab/testkit@0.6.2"
         );
         assert_eq!(
             testkit_install_command("/workspace/node_modules/.bin/pnpm"),
-            "pnpm add --save-dev @a3s-lab/testkit@0.6.1"
+            "pnpm add --save-dev @a3s-lab/testkit@0.6.2"
         );
     }
 

@@ -26,7 +26,7 @@ const provider: A3STestKitProps = {
 const handshake: TestKitHandshake = {
   protocol: TESTKIT_HANDSHAKE_PROTOCOL,
   packageName: TESTKIT_PACKAGE_NAME,
-  sdkVersion: "0.6.1",
+  sdkVersion: "0.6.2",
   pageContextProtocol: "a3s.test.page-context/1",
   capabilities: ["bounded_snapshot"],
 };

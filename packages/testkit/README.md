@@ -24,10 +24,10 @@ verification, and cleanup.
 ## Install
 
 ```bash
-npm install --save-dev @a3s-lab/testkit@0.6.1
+npm install --save-dev @a3s-lab/testkit@0.6.2
 ```
 
-`@a3s-lab/testkit` 0.6.1 is published on the official npm Registry with GitHub
+`@a3s-lab/testkit` 0.6.2 is published on the official npm Registry with GitHub
 OIDC provenance. The pinned command keeps installation reproducible and locks
 the package integrity in the project lockfile.
 
