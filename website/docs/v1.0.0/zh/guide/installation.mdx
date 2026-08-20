@@ -5,11 +5,18 @@ description: 分清 CLI、Agent Skill 与 Web Test Kit，按使用场景安装�
 
 # 安装 A3S Test
 
-A3S Test 将终端测试与页面评审分开安装。按当前目标选择一个入口：
+A3S Test 包含两个独立版本的安装部分，因为它们负责不同的信任边界。
 
-- **只需页面点选、框选或画草图：** [安装 Web Test Kit](#安装-web-test-kit)。
-- **需要从终端探索页面或运行 ACL 测试：** [安装 CLI 与 Agent Skill](#安装-cli-与-agent-skill)。
-- **需要把页面问题发送给 Agent 修复：** 两者都安装。
+| 部分               | 安装位置                             | 负责内容                                        |
+| ------------------ | ------------------------------------ | ----------------------------------------------- |
+| CLI 与 Agent Skill | 开发者机器和编码 Agent 的 Skill 目录 | 会话、类型化动作、ACL、证据、修复协调与自有清理 |
+| Web Test Kit       | 前端工程的开发依赖                   | 渲染后 Page Context、源码映射与可选页面评审界面 |
+
+只安装当前任务需要的部分：
+
+- **在开发页面点选、框选、截图或画草图：** 安装 [Web Test Kit](#安装-web-test-kit)。
+- **从终端探索页面或运行 ACL：** 安装 [CLI 与 Agent Skill](#安装-cli-与-agent-skill)。
+- **把页面问题交给编码 Agent 修复并验证：** 两者都安装。
 
 ## 安装 Web Test Kit
 

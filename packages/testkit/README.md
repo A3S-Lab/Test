@@ -1,6 +1,24 @@
 # A3S Test Kit
 
-Development-only page context and human review SDK for A3S Test.
+Development-only page context, rendered-node source mapping, and human review
+SDK for A3S Test.
+
+The browser already knows what it rendered. Test Kit turns that result into a
+bounded, revisioned record that a coding agent can inspect without scraping
+framework internals or guessing from a screenshot. Its optional right-side
+Review Overlay lets a person point at a problem, sketch the intended UI, or
+attach a browser-page crop before explicitly sending a repair.
+
+| Layer           | Responsibility                                                                                                 |
+| --------------- | -------------------------------------------------------------------------------------------------------------- |
+| Context Runtime | Publish semantics, components, locators, geometry, layout, state, motion, and controlled facts after rendering |
+| Source mapping  | Rank explicit component, DOM-owner, and Source Map v3 spans for a selected rendered node                       |
+| Review Overlay  | Keep element, text, multi-select, region, drawing, board, and capture flows in one localized side panel        |
+| Repair handoff  | Bind a submitted finding to the current page revision without granting workspace or source-edit authority      |
+
+Test Kit is not a browser driver, test runner, coding agent, or source editor.
+The A3S Test CLI continues to own typed actions, evidence, repair state,
+verification, and cleanup.
 
 ## Install
 

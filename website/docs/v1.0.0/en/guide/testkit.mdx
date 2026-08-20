@@ -7,6 +7,28 @@ description: Publish revisioned semantics, components, locators, geometry, and U
 
 If the goal is to select an element, drag over a region, sketch the intended UI, or attach a page capture during development, install Test Kit and mount two components at the application root. After the three steps below, the page shows an **A3S Review** launcher.
 
+## What Test Kit adds
+
+Test Kit connects a rendered page to its implementation without turning the page into an editor.
+
+| Need                                           | Implementation                                                                                                             |
+| ---------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| Let an agent read the page beyond a screenshot | A headless Context Runtime derives bounded facts after DOM, accessibility, style, and layout are computed                  |
+| Let a person point at the exact problem        | One right-side Review Overlay supports element, text, multi-select, region, drawing, board, and browser-page capture flows |
+| Lead a selected node back to code              | Explicit component boundaries, DOM ownership registration, and optional Source Map v3 produce ranked source spans          |
+| Prevent an old target from reaching a new page | Every snapshot and submitted finding binds to a monotonic page revision                                                    |
+| Keep review separate from source mutation      | Saving stays local; only explicit submission enters the A3S Test repair ledger                                             |
+
+```text
+browser finishes rendering
+  -> Context Runtime publishes a bounded revision
+  -> reviewer selects one target and describes the change
+  -> Test Kit attaches current page, component, geometry, and source evidence
+  -> explicit send crosses into the repair ledger
+  -> the workspace-owning agent edits source
+  -> A3S Test verifies a newer rendered revision
+```
+
 ## Three-step React setup
 
 ### 1. Install the development dependency

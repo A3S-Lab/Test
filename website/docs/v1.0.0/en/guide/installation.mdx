@@ -5,11 +5,18 @@ description: Choose the CLI, Agent Skill, or Web Test Kit for your task, then in
 
 # Install A3S Test
 
-A3S Test installs terminal testing and in-page review separately. Choose the path that matches the current task:
+A3S Test has two separately versioned installable parts because they own different trust boundaries.
 
-- **Only mark, select, or sketch on a development page:** [Install Web Test Kit](#install-web-test-kit).
-- **Explore a page or run ACL tests from the terminal:** [Install the CLI and Agent Skill](#install-the-cli-and-agent-skill).
-- **Send page findings to an agent for repair:** Install both.
+| Part                | Install location                                   | Owns                                                                              |
+| ------------------- | -------------------------------------------------- | --------------------------------------------------------------------------------- |
+| CLI and Agent Skill | Developer machine and coding-agent skill directory | Sessions, typed actions, ACL, evidence, repair coordination, and owned cleanup    |
+| Web Test Kit        | Frontend project development dependencies          | Post-render Page Context, source mapping, and the optional in-page review surface |
+
+Choose only what the current task needs:
+
+- **Mark, select, capture, or sketch on a development page:** install [Web Test Kit](#install-web-test-kit).
+- **Explore a page or run ACL from the terminal:** install the [CLI and Agent Skill](#install-the-cli-and-agent-skill).
+- **Send a page finding to a coding agent and verify the repair:** install both.
 
 ## Install Web Test Kit
 

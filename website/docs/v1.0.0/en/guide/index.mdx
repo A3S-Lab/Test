@@ -1,49 +1,37 @@
 ---
-title: Run your first Web test
-description: Observe a current page in a persistent agent session, execute one bounded action, retain the evidence, and preserve the proven path as ACL.
+title: From intent to a repeatable Web test
+description: Ground one coding-agent action in the current browser revision, retain the result as evidence, and preserve the proven path as ACL.
 ---
 
-# Run your first Web test
+# From intent to a repeatable Web test
 
-This guide starts with a local page that is already running. When you finish, you will have an inspectable session record containing the goal, every observation, the action that ran, a screenshot, and the terminal report. Once the path is stable, you can preserve it as an ACL regression suite.
+A3S Test turns a vague instruction into a short, checkable loop. The browser provides current facts. The coding agent chooses one typed action. A3S Test admits that action, records what happened, and lets a stable path become an ACL regression.
 
-## Choose the right entry point
+## The mental model
 
-| What you need to do                               | Start here                                                         |
-| ------------------------------------------------- | ------------------------------------------------------------------ |
-| Open a local page for in-place review             | Run `a3s-test init`, `doctor`, then `dev`                          |
-| Explore an unfamiliar page or reproduce an issue  | Continue here with a persistent agent session                      |
-| Repeat a workflow you already understand          | [Exploration and regression workflows](./workflows.mdx)            |
-| Look up every action, wait, and evidence output   | [Actions, waits, and evidence](./actions-and-evidence.mdx)         |
-| Author control, layout, and stability assertions  | [Assertions and stability](./assertions.mdx)                       |
-| Choose Web, GUI, TUI, or MCP                      | [Web, GUI, TUI, and MCP](./surfaces-and-mcp.mdx)                   |
-| Expose components, locators, and geometry         | [Add Web Test Kit](./testkit.mdx)                                  |
-| Inspect Page Context fields and expiry            | [Page Context details](../concepts/page-context.mdx)               |
-| Mark issues and hand them to a coding agent       | [Human review and automated repair](./repairs.mdx)                 |
-| Compare a PRD or design with the rendered page    | [Generate a Surface Contract](./contracts.mdx)                     |
-| Connect LLM, grounding, or design models          | [LLM, grounding, and design providers](./providers.mdx)            |
-| Shard a deterministic suite across remote workers | [Workers and distributed execution](./distributed.mdx)             |
-| Review model, human, and source authority         | [Authority and safety model](../concepts/authority-and-safety.mdx) |
-| Inspect every current capability by entry point   | [Complete capability reference](../reference/capabilities.mdx)     |
-| Diagnose a failure from its code and evidence     | [Troubleshooting](./troubleshooting.mdx)                           |
-
-The example assumes that your product runs at `http://127.0.0.1:3000/checkout` and that the confirmation page exposes an observable heading. Replace the URL, goal, and success condition with facts from your project.
-
-For a frontend that already mounts Test Kit, the shorter reviewer-facing path
-discovers and starts the local environment for you:
-
-```bash
-a3s-test init
-a3s-test doctor
-a3s-test dev
+```text
+observable intent
+  -> current browser revision
+  -> smallest useful action or difference
+  -> owning source when needed
+  -> explicit repair authorization
+  -> evidence from the changed page
+  -> deterministic ACL regression
 ```
 
-The project-loop commands are staged on `main` for the next release; the
-published v1.0.0 binary predates them.
+This order matters. A screenshot cannot prove component ownership. A source hint cannot prove the page rendered correctly. Model advice cannot grant edit authority. Each stage contributes one kind of truth and keeps its own boundary.
 
-Continue below when the coding agent needs to drive each observation and
-action directly, or see [Installation](./installation.mdx#start-one-local-review-loop)
-for the project-loop ownership rules.
+## Choose one entry point
+
+| Current task                                         | Use                                    | Result                                                       |
+| ---------------------------------------------------- | -------------------------------------- | ------------------------------------------------------------ |
+| Review a local page and point out a change           | Web Test Kit and the local review loop | A revision-bound finding with page and source context        |
+| Explore an unfamiliar flow or reproduce a bug        | Persistent agent session               | An append-only record of observations, actions, and evidence |
+| Repeat a flow whose actions and assertions are known | ACL suite                              | A deterministic local or CI regression                       |
+
+Test Kit is optional for ordinary browser automation. Add it when the task needs component ownership, ranked source spans, rendered geometry, visual evidence, or human marking.
+
+The `init`, `doctor`, and `dev` local project loop is staged on `main` for the next release. The published v1.0.0 binary predates it. This guide therefore uses the released persistent-session commands below.
 
 ## Install the CLI and Agent Skill
 
@@ -60,11 +48,11 @@ Windows PowerShell
 & ([scriptblock]::Create((irm 'https://github.com/A3S-Lab/Test/releases/latest/download/install.ps1'))) -Version v1.0.0
 ```
 
-The installer downloads the platform CLI, verifies its SHA-256, and installs the matching Skill for detected coding agents. See [Installation](./installation.mdx) to pin a version, agent, or destination.
+The installer downloads the platform CLI, verifies its SHA-256, and installs the matching Skill for detected coding agents. See [Installation](./installation.mdx) to choose only Test Kit, only the CLI, or a specific agent destination.
 
-## 1. Start a persistent session
+## 1. Declare a result the page can prove
 
-Run the local product, then declare the test goal and a success condition that the page can prove.
+Start the local product, then name the goal and an observable success condition.
 
 ```bash
 a3s-test agent start http://127.0.0.1:3000/checkout \
@@ -74,34 +62,32 @@ a3s-test agent start http://127.0.0.1:3000/checkout \
   --json
 ```
 
-The session retains the browser, policy boundary, and append-only event log until you explicitly finish, abort, or reach its timeout.
+The session retains its browser, exact-origin policy, and append-only event log until it is explicitly finished, aborted, or timed out.
 
-## 2. Read the fresh observation
+## 2. Read the page that actually rendered
 
 ```bash
 a3s-test agent observe --session checkout --interactive --json
 ```
 
-The response contains a new `observation_id` and semantic refs that are actionable in the current page state.
+The response contains a new `observation_id` and refs bound to that observation.
 
 ```text
 observation_id: 1
 @e1 [button] Continue
 ```
 
-One observation may contain three kinds of refs with different authority:
+| Ref   | Source                                 | Authority                                                         |
+| ----- | -------------------------------------- | ----------------------------------------------------------------- |
+| `@eN` | Browser accessibility semantics        | Actionable only in the observation that created it                |
+| `@cN` | Test Kit Page Context                  | Actionable only when the current node is unique and valid         |
+| `@uN` | Supplemental UI-understanding evidence | Always read-only; connects style, layout, state, and motion facts |
 
-| Ref   | Source                            | Action target                                                  |
-| ----- | --------------------------------- | -------------------------------------------------------------- |
-| `@eN` | Browser accessibility semantics   | Yes, but only inside the current observation                   |
-| `@cN` | Test Kit Page Context             | Yes, for a uniquely actionable node in the current observation |
-| `@uN` | Supplemental Test Kit UI evidence | No, it only connects style, layout, state, and motion evidence |
+Page changes expire old `@eN` and `@cN` refs. `@uN` can never be used in `click`, `fill`, `drag`, or another action. This prevents an agent from silently applying an old decision to a new page state.
 
-`@uN` is a read-only evidence ref. Never put it in a `click`, `fill`, `drag`, or ACL action; A3S Test rejects it during admission or before driver dispatch. Page changes also expire `@eN` and `@cN`, so observe again before continuing.
+## 3. Execute one admitted action
 
-## 3. Execute one bounded action
-
-Bind the action to the observation you just received.
+Bind the action to the observation you just read.
 
 ```bash
 a3s-test agent click @e1 \
@@ -110,11 +96,11 @@ a3s-test agent click @e1 \
   --json
 ```
 
-Before the driver executes, A3S Test checks the action schema, session capability, policy, and observation revision. A state change immediately expires old refs. Run `agent observe` again before choosing the next action.
+Before the driver runs, A3S Test validates the action schema, session capability, target type, origin policy, and observation revision. Continue by observing again, not by reusing the old ref.
 
-## 4. Retain evidence and finish
+## 4. Verify the changed page and retain evidence
 
-After the target state appears, save a screenshot and write the terminal report.
+After the success condition appears, save the minimum evidence that another person or agent needs to inspect the result.
 
 ```bash
 a3s-test agent screenshot screenshots/confirmation.png \
@@ -128,8 +114,6 @@ a3s-test agent finish \
   --json
 ```
 
-Each workspace retains an append-only record.
-
 ```text
 .a3s-test/agent-sessions/checkout/
 ├── session.json
@@ -139,8 +123,25 @@ Each workspace retains an append-only record.
     └── screenshots/confirmation.png
 ```
 
-`events.jsonl` explains what happened at each step, `report.json` stores the terminal state and summary, and `artifacts/` contains only evidence owned by this session.
+`events.jsonl` explains each admitted step. `report.json` holds the terminal result. `artifacts/` contains only files owned by this session.
 
-## 5. Preserve the stable path as a regression
+## 5. Preserve only the proven path
 
-Agent sessions are for discovering a path. Once the actions, waits, and success conditions are explicit, encode them as ACL. Use `a3s-test check` for static admission and `a3s-test run` to repeat the suite locally or in CI. Continue with [Exploration and regression workflows](./workflows.mdx) for the complete example.
+Exploration discovers the path. ACL keeps its smallest stable form. Encode explicit actions, bounded waits, assertions, and evidence, then admit the suite before running it.
+
+```bash
+a3s-test check tests/e2e/checkout.acl --json
+a3s-test run tests/e2e/checkout.acl --json
+```
+
+Continue with [Exploration and regression workflows](./workflows.mdx) for a complete ACL example. Use [Assertions and stability](./assertions.mdx) when the success condition depends on control state, rendered text, collections, layout, viewport coverage, pointer reachability, or focus ownership.
+
+## Where Test Kit enters
+
+Test Kit derives bounded context after browser rendering. It adds component ownership, stable locator candidates, multi-space geometry, ranked source spans, and a human review surface without replacing the browser accessibility tree.
+
+- [Install and mount Web Test Kit](./testkit.mdx)
+- [Understand Page Context and revision expiry](../concepts/page-context.mdx)
+- [Follow human-authorized repair](./repairs.mdx)
+- [Review architecture and authority boundaries](../concepts/architecture.mdx)
+- [Inspect the complete capability reference](../reference/capabilities.mdx)

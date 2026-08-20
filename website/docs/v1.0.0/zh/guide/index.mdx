@@ -1,32 +1,37 @@
 ---
-title: 跑通第一个 Web 测试
-description: 用持久 Agent 会话观察当前页面，执行一个受限动作并保存证据，再把跑通的路径固化为 ACL。
+title: 从一个意图到可重复 Web 测试
+description: 把一次编码 Agent 动作绑定到当前浏览器修订，保存结果证据，再把跑通的路径固化为 ACL。
 ---
 
-# 跑通第一个 Web 测试
+# 从一个意图到可重复 Web 测试
 
-这份指南从一个正在运行的本地页面开始。完成后，你会得到一份可复查的会话记录，其中包含目标、每次观察、实际动作、截图和终态报告。路径稳定后，可以继续把它写成 ACL 回归套件。
+A3S Test 把模糊指令收敛成一条可核验的短链路。浏览器提供当前事实，编码 Agent 只选择一个类型化动作，A3S Test 完成动作准入并记录结果，稳定路径最后再进入 ACL 回归。
 
-## 先选对入口
+## 先建立正确的心智模型
 
-| 你现在要完成的事              | 从这里开始                                             |
-| ----------------------------- | ------------------------------------------------------ |
-| 探索陌生页面或复现一个问题    | 继续本页，使用持久 Agent 会话                          |
-| 重复运行已经明确的流程        | [探索与回归工作流](./workflows.mdx)                    |
-| 查询每个动作、等待和证据产物  | [动作、等待与证据](./actions-and-evidence.mdx)         |
-| 编写控件、布局和稳定性断言    | [断言与稳定性](./assertions.mdx)                       |
-| 选择 Web、GUI、TUI 或 MCP     | [Web、GUI、TUI 与 MCP](./surfaces-and-mcp.mdx)         |
-| 让页面提供组件、定位器和坐标  | [接入 Web Test Kit](./testkit.mdx)                     |
-| 查清页面上下文字段与失效规则  | [Page Context 详解](../concepts/page-context.mdx)      |
-| 点选问题并交给 Agent 修复     | [人工评审与自动修复](./repairs.mdx)                    |
-| 对照 PRD、设计稿与真实页面    | [生成 Surface Contract](./contracts.mdx)               |
-| 接入 LLM、视觉定位或设计模型  | [LLM、视觉定位与设计 Provider](./providers.mdx)        |
-| 把确定性套件分片到远程 Worker | [Worker 与分布式执行](./distributed.mdx)               |
-| 核对模型、人工和源码权限      | [权限与安全模型](../concepts/authority-and-safety.mdx) |
-| 按入口核对所有当前能力        | [完整能力参考](../reference/capabilities.mdx)          |
-| 根据错误码和证据排查失败      | [故障排查](./troubleshooting.mdx)                      |
+```text
+可观察意图
+  -> 当前浏览器修订
+  -> 最小有效动作或差异
+  -> 必要时定位负责源码
+  -> 明确授权修复
+  -> 从变化后页面采集证据
+  -> 确定性 ACL 回归
+```
 
-下面的示例假设产品已经运行在 `http://127.0.0.1:3000/checkout`，并且确认页有一个可观察的标题。请把 URL、目标和成功条件换成当前项目的真实状态。
+这个顺序不能颠倒。截图不能证明组件归属，源码提示不能证明页面已经正确渲染，模型建议也不能授予源码修改权限。每一层只提供一种事实，并保留自己的边界。
+
+## 只选一个入口
+
+| 当前任务               | 使用方式                    | 最终得到什么                                 |
+| ---------------------- | --------------------------- | -------------------------------------------- |
+| 在本地页面指出一个修改 | Web Test Kit 与本地评审流程 | 绑定页面修订、页面上下文与源码提示的 finding |
+| 探索陌生流程或复现问题 | 持久 Agent 会话             | 包含观察、动作和证据的追加式记录             |
+| 重复已明确的动作与断言 | ACL 套件                    | 可在本地或 CI 重复运行的确定性回归           |
+
+普通浏览器自动化不强制依赖 Test Kit。需要组件归属、源码候选、渲染几何、视觉证据或人工标记时再接入。
+
+`init`、`doctor` 与 `dev` 本地工程流程已经进入 `main`，会随下一版本发布。已发布的 v1.0.0 二进制尚不包含它们，因此本页先使用已经发布的持久会话命令。
 
 ## 安装 CLI 与 Agent Skill
 
@@ -43,11 +48,11 @@ Windows PowerShell
 & ([scriptblock]::Create((irm 'https://github.com/A3S-Lab/Test/releases/latest/download/install.ps1'))) -Version v1.0.0
 ```
 
-安装器会下载当前平台的 CLI，校验 SHA-256，并为检测到的编码 Agent 安装同版本 Skill。需要固定版本、Agent 或目标目录时，请查看[安装指南](./installation.mdx)。
+安装器会下载当前平台的 CLI、校验 SHA-256，并为检测到的编码 Agent 安装同版本 Skill。只安装 Test Kit、只安装 CLI 或指定 Agent 目录时，请查看[安装指南](./installation.mdx)。
 
-## 1. 启动持久会话
+## 1. 声明页面能够证明的结果
 
-先启动本地产品，再声明测试目标和可以从页面确认的成功条件。
+先启动本地产品，再写清测试目标和可观察的成功条件。
 
 ```bash
 a3s-test agent start http://127.0.0.1:3000/checkout \
@@ -57,34 +62,32 @@ a3s-test agent start http://127.0.0.1:3000/checkout \
   --json
 ```
 
-会话会保留浏览器、策略边界和追加式事件记录，直到显式完成、取消或超时。
+会话会保留浏览器、精确来源策略和追加式事件记录，直到显式完成、取消或超时。
 
-## 2. 读取最新观察
+## 2. 读取真正渲染出来的页面
 
 ```bash
 a3s-test agent observe --session checkout --interactive --json
 ```
 
-响应会带回新的 `observation_id` 和当前可操作语义引用。
+响应包含新的 `observation_id`，以及只属于本次观察的引用。
 
 ```text
 observation_id: 1
 @e1 [button] Continue
 ```
 
-同一次观察可能出现三种引用。它们的权限不同。
+| 引用  | 来自哪里              | 权限                                       |
+| ----- | --------------------- | ------------------------------------------ |
+| `@eN` | 浏览器可访问语义      | 只能在生成它的观察中操作                   |
+| `@cN` | Test Kit Page Context | 当前节点仍然唯一且有效时才可操作           |
+| `@uN` | UI 理解补充证据       | 永远只读，只关联样式、布局、状态与动效事实 |
 
-| 引用  | 来自哪里                   | 能否作为动作目标                             |
-| ----- | -------------------------- | -------------------------------------------- |
-| `@eN` | 浏览器可访问语义           | 可以，但只在当前观察中有效                   |
-| `@cN` | Test Kit Page Context      | 可以，但只代表可唯一操作且属于当前观察的节点 |
-| `@uN` | Test Kit UI 理解的补充证据 | 不可以，只用于关联样式、布局、状态和动效证据 |
+页面变化会使旧的 `@eN` 与 `@cN` 失效。`@uN` 不能用于 `click`、`fill`、`drag` 或其它动作。这样可以阻止 Agent 把旧页面上的决定悄悄套到新页面上。
 
-`@uN` 是只读证据引用。不要把它写进 `click`、`fill`、`drag` 或 ACL 动作；A3S Test 会在准入或驱动执行前拒绝它。页面变化后，`@eN` 与 `@cN` 也会失效，继续操作前必须重新观察。
+## 3. 只执行一个通过准入的动作
 
-## 3. 执行一个受限动作
-
-把动作绑定到刚才的观察。
+把动作绑定到刚刚读取的观察。
 
 ```bash
 a3s-test agent click @e1 \
@@ -93,11 +96,11 @@ a3s-test agent click @e1 \
   --json
 ```
 
-A3S Test 会在驱动执行前检查动作 Schema、会话能力、策略和观察修订。页面状态一旦变化，旧引用立即失效。继续操作前必须再次运行 `agent observe`。
+驱动执行前，A3S Test 会校验动作 Schema、会话能力、目标类型、来源策略与观察修订。继续操作时应重新观察，不要复用旧引用。
 
-## 4. 保存证据并结束会话
+## 4. 验证变化后的页面并保存证据
 
-确认目标状态已经出现后，保存截图并写入终态报告。
+成功条件出现后，只保存足以让其他人或 Agent 复查结果的最小证据。
 
 ```bash
 a3s-test agent screenshot screenshots/confirmation.png \
@@ -111,8 +114,6 @@ a3s-test agent finish \
   --json
 ```
 
-每个工作区保留追加式记录。
-
 ```text
 .a3s-test/agent-sessions/checkout/
 ├── session.json
@@ -122,8 +123,25 @@ a3s-test agent finish \
     └── screenshots/confirmation.png
 ```
 
-`events.jsonl` 说明每一步发生了什么，`report.json` 保存终态与摘要，`artifacts/` 只包含这次会话拥有的证据文件。
+`events.jsonl` 解释每一步准入动作，`report.json` 保存终态，`artifacts/` 只包含本次会话拥有的文件。
 
-## 5. 把稳定路径写成回归
+## 5. 只固化已经证明的路径
 
-Agent 会话适合发现路径。动作、等待和成功条件已经明确后，把它们写成 ACL，再用 `a3s-test check` 做静态准入，用 `a3s-test run` 在本地或 CI 重复执行。完整示例见[探索与回归工作流](./workflows.mdx)。
+探索用于发现路径，ACL 只保留最小稳定形式。把明确动作、有界等待、断言与证据写入套件，先做静态准入，再真正运行。
+
+```bash
+a3s-test check tests/e2e/checkout.acl --json
+a3s-test run tests/e2e/checkout.acl --json
+```
+
+完整 ACL 示例见[探索与回归工作流](./workflows.mdx)。成功条件涉及控件状态、渲染文本、集合、布局、视口覆盖、指针可达或焦点归属时，请继续查看[断言与稳定性](./assertions.mdx)。
+
+## Test Kit 在哪里接入
+
+Test Kit 在浏览器完成渲染后生成有界上下文。它补充组件归属、稳定定位器候选、多坐标空间几何、排序后的源码候选和人工评审界面，不会替代浏览器可访问树。
+
+- [安装并挂载 Web Test Kit](./testkit.mdx)
+- [理解 Page Context 与修订失效](../concepts/page-context.mdx)
+- [了解人工授权修复](./repairs.mdx)
+- [查看架构与权限边界](../concepts/architecture.mdx)
+- [查询完整能力参考](../reference/capabilities.mdx)

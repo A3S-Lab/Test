@@ -177,63 +177,51 @@ if (!englishHtml.includes('<html lang="en">')) {
   failures.push('English homepage does not declare English');
 }
 if (
-  !rootHtml.includes('让 Agent 看清页面') ||
-  !rootHtml.includes('让每次动作都有证据') ||
-  !rootHtml.includes('每个动作都从最新观察开始') ||
-  !rootHtml.includes('功能清单细到输入、证据和失效规则') ||
+  !rootHtml.includes('基于真实页面行动') ||
+  !rootHtml.includes('把结果固化为回归') ||
+  !rootHtml.includes('从页面事实到 ACL 的最短可信闭环') ||
+  !rootHtml.includes('四个技术机制支撑整条闭环') ||
+  !rootHtml.includes('data-testid="capability-group-context"') ||
+  !rootHtml.includes('data-testid="capability-group-safety"') ||
   !rootHtml.includes('data-testid="capability-group-repair"') ||
-  !rootHtml.includes('data-testid="capability-group-execution"') ||
-  !rootHtml.includes('data-testid="capability-group-contracts"') ||
-  !rootHtml.includes('查看 47 项能力的入口、输出、证据和失败边界') ||
-  !rootHtml.includes('展开与折叠状态') ||
-  !rootHtml.includes('按压开关状态') ||
-  !rootHtml.includes('只读与可写状态') ||
-  !rootHtml.includes('必填与可选状态') ||
-  !rootHtml.includes('无效与有效状态') ||
-  !rootHtml.includes('精确焦点归属') ||
-  !rootHtml.includes('组件内焦点归属') ||
-  !rootHtml.includes('视口正面积相交') ||
-  !rootHtml.includes('确定性指针命中可达')
+  !rootHtml.includes('data-testid="capability-group-evidence"') ||
+  !rootHtml.includes('查看完整能力的入口、输出、证据和失败边界') ||
+  !rootHtml.includes('组合浏览器事实') ||
+  !rootHtml.includes('显式源码归属') ||
+  !rootHtml.includes('四层独立权限') ||
+  !rootHtml.includes('一个右侧评审界面') ||
+  !rootHtml.includes('ACL 固化已证明路径')
 ) {
   failures.push('default homepage lacks Chinese product copy');
 }
 if (
-  !englishHtml.includes('Observe the page.') ||
-  !englishHtml.includes('Prove every action.') ||
-  !englishHtml.includes('Every action starts from a fresh observation') ||
+  !englishHtml.includes('Act on what rendered.') ||
+  !englishHtml.includes('Preserve what worked.') ||
   !englishHtml.includes(
-    'Inspect capabilities down to signals, evidence, and expiry rules',
+    'The shortest trustworthy path from page fact to ACL',
   ) ||
+  !englishHtml.includes('Four technical mechanisms support the loop') ||
   !englishHtml.includes(
-    'Inspect all 47 entry points, outputs, evidence rules, and failure boundaries',
+    'Inspect every capability entry point, output, evidence rule, and failure boundary',
   ) ||
-  !englishHtml.includes('Expanded and collapsed state') ||
-  !englishHtml.includes('Pressed toggle state') ||
-  !englishHtml.includes('Read-only and writable state') ||
-  !englishHtml.includes('Required and optional state') ||
-  !englishHtml.includes('Invalid and valid state') ||
-  !englishHtml.includes('Exact focus ownership') ||
-  !englishHtml.includes('Component-scoped focus ownership') ||
-  !englishHtml.includes('Positive-area viewport intersection') ||
-  !englishHtml.includes('Deterministic pointer hit reachability')
+  !englishHtml.includes('Combine browser facts') ||
+  !englishHtml.includes('Declare source ownership') ||
+  !englishHtml.includes('Keep four authorities independent') ||
+  !englishHtml.includes('Use one right-side review surface') ||
+  !englishHtml.includes('Preserve proven paths as ACL')
 ) {
   failures.push('English homepage lacks English product copy');
 }
 if (
-  !rootMarkdown.includes('功能清单细到输入、证据和失效规则') ||
-  !rootMarkdown.includes('观察绑定引用') ||
+  !rootMarkdown.includes('四个技术机制支撑整条闭环') ||
+  !rootMarkdown.includes('观察绑定身份') ||
+  !rootMarkdown.includes('显式源码归属') ||
+  !rootMarkdown.includes('类型化准入与失败关闭') ||
   !rootMarkdown.includes('新页面验证与人工验收') ||
-  !rootMarkdown.includes('标签页、Frame 与对话框') ||
-  !rootMarkdown.includes('展开与折叠状态') ||
-  !rootMarkdown.includes('按压开关状态') ||
-  !rootMarkdown.includes('只读与可写状态') ||
-  !rootMarkdown.includes('必填与可选状态') ||
-  !rootMarkdown.includes('无效与有效状态') ||
-  !rootMarkdown.includes('精确焦点归属') ||
-  !rootMarkdown.includes('组件内焦点归属') ||
-  !rootMarkdown.includes('PRD 候选生成')
+  !rootMarkdown.includes('追加式会话记录') ||
+  !rootMarkdown.includes('ACL 固化已证明路径')
 ) {
-  failures.push('homepage Markdown lacks the detailed capability ledger');
+  failures.push('homepage Markdown lacks the core implementation ledger');
 }
 if (
   !rootHtml.includes('PRD 和设计稿产生的是期望候选，不是浏览器可访问树') ||
@@ -252,14 +240,12 @@ if (
   failures.push('homepage lacks the local interactive Test Kit surface');
 }
 if (
-  !quickStartHtml.includes('先选对入口') ||
-  !quickStartHtml.includes('让页面提供组件、定位器和坐标') ||
+  !quickStartHtml.includes('只选一个入口') ||
+  !quickStartHtml.includes('Test Kit 在哪里接入') ||
   !quickStartHtml.includes('<code>@cN</code>') ||
   !quickStartHtml.includes('<code>@uN</code>') ||
-  !englishQuickStartHtml.includes('Choose the right entry point') ||
-  !englishQuickStartHtml.includes(
-    'Expose components, locators, and geometry',
-  ) ||
+  !englishQuickStartHtml.includes('Choose one entry point') ||
+  !englishQuickStartHtml.includes('Where Test Kit enters') ||
   !englishQuickStartHtml.includes('<code>@cN</code>') ||
   !englishQuickStartHtml.includes('<code>@uN</code>')
 ) {

@@ -17,7 +17,7 @@ suite "website-testkit-experience" {
         }
 
         wait "homepage-ready" {
-            text = "让 Agent 看清页面"
+            text = "基于真实页面行动"
         }
 
         expect "published-install-version" {
@@ -48,8 +48,8 @@ suite "website-testkit-experience" {
             text = "PRD 和设计稿产生的是期望候选，不是浏览器可访问树"
         }
 
-        expect "detailed-capability-ledger" {
-            text = "功能清单细到输入、证据和失效规则"
+        expect "core-implementation-ledger" {
+            text = "四个技术机制支撑整条闭环"
         }
 
         click "open-repair-capabilities" {
@@ -64,28 +64,28 @@ suite "website-testkit-experience" {
             text = "新页面验证与人工验收"
         }
 
-        click "open-execution-capabilities" {
-            target = testid("capability-group-execution")
+        click "open-safety-capabilities" {
+            target = testid("capability-group-safety")
         }
 
-        wait "execution-capabilities-expanded" {
-            visible = css(".test-capability-group.is-open [data-testid='capability-panel-execution']")
+        wait "safety-capabilities-expanded" {
+            visible = css(".test-capability-group.is-open [data-testid='capability-panel-safety']")
         }
 
-        expect "browser-context-actions" {
-            text = "标签页、Frame 与对话框"
+        expect "independent-authorities" {
+            text = "四层独立权限"
         }
 
-        click "open-contract-capabilities" {
-            target = testid("capability-group-contracts")
+        click "open-evidence-capabilities" {
+            target = testid("capability-group-evidence")
         }
 
-        wait "contract-capabilities-expanded" {
-            visible = css(".test-capability-group.is-open [data-testid='capability-panel-contracts']")
+        wait "evidence-capabilities-expanded" {
+            visible = css(".test-capability-group.is-open [data-testid='capability-panel-evidence']")
         }
 
-        expect "prd-candidate-generation" {
-            text = "PRD 候选生成"
+        expect "acl-preservation" {
+            text = "ACL 固化已证明路径"
         }
 
         expect "local-only-disclosure" {
@@ -268,7 +268,7 @@ suite "website-testkit-experience" {
         }
 
         wait "mobile-homepage-ready" {
-            text = "让 Agent 看清页面"
+            text = "基于真实页面行动"
         }
 
         expect "mobile-rendered-context" {

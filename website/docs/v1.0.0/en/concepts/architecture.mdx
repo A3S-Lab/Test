@@ -1,76 +1,135 @@
 ---
-title: Architecture and authority boundaries
-description: Follow a page observation into typed execution, human authorization, source repair, and fresh evidence.
+title: Architecture from first principles
+description: See how A3S Test turns current rendered facts into admitted actions, source-aware repair, fresh evidence, and deterministic ACL regressions.
 ---
 
-# Architecture and authority boundaries
+# Architecture from first principles
 
-A3S Test separates a test into four independently checkable responsibilities. The surface supplies facts, a planner chooses an action, the execution core decides whether that action is allowed, and evidence records what happened. Models may suggest locations or design changes, but only explicit authorization can send a suggestion into repair.
+The core problem is not making a model click a page. It is preserving a trustworthy chain from human intent to the exact interface state, the action that ran, the source that owns the result, and the evidence that proves the outcome.
+
+A3S Test treats each link as a separate technical contract.
+
+## Constraints that shape the system
+
+| Fundamental constraint                                                        | Architectural consequence                                                                               |
+| ----------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| A Web page is dynamic and an observation becomes stale                        | Every public ref is bound to an observation and page revision                                           |
+| The browser already owns DOM, accessibility, CSS, layout, and scrolling truth | Page understanding is derived after rendering instead of reconstructed from a screenshot                |
+| Natural language does not define an executable safety boundary                | Actions use closed typed variants, schema validation, capability checks, and policy admission           |
+| A visible node and its source file are different identities                   | Test Kit keeps explicit component ownership and ranked source spans as navigation evidence              |
+| Advice, permission, and mutation have different owners                        | Browser facts, model candidates, human authorization, and workspace editing remain separate authorities |
+| Exploration is useful but not reproducible                                    | Proven actions, waits, assertions, and evidence become a closed ACL suite                               |
+| Cancellation can be more dangerous than a failed assertion                    | Every runtime, browser namespace, process tree, and artifact path has exact ownership                   |
+
+## The complete evidence path
+
+```text
+human intent / PRD / design
+             |
+             v
+     reviewed expectation
+             |
+browser render + accessibility + Test Kit
+             |
+             v
+   revision-bound observation
+             |
+     one typed action proposal
+             |
+       Core admission gate
+ schema + capability + policy + origin
+             |
+             v
+      Web / GUI / TUI driver
+             |
+             v
+ events + assertions + owned artifacts
+             |
+ explicit human repair authorization
+             |
+             v
+ source edit -> newer rendered revision
+             |
+             v
+ fresh verification -> ACL regression
+```
+
+No arrow is implicit. An observation cannot authorize an edit. A model candidate cannot set a verdict. A source span cannot prove that the new page is correct. Verification must read the changed page again.
+
+## Implementation layers
+
+| Layer                         | Repository owner                                   | Responsibility                                                                                            |
+| ----------------------------- | -------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| Embedded page context         | `packages/testkit`                                 | Post-render context, component boundaries, source mapping, bounded UI evidence, and optional human review |
+| Surface-independent contracts | `crates/a3s-test-core`                             | Typed actions, targets, observations, policy inputs, evidence records, results, and driver traits         |
+| Persistent interaction state  | `crates/a3s-test-session`                          | Session lifecycle, observation-bound refs, action admission, append-only state, and verification bindings |
+| Concrete execution            | `crates/a3s-test-driver-web`, GUI, and TUI drivers | Surface perception, action dispatch, evidence capture, and exact runtime cleanup                          |
+| User and agent entry points   | `crates/a3s-test-cli` and MCP adapters             | CLI commands, JSON contracts, project loop, repair coordination, and protocol-facing validation           |
+| Deterministic regression      | ACL compiler and runner                            | Static admission followed by bounded actions, waits, assertions, evidence, and cleanup                    |
+
+The Core never branches on a backend name. A deployment injects a typed `SurfaceDriver`; the adapter owns only the capabilities it can prove. Unsupported behavior fails closed.
+
+## Understanding happens after rendering
+
+The browser has already solved layout. Test Kit reads a bounded projection of that result.
+
+```text
+browser render
+  ├── accessibility snapshot   role, name, native state
+  ├── Page Context             component, locator, source, geometry, facts
+  └── UI understanding         style, layout graph, clipping, state, motion
+                                      |
+                                      v
+                           one admitted observation
+```
+
+Protocol `a3s.test.page-context/1` is exposed through a non-enumerable, Symbol-addressed bridge. Private node identities live in a `WeakMap`, not in product DOM attributes. Mutation, resize, route, viewport, scroll, and form-state signals advance a monotonic revision. Snapshot detail, scope, time, node count, string size, and encoded bytes are bounded.
+
+Public refs express authority instead of leaking private identity:
+
+| Ref   | Meaning                                                                      |
+| ----- | ---------------------------------------------------------------------------- |
+| `@eN` | Browser semantic target, actionable only in its observation                  |
+| `@cN` | Unique Page Context target, actionable only in its observation               |
+| `@uN` | Supplemental style, layout, state, or motion evidence, permanently read-only |
+
+Rendered-node source mapping follows the same rule. `A3STestBoundary` may provide a coarse source hint. Framework adapters may explicitly register a DOM owner and an encoded Source Map v3. Test Kit ranks the resulting candidates but never reads framework private state, downloads a source map, or grants file authority.
 
 ## Two planning entries, one execution core
 
 ```text
-Calling coding agent                  Closed ACL suite
-  observe → decide → one action         admit → execute → assert
-              \                         /
-                 typed A3S Test Core
-          Action · Session · Policy · Lifecycle
-                           |
-                Web · GUI · TUI adapters
-                           |
-             events · evidence · JSON · cleanup
+calling coding agent                   closed ACL suite
+ observe -> decide -> one action        admit -> execute -> assert
+               \                       /
+                    typed A3S Test Core
+             Action · Policy · Evidence · Lifecycle
 ```
 
-The core does not depend on a browser, desktop perception, terminal emulation, CLI, or concrete LLM provider. It defines typed actions, observations, sessions, policy, results, and lifecycle. Injected adapters own concrete runtimes.
+A persistent agent session is useful while the path is unknown. The calling coding agent chooses one action from each fresh observation. ACL is useful after the path is understood. It closes the allowed actions, waits, assertions, and evidence before execution. Both routes use the same driver and result contracts, so exploration does not need a second automation model to become regression coverage.
 
-## Understanding happens after rendering
+## Four independent authorities
 
-The browser already computes DOM structure, accessibility semantics, CSS layout, stacking, scrolling, and viewports. Replacing that renderer with another perception system would discard exact facts. Embedded Test Kit instead derives a bounded projection after rendering.
+1. **Rendered facts** come from surface observations, Test Kit context, deterministic assertions, file digests, and owned evidence.
+2. **Model advice** may propose visual locations, design findings, or contract candidates with provenance, confidence, and budgets.
+3. **Human authorization** chooses the target, expected result, conflicts, and single or batch repair scope.
+4. **Workspace execution** belongs to the coding agent that already owns the workspace; A3S Test verifies its result in a newer browser revision.
 
-```text
-browser render
-  ├── accessibility tree ── roles, names, and native state
-  ├── Page Context ───────── component ownership, locators, geometry, product facts
-  └── UI understanding ───── style profile, layout graph, repeated structures,
-                              overflow/clipping, states, timelines and motion
-                                      |
-                                      v
-                          one revision-bound observation
-```
+Projecting a report into the Review Overlay never changes a runner verdict. Opening an editor or saving a draft never enters the repair ledger. Only explicit submission crosses that boundary.
 
-Page Context protocol `a3s.test.page-context/1` owns component boundaries, bounded source hints, multi-space geometry, visual viewport state, controlled product facts, and human repair context. Its optional nested `a3s.test.ui-understanding/1` record adds browser-computed visual facts: observed design tokens, Flex/Grid/flow and stacking relationships, exact client/scroll extents with derived clipping state, resolved physical box-model edges with writing direction, deterministic repeated-structure fingerprints, real interaction-state differences, and timeline-aware motion evidence.
+## Runtime and evidence ownership
 
-The accessibility tree remains the semantic source of truth. UI understanding is neither another accessibility tree nor a screenshot model, and it cannot click, pass a test, claim product intent, or authorize a repair. Screenshots remain A3S Test-owned evidence; model interpretation is an optional advisory layer for surfaces such as canvas or remote desktops that lack useful DOM semantics.
+Every launched program belongs to an A3S Test process group, Windows Job, or equivalent owned tree. Cancellation and timeout kill and reap the complete tree through bounded graceful and emergency paths. An existing developer server or unrelated browser session remains untouched.
 
-Page context never mutates the host DOM. Private node IDs live in a `WeakMap`, and mutation, resize, route, viewport, scroll, and form-state signals advance a monotonic page revision. Transient focus, hover, or animation state uses a separate UI `observationId`. A3S Test admits the accessibility snapshot, page revision, viewport, scope, protocol, and bounded UI evidence together or rejects the race.
+Web sessions use an isolated namespace and non-zero idle timeout. Artifact paths must resolve to fresh regular files inside the session root. Traversal, symlinks, reparse points, stale output, oversized evidence, and unsupported payloads fail before they can impersonate a successful capture.
 
-Public observations never expose those private node IDs. A uniquely actionable node uses the same observation-bound `@cN` ref in Page Context and UI evidence; layout-only evidence uses a read-only `@uN` ref. `@uN` preserves inspectable style, layout, state, and motion relationships but is rejected as an action target. If projection cannot preserve the admitted byte budget and graph integrity, A3S Test omits the optional UI evidence instead of leaking an internal identity.
+## Surface and provider boundaries
 
-## Four authority layers
+| Surface | Current implementation boundary                                                                                                                   |
+| ------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Web     | A3S Browser or a compatible standalone browser, with persistent sessions, ACL, semantic refs, Page Context, evidence, and isolated network policy |
+| GUI     | Locked macOS A3S CUA integration with permission, perception, and exact-cleanup verification on a real arm64 host                                 |
+| TUI     | Native PTY / ConPTY, bounded VT semantics, and an owned command process tree, currently driven through ACL                                        |
 
-1. **Deterministic facts**: driver observations, Test Kit context, file digests, local assertions, and evidence.
-2. **Model advice**: visual grounding, design audit, and source-to-contract candidates with provenance, budget, and confidence.
-3. **Human authorization**: target confirmation, candidate selection, conflict decisions, and single or batch repair submission.
-4. **Repair execution**: the workspace-owning coding agent edits source and A3S Test verifies it in a fresh browser.
+Optional LLM, grounding, and design providers are typed injected objects. HTTP adapters disable redirects and environment proxies, require HTTPS except for explicit loopback HTTP, bound bodies and deadlines, and redact authorization values. Provider output remains advice until the surrounding deterministic and human boundaries admit it.
 
-Model output cannot decide a verdict, claim browser-observed state, or authorize workspace mutation. Projecting a report into the overlay never changes the runner result.
-
-## Runtime ownership
-
-Every launched program belongs to a process group, Windows Job, or equivalent owned tree created by A3S Test. Cancellation and timeout kill and reap the complete tree. Graceful shutdown is bounded and retains an emergency path. A3S Test never closes unrelated developer browser sessions.
-
-Web sessions use an isolated namespace and non-zero idle timeout. Evidence paths must resolve to fresh regular files inside the session artifact root. GUI and TUI adapters carry the same exact-ownership requirement.
-
-## Surface adapters
-
-| Surface | Current boundary                                                                                                                                                   |
-| ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Web     | A3S Browser or a compatible standalone browser. Persistent agent sessions, ACL, semantic refs, evidence, and isolated network policy.                              |
-| GUI     | Contract-tested on macOS through locked A3S CUA `0.10.0`. Release workflow verifies permissions, both perception profiles, and exact cleanup on a real arm64 host. |
-| TUI     | Native PTY / ConPTY, bounded VT semantics, and an owned command process tree. Currently driven through ACL suites.                                                 |
-
-## Deployment-owned providers
-
-Provider protocols define data exchange only. They do not bundle model weights or select backends with raw strings in public APIs. Deployments inject typed implementations and own model licensing, privacy, capacity, and runtime.
-
-The HTTP adapters disable redirects and environment proxies, require HTTPS except for explicit loopback HTTP, bound request and response bodies, enforce transport and wire deadlines, and redact authorization values from errors. The surrounding services still verify identity, provenance, geometry, usage, and authority independently.
+Continue with [Page Context fields and lifecycle](./page-context.mdx) for the browser-side protocol, or [Authority and safety](./authority-and-safety.mdx) for admission and failure behavior.

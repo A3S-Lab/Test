@@ -13,7 +13,7 @@ export default defineConfig({
   siteOrigin,
   title: 'A3S Test',
   description:
-    'A3S Test gives coding agents fresh page observations, typed actions, inspectable evidence, and repeatable ACL regressions.',
+    'A3S Test grounds coding agents in current rendered facts, typed actions, source-aware repair, and deterministic ACL regressions.',
   lang: 'zh',
   icon: '/a3s-logo.png',
   logo: '/a3s-logo.png',
@@ -36,14 +36,14 @@ export default defineConfig({
       label: '简体中文',
       title: 'A3S Test',
       description:
-        'A3S Test 让编码 Agent 依据最新页面观察执行类型化动作，记录可复查证据，并把稳定路径固化为 ACL 回归。',
+        'A3S Test 让编码 Agent 基于当前渲染事实执行类型化动作，定位负责源码，并把证明过的路径固化为 ACL 回归。',
     },
     {
       lang: 'en',
       label: 'English',
       title: 'A3S Test',
       description:
-        'A3S Test gives coding agents fresh page observations, typed actions, inspectable evidence, and repeatable ACL regressions.',
+        'A3S Test grounds coding agents in current rendered facts, typed actions, source-aware repair, and deterministic ACL regressions.',
     },
   ],
   head: [
@@ -64,7 +64,7 @@ export default defineConfig({
       {
         property: 'og:image:alt',
         content:
-          'A3S Test connects fresh page observations, typed actions, human-authorized repair, and repeatable ACL regressions.',
+          'A3S Test connects current rendered facts, typed actions, source-aware repair, and deterministic ACL regressions.',
       },
     ],
     ['meta', { name: 'twitter:card', content: 'summary_large_image' }],

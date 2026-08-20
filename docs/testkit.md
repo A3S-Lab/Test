@@ -12,6 +12,26 @@ editor. A3S Test remains the owner of surface sessions, typed actions,
 evidence, reports, and cleanup. An already authorized coding agent remains the
 planner and workspace editor.
 
+The design follows four first-principles constraints:
+
+| Constraint                                                                    | Implementation response                                                                                                    |
+| ----------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| The browser already computed DOM, accessibility, style, layout, and scrolling | Derive Page Context after rendering instead of reconstructing the interface from pixels                                    |
+| A page changes while an agent reasons                                         | Bind snapshots, public refs, and submitted findings to a monotonic revision                                                |
+| A visible node does not identify its source file                              | Accept explicit boundary, DOM-owner, and Source Map registrations, then rank source spans as evidence                      |
+| Page review must not silently become workspace mutation                       | Keep local drafts, repair submission, coding-agent edits, verification, and human acceptance as separate state transitions |
+
+The shortest product path is therefore:
+
+```text
+rendered page
+  -> bounded Page Context revision
+  -> human-selected target and requested result
+  -> explicit repair submission with source-aware context
+  -> workspace-owning coding agent
+  -> newer rendered revision and owned verification evidence
+```
+
 ## Product layers
 
 ```text

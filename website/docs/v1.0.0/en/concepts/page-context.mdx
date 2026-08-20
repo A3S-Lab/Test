@@ -9,6 +9,19 @@ Page Context is a bounded fact record that Test Kit derives after the browser re
 
 Test Kit is an enhancement. Without it, A3S Test can still execute Web actions, assertions, and evidence capture from browser accessibility semantics. Add Page Context when a workflow needs components, geometry, a layout graph, rendered style evidence, or human marking.
 
+## Why Page Context exists
+
+No single browser representation answers every question a coding agent must ask.
+
+| Representation         | What it knows                               | What it loses                                                                           |
+| ---------------------- | ------------------------------------------- | --------------------------------------------------------------------------------------- |
+| Accessibility snapshot | Roles, names, and native interaction state  | Component ownership, source, full layout, and visual system                             |
+| Screenshot             | Final pixels in one viewport                | DOM identity, live state, stable locators, scroll structure, and source ownership       |
+| Framework internals    | Framework-specific component implementation | Stable public contracts across versions and frameworks                                  |
+| Raw DOM serialization  | Structure and attributes                    | Browser-computed visibility, occlusion, geometry, layout relations, and revision safety |
+
+Page Context is the smallest shared record that fills those gaps without replacing the browser or depending on private framework state. It derives facts after rendering, limits their scope and size, binds them to one monotonic revision, and marks source information as evidence rather than edit authority.
+
 ## How three browser fact sources work together
 
 ```text
