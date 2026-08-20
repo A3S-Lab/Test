@@ -1507,6 +1507,19 @@ browser session launches. Action protocol revision 15 admits A3S Browser
 `>= 0.4.0, < 0.5.0` and standalone agent-browser `>= 0.26.0, < 0.27.0`.
 Unverified versions fail with `test.driver.web.version_unsupported`.
 
+`a3s-test doctor` treats an installed Test Kit version only as a static package
+range check. `a3s-test dev` performs the authoritative live browser admission
+before its `a3s.test.dev/1` `ready` event. It calls
+`a3s.test.testkit-handshake/1`, verifies the exact `@a3s-lab/testkit` package,
+SDK `>= 0.4.0, < 0.5.0`, Page Context protocol v1, a bounded canonical
+capability set, and, for required profiles, the mounted Review Overlay open
+Shadow Root. Required profiles reject an absent bridge; optional profiles may
+admit absence but never a present incompatible bridge. Each boundary uses a
+distinct `test.driver.web.testkit_*` code. Failure aborts the exact browser and
+cleans only a development server owned by the command. Successful `ready`
+events serialize the admitted handshake under `testkit`, or `null` for an
+optional absent bridge.
+
 Persistent agent sessions derive a browser exact-origin policy from the
 initial URL and each `--allow-origin`. `--allow-origin` also permits explicit
 navigation to that exact HTTP(S) origin. `--allow-domain` adds a hostname or a

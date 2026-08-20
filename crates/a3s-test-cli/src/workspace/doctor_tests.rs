@@ -21,6 +21,10 @@ async fn compatible_installed_testkit_versions_pass() {
     let installed = check(&checks, "testkit.installed");
     assert_eq!(installed.status, CheckStatus::Passed);
     assert!(installed.summary.contains("0.4.9"));
+    assert!(installed.summary.contains("passes the static"));
+    assert!(installed.summary.contains("a3s-test dev"));
+    assert!(installed.summary.contains("live protocol handshake"));
+    assert!(!installed.summary.contains("installed and compatible"));
 }
 
 #[tokio::test]

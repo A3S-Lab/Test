@@ -1,5 +1,7 @@
 mod args;
+mod browser;
 mod design_audit;
+mod dev;
 mod events;
 mod grounding;
 mod inspect;
@@ -13,14 +15,10 @@ mod validation;
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use a3s_test_core::{
     Action, DriverError, RepairStatus, StepOutput, Surface, ACTION_PROTOCOL_REVISION,
-};
-use a3s_test_driver_web::{
-    AgentBrowserConfig, AgentBrowserConnectionConfig, AgentBrowserDriver, AgentBrowserSession,
-    BrowserCommand, BrowserMicrophone, BrowserNetworkPolicy,
 };
 use anyhow::{Context, Result};
 use serde::Serialize;
@@ -31,6 +29,13 @@ pub(crate) use self::args::AgentArgs;
 use self::args::{
     ActArgs, AgentCommand, FinishArgs, FinishStatus, ListArgs, ObserveArgs, SessionArgs, StartArgs,
 };
+#[cfg(test)]
+use self::browser::stored_browser_network_policy;
+use self::browser::{
+    close_and_remove_runtime, connect, containment_for_driver,
+    validate_turn_browser_network_policy, BrowserConnectionPurpose,
+};
+pub(crate) use self::dev::{abort_dev_session, start_dev_session, DevSession, DevSessionRequest};
 use self::events::{append_success_event, append_terminal_event, record_failure};
 use self::policy::{
     browser_network_policy, validate_action, validate_observation_origin, web_origin,
@@ -41,8 +46,8 @@ use self::runtime::{
 };
 use self::store::{
     AgentSessionError, AgentSessionReport, AgentSessionState, AgentSessionStatus,
-    AgentSessionStore, StoredBrowserConfig, StoredBrowserContainment, StoredBrowserDriver,
-    StoredBrowserMicrophone, SESSION_SCHEMA_VERSION,
+    AgentSessionStore, StoredBrowserConfig, StoredBrowserDriver, StoredBrowserMicrophone,
+    SESSION_SCHEMA_VERSION,
 };
 use self::validation::{compact_target, validate_session_id};
 use super::{validate_timeout, BrowserDriverKind};
@@ -466,82 +471,6 @@ fn emit_start(result: &StartSessionOutput, json_output: bool) -> Result<()> {
     )
 }
 
-pub(crate) struct DevSessionRequest {
-    pub(crate) workspace: PathBuf,
-    pub(crate) url: String,
-    pub(crate) session_prefix: String,
-    pub(crate) browser_driver: BrowserDriverKind,
-    pub(crate) browser_executable: Option<PathBuf>,
-    pub(crate) headed: bool,
-    pub(crate) command_timeout_ms: u64,
-    pub(crate) idle_timeout_ms: u64,
-}
-
-#[derive(Debug, Serialize)]
-pub(crate) struct DevSession {
-    pub(crate) session: String,
-    pub(crate) artifacts_dir: PathBuf,
-}
-
-pub(crate) async fn start_dev_session(request: DevSessionRequest) -> Result<DevSession> {
-    let session = next_dev_session_id(&request.workspace, &request.session_prefix)?;
-    let result = start_session(
-        StartArgs {
-            url: request.url,
-            session: session.clone(),
-            goal: "Process explicitly submitted Web review findings".to_string(),
-            success_criteria: vec![
-                "Every claimed finding reaches a verified, clarified, failed, or cancelled state"
-                    .to_string(),
-            ],
-            auto_resolve_repairs: false,
-            allowed_origins: Vec::new(),
-            allowed_domains: Vec::new(),
-            browser_driver: request.browser_driver,
-            browser_executable: request.browser_executable,
-            browser_microphone: super::BrowserMicrophoneArg::Disabled,
-            headed: request.headed,
-            command_timeout_ms: request.command_timeout_ms,
-            idle_timeout_ms: request.idle_timeout_ms,
-            json: false,
-        },
-        Some(&request.workspace),
-    )
-    .await?;
-    Ok(DevSession {
-        session,
-        artifacts_dir: result.state.artifacts_dir,
-    })
-}
-
-pub(crate) async fn abort_dev_session(workspace: &Path, session: &str) -> Result<()> {
-    let result = abort_session(session, Some(workspace)).await?;
-    match result.cleanup_error {
-        Some(error) => Err(anyhow::Error::new(error)),
-        None => Ok(()),
-    }
-}
-
-fn next_dev_session_id(workspace: &Path, prefix: &str) -> Result<String> {
-    let direct = AgentSessionStore::for_workspace(workspace, prefix);
-    if !direct.exists() {
-        return Ok(prefix.to_string());
-    }
-    let prefix = prefix.chars().take(42).collect::<String>();
-    let timestamp = unix_ms();
-    for attempt in 0..1_000_u16 {
-        let candidate = if attempt == 0 {
-            format!("{prefix}-{timestamp}")
-        } else {
-            format!("{prefix}-{timestamp}-{attempt}")
-        };
-        if !AgentSessionStore::for_workspace(workspace, &candidate).exists() {
-            return Ok(candidate);
-        }
-    }
-    anyhow::bail!("could not allocate a unique development session identifier")
-}
-
 async fn observe(args: ObserveArgs) -> Result<ExitCode> {
     let workspace = canonical_workspace().await?;
     let store = load_store(&workspace, &args.session)?;
@@ -902,68 +831,6 @@ async fn list(args: ListArgs) -> Result<ExitCode> {
     Ok(ExitCode::SUCCESS)
 }
 
-#[derive(Clone, Copy)]
-enum BrowserConnectionPurpose {
-    Turn,
-    Cleanup,
-}
-
-async fn connect(
-    state: &AgentSessionState,
-    purpose: BrowserConnectionPurpose,
-) -> Result<AgentBrowserSession> {
-    validate_timeout(state.browser.command_timeout_ms, "command timeout")?;
-    validate_timeout(state.browser.idle_timeout_ms, "idle timeout")?;
-    let command = match state.browser.driver {
-        StoredBrowserDriver::A3s => BrowserCommand::A3s {
-            executable: state.browser.executable.clone(),
-        },
-        StoredBrowserDriver::Standalone => BrowserCommand::Standalone {
-            executable: state.browser.executable.clone(),
-        },
-    };
-    let driver = AgentBrowserDriver::new(AgentBrowserConfig {
-        command,
-        namespace: state.namespace.clone(),
-        headed: state.browser.headed,
-        command_timeout: Duration::from_millis(state.browser.command_timeout_ms),
-        idle_timeout: Duration::from_millis(state.browser.idle_timeout_ms),
-        microphone: match state.browser.microphone {
-            StoredBrowserMicrophone::Disabled => BrowserMicrophone::Disabled,
-            StoredBrowserMicrophone::Synthetic => BrowserMicrophone::Synthetic,
-        },
-        network_policy: stored_browser_network_policy(state, purpose)?,
-    });
-    driver
-        .connect(AgentBrowserConnectionConfig {
-            namespace: state.namespace.clone(),
-            session: state.driver_session.clone(),
-            runtime_dir: state.runtime_dir.clone(),
-            artifacts_dir: state.artifacts_dir.clone(),
-            active_video_path: state.active_video_path.clone(),
-        })
-        .await
-        .map_err(anyhow::Error::new)
-}
-
-async fn close_and_remove_runtime(
-    browser: &mut AgentBrowserSession,
-    state: &AgentSessionState,
-) -> Option<DriverError> {
-    if let Err(error) = browser.close_surface().await {
-        return Some(error);
-    }
-    remove_runtime_directory(&state.runtime_dir, &state.workspace, &state.session)
-        .await
-        .err()
-        .map(|error| {
-            DriverError::new(
-                "test.session.runtime_cleanup_failed",
-                format!("browser closed but runtime cleanup failed: {error:#}"),
-            )
-        })
-}
-
 fn emit_driver_error(
     json_output: bool,
     state: &AgentSessionState,
@@ -1054,55 +921,6 @@ async fn load_active(
         );
     }
     Ok(state)
-}
-
-fn validate_turn_browser_network_policy(state: &AgentSessionState) -> Result<(), DriverError> {
-    stored_browser_network_policy(state, BrowserConnectionPurpose::Turn).map(drop)
-}
-
-fn containment_for_driver(driver: StoredBrowserDriver) -> StoredBrowserContainment {
-    match driver {
-        StoredBrowserDriver::A3s => StoredBrowserContainment::ExactOriginV1,
-        StoredBrowserDriver::Standalone => StoredBrowserContainment::HostnameV1,
-    }
-}
-
-fn stored_browser_network_policy(
-    state: &AgentSessionState,
-    purpose: BrowserConnectionPurpose,
-) -> Result<BrowserNetworkPolicy, DriverError> {
-    if matches!(purpose, BrowserConnectionPurpose::Cleanup) {
-        return Ok(BrowserNetworkPolicy::default());
-    }
-    match (
-        state.browser_containment,
-        &state.browser_allowed_origins,
-        &state.browser_allowed_domains,
-    ) {
-        (Some(containment), Some(origins), Some(domains))
-            if containment == containment_for_driver(state.browser.driver) =>
-        {
-            let policy = BrowserNetworkPolicy::restricted(origins.clone(), domains.clone())?;
-            if policy.allowed_origins() != origins
-                || policy.allowed_domains() != domains
-                || policy.allowed_origins() != state.allowed_origins
-            {
-                return Err(DriverError::new(
-                    "test.session.browser_network_policy_mismatch",
-                    "stored browser policy is not canonical or no longer matches the session origins; abort this session and start a new one",
-                ));
-            }
-            Ok(policy)
-        }
-        (Some(_), Some(_), Some(_)) => Err(DriverError::new(
-            "test.session.browser_containment_mismatch",
-            "stored browser containment mode does not match the selected driver; abort this session and start a new one",
-        )),
-        _ => Err(DriverError::new(
-            "test.session.browser_network_policy_missing",
-            "agent session predates typed browser containment; abort it and start a new session before executing another turn",
-        )),
-    }
 }
 
 fn abort_next_command(state: &AgentSessionState) -> String {

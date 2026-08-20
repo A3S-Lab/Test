@@ -173,10 +173,17 @@ a3s-test agent click @e3 \
 import { getPageContextBridge } from '@a3s-lab/testkit';
 
 const bridge = getPageContextBridge();
-console.log(bridge?.probe());
+console.log({ handshake: bridge?.handshake(), pageContext: bridge?.probe() });
 ```
 
 生产环境默认关闭 overlay 属于正常配置。CI 需要 Page Context 时，可以保留 `A3STestKit` 并省略可见界面。
+
+本地评审循环使用 `a3s-test dev --json`。`doctor` 只证明已安装版本处于静态
+范围，`dev` 会报告精确的实时失败边界。必需 bridge 缺失对应
+`test.driver.web.testkit_bridge_missing`，旧 runtime 没有 `handshake()` 对应
+`test.driver.web.testkit_handshake_missing`，provider 兼容但没有可见评审界面
+对应 `test.driver.web.testkit_review_overlay_missing`。按照错误中的安装或挂载
+命令修复，不要通过修改项目 profile 隐藏问题。
 
 ## Page Context 被截断
 

@@ -77,6 +77,7 @@ for (const [label, contents] of [
     `npm install --save-dev ${currentRegistrySpec}`,
     'npm ls @a3s-lab/testkit',
     'npm Registry',
+    'a3s.test.testkit-handshake/1',
   ]) {
     if (!contents.includes(installDetail)) {
       failures.push(
@@ -275,7 +276,9 @@ for (const version of versions) {
       (!testKitGuide.includes(registryInstall) ||
         !testKitGuide.includes('npm ls @a3s-lab/testkit') ||
         !testKitGuide.includes('npm Registry') ||
-        !testKitGuide.includes('GitHub OIDC provenance'))
+        !testKitGuide.includes('GitHub OIDC provenance') ||
+        !testKitGuide.includes('a3s.test.testkit-handshake/1') ||
+        !testKitGuide.includes('a3s-test dev --json'))
     ) {
       failures.push(
         `${version} ${locale} Test Kit guide lacks the install, verification, or distribution explanation.`,

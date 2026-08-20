@@ -10,14 +10,24 @@ const provider: reactTestkit.A3STestKitProps = {
   page: { id: "cjs-consumer" },
   children: null,
 };
+const handshake: testkit.TestKitHandshake = {
+  protocol: testkit.TESTKIT_HANDSHAKE_PROTOCOL,
+  packageName: testkit.TESTKIT_PACKAGE_NAME,
+  sdkVersion: "0.4.2",
+  pageContextProtocol: "a3s.test.page-context/1",
+  capabilities: ["bounded_snapshot"],
+};
 
 void [
   testkit.getPageContextBridge,
   testkit.installTestKit,
   testkit.registerBoundary,
+  testkit.TESTKIT_HANDSHAKE_PROTOCOL,
+  testkit.TESTKIT_PACKAGE_NAME,
   reactTestkit.A3STestKit,
   reactTestkit.A3STestBoundary,
   reactTestkit.A3SReviewOverlay,
   options,
   provider,
+  handshake,
 ];

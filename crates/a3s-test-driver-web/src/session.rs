@@ -33,6 +33,7 @@ use crate::protocol::{
 };
 use crate::repair_reference::materialize_design_references;
 use crate::runtime::RuntimeDirectory;
+use crate::testkit::{parse_testkit_handshake, testkit_handshake_script, TestKitHandshake};
 use crate::{AgentBrowserConfig, BrowserCapabilities, CommandExecutor, TokioCommandExecutor};
 
 mod advanced;
@@ -411,6 +412,25 @@ impl AgentBrowserSession {
 
     pub async fn page_error_count(&mut self) -> Result<u32, DriverError> {
         <Self as DriverSession>::page_error_count(self).await
+    }
+
+    pub async fn testkit_handshake(
+        &mut self,
+        require_review_overlay: bool,
+    ) -> Result<Option<TestKitHandshake>, DriverError> {
+        self.ensure_open()?;
+        let command_timeout_ms =
+            u64::try_from(self.config.command_timeout.as_millis()).unwrap_or(u64::MAX);
+        let readiness_timeout_ms = if require_review_overlay {
+            command_timeout_ms.saturating_sub(500).min(5_000)
+        } else {
+            0
+        };
+        let script = testkit_handshake_script(require_review_overlay, readiness_timeout_ms);
+        let value = self
+            .execute_command(vec!["eval".into(), script.into()])
+            .await?;
+        parse_testkit_handshake(browser_result(value), require_review_overlay)
     }
 
     #[must_use]

@@ -13,6 +13,15 @@
   an environment-scoped token, and GitHub OIDC provenance. Registry publication
   remains an explicit maintainer action rather than a side effect of a CLI
   release.
+- Added `a3s.test.testkit-handshake/1` across Test Kit, the Web adapter, and
+  `a3s-test dev`. Test Kit 0.4.2 reports its package identity, SDK version,
+  Page Context protocol, and canonical capabilities; the adapter performs
+  bounded strict validation and checks the live Review Overlay mount. Required
+  projects now abort the exact browser before `ready` when the bridge is
+  missing or any protocol boundary is incompatible, while optional projects
+  allow only a completely absent bridge. Every failure includes the exact
+  package-manager or mount repair, and the `ready` JSONL event carries the
+  typed admitted handshake.
 - Added the typed local project loop: `a3s-test init` discovers a bounded Web
   project profile, `a3s-test doctor` reports static and optional connection
   diagnostics with exact fixes, and `a3s-test dev` reuses or owns the

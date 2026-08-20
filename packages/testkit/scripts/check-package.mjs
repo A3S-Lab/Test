@@ -63,6 +63,16 @@ for (const [label, core] of [
   ["CommonJS", coreCjs],
 ]) {
   assert.equal(
+    core.TESTKIT_HANDSHAKE_PROTOCOL,
+    "a3s.test.testkit-handshake/1",
+    `${label} core exposed an unexpected Test Kit handshake protocol`,
+  );
+  assert.equal(
+    core.TESTKIT_PACKAGE_NAME,
+    "@a3s-lab/testkit",
+    `${label} core exposed an unexpected Test Kit package identity`,
+  );
+  assert.equal(
     core.getPageContextBridge(),
     null,
     `${label} core exposed a server bridge`,

@@ -25,6 +25,8 @@ import { UIStateTracker } from "./ui-understanding-state";
 import {
   PAGE_CONTEXT_PROTOCOL,
   PAGE_CONTEXT_SYMBOL,
+  TESTKIT_HANDSHAKE_PROTOCOL,
+  TESTKIT_PACKAGE_NAME,
   type BoundaryRegistration,
   type ContextComponent,
   type ContextDetail,
@@ -47,11 +49,31 @@ import {
   type StructuredRepairExport,
   type SubmittedRepair,
   type TestKitEvent,
+  type TestKitHandshake,
   type TestKitOptions,
   type TestKitRuntime,
 } from "./types";
 
 const SDK_VERSION = packageManifest.version;
+const TESTKIT_CAPABILITIES = Object.freeze([
+  "bounded_snapshot",
+  "component_boundaries",
+  "design_audit_reports",
+  "design_references",
+  "diff",
+  "geometry",
+  "layout_intents",
+  "open_shadow_dom",
+  "quality_reports",
+  "repair_queue",
+  "revision_wait",
+  "scoped_inspection",
+  "ui_component_clusters",
+  "ui_layout_graph",
+  "ui_motion_profile",
+  "ui_state_diffs",
+  "ui_style_profile",
+]);
 type NormalizedOptions = Required<
   Pick<
     TestKitOptions,
@@ -124,29 +146,21 @@ class Runtime implements TestKitRuntime, NodeIdentity {
     this.#cleanup.push(installPageObserver(() => this.#markChanged()));
   }
 
+  handshake(): TestKitHandshake {
+    return {
+      protocol: TESTKIT_HANDSHAKE_PROTOCOL,
+      packageName: TESTKIT_PACKAGE_NAME,
+      sdkVersion: SDK_VERSION,
+      pageContextProtocol: PAGE_CONTEXT_PROTOCOL,
+      capabilities: [...TESTKIT_CAPABILITIES],
+    };
+  }
+
   probe() {
     return {
       protocol: PAGE_CONTEXT_PROTOCOL,
       sdkVersion: SDK_VERSION,
-      capabilities: [
-        "bounded_snapshot",
-        "component_boundaries",
-        "design_audit_reports",
-        "design_references",
-        "diff",
-        "geometry",
-        "layout_intents",
-        "open_shadow_dom",
-        "quality_reports",
-        "repair_queue",
-        "revision_wait",
-        "scoped_inspection",
-        "ui_component_clusters",
-        "ui_layout_graph",
-        "ui_motion_profile",
-        "ui_state_diffs",
-        "ui_style_profile",
-      ],
+      capabilities: [...TESTKIT_CAPABILITIES],
     };
   }
 
@@ -955,6 +969,7 @@ function disabledBridge(): TestKitRuntime {
     throw new Error("A3S Test Kit is disabled");
   };
   return {
+    handshake: unavailable,
     probe: unavailable,
     snapshot: unavailable,
     resolve: () => null,

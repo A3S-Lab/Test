@@ -301,7 +301,9 @@ async fn check_testkit(
             if compatible {
                 checks.push(passed(
                     "testkit.installed",
-                    format!("{TESTKIT_PACKAGE} {version} is installed and compatible"),
+                    format!(
+                        "{TESTKIT_PACKAGE} {version} passes the static {TESTKIT_COMPATIBILITY} package range; a3s-test dev verifies the live protocol handshake"
+                    ),
                 ));
             } else {
                 checks.push(failed(

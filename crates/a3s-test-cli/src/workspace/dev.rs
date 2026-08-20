@@ -7,6 +7,7 @@ use serde_json::{json, Value};
 use tokio_util::sync::CancellationToken;
 
 use super::config::{ProjectBrowserDriver, ProjectProfile};
+use super::discovery::testkit_install_command;
 use super::process::OwnedServer;
 use super::{config, doctor, DevArgs};
 use crate::agent_session::{abort_dev_session, start_dev_session, DevSession, DevSessionRequest};
@@ -129,6 +130,7 @@ async fn run(
                 "server": server_kind,
                 "session": session.session,
                 "artifacts_dir": session.artifacts_dir,
+                "testkit": session.testkit,
             }),
             &format!(
                 "A3S Test review is ready at {} (session '{}')",
@@ -204,6 +206,8 @@ async fn start_browser_session(profile: &ProjectProfile) -> Result<DevSession> {
         headed: profile.browser.headed,
         command_timeout_ms: profile.browser.command_timeout_ms,
         idle_timeout_ms: profile.browser.idle_timeout_ms,
+        testkit_required: profile.testkit.required,
+        testkit_install_command: testkit_install_command(&profile.dev_server.executable),
     })
     .await
 }

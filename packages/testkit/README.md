@@ -5,10 +5,10 @@ Development-only page context and human review SDK for A3S Test.
 ## Install
 
 ```bash
-npm install --save-dev @a3s-lab/testkit@0.4.1
+npm install --save-dev @a3s-lab/testkit@0.4.2
 ```
 
-`@a3s-lab/testkit` 0.4.1 is published on the official npm Registry with GitHub
+`@a3s-lab/testkit` 0.4.2 is published on the official npm Registry with GitHub
 OIDC provenance. The pinned command keeps installation reproducible and locks
 the package integrity in the project lockfile. The package can lag features on
 `main`; use the versioned documentation to distinguish published and staged
@@ -65,6 +65,12 @@ For headless CI context, keep `A3STestKit` enabled and omit
 `installTestKit`, `getPageContextBridge`, and all protocol types.
 `installTestKit` also requires `enabled: true`; omitted or false-like runtime
 configuration fails closed.
+
+Test Kit 0.4.2 exposes `a3s.test.testkit-handshake/1`. After the provider and
+overlay mount, `a3s-test dev --json` verifies the live package identity, SDK
+range, Page Context protocol, required capabilities, and Review Overlay before
+it reports a ready review session. The older `probe()` operation remains for
+Page Context feature discovery; it is not the CLI compatibility decision.
 
 The review UI supports `locale="auto" | "en" | "zh-CN"`. `auto` is the
 default and observes `<html lang>` while mounted, resolving every `zh-*` page

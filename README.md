@@ -78,14 +78,21 @@ a3s-test dev
 `init` writes `.a3s-test/project.acl` and prints an exact Test Kit install
 command when the dependency is missing. It never installs or starts anything
 implicitly. `doctor` validates the profile, executables, package metadata, and
-compatible installed Test Kit version. `dev` then reuses an already reachable
-URL or starts the declared development command, waits for readiness, and opens
-one headed review session.
+the static installed Test Kit range. `dev` then reuses an already reachable
+URL or starts the declared development command, waits for readiness, opens one
+headed review session, and performs the authoritative
+`a3s.test.testkit-handshake/1` live Test Kit handshake before reporting
+`ready`.
 
 Press Ctrl+C to abort that exact browser session. A development server started
 by A3S Test is stopped with its complete process tree; a server that was
 already running remains untouched. Pass `--json` to `dev` for compact
 `a3s.test.dev/1` JSONL lifecycle events while server logs remain on stderr.
+The `ready` event contains the admitted Test Kit protocol, SDK version,
+Page Context protocol, capabilities, and Review Overlay mount state. A missing
+required bridge or an incompatible mounted bridge aborts that exact browser
+session and reports the failed boundary with the package-manager-specific
+repair command.
 
 Use `a3s-test init --testkit optional` only when browser semantics are enough
 and the in-page review overlay is deliberately absent.
@@ -609,10 +616,10 @@ Development frontends can embed `@a3s-lab/testkit` so A3S Test can read the
 rendered page without relying on pixels alone:
 
 ```bash
-npm install --save-dev @a3s-lab/testkit@0.4.1
+npm install --save-dev @a3s-lab/testkit@0.4.2
 ```
 
-Test Kit 0.4.1 is published on the official npm Registry with GitHub OIDC
+Test Kit 0.4.2 is published on the official npm Registry with GitHub OIDC
 provenance. The pinned command records the package integrity in the project
 lockfile. Confirm the dependency with `npm ls @a3s-lab/testkit`.
 

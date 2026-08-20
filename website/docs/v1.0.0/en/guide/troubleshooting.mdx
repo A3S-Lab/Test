@@ -209,10 +209,19 @@ Use a read-only bridge probe in the browser console.
 import { getPageContextBridge } from '@a3s-lab/testkit';
 
 const bridge = getPageContextBridge();
-console.log(bridge?.probe());
+console.log({ handshake: bridge?.handshake(), pageContext: bridge?.probe() });
 ```
 
 A production build with the overlay disabled is normal. CI can retain `A3STestKit` while omitting the visible review surface.
+
+For the local review loop, run `a3s-test dev --json`. `doctor` proves only the
+static installed range; `dev` reports the exact live failure boundary. A
+missing required bridge produces `test.driver.web.testkit_bridge_missing`, an
+old runtime without `handshake()` produces
+`test.driver.web.testkit_handshake_missing`, and a compatible provider without
+the visible review host produces
+`test.driver.web.testkit_review_overlay_missing`. Follow the install or mount
+repair in that error instead of editing the project profile to suppress it.
 
 ## Page Context is truncated
 

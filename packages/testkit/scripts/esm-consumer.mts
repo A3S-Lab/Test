@@ -2,6 +2,9 @@ import {
   getPageContextBridge,
   installTestKit,
   registerBoundary,
+  TESTKIT_HANDSHAKE_PROTOCOL,
+  TESTKIT_PACKAGE_NAME,
+  type TestKitHandshake,
   type TestKitOptions,
 } from "@a3s-lab/testkit";
 import {
@@ -20,14 +23,24 @@ const provider: A3STestKitProps = {
   page: { id: "esm-consumer" },
   children: null,
 };
+const handshake: TestKitHandshake = {
+  protocol: TESTKIT_HANDSHAKE_PROTOCOL,
+  packageName: TESTKIT_PACKAGE_NAME,
+  sdkVersion: "0.4.2",
+  pageContextProtocol: "a3s.test.page-context/1",
+  capabilities: ["bounded_snapshot"],
+};
 
 void [
   getPageContextBridge,
   installTestKit,
   registerBoundary,
+  TESTKIT_HANDSHAKE_PROTOCOL,
+  TESTKIT_PACKAGE_NAME,
   A3STestKit,
   A3STestBoundary,
   A3SReviewOverlay,
   options,
   provider,
+  handshake,
 ];

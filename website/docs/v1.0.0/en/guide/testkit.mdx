@@ -14,10 +14,10 @@ If the goal is to select an element, drag over a region, sketch the intended UI,
 Run the version-pinned command in the frontend project:
 
 ```bash
-npm install --save-dev @a3s-lab/testkit@0.4.1
+npm install --save-dev @a3s-lab/testkit@0.4.2
 ```
 
-The package is published on the official npm Registry with GitHub OIDC provenance. The pinned 0.4.1 package includes the design board and page-region capture without a separate drawing or screenshot package.
+The package is published on the official npm Registry with GitHub OIDC provenance. The pinned 0.4.2 package includes the design board, page-region capture, and live CLI compatibility handshake without a separate drawing or screenshot package.
 
 Verify that the dependency belongs to the current project:
 
@@ -58,6 +58,22 @@ Start the existing development server and open the page. The integration is read
 - The integration mounts from a client entry rather than rendering only on the server.
 
 Test Kit is a frontend SDK and does not add an `a3s-testkit` terminal command. Install the [A3S Test CLI and Agent Skill](./installation.mdx#install-the-cli-and-agent-skill) only when tests must run from the terminal or an agent must receive repair work.
+
+When the CLI is installed, verify the actual rendered integration instead of
+inferring compatibility from `node_modules`:
+
+```bash
+a3s-test init
+a3s-test doctor
+a3s-test dev --json
+```
+
+`doctor` checks the static package range. Before emitting `ready`, `dev` waits
+briefly for client hydration and validates `a3s.test.testkit-handshake/1`, the
+package identity, SDK range, Page Context protocol, required capabilities, and
+the live Review Overlay. Its `ready` event contains the admitted handshake.
+If a required boundary is missing or incompatible, A3S Test aborts only the
+browser session it opened and prints the exact install or mount repair.
 
 ## Most projects can stop here
 
@@ -354,7 +370,7 @@ Verification screenshots remain A3S Test evidence. A screenshot deliberately att
 
 ## Human marking and batch repair
 
-Test Kit 0.4.1 keeps review work in one fixed side panel. The shortest path is
+Test Kit 0.4.2 keeps review work in one fixed side panel. The shortest path is
 select a target, describe the change, then save or send. New feedback,
 findings, and preferences are three peer views. Marking tools are visible
 directly; selecting a target replaces them with the editor in the same panel,

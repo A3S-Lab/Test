@@ -20,6 +20,7 @@ application
 ├── framework adapter                  optional explicit boundaries
 └── Review Overlay                     optional human interaction
         │
+        │ a3s.test.testkit-handshake/1
         │ a3s.test.page-context/1
         v
 A3S Browser adapter
@@ -41,7 +42,10 @@ identifier `a3s.test.page-context/1`. The bridge is read only to application
 code except for explicit SDK registration APIs. Its browser-facing operations
 are:
 
-- `probe()` returns protocol and SDK versions plus supported capabilities.
+- `handshake()` returns the explicit Test Kit package, SDK, Page Context, and
+  capability contract used for live CLI compatibility admission.
+- `probe()` returns Page Context protocol and SDK versions plus supported
+  capabilities for existing Page Context consumers.
 - `snapshot(request)` returns a bounded page or scoped context snapshot.
 - `resolve(nodeId)` returns the live DOM node for a current snapshot node.
 - `waitForChange(revision, timeoutMs)` completes when the semantic revision
@@ -64,6 +68,56 @@ are:
 
 The bridge does not expose `eval`, filesystem access, cookies, arbitrary
 network requests, or shell execution.
+
+### Live Test Kit handshake
+
+`a3s-test dev` does not infer live compatibility from the installed
+`package.json`. After navigation, the Web adapter waits for bounded client
+hydration and calls `handshake()` through the browser bridge:
+
+```json
+{
+  "protocol": "a3s.test.testkit-handshake/1",
+  "packageName": "@a3s-lab/testkit",
+  "sdkVersion": "0.4.2",
+  "pageContextProtocol": "a3s.test.page-context/1",
+  "capabilities": [
+    "bounded_snapshot",
+    "component_boundaries",
+    "design_audit_reports",
+    "design_references",
+    "diff",
+    "geometry",
+    "layout_intents",
+    "open_shadow_dom",
+    "quality_reports",
+    "repair_queue",
+    "revision_wait",
+    "scoped_inspection",
+    "ui_component_clusters",
+    "ui_layout_graph",
+    "ui_motion_profile",
+    "ui_state_diffs",
+    "ui_style_profile"
+  ]
+}
+```
+
+The adapter accepts only handshake protocol v1, package
+`@a3s-lab/testkit`, SDK `>= 0.4.0, < 0.5.0`, Page Context protocol v1, and a
+sorted, unique, bounded capability list. The local review loop requires
+`bounded_snapshot`, `component_boundaries`, `design_references`, `geometry`,
+`repair_queue`, `revision_wait`, and `scoped_inspection`. When the project
+profile requires Test Kit, the adapter separately proves that the Review
+Overlay host and its open Shadow Root are mounted.
+
+A completely absent bridge is allowed only when `project.testkit.required` is
+false. A present but invalid or incompatible bridge always fails closed. The
+driver preserves distinct error codes for bridge shape, handshake method and
+protocol, package identity, SDK semver and range, Page Context protocol,
+capabilities, and Review Overlay mount state. The CLI appends the exact
+package-manager or component-mount repair and aborts its exact browser session
+before emitting a `ready` event.
 
 ### Snapshot request
 
@@ -98,7 +152,7 @@ for one request with `"ui": false`.
 ```json
 {
   "protocol": "a3s.test.page-context/1",
-  "sdkVersion": "0.4.0",
+  "sdkVersion": "0.4.2",
   "revision": 42,
   "page": {
     "id": "checkout",

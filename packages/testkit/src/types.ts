@@ -1,4 +1,7 @@
 export const PAGE_CONTEXT_PROTOCOL = "a3s.test.page-context/1" as const;
+export const TESTKIT_HANDSHAKE_PROTOCOL =
+  "a3s.test.testkit-handshake/1" as const;
+export const TESTKIT_PACKAGE_NAME = "@a3s-lab/testkit" as const;
 export const UI_UNDERSTANDING_PROTOCOL = "a3s.test.ui-understanding/1" as const;
 export const PAGE_CONTEXT_SYMBOL = Symbol.for("a3s.test.page-context");
 export const QUALITY_REPORT_PROTOCOL = "a3s.test.quality-report/1" as const;
@@ -690,7 +693,16 @@ export type PageContextProbe = {
   capabilities: string[];
 };
 
+export type TestKitHandshake = {
+  protocol: typeof TESTKIT_HANDSHAKE_PROTOCOL;
+  packageName: typeof TESTKIT_PACKAGE_NAME;
+  sdkVersion: string;
+  pageContextProtocol: typeof PAGE_CONTEXT_PROTOCOL;
+  capabilities: string[];
+};
+
 export type PageContextBridge = {
+  handshake(): TestKitHandshake;
   probe(): PageContextProbe;
   snapshot(request?: ContextSnapshotRequest): PageContextSnapshot;
   resolve(nodeId: string): Element | null;

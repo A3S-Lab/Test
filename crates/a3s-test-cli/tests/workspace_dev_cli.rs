@@ -27,7 +27,7 @@ fn dev_uses_an_existing_server_without_starting_or_stopping_it() {
     let server = HttpFixture::start();
     let dev_server = write_never_start_server(temp.path());
     let browser = write_browser_fixture(temp.path());
-    write_project(temp.path(), &server.url(), &dev_server, &browser, 250);
+    write_project(temp.path(), &server.url(), &dev_server, &browser, 250, true);
 
     let variables = [(
         "A3S_TEST_DEV_INVOKED",
@@ -39,6 +39,9 @@ fn dev_uses_an_existing_server_without_starting_or_stopping_it() {
     assert_eq!(ready["event"], "ready");
     assert_eq!(ready["server"], "existing");
     assert_eq!(ready["session"], "dev");
+    assert_eq!(ready["testkit"]["protocol"], "a3s.test.testkit-handshake/1");
+    assert_eq!(ready["testkit"]["sdk_version"], "0.4.2");
+    assert_eq!(ready["testkit"]["review_overlay_mounted"], true);
 
     send_sigint(dev.child.id());
     let stopped = dev.next_event("stopped");
@@ -60,7 +63,7 @@ fn dev_starts_waits_for_and_cleans_its_owned_server_tree() {
     let url = format!("http://127.0.0.1:{port}/");
     let dev_server = write_owned_server(temp.path(), true);
     let browser = write_browser_fixture(temp.path());
-    write_project(temp.path(), &url, &dev_server, &browser, 150);
+    write_project(temp.path(), &url, &dev_server, &browser, 150, true);
 
     let variables = [
         ("A3S_TEST_DEV_FIXTURE", "serve".to_string()),
@@ -110,7 +113,7 @@ fn dev_aborts_the_browser_when_the_owned_server_exits() {
     let url = format!("http://127.0.0.1:{port}/");
     let dev_server = write_owned_server(temp.path(), false);
     let browser = write_browser_fixture(temp.path());
-    write_project(temp.path(), &url, &dev_server, &browser, 250);
+    write_project(temp.path(), &url, &dev_server, &browser, 250, true);
     let trigger = temp.path().join("stop-server");
 
     let variables = [
@@ -153,7 +156,7 @@ fn dev_watchdog_reaps_the_owned_server_after_host_sigkill() {
     let url = format!("http://127.0.0.1:{port}/");
     let dev_server = write_owned_server(temp.path(), false);
     let browser = write_browser_fixture(temp.path());
-    write_project(temp.path(), &url, &dev_server, &browser, 250);
+    write_project(temp.path(), &url, &dev_server, &browser, 250, true);
 
     let variables = [
         ("A3S_TEST_DEV_FIXTURE", "serve".to_string()),
@@ -221,6 +224,146 @@ fn dev_server_fixture() {
             Err(error) => panic!("fixture server failed: {error}"),
         }
     }
+}
+
+#[test]
+fn required_testkit_missing_aborts_the_browser_without_stopping_an_existing_server() {
+    let _guard = process_test_lock().lock().unwrap();
+    let temp = tempfile::tempdir().expect("tempdir");
+    let server = HttpFixture::start();
+    let dev_server = write_never_start_server(temp.path());
+    let browser = write_browser_fixture(temp.path());
+    write_project(temp.path(), &server.url(), &dev_server, &browser, 250, true);
+
+    let variables = [("A3S_TEST_TESTKIT_MODE", "absent".to_string())];
+    let mut dev = spawn_dev(temp.path(), &variables);
+    let status = dev.wait();
+
+    assert_eq!(status.code(), Some(2), "{}", dev.stderr());
+    assert!(TcpStream::connect(server.address()).is_ok());
+    assert_browser_opened_and_closed(temp.path());
+    assert_session_aborted(temp.path(), "dev");
+    assert!(
+        dev.stderr()
+            .contains("test.driver.web.testkit_bridge_missing"),
+        "{}",
+        dev.stderr()
+    );
+    assert!(
+        dev.stderr()
+            .contains("npm install --save-dev @a3s-lab/testkit@^0.4.0"),
+        "{}",
+        dev.stderr()
+    );
+}
+
+#[test]
+fn optional_testkit_allows_an_absent_bridge_and_reports_null() {
+    let _guard = process_test_lock().lock().unwrap();
+    let temp = tempfile::tempdir().expect("tempdir");
+    let server = HttpFixture::start();
+    let dev_server = write_never_start_server(temp.path());
+    let browser = write_browser_fixture(temp.path());
+    write_project(
+        temp.path(),
+        &server.url(),
+        &dev_server,
+        &browser,
+        250,
+        false,
+    );
+
+    let variables = [("A3S_TEST_TESTKIT_MODE", "absent".to_string())];
+    let mut dev = spawn_dev(temp.path(), &variables);
+    let ready = dev.next_event("ready");
+    assert_eq!(ready["testkit"], serde_json::Value::Null);
+
+    send_sigint(dev.child.id());
+    let stopped = dev.next_event("stopped");
+    assert_eq!(stopped["cleanup"], "complete");
+    let status = dev.wait();
+
+    assert_eq!(status.code(), Some(130), "{}", dev.stderr());
+    assert!(TcpStream::connect(server.address()).is_ok());
+    assert_browser_opened_and_closed(temp.path());
+    assert_session_aborted(temp.path(), "dev");
+}
+
+#[test]
+fn incompatible_live_testkit_boundaries_fail_with_exact_repairs() {
+    let _guard = process_test_lock().lock().unwrap();
+    let cases = [
+        (
+            "incompatible_version",
+            "test.driver.web.testkit_sdk_version_unsupported",
+            "npm install --save-dev @a3s-lab/testkit@^0.4.0",
+        ),
+        (
+            "missing_capability",
+            "test.driver.web.testkit_capability_missing",
+            "npm install --save-dev @a3s-lab/testkit@^0.4.0",
+        ),
+        (
+            "overlay_missing",
+            "test.driver.web.testkit_review_overlay_missing",
+            "render <A3SReviewOverlay />",
+        ),
+    ];
+
+    for (mode, code, repair) in cases {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let server = HttpFixture::start();
+        let dev_server = write_never_start_server(temp.path());
+        let browser = write_browser_fixture(temp.path());
+        write_project(temp.path(), &server.url(), &dev_server, &browser, 250, true);
+        let variables = [("A3S_TEST_TESTKIT_MODE", mode.to_string())];
+        let mut dev = spawn_dev(temp.path(), &variables);
+
+        let status = dev.wait();
+
+        assert_eq!(status.code(), Some(2), "{mode}: {}", dev.stderr());
+        assert!(TcpStream::connect(server.address()).is_ok());
+        assert_browser_opened_and_closed(temp.path());
+        assert_session_aborted(temp.path(), "dev");
+        assert!(dev.stderr().contains(code), "{mode}: {}", dev.stderr());
+        assert!(dev.stderr().contains(repair), "{mode}: {}", dev.stderr());
+    }
+}
+
+#[test]
+fn handshake_failure_cleans_an_owned_server_tree() {
+    let _guard = process_test_lock().lock().unwrap();
+    let temp = tempfile::tempdir().expect("tempdir");
+    let port = available_port();
+    let url = format!("http://127.0.0.1:{port}/");
+    let dev_server = write_owned_server(temp.path(), false);
+    let browser = write_browser_fixture(temp.path());
+    write_project(temp.path(), &url, &dev_server, &browser, 250, true);
+
+    let variables = [
+        ("A3S_TEST_DEV_FIXTURE", "serve".to_string()),
+        ("A3S_TEST_DEV_PORT", port.to_string()),
+        (
+            "A3S_TEST_FIXTURE_BIN",
+            std::env::current_exe()
+                .expect("current test binary")
+                .display()
+                .to_string(),
+        ),
+        (
+            "A3S_TEST_DEV_PID",
+            temp.path().join("dev-server.pid").display().to_string(),
+        ),
+        ("A3S_TEST_TESTKIT_MODE", "absent".to_string()),
+    ];
+    let mut dev = spawn_dev(temp.path(), &variables);
+    let status = dev.wait();
+    let owned_pid = wait_for_pid(&temp.path().join("dev-server.pid"));
+
+    assert_eq!(status.code(), Some(2), "{}", dev.stderr());
+    assert_process_stopped(&owned_pid);
+    assert_browser_opened_and_closed(temp.path());
+    assert_session_aborted(temp.path(), "dev");
 }
 
 struct DevProcess {
@@ -382,7 +525,14 @@ fn respond(stream: &mut TcpStream) {
         .expect("write HTTP response");
 }
 
-fn write_project(root: &Path, url: &str, dev_server: &Path, browser: &Path, cleanup_ms: u64) {
+fn write_project(
+    root: &Path,
+    url: &str,
+    dev_server: &Path,
+    browser: &Path,
+    cleanup_ms: u64,
+    testkit_required: bool,
+) {
     fs::write(
         root.join("package.json"),
         r#"{
@@ -428,7 +578,7 @@ fn write_project(root: &Path, url: &str, dev_server: &Path, browser: &Path, clea
   }}
 
   testkit {{
-    required = true
+    required = {}
   }}
 }}
 "#,
@@ -436,6 +586,7 @@ fn write_project(root: &Path, url: &str, dev_server: &Path, browser: &Path, clea
             acl_escape(url),
             cleanup_ms,
             acl_escape(&browser.display().to_string()),
+            testkit_required,
         ),
     )
     .expect("project profile");
@@ -458,6 +609,26 @@ case " $* " in
     if [ -n "${A3S_TEST_BROWSER_OPEN_TRIGGER-}" ]; then
       : > "$A3S_TEST_BROWSER_OPEN_TRIGGER"
     fi
+    ;;
+  *" eval "*)
+    case "${A3S_TEST_TESTKIT_MODE-compatible}" in
+      absent)
+        printf '%s\n' '{"success":true,"data":{"result":{"state":"absent"}}}'
+        ;;
+      incompatible_version)
+        printf '%s\n' '{"success":true,"data":{"result":{"state":"present","handshake":{"protocol":"a3s.test.testkit-handshake/1","packageName":"@a3s-lab/testkit","sdkVersion":"0.5.0","pageContextProtocol":"a3s.test.page-context/1","capabilities":["bounded_snapshot","component_boundaries","design_references","geometry","repair_queue","revision_wait","scoped_inspection"]},"reviewOverlayMounted":true}}}'
+        ;;
+      missing_capability)
+        printf '%s\n' '{"success":true,"data":{"result":{"state":"present","handshake":{"protocol":"a3s.test.testkit-handshake/1","packageName":"@a3s-lab/testkit","sdkVersion":"0.4.2","pageContextProtocol":"a3s.test.page-context/1","capabilities":["bounded_snapshot","component_boundaries","design_references","geometry","repair_queue","revision_wait"]},"reviewOverlayMounted":true}}}'
+        ;;
+      overlay_missing)
+        printf '%s\n' '{"success":true,"data":{"result":{"state":"present","handshake":{"protocol":"a3s.test.testkit-handshake/1","packageName":"@a3s-lab/testkit","sdkVersion":"0.4.2","pageContextProtocol":"a3s.test.page-context/1","capabilities":["bounded_snapshot","component_boundaries","design_references","geometry","repair_queue","revision_wait","scoped_inspection"]},"reviewOverlayMounted":false}}}'
+        ;;
+      *)
+        printf '%s\n' '{"success":true,"data":{"result":{"state":"present","handshake":{"protocol":"a3s.test.testkit-handshake/1","packageName":"@a3s-lab/testkit","sdkVersion":"0.4.2","pageContextProtocol":"a3s.test.page-context/1","capabilities":["bounded_snapshot","component_boundaries","design_references","geometry","repair_queue","revision_wait","scoped_inspection"]},"reviewOverlayMounted":true}}}'
+        ;;
+    esac
+    exit 0
     ;;
 esac
 printf '{"success":true}\n'

@@ -1,3 +1,4 @@
+use super::store::StoredBrowserContainment;
 use super::*;
 use a3s_test_core::{StepOutput, Target};
 use clap::Parser;

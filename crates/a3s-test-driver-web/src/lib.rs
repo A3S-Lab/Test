@@ -12,6 +12,7 @@ mod protocol;
 mod repair_reference;
 mod runtime;
 mod session;
+mod testkit;
 
 pub use capabilities::{BrowserCapabilities, BrowserIntegration, WebCapability};
 pub use config::{AgentBrowserConfig, BrowserCommand, BrowserMicrophone, BrowserNetworkPolicy};
@@ -21,3 +22,6 @@ pub use executor::{
 };
 pub use process::terminate_active_commands;
 pub use session::{AgentBrowserConnectionConfig, AgentBrowserDriver, AgentBrowserSession};
+pub use testkit::{
+    TestKitHandshake, TESTKIT_HANDSHAKE_PROTOCOL, TESTKIT_PACKAGE_NAME, TESTKIT_SDK_COMPATIBILITY,
+};

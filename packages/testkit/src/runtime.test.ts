@@ -7,6 +7,11 @@ import type {
   RepairDraft,
   RepairEvent,
 } from "./types";
+import {
+  PAGE_CONTEXT_PROTOCOL,
+  TESTKIT_HANDSHAKE_PROTOCOL,
+  TESTKIT_PACKAGE_NAME,
+} from "./types";
 import { setRect } from "./test-setup";
 
 describe("page context runtime", () => {
@@ -19,6 +24,13 @@ describe("page context runtime", () => {
 
     expect(bridge.probe().sdkVersion).toBe(packageManifest.version);
     expect(bridge.snapshot().sdkVersion).toBe(packageManifest.version);
+    expect(bridge.handshake()).toEqual({
+      protocol: TESTKIT_HANDSHAKE_PROTOCOL,
+      packageName: TESTKIT_PACKAGE_NAME,
+      sdkVersion: packageManifest.version,
+      pageContextProtocol: PAGE_CONTEXT_PROTOCOL,
+      capabilities: bridge.probe().capabilities,
+    });
   });
 
   it("admits revision-bound design advice without granting verdict or repair authority", () => {
