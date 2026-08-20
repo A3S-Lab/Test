@@ -24,16 +24,8 @@ pub fn validate_repair_verification_request(
             "verification finding id, request id, and summary must be bounded and non-empty",
         ));
     }
-    if request.changed_files.len() > 200
+    if !valid_repair_changed_files(&request.changed_files)
         || request.checks.len() > 50
-        || request.changed_files.iter().any(|path| {
-            path.is_empty()
-                || path.len() > 1_024
-                || Path::new(path).is_absolute()
-                || Path::new(path)
-                    .components()
-                    .any(|component| !matches!(component, Component::Normal(_)))
-        })
         || request.checks.iter().any(|check| {
             check.command.trim().is_empty()
                 || check.command.len() > MAX_REPAIR_CHECK_COMMAND_BYTES
@@ -51,6 +43,18 @@ pub fn validate_repair_verification_request(
         ));
     }
     Ok(())
+}
+
+pub(crate) fn valid_repair_changed_files(changed_files: &[String]) -> bool {
+    changed_files.len() <= 200
+        && changed_files.iter().all(|path| {
+            !path.is_empty()
+                && path.len() <= 1_024
+                && !Path::new(path).is_absolute()
+                && Path::new(path)
+                    .components()
+                    .all(|component| matches!(component, Component::Normal(_)))
+        })
 }
 
 pub fn build_repair_verification(

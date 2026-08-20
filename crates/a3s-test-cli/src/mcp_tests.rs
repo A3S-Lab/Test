@@ -220,6 +220,11 @@ async fn projects_the_session_application_layer_over_mcp() {
     assert!(listed["result"]["tools"]
         .as_array()
         .is_some_and(|tools| tools.iter().any(|tool| tool["name"] == "test_inspect")));
+    assert!(listed["result"]["tools"].as_array().is_some_and(|tools| {
+        tools
+            .iter()
+            .any(|tool| tool["name"] == "test_repair_inspect")
+    }));
     let start_tool = listed["result"]["tools"]
         .as_array()
         .and_then(|tools| {
@@ -655,7 +660,8 @@ async fn mcp_web_ingests_claims_and_completes_a_page_repair_durably() {
             "finding_id": "finding-1",
             "request_id": "complete-1",
             "attempt_id": "attempt-claim-1",
-            "summary": "Workspace edit reported complete"
+            "summary": "Workspace edit reported complete",
+            "changed_files": ["src/Repair.tsx"]
         }),
     )
     .await;
@@ -664,10 +670,27 @@ async fn mcp_web_ingests_claims_and_completes_a_page_repair_durably() {
         "verifying"
     );
 
-    let aborted = call(
+    let inspected = call(
         &mut client_writer,
         &mut client_reader,
         8,
+        "test_repair_inspect",
+        json!({ "session": "web-repair", "finding_id": "finding-1" }),
+    )
+    .await;
+    let loop_record = &inspected["result"]["structuredContent"];
+    assert_eq!(loop_record["protocol"], "a3s.test.repair-loop-record/1");
+    assert_eq!(
+        loop_record["change"]["changed_files"],
+        json!(["src/Repair.tsx"])
+    );
+    assert_eq!(loop_record["resume"]["action"], "verify");
+    assert_eq!(loop_record["resume"]["mcp_tool"], "test_repair_verify");
+
+    let aborted = call(
+        &mut client_writer,
+        &mut client_reader,
+        9,
         "test_abort",
         json!({ "session": "web-repair" }),
     )

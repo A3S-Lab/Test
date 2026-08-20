@@ -47,6 +47,14 @@ fn single_repair_restart_recovery_and_acl_promotion_are_end_to_end() {
     assert_eq!(repair["finding"]["instruction"], "Repair the broken action");
 
     transition_attempt_to_verifying(&session, "finding-single", "attempt-single");
+    let completed_loop = inspect_loop(&session, "finding-single");
+    assert_eq!(completed_loop["protocol"], "a3s.test.repair-loop-record/1");
+    assert_eq!(
+        completed_loop["change"]["changed_files"],
+        json!(["src/Fixture.tsx"])
+    );
+    assert_eq!(completed_loop["resume"]["action"], "verify");
+    assert!(completed_loop["verification"].is_null());
     fixture.set_repaired(true);
     assert_process_success(
         "apply the fixture hot repair",
@@ -98,6 +106,13 @@ fn single_repair_restart_recovery_and_acl_promotion_are_end_to_end() {
         acl_path.is_file(),
         "persisted ACL proof missing: {acl_path:?}"
     );
+    let verified_loop = inspect_loop(&session, "finding-single");
+    assert_eq!(verified_loop["verification"]["passed"], true);
+    assert_eq!(verified_loop["acl_promotion"]["status"], "proof_passed");
+    assert!(verified_loop["verification"]["before_evidence"]
+        .get("context")
+        .is_none());
+    assert_eq!(verified_loop["resume"]["action"], "await_review");
 
     submit_human_action(&session, "finding-single", "accept", None);
     assert_process_success("reload the repaired page", &session.browser(&["reload"]));
@@ -489,7 +504,7 @@ fn disconnect_recovers_pre_edit_claim_and_quarantines_possible_edits() {
 
 #[test]
 #[ignore = "requires Node esbuild and the exact standalone agent-browser 0.26.x runtime"]
-fn hot_reload_expires_context_refs_and_fresh_observation_recovers() {
+fn hot_reload_preserves_unaffected_context_refs_and_rebinds_changed_targets() {
     let Some(browser) = admitted_browser() else {
         eprintln!("A3S_TEST_AGENT_BROWSER is not set; skipping stale ref E2E");
         return;
@@ -498,6 +513,9 @@ fn hot_reload_expires_context_refs_and_fresh_observation_recovers() {
     let mut session = RepairSession::start(&browser, &fixture, "repair-stale-ref");
     let observed = inspect_context(&session, "inspect before hot reload");
     let observation_id = observed["observation_id"].as_u64().expect("observation ID");
+    let observed_revision = observed["output"]["page_context"]["snapshot"]["revision"]
+        .as_u64()
+        .expect("observed Page Context revision");
     let context_ref = observed["output"]["page_context"]["snapshot"]["nodes"]
         .as_array()
         .and_then(|nodes| nodes.iter().find(|node| node["testId"] == "repair-target"))
@@ -517,16 +535,59 @@ fn hot_reload_expires_context_refs_and_fresh_observation_recovers() {
         &session.browser(&[
             "wait",
             "--fn",
-            "document.querySelector('#virtual-row')?.textContent==='Virtual row 50'&&location.pathname==='/routed'",
+            &format!(
+                "document.querySelector('#virtual-row')?.textContent==='Virtual row 50'&&location.pathname==='/routed'&&window[Symbol.for('a3s.test.page-context')].snapshot().revision>{observed_revision}"
+            ),
         ]),
     );
-    let stale = session.agent(&[
+    let unaffected = session.agent(&[
         "click",
         &context_ref,
         "--session",
         "repair-stale-ref",
         "--observation",
         &observation_id.to_string(),
+        "--json",
+    ]);
+    assert_process_success(
+        "click an unaffected context ref after hot reload",
+        &unaffected,
+    );
+
+    let changed_baseline = inspect_context(&session, "inspect before target replacement");
+    let changed_observation = changed_baseline["observation_id"]
+        .as_u64()
+        .expect("changed-target observation ID");
+    let changed_revision = changed_baseline["output"]["page_context"]["snapshot"]["revision"]
+        .as_u64()
+        .expect("changed-target Page Context revision");
+    let changed_ref = changed_baseline["output"]["page_context"]["snapshot"]["nodes"]
+        .as_array()
+        .and_then(|nodes| nodes.iter().find(|node| node["testId"] == "repair-target"))
+        .and_then(|node| node["ref"].as_str())
+        .expect("changed repair target context ref")
+        .to_string();
+    assert_process_success(
+        "replace the observed repair target",
+        &session.browser(&["eval", "window.testkitFixture.repair(); true"]),
+    );
+    assert_process_success(
+        "wait for the changed repair target context",
+        &session.browser(&[
+            "wait",
+            "--fn",
+            &format!(
+                "document.querySelector('#sticky')?.textContent==='Repaired action'&&window[Symbol.for('a3s.test.page-context')].snapshot().revision>{changed_revision}"
+            ),
+        ]),
+    );
+    let stale = session.agent(&[
+        "click",
+        &changed_ref,
+        "--session",
+        "repair-stale-ref",
+        "--observation",
+        &changed_observation.to_string(),
         "--json",
     ]);
     assert_eq!(stale.status.code(), Some(1), "{stale:?}");
@@ -683,6 +744,21 @@ fn transition_attempt_to_verifying(session: &RepairSession, finding_id: &str, at
         assert_eq!(transition["repair"]["status"], expected);
         assert_eq!(transition["repair"]["attempt_id"], attempt_id);
     }
+}
+
+fn inspect_loop(session: &RepairSession, finding_id: &str) -> Value {
+    json_output(
+        "inspect durable repair loop",
+        &session.agent(&[
+            "repair-inspect",
+            finding_id,
+            "--session",
+            session.state()["session"]
+                .as_str()
+                .expect("repair session ID"),
+            "--json",
+        ]),
+    )
 }
 
 fn verify(

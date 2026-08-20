@@ -134,6 +134,31 @@ The selected node's repair context may already contain ranked
 turn while keeping authority unchanged: the mapping suggests likely files and
 spans, but only the workspace-owning coding agent can read or edit them.
 
+### Recoverable repair projection
+
+The append-only `repairs.jsonl` ledger is also the source of truth for agent
+handoff. `repair-complete` records the exact ordered changed-file report at the
+point editing ends, before browser verification begins. `repair-verify`
+repeats that report; a mismatch fails before any browser command. This closes
+the recovery gap where an agent could edit the workspace, disappear, and leave
+its successor unable to distinguish the intended change from unrelated files.
+
+`RepairLedger::inspect_loop` deterministically derives
+`a3s.test.repair-loop-record/1` instead of writing a second recovery store. The
+projection joins the bounded human intent, Rust-admitted source mappings,
+current attempt and lease, completion report, compact evidence identities,
+verification slice and results, ACL candidate and proof, prior attempts, and a
+state-machine-derived resume disposition. It deliberately omits full Page
+Context from evidence summaries.
+
+The CLI reads this projection directly from an active or closed session and
+does not initialize a driver. MCP exposes the same read model only through the
+active owning session. Resume commands contain validated ledger identifiers
+and fixed protocol placeholders; page content, URLs, source mappings, and
+reported paths never become command text. A passing ACL proof records browser
+evidence for a candidate but does not promote it into the application
+repository.
+
 ### Source-to-contract generation
 
 Source interpretation is an adapter concern in `a3s-test-agent`, not a Core

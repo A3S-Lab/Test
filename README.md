@@ -287,6 +287,40 @@ versioned slice is stored beside the before/after evidence and fresh ACL proof.
 
 [Read the repair verification guide](https://a3s-lab.github.io/Test/guide/repairs.html#how-a3s-test-verifies-a-repair)
 
+## Resume a repair without chat history
+
+Report the exact workspace-relative change when editing finishes:
+
+```bash
+a3s-test agent repair-complete finding-checkout \
+  --session dev \
+  --request-id complete-1 \
+  --attempt-id attempt-1 \
+  --changed-file src/Checkout.tsx \
+  --json
+```
+
+Then inspect the durable loop at any time, including after the browser session
+has closed:
+
+```bash
+a3s-test agent repair-inspect finding-checkout --session dev --json
+```
+
+The `a3s.test.repair-loop-record/1` response deterministically projects the
+existing append-only `repairs.jsonl`. One bounded record contains the submitted
+intent and success criteria, target and ranked source spans, completion-time
+changed files, attempt replies, verification slice and check results, compact
+before/after evidence paths plus SHA-256 digests, ACL candidate/proof state,
+and a typed `resume` action for the current status. It does not duplicate the
+ledger or repeat complete Page Context snapshots. Verification must report the
+same changed files recorded at completion, so an interrupted agent cannot
+silently redefine the scope on resume.
+
+MCP clients use `test_repair_inspect` for the same projection while the owning
+session is active. A passing ACL proof means the candidate is ready for review;
+it does not commit that candidate to the application repository.
+
 ## Preserve the proven path as ACL
 
 Agent sessions discover unknown paths. ACL repeats paths whose actions, waits,

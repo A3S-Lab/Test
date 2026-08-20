@@ -6,7 +6,8 @@ use a3s_test_core::{
 };
 use a3s_test_session::{
     build_repair_verification_with_plan, latest_prior_acl_proof_passed,
-    validate_repair_verification_request, RepairLedger, RepairTransition, RepairVerifyRequest,
+    validate_repair_verification_change, validate_repair_verification_request, RepairLedger,
+    RepairTransition, RepairVerifyRequest,
 };
 use anyhow::{Context, Result};
 use serde_json::json;
@@ -53,6 +54,14 @@ pub(super) async fn transition(
     } else {
         args.lease_expires_at_ms
     };
+    let changed_files = if status == RepairStatus::Verifying {
+        Some(args.changed_files)
+    } else {
+        if !args.changed_files.is_empty() {
+            anyhow::bail!("--changed-file is only valid with repair-complete");
+        }
+        None
+    };
     let request = RepairTransition {
         session: state.session.clone(),
         finding_id: args.finding_id,
@@ -64,6 +73,7 @@ pub(super) async fn transition(
         summary: args.summary,
         message: args.message,
         verification: None,
+        changed_files,
     };
     let (repair, event) = ledger
         .transition_in_workspace(request, now_ms, &mut repair_lock)
@@ -72,18 +82,18 @@ pub(super) async fn transition(
     drop(repair_lock);
     let mut browser = connect(&state, BrowserConnectionPurpose::Turn).await?;
     browser.project_repair_event(&event).await?;
+    let loop_record = ledger
+        .inspect_loop(&state.session, &repair.finding.id)
+        .map_err(anyhow::Error::new)?;
+    let next = loop_record.resume.cli_command.clone();
     emit(
         args.json,
         json!({
             "protocol_revision": ACTION_PROTOCOL_REVISION,
             "session": state.session,
             "repair": repair,
-            "next": next_command(
-                &state.session,
-                &repair.finding.id,
-                repair.status,
-                repair.attempt_id.as_deref(),
-            ),
+            "loop": loop_record,
+            "next": next,
         }),
         format!("Repair '{}' is {:?}", repair.finding.id, repair.status),
     )?;
@@ -140,6 +150,8 @@ pub(super) async fn verify(args: RepairVerifyArgs) -> Result<ExitCode> {
                 unix_ms(),
             )
             .await
+            .map_err(anyhow::Error::new)?;
+        validate_repair_verification_change(&current, &request.changed_files)
             .map_err(anyhow::Error::new)?;
         (ledger, current, attempt_id)
     };
@@ -262,6 +274,7 @@ pub(super) async fn verify(args: RepairVerifyArgs) -> Result<ExitCode> {
         summary: Some(request.summary),
         message: None,
         verification: Some(verification),
+        changed_files: None,
     };
     let (mut repair, event) = ledger
         .transition_in_workspace(transition, unix_ms(), &mut repair_lock)
@@ -289,6 +302,7 @@ pub(super) async fn verify(args: RepairVerifyArgs) -> Result<ExitCode> {
             summary: Some("A3S Test automatically accepted the fully verified repair".to_string()),
             message: None,
             verification: None,
+            changed_files: None,
         };
         let (resolved, event) = ledger
             .transition_in_workspace(transition, unix_ms(), &mut repair_lock)
@@ -298,18 +312,18 @@ pub(super) async fn verify(args: RepairVerifyArgs) -> Result<ExitCode> {
         browser.project_repair_event(&event).await?;
         repair = resolved;
     }
+    let loop_record = ledger
+        .inspect_loop(&state.session, &repair.finding.id)
+        .map_err(anyhow::Error::new)?;
+    let next = loop_record.resume.cli_command.clone();
     emit(
         json_output,
         json!({
             "protocol_revision": ACTION_PROTOCOL_REVISION,
             "session": state.session,
             "repair": repair,
-            "next": next_command(
-                &state.session,
-                &repair.finding.id,
-                repair.status,
-                repair.attempt_id.as_deref(),
-            ),
+            "loop": loop_record,
+            "next": next,
         }),
         format!("Repair '{}' verification completed", repair.finding.id),
     )?;
@@ -348,27 +362,4 @@ fn auto_resolution_request_id(verification_request_id: &str) -> String {
         .take(115)
         .collect::<String>();
     format!("auto-resolve-{prefix}")
-}
-
-fn next_command(
-    session: &str,
-    finding_id: &str,
-    status: RepairStatus,
-    attempt_id: Option<&str>,
-) -> String {
-    let attempt = attempt_id
-        .map(|value| format!(" --attempt-id {value}"))
-        .unwrap_or_default();
-    match status {
-        RepairStatus::Claimed => format!(
-            "a3s-test agent repair-progress {finding_id} --session {session} --request-id <id>{attempt} --json"
-        ),
-        RepairStatus::Repairing => format!(
-            "a3s-test agent repair-complete {finding_id} --session {session} --request-id <id>{attempt} --json"
-        ),
-        RepairStatus::Verifying => {
-            format!("a3s-test agent observe --session {session} --interactive --json")
-        }
-        _ => format!("a3s-test agent repair-watch --session {session} --json"),
-    }
 }

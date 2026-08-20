@@ -186,6 +186,7 @@ MCP 修复工具和 `a3s-test agent repair-*` CLI 使用同一应用层。
 | 阶段       | MCP 工具                                 | 编码 Agent 的责任                                       |
 | ---------- | ---------------------------------------- | ------------------------------------------------------- |
 | 等待       | `test_repair_watch`                      | 先读取已排队项，再进行一次有界等待和批次收集            |
+| 检查       | `test_repair_inspect`                    | 恢复完整循环状态和类型化下一步                          |
 | 领取       | `test_repair_claim`                      | 建立 lease 和 attempt ID，只领取一项                    |
 | 开始修改   | `test_repair_progress`                   | 在任何可能改动工作区的动作前报告 `repairing`            |
 | 请求澄清   | `test_repair_reply`                      | 说明缺失信息并进入 `needs_input`                        |
@@ -195,7 +196,23 @@ MCP 修复工具和 `a3s-test agent repair-*` CLI 使用同一应用层。
 
 默认 claim lease 为五分钟。claim 返回的 attempt ID 必须用于 progress、reply、complete 和 fail。执行者在开始编辑前消失时，lease 可以把 finding 安全放回队列；已经可能改动工作区后失联时，A3S Test 会进入 `needs_input`，不会把同一次尝试静默交给另一执行者。
 
+完成修改时会记录精确且有顺序的 `changed_files` 列表，包括显式空报告。验证必须重复同一列表；如果不同，A3S Test 会在连接浏览器前返回 `test.session.repair_change_mismatch`，避免接手的 Agent 验证另一组工作区改动。
+
 目标范围过大时，编码 Agent 可以用组件、节点或区域 scope 做 forensic inspection。每次 inspection 都会替换最新观察并生成新的 `@cN`，旧引用不能继续使用。
+
+## 不依赖聊天历史恢复
+
+追加式 `repairs.jsonl` 始终是唯一事实源。A3S Test 从中派生只读的 `a3s.test.repair-loop-record/1` 视图，不创建第二个恢复数据库。CLI 可以在会话仍活动或已经关闭时读取它，全程不会启动或连接浏览器。
+
+```bash
+a3s-test agent repair-inspect finding-checkout \
+  --session dev \
+  --json
+```
+
+记录把人工指令和成功条件、结构化意图与目标、经过 Rust 校验的源码映射、当前 lease 和 attempt、完成修改时的 changed files、attempt 回复、验证切片与结果、紧凑的证据路径与 SHA-256、ACL 候选及证明状态，以及类型化下一步连成一条循环。完整 Page Context 不会被重复保存。
+
+活动中的 MCP owner 可通过 `test_repair_inspect` 返回相同视图。生成的恢复命令只使用经过校验的 ledger 标识符和固定占位符；页面内容、URL、源码映射与 changed-file 值都不会成为命令文本。ACL 证明通过只代表候选在新浏览器中执行成功，不会把候选写入或提交到业务仓库。
 
 ## A3S Test 如何验证修复
 

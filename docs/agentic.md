@@ -206,9 +206,21 @@ publishes these tools:
 | `test_abort` | Abort and close the exact owned surface |
 | `test_schema` | Return action protocol revision 15 and its interactive JSON Schema |
 | `test_repair_watch` | Drain and perform one bounded pickup of submitted Test Kit findings |
+| `test_repair_inspect` | Project one recoverable repair loop from the authoritative ledger |
 | `test_repair_claim`, `test_repair_progress`, `test_repair_reply` | Own one lease-bound repair attempt and report progress or required input |
 | `test_repair_complete`, `test_repair_verify` | Hand completed editing to A3S Test-owned browser verification |
 | `test_repair_fail`, `test_repair_cancel` | Preserve a terminal failed or cancelled repair transition |
+
+`test_repair_complete` persists the caller's exact ordered changed-file list at
+the edit boundary. `test_repair_verify` must submit the same list and fails
+with `test.session.repair_change_mismatch` before browser connection if it
+differs. `test_repair_inspect` returns the versioned
+`a3s.test.repair-loop-record/1` projection while the MCP session is active.
+The equivalent `agent repair-inspect` CLI command reads active or closed
+sessions without connecting to a browser. Both derive bounded intent, validated
+source mappings, completion, evidence digests, verification, ACL proof, attempt
+history, and a typed resume disposition from `repairs.jsonl`; neither creates a
+second state store or turns untrusted page context into a command.
 
 The server serializes turns within each session, bounds active sessions and
 request size, advertises only registered surfaces, and closes independent

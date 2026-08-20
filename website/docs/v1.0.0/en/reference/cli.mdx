@@ -213,14 +213,25 @@ a3s-test agent inspect \
 | Stage            | Command                        | Key arguments and result                                                            |
 | ---------------- | ------------------------------ | ----------------------------------------------------------------------------------- |
 | Pickup           | `repair-watch`                 | `--limit` defaults to 20, `--timeout-ms` to 30,000, and the batch window to 250 ms  |
+| Inspect          | `repair-inspect`               | Finding ID and session; reads active or closed state without a browser connection   |
 | Claim            | `repair-claim`                 | Finding ID, idempotent request ID, attempt ID, and five-minute default lease        |
 | Start editing    | `repair-progress`              | Attempt ID must match, then state enters `repairing`                                |
 | Ask for input    | `repair-reply`                 | Retains the message and enters `needs_input`                                        |
-| Finish editing   | `repair-complete`              | Enters A3S Test-owned `verifying` without declaring resolved                        |
+| Finish editing   | `repair-complete`              | Records changed files and enters A3S Test-owned `verifying` without resolving       |
 | Run verification | `repair-verify`                | New-page criteria, changed files, trusted project slice, and optional ACL candidate |
 | Fail or cancel   | `repair-fail`, `repair-cancel` | Appends a terminal event while retaining attempt history                            |
 
-Every transition needs a new idempotent request ID. Reuse the attempt ID returned by claim for progress, reply, complete, and fail. `repair-verify` must target a newer ready page revision.
+Every transition needs a new idempotent request ID. Reuse the attempt ID returned by claim for progress, reply, complete, and fail. `repair-complete` stores the exact ordered `--changed-file` list, including an empty report. `repair-verify` must repeat that list and target a newer ready page revision; a mismatch fails before browser connection.
+
+Inspect the recoverable loop at any point, including after the session browser has closed:
+
+```bash
+a3s-test agent repair-inspect finding-checkout \
+  --session dev \
+  --json
+```
+
+The versioned `a3s.test.repair-loop-record/1` result combines bounded intent, validated source mappings, completion-time changes, compact evidence digests, verification, ACL proof, attempt history, and the typed next disposition. It is derived from `repairs.jsonl`, does not connect to the browser, and never turns untrusted Page Context into a resume command.
 
 Omit `--checks-json` to plan and run the smallest configured slice from `.a3s-test/project.acl`:
 

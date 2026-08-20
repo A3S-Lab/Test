@@ -166,6 +166,9 @@ impl RepairSession {
         if let Some(lease_ms) = transition.lease_ms {
             arguments.extend(["--lease-ms".to_string(), lease_ms.to_string()]);
         }
+        if transition.command == "repair-complete" {
+            arguments.extend(["--changed-file".to_string(), "src/Fixture.tsx".to_string()]);
+        }
         arguments.push("--json".to_string());
         let borrowed = arguments.iter().map(String::as_str).collect::<Vec<_>>();
         json_output(transition.command, &self.agent(&borrowed))
@@ -383,6 +386,8 @@ const LAYOUT_OVERLAY_SUBMISSION_SCRIPT: &str = r##"
   click("Add draft");
   await waitFor(() => shadow.querySelector(".a3s-list")?.textContent.includes("Place Pricing section"), "the placement draft");
 
+  click("New feedback");
+  await nextFrame();
   source.focus();
   await nextFrame();
   click("Select section on page");

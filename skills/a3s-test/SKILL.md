@@ -163,9 +163,9 @@ equivalent `a3s-test agent repair-*` CLI commands:
    first workspace mutation.
 5. Make only the authorized scoped repair, preserve unrelated dirty changes,
    and run focused checks.
-6. Call `test_repair_complete` with the same attempt ID, then call
-   `test_repair_verify` after hot reload with the changed-file list and focused
-   check results.
+6. Call `test_repair_complete` with the same attempt ID and exact changed-file
+   list. After hot reload, call `test_repair_verify` with that same list and
+   the focused check results. A mismatch fails closed before browser work.
 7. By default, verification stops at `review_ready` for human acceptance. A
    session explicitly started with `--auto-resolve-repairs` resolves only after
    A3S Test has persisted a passing review-ready verification. Review the
@@ -175,6 +175,14 @@ Never omit or invent an attempt ID after claim. If a pre-edit lease expires,
 watch may safely return it to the queue. If editing may have begun, A3S Test
 moves it to `needs_input`; do not hand it to another worker or guess whether
 the workspace was mutated.
+
+If work resumes after context loss, call `test_repair_inspect` or
+`a3s-test agent repair-inspect <finding-id> --session <session> --json` first.
+The versioned loop record derives intent, source mapping, completion change,
+compact evidence digests, verification, ACL proof, attempt thread, and a typed
+resume action from the authoritative ledger. CLI inspection also works after
+the session browser has closed. Never reconstruct these facts from chat when
+the loop record is available.
 
 Only one attempt may own the workspace mutation slot across A3S Test sessions
 and processes. Finish verification, safely recover the owning session, or ask

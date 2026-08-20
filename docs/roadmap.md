@@ -938,6 +938,6 @@ intent, or shorten verification do not belong in this loop.
       from an explicit trusted ACL check catalog, expand to regression only for
       observed impact evidence, execute only selected checks in owned process
       trees, and require fresh browser and ACL proof
-- [ ] Preserve intent, source mapping, change, verification evidence, and ACL
+- [x] Preserve intent, source mapping, change, verification evidence, and ACL
       promotion as one inspectable loop record so a later agent can resume
       without reconstructing the task from chat history

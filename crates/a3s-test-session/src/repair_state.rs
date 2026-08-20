@@ -18,12 +18,25 @@ pub(super) fn apply_event(record: &mut RepairRecord, event: &RepairEventRecord) 
         record.attempt_id = None;
         record.lease_expires_at_ms = None;
         record.before_evidence = None;
+        record.change = None;
     }
     record.updated_at_ms = event.timestamp_ms;
     record.summary.clone_from(&event.summary);
     record.message.clone_from(&event.message);
     if event.verification.is_some() {
         record.verification.clone_from(&event.verification);
+    }
+    if event.status == RepairStatus::Verifying {
+        if let (Some(attempt_id), Some(changed_files)) =
+            (event.attempt_id.as_ref(), event.changed_files.as_ref())
+        {
+            record.change = Some(RepairChange {
+                attempt_id: attempt_id.clone(),
+                reported_at_ms: event.timestamp_ms,
+                changed_files: changed_files.clone(),
+                summary: event.summary.clone(),
+            });
+        }
     }
     update_attempts(record, event);
 }
@@ -45,6 +58,7 @@ pub(super) fn update_attempts(record: &mut RepairRecord, event: &RepairEventReco
             replies: Vec::new(),
             verification: None,
             before_evidence: record.before_evidence.clone(),
+            change: None,
         });
     }
     let Some(attempt) = record
@@ -78,6 +92,13 @@ pub(super) fn update_attempts(record: &mut RepairRecord, event: &RepairEventReco
     }
     if event.verification.is_some() {
         attempt.verification.clone_from(&event.verification);
+    }
+    if record
+        .change
+        .as_ref()
+        .is_some_and(|change| change.attempt_id == attempt_id)
+    {
+        attempt.change.clone_from(&record.change);
     }
     if !finished
         && matches!(
@@ -180,6 +201,7 @@ pub(super) fn validate_idempotent_retry(
         && event.summary == request.summary
         && event.message == request.message
         && event.verification == request.verification
+        && event.changed_files == request.changed_files
     {
         return Ok(());
     }
@@ -317,6 +339,24 @@ pub(super) fn validate_transition_request(
     request: &RepairTransition,
     now_ms: u64,
 ) -> Result<(), SessionError> {
+    match (request.status, request.changed_files.as_ref()) {
+        (RepairStatus::Verifying, Some(changed_files))
+            if request.actor == RepairActor::Agent
+                && crate::verification::valid_repair_changed_files(changed_files) => {}
+        (RepairStatus::Verifying, _) => {
+            return Err(SessionError::new(
+                "test.session.repair_change_invalid",
+                "repair completion requires a bounded changed-files report from the owning agent",
+            ));
+        }
+        (_, None) => {}
+        (_, Some(_)) => {
+            return Err(SessionError::new(
+                "test.session.repair_change_invalid",
+                "changed files may only be reported when editing completes",
+            ));
+        }
+    }
     if let Some(attempt_id) = request.attempt_id.as_deref() {
         validate_component(attempt_id, "attempt id")?;
     }

@@ -7,9 +7,11 @@ mod grounding;
 mod inspect;
 mod policy;
 mod repair;
+mod repair_inspect;
 mod repair_watch;
 mod runtime;
 mod schema;
+mod session_query;
 mod store;
 mod validation;
 
@@ -28,7 +30,7 @@ use url::Url;
 
 pub(crate) use self::args::AgentArgs;
 use self::args::{
-    ActArgs, AgentCommand, FinishArgs, FinishStatus, ListArgs, ObserveArgs, SessionArgs, StartArgs,
+    ActArgs, AgentCommand, FinishArgs, FinishStatus, ObserveArgs, SessionArgs, StartArgs,
 };
 #[cfg(test)]
 use self::browser::stored_browser_network_policy;
@@ -250,6 +252,7 @@ pub(crate) async fn execute(args: AgentArgs) -> Result<ExitCode> {
             .await
         }
         AgentCommand::RepairWatch(args) => repair_watch::watch(args).await,
+        AgentCommand::RepairInspect(args) => repair_inspect::execute(args).await,
         AgentCommand::RepairClaim(args) => repair::transition(args, RepairStatus::Claimed).await,
         AgentCommand::RepairProgress(args) => {
             repair::transition(args, RepairStatus::Repairing).await
@@ -263,8 +266,8 @@ pub(crate) async fn execute(args: AgentArgs) -> Result<ExitCode> {
         AgentCommand::RepairCancel(args) => repair::transition(args, RepairStatus::Cancelled).await,
         AgentCommand::Finish(args) => finish(args).await,
         AgentCommand::Abort(args) => abort(args).await,
-        AgentCommand::Show(args) => show(args).await,
-        AgentCommand::List(args) => list(args).await,
+        AgentCommand::Show(args) => session_query::show(args).await,
+        AgentCommand::List(args) => session_query::list(args).await,
         AgentCommand::Schema(args) => schema::execute(args),
     }
 }
@@ -805,58 +808,6 @@ fn emit_abort(result: &AbortSessionOutput, json_output: bool) -> Result<()> {
             result.state.session, result.state.status
         ),
     )
-}
-
-async fn show(args: SessionArgs) -> Result<ExitCode> {
-    let workspace = canonical_workspace().await?;
-    let store = load_store(&workspace, &args.session)?;
-    let state = load_session_state(&store, &workspace, &args.session).await?;
-    emit(
-        args.json,
-        serde_json::to_value(&state)?,
-        format!("{}: {:?} — {}", state.session, state.status, state.goal),
-    )?;
-    Ok(ExitCode::SUCCESS)
-}
-
-async fn list(args: ListArgs) -> Result<ExitCode> {
-    let workspace = canonical_workspace().await?;
-    let root = AgentSessionStore::sessions_root(&workspace);
-    let mut sessions = Vec::new();
-    let mut entries = match tokio::fs::read_dir(&root).await {
-        Ok(entries) => entries,
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-            emit(args.json, json!([]), "No agent test sessions".to_string())?;
-            return Ok(ExitCode::SUCCESS);
-        }
-        Err(error) => {
-            return Err(error).with_context(|| format!("failed to list {}", root.display()));
-        }
-    };
-    while let Some(entry) = entries.next_entry().await? {
-        if !entry.file_type().await?.is_dir() {
-            continue;
-        }
-        let Some(session) = entry.file_name().to_str().map(str::to_string) else {
-            continue;
-        };
-        let store = AgentSessionStore::for_workspace(&workspace, &session);
-        if let Ok(state) = load_session_state(&store, &workspace, &session).await {
-            sessions.push(state);
-        }
-    }
-    sessions.sort_by(|left, right| left.session.cmp(&right.session));
-    let human = if sessions.is_empty() {
-        "No agent test sessions".to_string()
-    } else {
-        sessions
-            .iter()
-            .map(|state| format!("{}: {:?}", state.session, state.status))
-            .collect::<Vec<_>>()
-            .join("\n")
-    };
-    emit(args.json, serde_json::to_value(&sessions)?, human)?;
-    Ok(ExitCode::SUCCESS)
 }
 
 fn emit_driver_error(

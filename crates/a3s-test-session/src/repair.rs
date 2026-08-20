@@ -3,8 +3,8 @@ use std::path::{Path, PathBuf};
 
 use a3s_test_core::{
     RepairActor, RepairAttempt, RepairBatch, RepairBatchItemResult, RepairBatchStatus,
-    RepairEvidenceBundle, RepairFinding, RepairHumanAction, RepairHumanActionKind, RepairStatus,
-    RepairStatusEvent, RepairThreadMessage, RepairVerification,
+    RepairChange, RepairEvidenceBundle, RepairFinding, RepairHumanAction, RepairHumanActionKind,
+    RepairStatus, RepairStatusEvent, RepairThreadMessage, RepairVerification,
 };
 use serde::{Deserialize, Serialize};
 use tokio::io::AsyncWriteExt;
@@ -30,23 +30,8 @@ pub struct RepairRecord {
     pub attempts: Vec<RepairAttempt>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub before_evidence: Option<RepairEvidenceBundle>,
-}
-
-#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
-pub struct RepairEventRecord {
-    pub session: String,
-    pub finding_id: String,
-    pub request_id: String,
-    pub sequence: u64,
-    pub status: RepairStatus,
-    pub actor: RepairActor,
-    pub timestamp_ms: u64,
-    pub attempt_id: Option<String>,
-    pub lease_expires_at_ms: Option<u64>,
-    pub summary: Option<String>,
-    pub message: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub verification: Option<RepairVerification>,
+    pub change: Option<RepairChange>,
 }
 
 pub struct RepairLedger {
@@ -160,6 +145,7 @@ impl RepairLedger {
                 verification: None,
                 attempts: Vec::new(),
                 before_evidence: None,
+                change: None,
             };
             self.order.push(finding.id.clone());
             self.records.insert(finding.id.clone(), record.clone());
@@ -363,6 +349,7 @@ impl RepairLedger {
             summary: request.summary.clone(),
             message: request.message.clone(),
             verification: request.verification.clone(),
+            changed_files: request.changed_files.clone(),
         };
         self.append(&StoredLedgerEvent::Transition {
             event: Box::new(event.clone()),
@@ -480,6 +467,7 @@ impl RepairLedger {
                         .to_string()
                 }),
                 verification: None,
+                changed_files: None,
             };
             self.append(&StoredLedgerEvent::Transition {
                 event: Box::new(event.clone()),
@@ -563,6 +551,7 @@ impl RepairLedger {
                 "Review the possibly mutated workspace before assigning another attempt".to_string()
             }),
             verification: None,
+            changed_files: None,
         };
         let result = self
             .transition_in_workspace(transition, now_ms, workspace)
@@ -620,6 +609,7 @@ impl RepairLedger {
                                 .to_string(),
                         ),
                         verification: None,
+                        changed_files: None,
                     },
                     now_ms,
                 )
@@ -715,6 +705,7 @@ impl RepairLedger {
                     summary: Some("Human clarification received".to_string()),
                     message,
                     verification: None,
+                    changed_files: None,
                 });
             }
             RepairHumanActionKind::Accept | RepairHumanActionKind::Dismiss => {
@@ -743,6 +734,7 @@ impl RepairLedger {
                     }),
                     message,
                     verification: None,
+                    changed_files: None,
                 });
             }
             RepairHumanActionKind::Reopen => {
@@ -758,6 +750,7 @@ impl RepairLedger {
                         summary: Some("Human retried the failed verification".to_string()),
                         message,
                         verification: None,
+                        changed_files: None,
                     });
                 } else {
                     if !matches!(
@@ -784,6 +777,7 @@ impl RepairLedger {
                         summary: Some("Human reopened the repair".to_string()),
                         message: message.clone(),
                         verification: None,
+                        changed_files: None,
                     });
                     transitions.push(RepairTransition {
                         session: session.to_string(),
@@ -796,6 +790,7 @@ impl RepairLedger {
                         summary: Some("Reopened repair returned to the queue".to_string()),
                         message: None,
                         verification: None,
+                        changed_files: None,
                     });
                 }
             }
@@ -881,6 +876,7 @@ impl RepairLedger {
                         verification: None,
                         attempts: Vec::new(),
                         before_evidence: None,
+                        change: None,
                     },
                 );
             }
@@ -956,37 +952,14 @@ impl RepairLedger {
     }
 }
 
-#[derive(Clone, Debug)]
-pub struct RepairTransition {
-    pub session: String,
-    pub finding_id: String,
-    pub request_id: String,
-    pub status: RepairStatus,
-    pub actor: RepairActor,
-    pub attempt_id: Option<String>,
-    pub lease_expires_at_ms: Option<u64>,
-    pub summary: Option<String>,
-    pub message: Option<String>,
-    pub verification: Option<RepairVerification>,
-}
+#[path = "repair_event.rs"]
+mod event;
+use event::StoredLedgerEvent;
+pub use event::{RepairEventRecord, RepairTransition};
 
-#[derive(Clone, Debug, Deserialize, Serialize)]
-#[serde(tag = "kind", rename_all = "snake_case")]
-enum StoredLedgerEvent {
-    Submitted {
-        session: String,
-        finding: Box<RepairFinding>,
-        timestamp_ms: u64,
-    },
-    Transition {
-        event: Box<RepairEventRecord>,
-    },
-    BeforeEvidence {
-        session: String,
-        finding_id: String,
-        evidence: Box<RepairEvidenceBundle>,
-    },
-}
+#[path = "repair_loop.rs"]
+mod loop_record;
+pub use loop_record::*;
 
 #[path = "repair_state.rs"]
 mod state;

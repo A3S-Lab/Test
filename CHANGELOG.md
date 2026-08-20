@@ -4,6 +4,19 @@
 
 ### Added
 
+- Added `a3s.test.repair-loop-record/1`, a deterministic projection of the
+  authoritative Repair Ledger that keeps human intent, ranked source mapping,
+  the exact completion-time changed-files report, compact digest-bound before
+  and after evidence, verification checks and slice, ACL candidate/proof
+  state, attempt threads, and a typed resume disposition in one record.
+  `a3s-test agent repair-inspect` reads active or closed CLI sessions without
+  connecting to their browser, while `test_repair_inspect` exposes the same
+  projection for active MCP sessions. `repair-complete` now appends changed
+  files before verification begins, and `repair-verify` fails closed as
+  `test.session.repair_change_mismatch` if a later caller reports a different
+  ordered list. The projection is derived from `repairs.jsonl`, not stored as a
+  second database; untrusted page context can supply bounded navigation
+  evidence but never a resume command.
 - Added revision-scoped Page Context deltas through
   `a3s.test.page-context-diff/1` and Test Kit 0.6.0. `waitForDiff` now waits
   for one bounded semantic revision and returns exact node, component, page,

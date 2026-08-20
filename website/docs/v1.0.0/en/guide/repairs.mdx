@@ -187,6 +187,7 @@ The MCP repair tools and `a3s-test agent repair-*` CLI share one application lay
 | Phase          | MCP tool                                 | Coding-agent responsibility                                        |
 | -------------- | ---------------------------------------- | ------------------------------------------------------------------ |
 | Wait           | `test_repair_watch`                      | Drain queued work, then perform one bounded wait and batch window  |
+| Inspect        | `test_repair_inspect`                    | Recover the complete loop state and typed next disposition         |
 | Claim          | `test_repair_claim`                      | Establish a lease and attempt ID for one finding                   |
 | Start edits    | `test_repair_progress`                   | Report `repairing` before any operation may change the workspace   |
 | Clarify        | `test_repair_reply`                      | Explain missing information and enter `needs_input`                |
@@ -196,7 +197,23 @@ The MCP repair tools and `a3s-test agent repair-*` CLI share one application lay
 
 The default claim lease is five minutes. The attempt ID returned by claim must accompany progress, reply, complete, and fail. If a worker disappears before editing starts, the lease may safely return the finding to the queue. If workspace edits may already have happened, A3S Test enters `needs_input` instead of silently handing that attempt to another worker.
 
+Completion records the exact ordered `changed_files` list at the point editing ends, including an explicit empty report. Verification must repeat that list. A difference returns `test.session.repair_change_mismatch` before A3S Test connects to the browser, so a resumed agent cannot verify a different workspace change.
+
 When a normal observation is too broad, the coding agent may run forensic inspection with a component, node, or region scope. Each inspection replaces the latest observation and creates fresh `@cN` refs. Older refs cannot continue.
+
+## Resume without chat history
+
+The append-only `repairs.jsonl` remains the only source of truth. A3S Test derives a read-only `a3s.test.repair-loop-record/1` view instead of creating another recovery database. Read it from an active or closed CLI session without starting or connecting to a browser.
+
+```bash
+a3s-test agent repair-inspect finding-checkout \
+  --session dev \
+  --json
+```
+
+The record joins the human instruction and success criteria, structured intent and target, Rust-validated source mappings, current lease and attempt, completion-time changed files, attempt replies, verification slice and results, compact evidence paths and SHA-256 digests, ACL candidate and proof state, and a typed next action. Full Page Context is not duplicated.
+
+An active MCP owner returns the same view through `test_repair_inspect`. The generated resume command uses only validated ledger identifiers and fixed placeholders. Page content, URLs, source mappings, and changed-file values never become command text. A passing ACL proof remains evidence for a candidate; it does not write or commit the candidate to the application repository.
 
 ## How A3S Test verifies a repair
 

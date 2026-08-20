@@ -2207,6 +2207,58 @@ An eventual retryable close failure restores the same driver session in
 `test.session.cleanup_required`; only `finish` or `abort` may retry cleanup.
 Success or a non-retryable cleanup failure releases the session identifier.
 
+### Repair loop projection
+
+The authoritative repair state is the append-only session `repairs.jsonl`.
+A3S Test MUST derive the read-only
+`a3s.test.repair-loop-record/1` projection from the current `RepairRecord` and
+MUST NOT require a second database or chat transcript to resume a repair.
+
+The projection contains the session and finding identity, current sequence,
+status, timestamp, lease, summary and message; bounded human intent and target;
+validated component and target source mappings; the active completion report;
+compact before and after evidence identities; verification slice, checks and
+result; ACL candidate and proof status; complete attempt and reply history; and
+one typed resume disposition. Compact evidence retains its artifact path,
+context revision, error counts, and SHA-256 digests but MUST NOT duplicate full
+Page Context.
+
+Source mappings originate in untrusted repair context. The projection MUST
+deserialize and validate them as typed Rust values, omit inadmissible mappings,
+and report malformed or truncated input. Page text, URL, source mappings, and
+changed-file values MUST NOT be interpolated into `resume.cli_command`. The
+command may contain only fixed protocol text, validated session, finding and
+attempt identifiers, and explicit placeholders.
+
+The resume action is a deterministic projection of persisted status:
+
+| Status | Resume action |
+| --- | --- |
+| `queued` | `claim` |
+| `claimed` | `start_editing` |
+| `repairing` | `report_change` |
+| `verifying` | `verify` |
+| `needs_input` | `await_input` |
+| `review_ready` | `await_review` |
+| `verification_failed` | `reopen_or_stop` |
+| `resolved`, `dismissed`, `cancelled`, `failed` | `complete` |
+| `draft`, `reopened` | `inspect_only` |
+
+A new completion transition MUST append the exact ordered, validated changed
+files supplied by the caller, including an empty list, and bind the report to
+the active attempt. When that report exists, verification MUST supply the same
+ordered list. A mismatch returns `test.session.repair_change_mismatch` before
+driver connection or browser evidence capture. A legacy ledger with no
+completion report remains readable and retains its previous verification
+behavior.
+
+`a3s-test agent repair-inspect <finding-id> --session <session> --json` MUST
+load active or terminal session state and the ledger without connecting to a
+browser. `test_repair_inspect` exposes the same projection through an active
+owning MCP session. ACL status `proof_passed` means that the candidate passed
+fresh-browser proof; it MUST NOT imply a repository write, commit, or other
+application-owned promotion.
+
 ## Optional visual grounding
 
 Visual grounding is a typed SDK-host capability in `a3s-test-agent`; it is not

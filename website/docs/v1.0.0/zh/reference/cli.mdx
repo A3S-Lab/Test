@@ -178,17 +178,28 @@ a3s-test agent inspect \
 
 ### Repair Ledger 命令
 
-| 阶段       | 命令                           | 关键参数和结果                                                     |
-| ---------- | ------------------------------ | ------------------------------------------------------------------ |
-| 提取       | `repair-watch`                 | `--limit` 默认 20，`--timeout-ms` 默认 30,000，批次窗口默认 250 ms |
-| 领取       | `repair-claim`                 | finding ID、幂等 request ID、attempt ID 与默认五分钟 lease         |
-| 开始编辑   | `repair-progress`              | attempt ID 必须匹配，状态进入 `repairing`                          |
-| 请求澄清   | `repair-reply`                 | 保存消息并进入 `needs_input`                                       |
-| 完成编辑   | `repair-complete`              | 进入 A3S Test 拥有的 `verifying`，不声明 resolved                  |
-| 运行验证   | `repair-verify`                | 新页面条件、changed files、可信项目切片与可选 ACL candidate        |
-| 失败或取消 | `repair-fail`、`repair-cancel` | 追加终止事件并保留 attempt 历史                                    |
+| 阶段       | 命令                           | 关键参数和结果                                                      |
+| ---------- | ------------------------------ | ------------------------------------------------------------------- |
+| 提取       | `repair-watch`                 | `--limit` 默认 20，`--timeout-ms` 默认 30,000，批次窗口默认 250 ms  |
+| 检查       | `repair-inspect`               | finding ID 和 session；无需连接浏览器即可读取活动或关闭的状态       |
+| 领取       | `repair-claim`                 | finding ID、幂等 request ID、attempt ID 与默认五分钟 lease          |
+| 开始编辑   | `repair-progress`              | attempt ID 必须匹配，状态进入 `repairing`                           |
+| 请求澄清   | `repair-reply`                 | 保存消息并进入 `needs_input`                                        |
+| 完成编辑   | `repair-complete`              | 记录 changed files，进入 A3S Test 拥有的 `verifying`，不做 resolved |
+| 运行验证   | `repair-verify`                | 新页面条件、changed files、可信项目切片与可选 ACL candidate         |
+| 失败或取消 | `repair-fail`、`repair-cancel` | 追加终止事件并保留 attempt 历史                                     |
 
-每次状态变化都需要新的幂等 request ID。claim 返回的 attempt ID 要沿用到 progress、reply、complete 和 fail。`repair-verify` 必须针对更新后的 ready 页面修订。
+每次状态变化都需要新的幂等 request ID。claim 返回的 attempt ID 要沿用到 progress、reply、complete 和 fail。`repair-complete` 会保存精确且有顺序的 `--changed-file` 列表，包括空报告。`repair-verify` 必须重复同一列表并针对更新后的 ready 页面修订；列表不同会在连接浏览器前失败。
+
+任何阶段都可以检查可恢复的完整循环，包括会话浏览器已经关闭之后：
+
+```bash
+a3s-test agent repair-inspect finding-checkout \
+  --session dev \
+  --json
+```
+
+版本化的 `a3s.test.repair-loop-record/1` 结果包含有界意图、经过校验的源码映射、完成修改时的变更、紧凑证据摘要、验证、ACL 证明、attempt 历史和类型化下一步。它从 `repairs.jsonl` 派生，不连接浏览器，也不会把不可信 Page Context 变成恢复命令。
 
 省略 `--checks-json` 即可从 `.a3s-test/project.acl` 规划并运行最小配置切片：
 

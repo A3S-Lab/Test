@@ -39,7 +39,13 @@ pub use protocol::{
     SessionError, SessionFailure, SessionFinishStatus, SessionFinished, SessionStarted,
     StartSessionRequest,
 };
-pub use repair::{RepairEventRecord, RepairLedger, RepairRecord, RepairTransition};
+pub use repair::{
+    validate_repair_verification_change, RepairEventRecord, RepairLedger, RepairLoopAclPromotion,
+    RepairLoopAclStatus, RepairLoopAttempt, RepairLoopChange, RepairLoopEvidence, RepairLoopIntent,
+    RepairLoopRecord, RepairLoopResume, RepairLoopResumeAction, RepairLoopSourceMapping,
+    RepairLoopSourceTarget, RepairLoopVerification, RepairRecord, RepairTransition,
+    REPAIR_LOOP_PROTOCOL,
+};
 pub use verification::{
     build_repair_verification, build_repair_verification_with_plan,
     validate_repair_verification_request,

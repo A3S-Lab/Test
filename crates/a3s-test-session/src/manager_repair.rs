@@ -307,6 +307,17 @@ impl AgentSessionManager {
         })
     }
 
+    pub async fn inspect_repair_loop(
+        &self,
+        session: &str,
+        finding_id: &str,
+    ) -> Result<RepairLoopRecord, SessionError> {
+        let managed = self.get(session).await?;
+        let managed = managed.lock().await;
+        ensure_active(&managed)?;
+        managed.repair_ledger.inspect_loop(session, finding_id)
+    }
+
     pub async fn transition_repair(
         &self,
         transition: RepairTransition,
@@ -393,6 +404,7 @@ impl AgentSessionManager {
                 "repair verification is missing A3S-owned before evidence",
             )
         })?;
+        validate_repair_verification_change(&current, &request.changed_files)?;
         let after_evidence = managed
             .driver
             .capture_repair_evidence(&RepairEvidenceRequest {
@@ -471,6 +483,7 @@ impl AgentSessionManager {
             summary: Some(request.summary),
             message: None,
             verification: Some(verification),
+            changed_files: None,
         };
         let (mut record, event) = managed
             .repair_ledger
@@ -503,6 +516,7 @@ impl AgentSessionManager {
                 ),
                 message: None,
                 verification: None,
+                changed_files: None,
             };
             let (resolved, event) = managed
                 .repair_ledger

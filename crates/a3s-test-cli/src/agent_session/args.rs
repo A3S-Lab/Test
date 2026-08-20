@@ -65,6 +65,8 @@ pub(super) enum AgentCommand {
     Screenshot(ScreenshotArgs),
     /// Pick up queued Test Kit findings and persist them in this session.
     RepairWatch(RepairWatchArgs),
+    /// Inspect one durable repair loop without connecting to its browser.
+    RepairInspect(RepairInspectArgs),
     /// Claim one queued repair finding.
     RepairClaim(RepairTransitionArgs),
     /// Report that workspace editing has started.
@@ -459,6 +461,18 @@ pub(super) struct RepairWatchArgs {
 }
 
 #[derive(Debug, Args)]
+pub(super) struct RepairInspectArgs {
+    /// Durable repair finding identifier.
+    pub(super) finding_id: String,
+    /// Owning session identifier, active or closed.
+    #[arg(long)]
+    pub(super) session: String,
+    /// Emit the versioned loop record as JSON.
+    #[arg(long)]
+    pub(super) json: bool,
+}
+
+#[derive(Debug, Args)]
 pub(super) struct RepairTransitionArgs {
     pub(super) finding_id: String,
     #[arg(long)]
@@ -476,6 +490,9 @@ pub(super) struct RepairTransitionArgs {
     pub(super) summary: Option<String>,
     #[arg(long)]
     pub(super) message: Option<String>,
+    /// Workspace-relative files changed by this attempt. Report when editing completes.
+    #[arg(long = "changed-file")]
+    pub(super) changed_files: Vec<String>,
     #[arg(long)]
     pub(super) json: bool,
 }

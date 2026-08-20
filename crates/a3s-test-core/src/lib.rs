@@ -38,7 +38,7 @@ pub use model::{
     PageContextSource, PageContextSourceCandidate, PageContextSourceMapping,
     PageContextSourceOrigin, PageContextSourceRelation, PageContextTheme, PageContextViewport,
     PageContextVisualViewport, RepairAclProof, RepairActor, RepairAttempt, RepairBatch,
-    RepairBatchItemResult, RepairBatchStatus, RepairCheckResult, RepairCheckStatus,
+    RepairBatchItemResult, RepairBatchStatus, RepairChange, RepairCheckResult, RepairCheckStatus,
     RepairDesignReference, RepairDesignReferenceImage, RepairDesignReferenceKind,
     RepairEvidenceBundle, RepairEvidencePhase, RepairEvidenceRequest, RepairFinding,
     RepairHumanAction, RepairHumanActionKind, RepairIntent, RepairLayoutCanvas, RepairLayoutIntent,
