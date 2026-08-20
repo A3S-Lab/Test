@@ -34,6 +34,7 @@ struct FailingActionExecutor {
 struct PageContextExecutor {
     invocations: Mutex<Vec<CommandInvocation>>,
     revisions: Mutex<Vec<u64>>,
+    invalid_source_mapping: bool,
 }
 
 struct GroundingScreenshotExecutor {
@@ -60,6 +61,7 @@ impl PageContextExecutor {
         Self {
             invocations: Mutex::new(Vec::new()),
             revisions: Mutex::new(vec![revision, revision]),
+            invalid_source_mapping: false,
         }
     }
 
@@ -67,6 +69,15 @@ impl PageContextExecutor {
         Self {
             invocations: Mutex::new(Vec::new()),
             revisions: Mutex::new(vec![1, 2, 3, 4]),
+            invalid_source_mapping: false,
+        }
+    }
+
+    fn invalid_source_mapping() -> Self {
+        Self {
+            invocations: Mutex::new(Vec::new()),
+            revisions: Mutex::new(vec![7, 7]),
+            invalid_source_mapping: true,
         }
     }
 }
@@ -206,7 +217,7 @@ impl CommandExecutor for PageContextExecutor {
             "agent-browser 0.26.0".to_string()
         } else if is_eval {
             let revision = self.revisions.lock().unwrap().remove(0);
-            page_context_response(revision)
+            page_context_response(revision, self.invalid_source_mapping)
         } else {
             r#"{"success":true,"data":{"snapshot":"accessibility"}}"#.to_string()
         };
@@ -246,7 +257,7 @@ impl CommandExecutor for GroundingScreenshotExecutor {
             "agent-browser 0.26.0".to_string()
         } else if is_eval {
             let revision = self.revisions.lock().unwrap().remove(0);
-            page_context_response(revision)
+            page_context_response(revision, false)
         } else {
             r#"{"success":true}"#.to_string()
         };
@@ -787,12 +798,38 @@ async fn captures_a_typed_testkit_context_at_the_same_stable_revision() {
     let snapshot = page_context.snapshot.expect("typed snapshot");
     assert_eq!(snapshot.page.expect("page").route, "/checkout");
     assert_eq!(snapshot.nodes[0].role.as_deref(), Some("button"));
+    let source_mapping = snapshot.nodes[0]
+        .source_mapping
+        .as_ref()
+        .expect("ranked source mapping");
+    assert_eq!(source_mapping.candidates[0].span.file, "src/Checkout.tsx");
+    assert_eq!(source_mapping.candidates[0].confidence, 0.97);
     assert_eq!(
         snapshot.nodes[0].locators[0],
         a3s_test_core::PageContextLocator::TestId {
             value: "pay".to_string()
         }
     );
+}
+
+#[tokio::test]
+async fn rejects_an_invalid_ranked_source_mapping_from_the_page_bridge() {
+    let temp = tempfile::tempdir().expect("tempdir");
+    let executor = Arc::new(PageContextExecutor::invalid_source_mapping());
+    let driver =
+        AgentBrowserDriver::with_executor(standalone_config("invalid-source-mapping"), executor);
+    let mut session = driver
+        .open(&ScenarioContext {
+            run_id: "run".to_string(),
+            scenario_id: "invalid-source-mapping".to_string(),
+            artifacts_dir: temp.path().join("artifacts"),
+        })
+        .await
+        .expect("session");
+
+    let error = session.observe().await.expect_err("invalid source mapping");
+    assert_eq!(error.code(), "test.driver.web.source_mapping_invalid");
+    session.close().await.expect("close");
 }
 
 #[tokio::test]
@@ -1657,8 +1694,8 @@ fn standalone_config(namespace: &str) -> AgentBrowserConfig {
     }
 }
 
-fn page_context_response(revision: u64) -> String {
-    serde_json::json!({
+fn page_context_response(revision: u64, invalid_source_mapping: bool) -> String {
+    let mut response = serde_json::json!({
         "success": true,
         "data": {
             "result": {
@@ -1696,7 +1733,20 @@ fn page_context_response(revision: u64) -> String {
                         "transformed": false
                     },
                     "state": { "visible": true, "focused": false },
-                    "locators": [{ "type": "test_id", "value": "pay" }]
+                    "locators": [{ "type": "test_id", "value": "pay" }],
+                    "sourceMapping": {
+                        "protocol": "a3s.test.source-mapping/1",
+                        "candidates": [{
+                            "span": { "file": "src/Checkout.tsx", "line": 12, "column": 3 },
+                            "generatedSpan": { "file": "assets/app.js", "line": 1, "column": 1 },
+                            "confidence": 0.97,
+                            "origin": "source_map",
+                            "relation": "exact",
+                            "registrationId": "vite:checkout",
+                            "framework": "react"
+                        }],
+                        "truncated": false
+                    }
                 }],
                 "facts": {},
                 "removedNodeIds": [],
@@ -1704,8 +1754,12 @@ fn page_context_response(revision: u64) -> String {
                 "nextCursor": null
             }
         }
-    })
-    .to_string()
+    });
+    if invalid_source_mapping {
+        response["data"]["result"]["nodes"][0]["sourceMapping"]["truncated"] =
+            serde_json::json!(true);
+    }
+    response.to_string()
 }
 
 fn png_fixture() -> Vec<u8> {

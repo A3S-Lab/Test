@@ -14,10 +14,10 @@ If the goal is to select an element, drag over a region, sketch the intended UI,
 Run the version-pinned command in the frontend project:
 
 ```bash
-npm install --save-dev @a3s-lab/testkit@0.4.2
+npm install --save-dev @a3s-lab/testkit@0.5.0
 ```
 
-The package is published on the official npm Registry with GitHub OIDC provenance. The pinned 0.4.2 package includes the design board, page-region capture, and live CLI compatibility handshake without a separate drawing or screenshot package.
+The package is published on the official npm Registry with GitHub OIDC provenance. The pinned 0.5.0 package includes the design board, page-region capture, live CLI compatibility handshake, and ranked rendered-node source mapping without a separate drawing or screenshot package.
 
 Verify that the dependency belongs to the current project:
 
@@ -91,6 +91,7 @@ Choose additional configuration only when the workflow needs it.
 - **Element marking, area selection, board, and capture:** Use `A3STestKit` with `A3SReviewOverlay`.
 - **Headless Page Context in CI:** Keep `A3STestKit` and omit the visible `A3SReviewOverlay`.
 - **Component ownership and source hints:** Add `A3STestBoundary`.
+- **Exact selected-node source ownership:** Let a framework adapter call `registerSource` and, when needed, `registerSourceMap`.
 - **Send findings to a custom service:** Add a same-origin `repairEndpoint` or `onSubmitted`.
 
 :::info Test Kit is an enhancement, not a prerequisite
@@ -112,6 +113,42 @@ import { A3STestBoundary } from '@a3s-lab/testkit/react';
   <Checkout />
 </A3STestBoundary>;
 ```
+
+## Map a selected node to source
+
+Most applications need only the `source` hint on `A3STestBoundary`. It gives every descendant a coarse owning-file candidate. Framework adapters can provide an exact DOM owner and optionally trace its generated location through an explicitly supplied encoded Source Map v3.
+
+```ts
+import { registerSource, registerSourceMap } from '@a3s-lab/testkit';
+
+const unregisterMap = registerSourceMap({
+  id: 'vite-app',
+  generatedFile: 'http://127.0.0.1:3000/assets/app.js',
+  mapUrl: 'http://127.0.0.1:3000/assets/app.js.map',
+  map: encodedMap,
+});
+
+const unregisterOwner = registerSource({
+  id: 'react:pay-button',
+  framework: 'react',
+  elements: () => [document.querySelector('[data-testid=pay]')!],
+  includeDescendants: false,
+  generated: {
+    file: 'http://127.0.0.1:3000/assets/app.js',
+    line: 1,
+    column: 1,
+  },
+});
+
+export function disposeSourceMapping() {
+  unregisterOwner();
+  unregisterMap();
+}
+```
+
+The selected node then carries ranked `sourceMapping.candidates` with a confidence, an `exact` or `ancestor` relation, and an origin of `framework_adapter`, `source_map`, `boundary_hint`, or `generated`. The same record enters explicitly submitted repair context, so the coding agent can open the likely file without another browser discovery turn.
+
+Registration is explicit by design. Test Kit never reads React Fiber, Vue instances, or other framework-private state, never discovers or downloads source maps, and drops `sourcesContent` before storing a registered map. A source candidate is navigation evidence; it does not grant file-read or edit authority.
 
 ## Framework-neutral integration
 
@@ -379,7 +416,7 @@ Verification screenshots remain A3S Test evidence. A screenshot deliberately att
 
 ## Human marking and batch repair
 
-Test Kit 0.4.2 keeps review work in one fixed side panel. The shortest path is
+Test Kit 0.5.0 keeps review work in one fixed side panel. The shortest path is
 select a target, describe the change, then save or send. New feedback,
 findings, and preferences are three peer views. Marking tools are visible
 directly; selecting a target replaces them with the editor in the same panel,

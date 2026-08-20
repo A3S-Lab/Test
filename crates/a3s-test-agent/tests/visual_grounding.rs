@@ -718,5 +718,6 @@ fn node(id: &str, reference: &str, x: f64, y: f64, width: f64, height: f64) -> P
         classes: None,
         attributes: None,
         computed_styles: None,
+        source_mapping: None,
     }
 }

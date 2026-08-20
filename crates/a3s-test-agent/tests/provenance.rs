@@ -244,6 +244,8 @@ fn secret_page_context() -> PageContextObservation {
                 file: format!("src/{EXACT_SECRET}/Checkout.tsx"),
                 line: Some(1),
                 column: Some(1),
+                end_line: None,
+                end_column: None,
             }),
             ready: true,
             facts: serde_json::Map::from_iter([(
@@ -284,6 +286,7 @@ fn secret_page_context() -> PageContextObservation {
                 json!("implicit-node-secret"),
             )])),
             computed_styles: None,
+            source_mapping: None,
         }],
         facts: serde_json::Map::new(),
         ui: None,

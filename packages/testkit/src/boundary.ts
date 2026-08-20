@@ -2,17 +2,26 @@ import { safeCallback } from "./sanitize";
 import type { BoundaryRegistration } from "./types";
 
 export function composedContains(root: Element, candidate: Element): boolean {
+  return composedDistance(root, candidate) !== null;
+}
+
+export function composedDistance(
+  root: Element,
+  candidate: Element,
+): number | null {
+  let distance = 0;
   let current: Node | null = candidate;
   while (current) {
-    if (current === root) return true;
+    if (current === root) return distance;
     const parent: Node | null = current.parentNode;
     current =
       parent ??
       (current.getRootNode() instanceof ShadowRoot
         ? (current.getRootNode() as ShadowRoot).host
         : null);
+    distance += 1;
   }
-  return false;
+  return null;
 }
 
 export function boundaryDepth(boundary: BoundaryRegistration): number {

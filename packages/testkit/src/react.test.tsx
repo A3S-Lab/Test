@@ -35,7 +35,16 @@ describe("React adapter and review overlay", () => {
     setRect(boundary, { x: 10, y: 10, width: 200, height: 80 });
     setRect(button, { x: 20, y: 20, width: 70, height: 30 });
     await waitFor(() => expect(getPageContextBridge()?.snapshot().components).toHaveLength(1));
-    expect(getPageContextBridge()?.snapshot().nodes.find((node) => node.role === "button")?.componentId).toBe("card");
+    const buttonNode = getPageContextBridge()
+      ?.snapshot()
+      .nodes.find((node) => node.role === "button");
+    expect(buttonNode?.componentId).toBe("card");
+    expect(buttonNode?.sourceMapping?.candidates[0]).toMatchObject({
+      span: { file: "src/Card.tsx" },
+      origin: "boundary_hint",
+      relation: "ancestor",
+      componentId: "card",
+    });
     view.unmount();
     expect(getPageContextBridge()).toBeNull();
   });

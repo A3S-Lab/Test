@@ -131,8 +131,26 @@ Boundaries are optional. Automatic DOM, open Shadow DOM, semantics, locator, and
 | `locators`       | Ordered semantic and CSS candidates                                               |
 | `geometry`       | Three coordinate spaces, visibility, occlusion, positioning, and scroll container |
 | `computedStyles` | Bounded styles only at admitted detail and budget                                 |
+| `sourceMapping`  | Optional ranked source spans from explicit ownership declarations                 |
 
 Locator candidates prefer role and name, label, test ID, placeholder, text, and CSS in that order. Geometry is evidence and a final fallback, not a reason to skip semantic targeting.
+
+## Rendered-node source mapping
+
+`sourceMapping` uses protocol `a3s.test.source-mapping/1`. It contains up to eight unique candidates sorted by descending confidence.
+
+| Field            | Meaning                                                                                                 |
+| ---------------- | ------------------------------------------------------------------------------------------------------- |
+| `span`           | Likely original file with optional start and end line and column                                        |
+| `generatedSpan`  | Declared generated location retained beside a direct or Source Map-derived original span                |
+| `confidence`     | Bounded routing confidence from 0 through 1; it is not a correctness verdict                            |
+| `origin`         | `framework_adapter`, `source_map`, `boundary_hint`, or raw `generated`                                  |
+| `relation`       | `exact` for the registered element or `ancestor` when an enclosing registered owner supplied the result |
+| `registrationId` | Stable ID of the explicit source, map-backed owner, or boundary declaration                             |
+
+Framework adapters declare ownership through `registerSource` and optionally `registerSourceMap`. An `A3STestBoundary` can provide a coarser `source` or `generated` hint. The selected node keeps the same mapping in explicitly submitted repair context, which can save a second browser discovery turn.
+
+Test Kit does not inspect React Fiber, Vue instances, or other framework-private state. It does not discover or fetch maps. Only explicitly registered flat encoded Source Map v3 data is accepted, and `sourcesContent` is discarded before runtime storage. The Web driver independently rejects unsupported protocols, invalid spans or confidence, unsorted or duplicate candidates, and inconsistent truncation.
 
 ## Geometry and zoom
 

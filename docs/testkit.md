@@ -79,7 +79,7 @@ hydration and calls `handshake()` through the browser bridge:
 {
   "protocol": "a3s.test.testkit-handshake/1",
   "packageName": "@a3s-lab/testkit",
-  "sdkVersion": "0.4.2",
+  "sdkVersion": "0.5.0",
   "pageContextProtocol": "a3s.test.page-context/1",
   "capabilities": [
     "bounded_snapshot",
@@ -94,6 +94,7 @@ hydration and calls `handshake()` through the browser bridge:
     "repair_queue",
     "revision_wait",
     "scoped_inspection",
+    "source_mapping",
     "ui_component_clusters",
     "ui_layout_graph",
     "ui_motion_profile",
@@ -104,7 +105,7 @@ hydration and calls `handshake()` through the browser bridge:
 ```
 
 The adapter accepts only handshake protocol v1, package
-`@a3s-lab/testkit`, SDK `>= 0.4.0, < 0.5.0`, Page Context protocol v1, and a
+`@a3s-lab/testkit`, SDK `>= 0.4.0, < 0.6.0`, Page Context protocol v1, and a
 sorted, unique, bounded capability list. The local review loop requires
 `bounded_snapshot`, `component_boundaries`, `design_references`, `geometry`,
 `repair_queue`, `revision_wait`, and `scoped_inspection`. When the project
@@ -179,7 +180,7 @@ for one request with `"ui": false`.
 ```json
 {
   "protocol": "a3s.test.page-context/1",
-  "sdkVersion": "0.4.2",
+  "sdkVersion": "0.5.0",
   "revision": 42,
   "page": {
     "id": "checkout",
@@ -434,6 +435,88 @@ viewport so targets outside a zoomed view are not reported as visible.
 Geometry is evidence and a last-resort target. Semantic role, label, test ID,
 placeholder, and stable text locators remain preferred.
 
+### Rendered-node source mapping
+
+A context node may carry an optional `a3s.test.source-mapping/1` record:
+
+```json
+{
+  "protocol": "a3s.test.source-mapping/1",
+  "candidates": [
+    {
+      "span": {
+        "file": "src/PayButton.tsx",
+        "line": 42,
+        "column": 5
+      },
+      "generatedSpan": {
+        "file": "http://127.0.0.1:3000/assets/app.js",
+        "line": 1,
+        "column": 1
+      },
+      "confidence": 0.97,
+      "origin": "source_map",
+      "relation": "exact",
+      "registrationId": "vite:pay-button",
+      "framework": "react"
+    }
+  ],
+  "truncated": false
+}
+```
+
+Candidates are unique source spans sorted by descending confidence. `origin`
+is `framework_adapter`, `source_map`, `boundary_hint`, or `generated`;
+`relation` distinguishes the exact registered element from a descendant of a
+registered owner. An enclosing boundary is deliberately less precise than an
+exact adapter registration. A raw generated location remains useful when no
+map was declared, but receives the lowest confidence. Confidence is routing
+evidence, not file-read or workspace-edit authority.
+
+Only explicitly declared ownership participates. A framework adapter can
+register a live DOM owner and, when available, one flat encoded Source Map v3:
+
+```ts
+import { registerSource, registerSourceMap } from "@a3s-lab/testkit";
+
+const unregisterMap = registerSourceMap({
+  id: "vite-app",
+  generatedFile: "http://127.0.0.1:3000/assets/app.js",
+  mapUrl: "http://127.0.0.1:3000/assets/app.js.map",
+  map: encodedMap,
+});
+
+const unregisterOwner = registerSource({
+  id: "react:pay-button",
+  framework: "react",
+  elements: () => [document.querySelector("[data-testid=pay]")!],
+  includeDescendants: false,
+  generated: {
+    file: "http://127.0.0.1:3000/assets/app.js",
+    line: 1,
+    column: 1,
+  },
+});
+
+unregisterOwner();
+unregisterMap();
+```
+
+`registerSource` also accepts a direct `source` span. `A3STestBoundary`
+accepts the same `source` and `generated` shapes for a coarser component hint.
+Every registration returns an idempotent cleanup function and advances the
+page revision when added or removed.
+
+The runtime does not inspect React Fiber, Vue component instances, Svelte
+closures, or any other undeclared framework state. It never discovers or
+fetches a source map from the network. A registered map is limited to encoded
+Source Map v3 fields; `sourcesContent` is discarded before runtime storage and
+never enters Page Context or repair context. One page admits at most 512
+source owners and 32 maps, each node returns at most eight candidates, and
+file names, positions, mapping bytes, source counts, and name counts are
+bounded. The Web driver independently validates protocol, spans, confidence,
+ordering, uniqueness, and truncation before exposing the snapshot.
+
 ## Framework-neutral runtime
 
 The base package discovers semantic DOM nodes, open Shadow DOM, form state,
@@ -485,9 +568,9 @@ If it is omitted, an active A3S Test browser session can drain the same
 page-local queue through the fixed bridge operation. The endpoint is not an
 A3S Test control API and receives no workspace or agent credentials.
 
-`A3STestBoundary` registers explicit component identity, optional source hints,
-facts, readiness, and all rendered roots beneath the boundary. Automatic DOM
-context continues to work when no boundary is present.
+`A3STestBoundary` registers explicit component identity, optional source or
+generated-location hints, facts, readiness, and all rendered roots beneath the
+boundary. Automatic DOM context continues to work when no boundary is present.
 
 ### Vite
 

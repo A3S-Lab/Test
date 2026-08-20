@@ -4,6 +4,17 @@
 
 ### Added
 
+- Added optional rendered-node source ownership through
+  `a3s.test.source-mapping/1`. Test Kit 0.5.0 ranks explicit framework-adapter
+  registrations, encoded Source Map v3 traces, `A3STestBoundary` hints, and
+  generated locations with confidence and exact/ancestor relations. Repair
+  context preserves the same candidates so a coding agent can open the likely
+  owning file without another browser turn. The runtime never reads React
+  Fiber, Vue instances, or other undeclared framework state, never fetches a
+  map, and discards `sourcesContent`; TypeScript and Rust independently bound
+  and validate registrations, maps, spans, ranking, deduplication, and
+  truncation. New `init` and `doctor` repairs point every supported package
+  manager to the reproducible `@a3s-lab/testkit@0.5.0` install.
 - Added `a3s.test.local-repair-bridge/1` to `a3s-test dev`. An admitted Test
   Kit now feeds explicitly submitted Review Overlay findings into the existing
   authoritative repair ledger, captures owned before evidence, and emits each

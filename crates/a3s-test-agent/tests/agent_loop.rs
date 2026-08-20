@@ -694,6 +694,7 @@ fn page_context_observation() -> SurfaceObservation {
                 classes: None,
                 attributes: None,
                 computed_styles: None,
+                source_mapping: None,
             }],
             facts: Default::default(),
             ui: None,

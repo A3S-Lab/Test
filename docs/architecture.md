@@ -129,6 +129,11 @@ typed session operations. A missing optional Test Kit creates no bridge.
 Cancellation or failure drops the bounded browser command before exact
 session and owned-server cleanup.
 
+The selected node's repair context may already contain ranked
+`a3s.test.source-mapping/1` candidates. This avoids a second browser discovery
+turn while keeping authority unchanged: the mapping suggests likely files and
+spans, but only the workspace-owning coding agent can read or edit them.
+
 ### Source-to-contract generation
 
 Source interpretation is an adapter concern in `a3s-test-agent`, not a Core
@@ -238,6 +243,12 @@ versioned semantic projection after a stable browser frame:
   evidence;
 - explicit component boundaries add stable ownership, source hints, readiness,
   and application facts without annotating every element;
+- explicit framework adapters may associate live elements with direct source
+  spans or generated locations. Declared flat Source Map v3 data can trace a
+  generated location to an original span; boundary hints supply a coarser
+  fallback. The runtime ranks and deduplicates these sources without reading
+  React Fiber, Vue instances, or other framework-private state, and discards
+  source contents before projection;
 - `MutationObserver`, `ResizeObserver`, route, viewport, and scroll signals
   invalidate the cached projection, while unchanged pages are never polled;
 - private node IDs remain in a `WeakMap` side table. The runtime does not write
@@ -262,7 +273,8 @@ driver.
 ```text
 browser render
   ├── accessibility tree ── semantic roles, names, native state
-  ├── Page Context ───────── components, locators, geometry, product facts
+  ├── Page Context ───────── components, locators, geometry, product facts,
+  │                           ranked source spans
   └── UI understanding ───── style profile, layout graph, clusters,
                               overflow/clipping, states, timelines and motion
                                       |

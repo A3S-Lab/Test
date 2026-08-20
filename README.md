@@ -626,10 +626,10 @@ Development frontends can embed `@a3s-lab/testkit` so A3S Test can read the
 rendered page without relying on pixels alone:
 
 ```bash
-npm install --save-dev @a3s-lab/testkit@0.4.2
+npm install --save-dev @a3s-lab/testkit@0.5.0
 ```
 
-Test Kit 0.4.2 is published on the official npm Registry with GitHub OIDC
+Test Kit 0.5.0 is published on the official npm Registry with GitHub OIDC
 provenance. The pinned command records the package integrity in the project
 lockfile. Confirm the dependency with `npm ls @a3s-lab/testkit`.
 
@@ -657,7 +657,10 @@ visible overlay.
 After rendering, Test Kit publishes bounded, revisioned context:
 
 - Accessible semantics, DOM and open Shadow DOM structure, and form state.
-- Component identity, bounded source hints, and preferred semantic locators.
+- Component identity, ranked source ownership, and preferred semantic
+  locators. Explicit framework registrations, Source Map v3 traces, and
+  boundary hints retain confidence and exact/ancestor relations without
+  reading framework-private state or carrying source contents.
 - Viewport, document, and normalized coordinates for actionable elements.
 - Observed color, typography, spacing, radius, shadow, and safe design-token
   profiles with source counts and confidence.

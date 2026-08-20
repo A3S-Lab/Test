@@ -41,6 +41,15 @@ fn dev_repair_bridge_delivers_real_browser_findings_without_manual_watch() {
     assert_eq!(batch["session"], session);
     assert_eq!(batch["repairs"][0]["finding"]["id"], "finding-dev-real");
     assert_eq!(batch["repairs"][0]["status"], "queued");
+    assert_eq!(
+        batch["repairs"][0]["finding"]["context"]["nodes"][0]["sourceMapping"]["protocol"],
+        "a3s.test.source-mapping/1"
+    );
+    assert_eq!(
+        batch["repairs"][0]["finding"]["context"]["nodes"][0]["sourceMapping"]["candidates"][0]
+            ["span"]["file"],
+        "src/Fixture.tsx"
+    );
     assert!(batch["repairs"][0]["before_evidence"].is_object());
     assert_eq!(
         batch["batches"][0]["id"],
@@ -191,7 +200,7 @@ fn write_project(root: &Path, url: &str, browser: &Path) {
         r#"{
   "name": "dev-repair-bridge-e2e",
   "scripts": { "dev": "fixture" },
-  "devDependencies": { "@a3s-lab/testkit": "0.4.2" }
+  "devDependencies": { "@a3s-lab/testkit": "0.5.0" }
 }
 "#,
     )
@@ -200,7 +209,7 @@ fn write_project(root: &Path, url: &str, browser: &Path) {
     fs::create_dir_all(&testkit).expect("Test Kit package directory");
     fs::write(
         testkit.join("package.json"),
-        "{\"name\":\"@a3s-lab/testkit\",\"version\":\"0.4.2\"}\n",
+        "{\"name\":\"@a3s-lab/testkit\",\"version\":\"0.5.0\"}\n",
     )
     .expect("Test Kit package metadata");
     let config = root.join(".a3s-test");

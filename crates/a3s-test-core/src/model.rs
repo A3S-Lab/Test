@@ -14,6 +14,7 @@ pub use assertions::{
 
 pub const ACTION_PROTOCOL_REVISION: u32 = 15;
 pub const PAGE_CONTEXT_PROTOCOL: &str = "a3s.test.page-context/1";
+pub const SOURCE_MAPPING_PROTOCOL: &str = "a3s.test.source-mapping/1";
 pub const REPAIR_PROTOCOL: &str = "a3s.test.repair/1";
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, Hash, JsonSchema, PartialEq, Serialize)]
@@ -471,6 +472,59 @@ pub struct PageContextSource {
     pub file: String,
     pub line: Option<u32>,
     pub column: Option<u32>,
+    #[serde(rename = "endLine", default, skip_serializing_if = "Option::is_none")]
+    pub end_line: Option<u32>,
+    #[serde(rename = "endColumn", default, skip_serializing_if = "Option::is_none")]
+    pub end_column: Option<u32>,
+}
+
+#[derive(Clone, Debug, Deserialize, JsonSchema, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct PageContextSourceMapping {
+    pub protocol: String,
+    pub candidates: Vec<PageContextSourceCandidate>,
+    pub truncated: bool,
+}
+
+#[derive(Clone, Debug, Deserialize, JsonSchema, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct PageContextSourceCandidate {
+    pub span: PageContextSource,
+    #[serde(
+        rename = "generatedSpan",
+        default,
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub generated_span: Option<PageContextSource>,
+    pub confidence: f64,
+    pub origin: PageContextSourceOrigin,
+    pub relation: PageContextSourceRelation,
+    #[serde(rename = "registrationId")]
+    pub registration_id: String,
+    #[serde(
+        rename = "componentId",
+        default,
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub component_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub framework: Option<String>,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum PageContextSourceOrigin {
+    BoundaryHint,
+    FrameworkAdapter,
+    SourceMap,
+    Generated,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum PageContextSourceRelation {
+    Exact,
+    Ancestor,
 }
 
 #[derive(Clone, Debug, Deserialize, JsonSchema, PartialEq, Serialize)]
@@ -497,6 +551,12 @@ pub struct PageContextNode {
     pub attributes: Option<serde_json::Map<String, Value>>,
     #[serde(rename = "computedStyles")]
     pub computed_styles: Option<serde_json::Map<String, Value>>,
+    #[serde(
+        rename = "sourceMapping",
+        default,
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub source_mapping: Option<PageContextSourceMapping>,
 }
 
 #[derive(Clone, Debug, Deserialize, JsonSchema, PartialEq, Serialize)]

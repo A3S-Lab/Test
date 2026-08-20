@@ -828,6 +828,16 @@ fn parse_page_context_value(mut value: Value) -> Result<PageContextObservation, 
             "page context bridge protocol is unsupported",
         ));
     }
+    for node in &parsed.nodes {
+        if let Some(source_mapping) = &node.source_mapping {
+            source_mapping.validate().map_err(|error| {
+                DriverError::new(
+                    "test.driver.web.source_mapping_invalid",
+                    format!("page context bridge returned invalid source mapping: {error}"),
+                )
+            })?;
+        }
+    }
     if let Some(ui) = &parsed.ui {
         ui.validate(
             parsed.revision,

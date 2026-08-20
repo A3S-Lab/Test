@@ -2,6 +2,7 @@ export const PAGE_CONTEXT_PROTOCOL = "a3s.test.page-context/1" as const;
 export const TESTKIT_HANDSHAKE_PROTOCOL =
   "a3s.test.testkit-handshake/1" as const;
 export const TESTKIT_PACKAGE_NAME = "@a3s-lab/testkit" as const;
+export const SOURCE_MAPPING_PROTOCOL = "a3s.test.source-mapping/1" as const;
 export const UI_UNDERSTANDING_PROTOCOL = "a3s.test.ui-understanding/1" as const;
 export const PAGE_CONTEXT_SYMBOL = Symbol.for("a3s.test.page-context");
 export const QUALITY_REPORT_PROTOCOL = "a3s.test.quality-report/1" as const;
@@ -105,13 +106,39 @@ export type ContextNode = {
   classes?: string[];
   attributes?: Record<string, string>;
   computedStyles?: Record<string, string>;
+  sourceMapping?: SourceMapping;
+};
+
+export type SourceSpan = {
+  file: string;
+  line?: number;
+  column?: number;
+  endLine?: number;
+  endColumn?: number;
+};
+
+export type SourceMappingCandidate = {
+  span: SourceSpan;
+  generatedSpan?: SourceSpan;
+  confidence: number;
+  origin: "boundary_hint" | "framework_adapter" | "source_map" | "generated";
+  relation: "exact" | "ancestor";
+  registrationId: string;
+  componentId?: string;
+  framework?: string;
+};
+
+export type SourceMapping = {
+  protocol: typeof SOURCE_MAPPING_PROTOCOL;
+  candidates: SourceMappingCandidate[];
+  truncated: boolean;
 };
 
 export type ContextComponent = {
   id: string;
   name: string;
   parentId?: string;
-  source?: { file: string; line?: number; column?: number };
+  source?: SourceSpan;
   ready: boolean;
   facts: Record<string, JsonValue>;
   boxes: Rect[];
@@ -737,9 +764,36 @@ export type BoundaryRegistration = {
   id: string;
   name: string;
   elements: () => readonly Element[];
-  source?: { file: string; line?: number; column?: number };
+  source?: SourceSpan;
+  generated?: SourceSpan;
   ready?: () => boolean;
   facts?: () => Record<string, unknown>;
+};
+
+export type SourceRegistration = {
+  id: string;
+  framework: string;
+  elements: () => readonly Element[];
+  source?: SourceSpan;
+  generated?: SourceSpan;
+  includeDescendants?: boolean;
+};
+
+export type EncodedSourceMapV3 = {
+  version: 3;
+  file?: string;
+  sourceRoot?: string;
+  names?: string[];
+  sources: string[];
+  sourcesContent?: Array<string | null>;
+  mappings: string;
+};
+
+export type SourceMapRegistration = {
+  id: string;
+  generatedFile: string;
+  mapUrl?: string;
+  map: EncodedSourceMapV3;
 };
 
 export type TestKitOptions = {
@@ -764,4 +818,6 @@ export type TestKitOptions = {
 
 export type TestKitRuntime = PageContextBridge & {
   registerBoundary(registration: BoundaryRegistration): () => void;
+  registerSource(registration: SourceRegistration): () => void;
+  registerSourceMap(registration: SourceMapRegistration): () => void;
 };

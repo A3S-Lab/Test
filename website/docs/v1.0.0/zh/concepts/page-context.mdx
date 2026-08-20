@@ -131,8 +131,26 @@ Bridge 不提供 `eval`、Cookie、浏览器存储、任意网络请求、文件
 | `locators`       | 按稳定性排序的语义与 CSS 候选                                  |
 | `geometry`       | 三套坐标、可见比例、遮挡、定位、变换与滚动容器                 |
 | `computedStyles` | 只在允许的明细和预算中返回的有界样式                           |
+| `sourceMapping`  | 来自显式归属声明的可选源码候选，并按置信度排序                 |
 
 定位器候选优先顺序为角色与名称、label、test ID、placeholder、文本和 CSS。几何用于证据与最后退化，不能因为坐标存在就跳过语义定位。
+
+## 渲染节点源码映射
+
+`sourceMapping` 使用 `a3s.test.source-mapping/1` 协议，最多返回八个去重后按置信度降序排列的候选。
+
+| 字段             | 含义                                                                  |
+| ---------------- | --------------------------------------------------------------------- |
+| `span`           | 最可能的原始文件，以及可选的起止行列                                  |
+| `generatedSpan`  | 与直接声明或 Source Map 还原的原始跨度同时保留的已声明生成代码位置    |
+| `confidence`     | 0 到 1 的有界定位置信度，不代表正确性 verdict                         |
+| `origin`         | `framework_adapter`、`source_map`、`boundary_hint` 或原始 `generated` |
+| `relation`       | 注册元素本身为 `exact`，由外层已注册归属提供时为 `ancestor`           |
+| `registrationId` | 显式源码归属、带 Source Map 的归属或组件边界的稳定 ID                 |
+
+框架适配器通过 `registerSource` 声明归属，需要时再调用 `registerSourceMap`。`A3STestBoundary` 可以提供更粗粒度的 `source` 或 `generated` 提示。用户明确发送 finding 后，点选节点会把同一份映射带入 repair context，从而减少一次浏览器探索。
+
+Test Kit 不检查 React Fiber、Vue 实例或其它框架私有状态，也不会自行发现或下载 Source Map。它只接受显式注册的扁平编码 Source Map v3，并在进入运行时存储前丢弃 `sourcesContent`。Web 驱动会再次拒绝不支持的协议、非法跨度或置信度、未排序或重复候选，以及不一致的截断信息。
 
 ## 几何和缩放
 

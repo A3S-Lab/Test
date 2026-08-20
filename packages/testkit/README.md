@@ -5,10 +5,10 @@ Development-only page context and human review SDK for A3S Test.
 ## Install
 
 ```bash
-npm install --save-dev @a3s-lab/testkit@0.4.2
+npm install --save-dev @a3s-lab/testkit@0.5.0
 ```
 
-`@a3s-lab/testkit` 0.4.2 is published on the official npm Registry with GitHub
+`@a3s-lab/testkit` 0.5.0 is published on the official npm Registry with GitHub
 OIDC provenance. The pinned command keeps installation reproducible and locks
 the package integrity in the project lockfile. The package can lag features on
 `main`; use the versioned documentation to distinguish published and staged
@@ -62,11 +62,12 @@ import { A3STestBoundary } from "@a3s-lab/testkit/react";
 
 For headless CI context, keep `A3STestKit` enabled and omit
 `A3SReviewOverlay`. The framework-neutral entry point exports
-`installTestKit`, `getPageContextBridge`, and all protocol types.
+`installTestKit`, `getPageContextBridge`, `registerSource`,
+`registerSourceMap`, and all protocol types.
 `installTestKit` also requires `enabled: true`; omitted or false-like runtime
 configuration fails closed.
 
-Test Kit 0.4.2 exposes `a3s.test.testkit-handshake/1`. After the provider and
+Test Kit 0.5.0 exposes `a3s.test.testkit-handshake/1`. After the provider and
 overlay mount, `a3s-test dev --json` verifies the live package identity, SDK
 range, Page Context protocol, required capabilities, and Review Overlay before
 it reports a ready review session. The older `probe()` operation remains for
@@ -79,6 +80,16 @@ Overlay is persisted with A3S Test-owned before evidence and emitted once as a
 agent therefore does not need a separate manually coordinated
 `repair-watch --session ...` process. The bridge reuses the existing repair
 ledger and projects later agent or human state back into this page.
+
+Each selected node can also carry a ranked `a3s.test.source-mapping/1` record.
+An enclosing `A3STestBoundary` contributes a coarse declared hint. Framework
+adapters can use `registerSource` for an exact DOM owner and
+`registerSourceMap` to trace a declared generated location through an encoded
+Source Map v3. The runtime never traverses React Fiber, Vue component
+instances, or other undeclared framework state, and it discards
+`sourcesContent` before the map enters runtime state. Submitted repair context
+keeps the same ranked spans, confidence, origin, and exact/ancestor relation so
+the coding agent can open the likely owning file without another browser turn.
 
 The review UI supports `locale="auto" | "en" | "zh-CN"`. `auto` is the
 default and observes `<html lang>` while mounted, resolving every `zh-*` page

@@ -251,7 +251,7 @@ fn required_testkit_missing_aborts_the_browser_without_stopping_an_existing_serv
     );
     assert!(
         dev.stderr()
-            .contains("npm install --save-dev @a3s-lab/testkit@^0.4.0"),
+            .contains("npm install --save-dev @a3s-lab/testkit@0.5.0"),
         "{}",
         dev.stderr()
     );
@@ -472,12 +472,12 @@ fn incompatible_live_testkit_boundaries_fail_with_exact_repairs() {
         (
             "incompatible_version",
             "test.driver.web.testkit_sdk_version_unsupported",
-            "npm install --save-dev @a3s-lab/testkit@^0.4.0",
+            "npm install --save-dev @a3s-lab/testkit@0.5.0",
         ),
         (
             "missing_capability",
             "test.driver.web.testkit_capability_missing",
-            "npm install --save-dev @a3s-lab/testkit@^0.4.0",
+            "npm install --save-dev @a3s-lab/testkit@0.5.0",
         ),
         (
             "overlay_missing",
@@ -855,7 +855,7 @@ case " $* " in
         printf '%s\n' '{"success":true,"data":{"result":{"state":"absent"}}}'
         ;;
       incompatible_version)
-        printf '%s\n' '{"success":true,"data":{"result":{"state":"present","handshake":{"protocol":"a3s.test.testkit-handshake/1","packageName":"@a3s-lab/testkit","sdkVersion":"0.5.0","pageContextProtocol":"a3s.test.page-context/1","capabilities":["bounded_snapshot","component_boundaries","design_references","geometry","repair_queue","revision_wait","scoped_inspection"]},"reviewOverlayMounted":true}}}'
+        printf '%s\n' '{"success":true,"data":{"result":{"state":"present","handshake":{"protocol":"a3s.test.testkit-handshake/1","packageName":"@a3s-lab/testkit","sdkVersion":"0.6.0","pageContextProtocol":"a3s.test.page-context/1","capabilities":["bounded_snapshot","component_boundaries","design_references","geometry","repair_queue","revision_wait","scoped_inspection"]},"reviewOverlayMounted":true}}}'
         ;;
       missing_capability)
         printf '%s\n' '{"success":true,"data":{"result":{"state":"present","handshake":{"protocol":"a3s.test.testkit-handshake/1","packageName":"@a3s-lab/testkit","sdkVersion":"0.4.2","pageContextProtocol":"a3s.test.page-context/1","capabilities":["bounded_snapshot","component_boundaries","design_references","geometry","repair_queue","revision_wait"]},"reviewOverlayMounted":true}}}'

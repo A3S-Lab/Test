@@ -1511,7 +1511,7 @@ Unverified versions fail with `test.driver.web.version_unsupported`.
 range check. `a3s-test dev` performs the authoritative live browser admission
 before its `a3s.test.dev/1` `ready` event. It calls
 `a3s.test.testkit-handshake/1`, verifies the exact `@a3s-lab/testkit` package,
-SDK `>= 0.4.0, < 0.5.0`, Page Context protocol v1, a bounded canonical
+SDK `>= 0.4.0, < 0.6.0`, Page Context protocol v1, a bounded canonical
 capability set, and, for required profiles, the mounted Review Overlay open
 Shadow Root. Required profiles reject an absent bridge; optional profiles may
 admit absence but never a present incompatible bridge. Each boundary uses a
@@ -1519,6 +1519,26 @@ distinct `test.driver.web.testkit_*` code. Failure aborts the exact browser and
 cleans only a development server owned by the command. Successful `ready`
 events serialize the admitted handshake under `testkit`, or `null` for an
 optional absent bridge.
+
+Each Page Context node may carry optional protocol
+`a3s.test.source-mapping/1`. Its one-to-eight candidates contain a bounded
+source span, optional generated span, finite confidence from zero through one,
+one of `framework_adapter`, `source_map`, `boundary_hint`, or `generated`, an
+`exact` or `ancestor` relation, a registration ID, and optional component and
+framework IDs. Candidates must be unique by source span and sorted by
+descending confidence. `truncated: true` is valid only with all eight returned
+candidates. The Web driver reports a well-typed record that violates these
+semantic bounds as `test.driver.web.source_mapping_invalid`; source-mapping
+schema drift remains part of `test.driver.web.page_context_invalid`. Neither
+form reaches the observation.
+
+Test Kit derives this record only from `registerSource`, `registerSourceMap`,
+and declared `A3STestBoundary` source or generated spans. A source map must be
+an explicitly registered flat encoded Source Map v3; the runtime performs no
+network discovery or fetch and drops `sourcesContent` before storing the map.
+Framework-private component state is outside the protocol. Source mapping is
+evidence for routing a repair and grants no filesystem or workspace mutation
+authority.
 
 When the admitted handshake is present, `a3s-test dev` starts the in-process
 local repair bridge `a3s.test.local-repair-bridge/1`. It opens no additional

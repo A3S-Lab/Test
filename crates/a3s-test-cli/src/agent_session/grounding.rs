@@ -436,6 +436,7 @@ mod tests {
                 classes: None,
                 attributes: None,
                 computed_styles: None,
+                source_mapping: None,
             }],
             facts: serde_json::Map::new(),
             ui: None,

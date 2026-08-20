@@ -207,6 +207,16 @@ supplied ACL candidate in a fresh browser. Human acceptance is the default;
 `--auto-resolve-repairs` is session-scoped and resolves only after all gates
 pass and `review_ready` has been persisted.
 
+A selected node in repair context may include ranked
+`a3s.test.source-mapping/1` candidates. Read them in descending confidence and
+prefer an `exact` framework or source-map span over an enclosing boundary
+hint. Treat every candidate as navigation evidence only: it does not authorize
+reading or editing outside the already approved workspace and does not prove
+that the current source still matches the rendered revision. The mapping is
+already part of the captured context, so do not spend another browser turn
+rediscovering ownership unless the candidates are absent, stale, or
+contradictory.
+
 For the workspace-local review loop, prefer `a3s-test dev --json`. After its
 live Test Kit handshake, `a3s.test.local-repair-bridge/1` emits submitted,
 evidence-backed findings as `repair_batch` events on the same JSONL stream and

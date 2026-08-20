@@ -14,10 +14,10 @@ description: 在页面渲染后发布带修订的语义、组件、定位器、�
 在前端工程目录执行固定版本的安装命令：
 
 ```bash
-npm install --save-dev @a3s-lab/testkit@0.4.2
+npm install --save-dev @a3s-lab/testkit@0.5.0
 ```
 
-该包已通过 GitHub OIDC provenance 发布到官方 npm Registry。固定安装的 0.4.2 版本已包含画板、页面区域截图和 CLI 实时兼容握手，不需要额外安装绘图或截图模块。
+该包已通过 GitHub OIDC provenance 发布到官方 npm Registry。固定安装的 0.5.0 版本已包含画板、页面区域截图、CLI 实时兼容握手和渲染节点源码映射，不需要额外安装绘图或截图模块。
 
 确认依赖已经进入当前工程：
 
@@ -88,6 +88,7 @@ agent 可以直接领取，不需要另行协调一个 `repair-watch` 进程。T
 - **页面点选、框选、画板和截图：** 使用 `A3STestKit` 与 `A3SReviewOverlay`。
 - **CI 只读取 Page Context：** 保留 `A3STestKit`，省略可见的 `A3SReviewOverlay`。
 - **标注组件归属和源码提示：** 再增加 `A3STestBoundary`。
+- **精确定位点选节点的源码：** 由框架适配器调用 `registerSource`，需要时再调用 `registerSourceMap`。
 - **把 finding 发送到自建服务：** 再配置同源 `repairEndpoint` 或 `onSubmitted`。
 
 :::info Test Kit 是增强项，不是运行前提
@@ -109,6 +110,42 @@ import { A3STestBoundary } from '@a3s-lab/testkit/react';
   <Checkout />
 </A3STestBoundary>;
 ```
+
+## 让点选节点直接定位源码
+
+大多数应用只需要在 `A3STestBoundary` 上声明 `source`，它会为所有后代提供一个粗粒度的归属文件候选。框架适配器还可以声明某个 DOM 节点的精确归属，并按需用显式提供的编码 Source Map v3 把生成代码位置还原到原始源码。
+
+```ts
+import { registerSource, registerSourceMap } from '@a3s-lab/testkit';
+
+const unregisterMap = registerSourceMap({
+  id: 'vite-app',
+  generatedFile: 'http://127.0.0.1:3000/assets/app.js',
+  mapUrl: 'http://127.0.0.1:3000/assets/app.js.map',
+  map: encodedMap,
+});
+
+const unregisterOwner = registerSource({
+  id: 'react:pay-button',
+  framework: 'react',
+  elements: () => [document.querySelector('[data-testid=pay]')!],
+  includeDescendants: false,
+  generated: {
+    file: 'http://127.0.0.1:3000/assets/app.js',
+    line: 1,
+    column: 1,
+  },
+});
+
+export function disposeSourceMapping() {
+  unregisterOwner();
+  unregisterMap();
+}
+```
+
+点选后的节点会得到按置信度排序的 `sourceMapping.candidates`。每个候选都带有 `exact` 或 `ancestor` 关系，以及 `framework_adapter`、`source_map`、`boundary_hint` 或 `generated` 来源。用户明确发送 finding 后，同一份记录会进入 repair context，coding agent 不需要再增加一次浏览器探索就能先打开最可能的文件。
+
+注册必须显式完成。Test Kit 不会读取 React Fiber、Vue 实例或其它框架私有状态，不会自行发现或下载 Source Map，并会在保存注册数据前丢弃 `sourcesContent`。源码候选只是定位证据，不授予文件读取或修改权限。
 
 ## 框架无关接入
 
@@ -364,7 +401,7 @@ MutationObserver、ResizeObserver、滚动、视口和导航信号会推进修�
 
 ## 人工标记与批量修复
 
-Test Kit 0.4.2 把评审收敛到一个固定侧栏。最短流程只有三步：选择目标、描述修改、保存或发送。“新反馈”“问题”“偏好设置”是同一侧栏里的三个并列视图。标记工具直接展示；选中目标后，编辑器在原位置替换工具；保存后直接进入问题视图。不会再打开贴着目标的编辑器、第二层工具浮层或嵌套弹窗。
+Test Kit 0.5.0 把评审收敛到一个固定侧栏。最短流程只有三步：选择目标、描述修改、保存或发送。“新反馈”“问题”“偏好设置”是同一侧栏里的三个并列视图。标记工具直接展示；选中目标后，编辑器在原位置替换工具；保存后直接进入问题视图。不会再打开贴着目标的编辑器、第二层工具浮层或嵌套弹窗。
 
 画板打开时会暂时替换评审侧栏，关闭后回到同一个编辑器。短桌面视口中的问题和偏好内容会在侧栏内部滚动；移动端使用单一全宽界面，主要操作提供至少 44 CSS 像素的触控目标，表单文字保持 16 像素，避免浏览器自动缩放。开始标记后，桌面和移动端侧栏都会暂时让出页面，只保留轻量的“完成选择 / 取消”提示条，因此被侧栏覆盖的内容也能直接选择；侧栏回来后，页面标记始终位于它的下方。
 

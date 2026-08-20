@@ -10,7 +10,7 @@ use super::config::{self, ProjectBrowserDriver, ProjectProfile};
 use super::discovery::{read_package, testkit_install_command, TESTKIT_PACKAGE};
 use super::DoctorArgs;
 
-const TESTKIT_COMPATIBILITY: &str = ">=0.4.0, <0.5.0";
+const TESTKIT_COMPATIBILITY: &str = ">=0.4.0, <0.6.0";
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]

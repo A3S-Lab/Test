@@ -293,6 +293,7 @@ pub(crate) fn test_page_context() -> PageContextObservation {
             classes: None,
             attributes: None,
             computed_styles: None,
+            source_mapping: None,
         }],
         facts: serde_json::Map::new(),
         ui: None,

@@ -71,7 +71,7 @@ async fn returns_a_typed_compatible_live_testkit_handshake() {
 
     assert_eq!(handshake.protocol, "a3s.test.testkit-handshake/1");
     assert_eq!(handshake.package_name, "@a3s-lab/testkit");
-    assert_eq!(handshake.sdk_version.to_string(), "0.4.2");
+    assert_eq!(handshake.sdk_version.to_string(), "0.5.0");
     assert_eq!(handshake.page_context_protocol, "a3s.test.page-context/1");
     assert_eq!(
         handshake.capabilities,
@@ -131,7 +131,7 @@ async fn reports_each_incompatible_testkit_boundary() {
             "test.driver.web.testkit_sdk_version_invalid",
         ),
         (
-            response_with("sdkVersion", json!("0.5.0")),
+            response_with("sdkVersion", json!("0.6.0")),
             "test.driver.web.testkit_sdk_version_unsupported",
         ),
         (
@@ -234,7 +234,7 @@ fn compatible_response(review_overlay_mounted: bool) -> Value {
         "handshake": {
             "protocol": "a3s.test.testkit-handshake/1",
             "packageName": "@a3s-lab/testkit",
-            "sdkVersion": "0.4.2",
+            "sdkVersion": "0.5.0",
             "pageContextProtocol": "a3s.test.page-context/1",
             "capabilities": REQUIRED_CAPABILITIES,
         },

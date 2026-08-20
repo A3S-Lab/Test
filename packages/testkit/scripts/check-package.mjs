@@ -40,12 +40,24 @@ assert.equal(
 
 assertFunctions(
   coreEsm,
-  ["getPageContextBridge", "installTestKit", "registerBoundary"],
+  [
+    "getPageContextBridge",
+    "installTestKit",
+    "registerBoundary",
+    "registerSource",
+    "registerSourceMap",
+  ],
   "ESM core",
 );
 assertFunctions(
   coreCjs,
-  ["getPageContextBridge", "installTestKit", "registerBoundary"],
+  [
+    "getPageContextBridge",
+    "installTestKit",
+    "registerBoundary",
+    "registerSource",
+    "registerSourceMap",
+  ],
   "CommonJS core",
 );
 assertFunctions(

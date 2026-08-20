@@ -20,6 +20,7 @@ import {
 } from "./runtime-values";
 import { installPageObserver } from "./page-observer";
 import { safeCallback, sanitizeFacts } from "./sanitize";
+import { normalizeSourceSpan, SourceMappingStore } from "./source-mapping";
 import { captureUIUnderstanding } from "./ui-understanding";
 import { UIStateTracker } from "./ui-understanding-state";
 import {
@@ -46,6 +47,8 @@ import {
   type RepairDraft,
   type RepairSubmission,
   type RepairThreadMessage,
+  type SourceMapRegistration,
+  type SourceRegistration,
   type StructuredRepairExport,
   type SubmittedRepair,
   type TestKitEvent,
@@ -68,6 +71,7 @@ const TESTKIT_CAPABILITIES = Object.freeze([
   "repair_queue",
   "revision_wait",
   "scoped_inspection",
+  "source_mapping",
   "ui_component_clusters",
   "ui_layout_graph",
   "ui_motion_profile",
@@ -116,6 +120,7 @@ class Runtime implements TestKitRuntime, NodeIdentity {
   readonly #repairStore: RepairStore;
   readonly #qualityStore: QualityStore;
   readonly #designAuditStore: DesignAuditStore;
+  readonly #sourceMappingStore = new SourceMappingStore();
   readonly #uiStateTracker = new UIStateTracker();
   #nodeSequence = 0;
   #revision = 1;
@@ -197,6 +202,7 @@ class Runtime implements TestKitRuntime, NodeIdentity {
       )
       .filter((node): node is ContextNode => node !== null);
     this.#associateComponents(allNodes);
+    this.#associateSourceMappings(allNodes);
     const ui =
       request.ui === false || !this.#options.uiUnderstanding
         ? undefined
@@ -527,11 +533,28 @@ class Runtime implements TestKitRuntime, NodeIdentity {
       throw new Error("boundary must contain at least one element");
     if (this.#boundaries.has(registration.id))
       throw new Error(`boundary '${registration.id}' is already registered`);
-    this.#boundaries.set(registration.id, registration);
+    const normalized: BoundaryRegistration = {
+      ...registration,
+      ...(registration.source
+        ? {
+            source: normalizeSourceSpan(registration.source, "boundary source"),
+          }
+        : {}),
+      ...(registration.generated
+        ? {
+            generated: normalizeSourceSpan(
+              registration.generated,
+              "boundary generated source",
+              true,
+            ),
+          }
+        : {}),
+    };
+    this.#boundaries.set(normalized.id, normalized);
     this.#markChanged();
     return () => {
-      if (this.#boundaries.get(registration.id) === registration) {
-        this.#boundaries.delete(registration.id);
+      if (this.#boundaries.get(normalized.id) === normalized) {
+        this.#boundaries.delete(normalized.id);
         this.#markChanged();
       }
     };
@@ -539,6 +562,32 @@ class Runtime implements TestKitRuntime, NodeIdentity {
 
   registerBoundary(registration: BoundaryRegistration): () => void {
     return this.register(registration);
+  }
+
+  registerSource(registration: SourceRegistration): () => void {
+    this.#ensureActive();
+    const unregister = this.#sourceMappingStore.registerSource(registration);
+    let active = true;
+    this.#markChanged();
+    return () => {
+      if (!active) return;
+      active = false;
+      unregister();
+      this.#markChanged();
+    };
+  }
+
+  registerSourceMap(registration: SourceMapRegistration): () => void {
+    this.#ensureActive();
+    const unregister = this.#sourceMappingStore.registerSourceMap(registration);
+    let active = true;
+    this.#markChanged();
+    return () => {
+      if (!active) return;
+      active = false;
+      unregister();
+      this.#markChanged();
+    };
   }
 
   dispose(): void {
@@ -553,6 +602,7 @@ class Runtime implements TestKitRuntime, NodeIdentity {
     this.#waiters.clear();
     this.#listeners.clear();
     this.#boundaries.clear();
+    this.#sourceMappingStore.clear();
     this.#qualityStore.clear();
     this.#designAuditStore.clear();
     this.#uiStateTracker.clear();
@@ -680,6 +730,19 @@ class Runtime implements TestKitRuntime, NodeIdentity {
         (left, right) => boundaryDepth(right) - boundaryDepth(left),
       )[0];
       if (owner) node.componentId = owner.id;
+    }
+  }
+
+  #associateSourceMappings(nodes: ContextNode[]): void {
+    const boundaries = Array.from(this.#boundaries.values());
+    for (const node of nodes) {
+      const element = this.resolve(node.id);
+      if (!element) continue;
+      const sourceMapping = this.#sourceMappingStore.mappingFor(
+        element,
+        boundaries,
+      );
+      if (sourceMapping) node.sourceMapping = sourceMapping;
     }
   }
 
@@ -964,6 +1027,26 @@ export function registerBoundary(
   return (bridge as TestKitRuntime).registerBoundary(registration);
 }
 
+export function registerSource(registration: SourceRegistration): () => void {
+  const bridge = getPageContextBridge();
+  if (!bridge || !("registerSource" in bridge))
+    throw new Error(
+      "A3S Test Kit must be installed before registering a source owner",
+    );
+  return (bridge as TestKitRuntime).registerSource(registration);
+}
+
+export function registerSourceMap(
+  registration: SourceMapRegistration,
+): () => void {
+  const bridge = getPageContextBridge();
+  if (!bridge || !("registerSourceMap" in bridge))
+    throw new Error(
+      "A3S Test Kit must be installed before registering a source map",
+    );
+  return (bridge as TestKitRuntime).registerSourceMap(registration);
+}
+
 function disabledBridge(): TestKitRuntime {
   const unavailable = () => {
     throw new Error("A3S Test Kit is disabled");
@@ -1008,6 +1091,8 @@ function disabledBridge(): TestKitRuntime {
     setAnimationsPaused: () => undefined,
     animationsPaused: () => false,
     registerBoundary: () => () => undefined,
+    registerSource: () => () => undefined,
+    registerSourceMap: () => () => undefined,
     dispose: () => undefined,
   };
 }

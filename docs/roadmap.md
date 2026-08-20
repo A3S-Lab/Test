@@ -922,7 +922,7 @@ intent, or shorten verification do not belong in this loop.
 - [x] Add a local repair bridge that lets an ordinary development browser and
       the workspace-owning coding agent exchange submitted findings without a
       manually coordinated session command
-- [ ] Map a selected rendered node to ranked, confidence-bearing source spans
+- [x] Map a selected rendered node to ranked, confidence-bearing source spans
       across framework boundaries, source maps, and explicit
       `A3STestBoundary` hints without reading undeclared framework state
 - [ ] Stream revision-scoped Page Context diffs and invalidate only evidence

@@ -1,6 +1,6 @@
 {
   "name": "@a3s-lab/testkit",
-  "version": "0.4.2",
+  "version": "0.5.0",
   "description": "Embedded page context and human review SDK for A3S Test",
   "keywords": [
     "a3s",
@@ -80,6 +80,7 @@
     "vitest": "^3.2.4"
   },
   "dependencies": {
+    "@jridgewell/trace-mapping": "^0.3.31",
     "modern-screenshot": "^4.7.0"
   }
 }

@@ -8,6 +8,7 @@ mod manifest;
 mod model;
 mod page_context;
 mod reconcile;
+mod source_mapping;
 mod ui_understanding;
 
 pub use contract::{
@@ -32,19 +33,21 @@ pub use model::{
     ModifierKey, NetworkRoute, PageContextComponent, PageContextGeometry, PageContextLocator,
     PageContextNode, PageContextNodeState, PageContextObservation, PageContextPage,
     PageContextPoint, PageContextPosition, PageContextRect, PageContextSize, PageContextSnapshot,
-    PageContextSource, PageContextTheme, PageContextViewport, PageContextVisualViewport,
-    RepairAclProof, RepairActor, RepairAttempt, RepairBatch, RepairBatchItemResult,
-    RepairBatchStatus, RepairCheckResult, RepairCheckStatus, RepairDesignReference,
-    RepairDesignReferenceImage, RepairDesignReferenceKind, RepairEvidenceBundle,
-    RepairEvidencePhase, RepairEvidenceRequest, RepairFinding, RepairHumanAction,
-    RepairHumanActionKind, RepairIntent, RepairLayoutCanvas, RepairLayoutIntent, RepairRelation,
-    RepairSeverity, RepairStatus, RepairStatusEvent, RepairTarget, RepairTargetKind,
-    RepairThreadMessage, RepairVerification, StepOutput, Surface, SurfaceObservation, TabOperation,
-    Target, TestScenario, TestStep, TestSuite, VideoOperation, ViewportCoverageComparison,
-    WaitCondition, WaitMode, ACTION_PROTOCOL_REVISION, DEFAULT_ASSERTION_SAMPLE_INTERVAL_MS,
-    MAX_ASSERTION_STABILITY_MS, MAX_ASSERTION_STABILITY_SAMPLES, MAX_LAYOUT_COORDINATE_ABS,
-    MAX_LAYOUT_TOLERANCE_PX, MAX_RENDERED_TEXT_ITEMS, MAX_VIEWPORT_COVERAGE_PERCENT,
-    MIN_ASSERTION_STABILITY_MS, PAGE_CONTEXT_PROTOCOL, REPAIR_PROTOCOL,
+    PageContextSource, PageContextSourceCandidate, PageContextSourceMapping,
+    PageContextSourceOrigin, PageContextSourceRelation, PageContextTheme, PageContextViewport,
+    PageContextVisualViewport, RepairAclProof, RepairActor, RepairAttempt, RepairBatch,
+    RepairBatchItemResult, RepairBatchStatus, RepairCheckResult, RepairCheckStatus,
+    RepairDesignReference, RepairDesignReferenceImage, RepairDesignReferenceKind,
+    RepairEvidenceBundle, RepairEvidencePhase, RepairEvidenceRequest, RepairFinding,
+    RepairHumanAction, RepairHumanActionKind, RepairIntent, RepairLayoutCanvas, RepairLayoutIntent,
+    RepairRelation, RepairSeverity, RepairStatus, RepairStatusEvent, RepairTarget,
+    RepairTargetKind, RepairThreadMessage, RepairVerification, StepOutput, Surface,
+    SurfaceObservation, TabOperation, Target, TestScenario, TestStep, TestSuite, VideoOperation,
+    ViewportCoverageComparison, WaitCondition, WaitMode, ACTION_PROTOCOL_REVISION,
+    DEFAULT_ASSERTION_SAMPLE_INTERVAL_MS, MAX_ASSERTION_STABILITY_MS,
+    MAX_ASSERTION_STABILITY_SAMPLES, MAX_LAYOUT_COORDINATE_ABS, MAX_LAYOUT_TOLERANCE_PX,
+    MAX_RENDERED_TEXT_ITEMS, MAX_VIEWPORT_COVERAGE_PERCENT, MIN_ASSERTION_STABILITY_MS,
+    PAGE_CONTEXT_PROTOCOL, REPAIR_PROTOCOL, SOURCE_MAPPING_PROTOCOL,
 };
 pub use page_context::{
     action_uses_observation_target, action_uses_page_context_ref,
@@ -55,6 +58,7 @@ pub use page_context::{
 pub use reconcile::{
     ContractFinding, ContractMatch, ContractMatchStrategy, ContractOutcome, ContractReport,
 };
+pub use source_mapping::SourceMappingValidationError;
 pub use ui_understanding::{
     UiAccessibilityStateChange, UiAnimationProfile, UiAnimationSource, UiAnimationTimeline,
     UiAnimationTimelineKind, UiAnimationTimelineSource, UiBaselineState, UiBoxEdges, UiBoxModel,

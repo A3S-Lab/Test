@@ -172,20 +172,21 @@ Checked-in evidence covers 1,000/1,000 base Core geometry cases plus 2,000/2,000
 
 ## Page perception and Test Kit
 
-| Capability            | Entry point or field                          | Output                                                                          | Key boundary                                                         |
-| --------------------- | --------------------------------------------- | ------------------------------------------------------------------------------- | -------------------------------------------------------------------- |
-| Automatic DOM context | `A3STestKit` or `installTestKit`              | Light DOM, open Shadow DOM, semantics, state, locators, and geometry            | Test Kit is optional; Web accessibility snapshots work without it    |
-| Component ownership   | `A3STestBoundary`                             | ID, name, parent, ready, facts, source, and multi-root boxes                    | Source is a locator hint and grants no file authority                |
-| Three geometry spaces | `geometry.viewport`, `document`, `normalized` | CSS pixels, document position, and visual-viewport normalization                | Geometry is evidence and a last resort after semantics               |
-| Stable locator chain  | `locators`                                    | Role, label, test ID, placeholder, text, and CSS candidates                     | A candidate must still resolve in the latest revision                |
-| Layout graph          | `ui.layout`                                   | Flex, Grid, normal flow, box model, overflow, and relation edges                | Missing endpoints, cyclic containment, and budget drift are rejected |
-| Visual system         | `ui.style`                                    | Colors, typography, spacing, radii, shadows, z-index, and responsive conditions | Class names alone never establish a component                        |
-| State differences     | `ui.stateDiffs`                               | Interaction-state changes that the page actually produced                       | Test Kit does not trigger hover, focus, or click to sample           |
-| Motion profile        | `ui.motion`                                   | Transitions, animations, timelines, ranges, and reduced motion                  | An unresolved named timeline is not guessed as scroll or view        |
-| Scoped snapshot       | `snapshot({ detail, scope })`                 | Page, node, component, or region context                                        | Private node IDs do not persist across revisions                     |
-| Diff and pagination   | `sinceRevision`, `cursor`, `nextCursor`       | Removed nodes and the next page                                                 | A cursor mismatched to request, scope, or revision fails closed      |
-| Budgets               | Provider ceilings and per-request `limits`    | Node, string, encoding, UI node, state, and duration use                        | A request can only reduce installation ceilings                      |
-| Redaction             | `redact` plus built-in sensitive-field rules  | Filtered text, attributes, form state, and facts                                | Cookies, storage, passwords, headers, and secrets stay out           |
+| Capability            | Entry point or field                          | Output                                                                          | Key boundary                                                          |
+| --------------------- | --------------------------------------------- | ------------------------------------------------------------------------------- | --------------------------------------------------------------------- |
+| Automatic DOM context | `A3STestKit` or `installTestKit`              | Light DOM, open Shadow DOM, semantics, state, locators, and geometry            | Test Kit is optional; Web accessibility snapshots work without it     |
+| Component ownership   | `A3STestBoundary`                             | ID, name, parent, ready, facts, source, and multi-root boxes                    | Source is a locator hint and grants no file authority                 |
+| Ranked source mapping | `registerSource`, `registerSourceMap`         | Confidence-ranked exact or ancestor spans on selected nodes                     | Explicit declarations only; no framework-private state or source text |
+| Three geometry spaces | `geometry.viewport`, `document`, `normalized` | CSS pixels, document position, and visual-viewport normalization                | Geometry is evidence and a last resort after semantics                |
+| Stable locator chain  | `locators`                                    | Role, label, test ID, placeholder, text, and CSS candidates                     | A candidate must still resolve in the latest revision                 |
+| Layout graph          | `ui.layout`                                   | Flex, Grid, normal flow, box model, overflow, and relation edges                | Missing endpoints, cyclic containment, and budget drift are rejected  |
+| Visual system         | `ui.style`                                    | Colors, typography, spacing, radii, shadows, z-index, and responsive conditions | Class names alone never establish a component                         |
+| State differences     | `ui.stateDiffs`                               | Interaction-state changes that the page actually produced                       | Test Kit does not trigger hover, focus, or click to sample            |
+| Motion profile        | `ui.motion`                                   | Transitions, animations, timelines, ranges, and reduced motion                  | An unresolved named timeline is not guessed as scroll or view         |
+| Scoped snapshot       | `snapshot({ detail, scope })`                 | Page, node, component, or region context                                        | Private node IDs do not persist across revisions                      |
+| Diff and pagination   | `sinceRevision`, `cursor`, `nextCursor`       | Removed nodes and the next page                                                 | A cursor mismatched to request, scope, or revision fails closed       |
+| Budgets               | Provider ceilings and per-request `limits`    | Node, string, encoding, UI node, state, and duration use                        | A request can only reduce installation ceilings                       |
+| Redaction             | `redact` plus built-in sensitive-field rules  | Filtered text, attributes, form state, and facts                                | Cookies, storage, passwords, headers, and secrets stay out            |
 
 Public ref authority remains fixed. `@eN` comes from browser accessibility, and `@cN` represents a uniquely actionable Page Context node. Both are actionable only in the latest observation. `@uN` connects style, layout, state, and motion evidence and is always read-only.
 

@@ -16,19 +16,19 @@ A3S Test installs terminal testing and in-page review separately. Choose the pat
 Run this command in the frontend project:
 
 ```bash
-npm install --save-dev @a3s-lab/testkit@0.4.2
+npm install --save-dev @a3s-lab/testkit@0.5.0
 ```
 
 Use the matching command when the project already uses another package manager:
 
 | Package manager | Command                                         |
 | --------------- | ----------------------------------------------- |
-| npm             | `npm install --save-dev @a3s-lab/testkit@0.4.2` |
-| pnpm            | `pnpm add --save-dev @a3s-lab/testkit@0.4.2`    |
-| Yarn            | `yarn add --dev @a3s-lab/testkit@0.4.2`         |
-| Bun             | `bun add --dev @a3s-lab/testkit@0.4.2`          |
+| npm             | `npm install --save-dev @a3s-lab/testkit@0.5.0` |
+| pnpm            | `pnpm add --save-dev @a3s-lab/testkit@0.5.0`    |
+| Yarn            | `yarn add --dev @a3s-lab/testkit@0.5.0`         |
+| Bun             | `bun add --dev @a3s-lab/testkit@0.5.0`          |
 
-`@a3s-lab/testkit` 0.4.2 is published on the official npm Registry with GitHub OIDC provenance. Pinning the version keeps installation reproducible, and the package manager stores its integrity in the project lockfile.
+`@a3s-lab/testkit` 0.5.0 is published on the official npm Registry with GitHub OIDC provenance. Pinning the version keeps installation reproducible, and the package manager stores its integrity in the project lockfile.
 
 Verify the installed dependency:
 
@@ -36,7 +36,7 @@ Verify the installed dependency:
 npm ls @a3s-lab/testkit
 ```
 
-The Test Kit package version advances independently from the A3S Test Release tag, so the two version numbers do not need to match. Continue with the [three-step Web Test Kit setup](./testkit.mdx#three-step-react-setup). Test Kit 0.4.2 includes the design board, page-region capture, and the live CLI compatibility handshake without a separate drawing library or screenshot plugin.
+The Test Kit package version advances independently from the A3S Test Release tag, so the two version numbers do not need to match. Continue with the [three-step Web Test Kit setup](./testkit.mdx#three-step-react-setup). Test Kit 0.5.0 includes the design board, page-region capture, live CLI compatibility handshake, and ranked rendered-node source mapping without a separate drawing library or screenshot plugin.
 
 ## Install the CLI and Agent Skill
 

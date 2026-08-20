@@ -13,6 +13,7 @@ import { useBrowserLayoutEffect } from "./react-effect";
 import { stableList } from "./review-utils";
 import type {
   PageContextBridge,
+  SourceSpan,
   TestKitOptions,
   TestKitRuntime,
 } from "./types";
@@ -83,7 +84,8 @@ export function A3STestKit({ children, ...options }: A3STestKitProps) {
 export type A3STestBoundaryProps = PropsWithChildren<{
   id: string;
   name: string;
-  source?: { file: string; line?: number; column?: number };
+  source?: SourceSpan;
+  generated?: SourceSpan;
   ready?: () => boolean;
   facts?: () => Record<string, unknown>;
   roots?: () => readonly Element[];
@@ -105,6 +107,7 @@ export function A3STestBoundary({
   id,
   name,
   source,
+  generated,
   ready,
   facts,
   roots,
@@ -124,10 +127,25 @@ export function A3STestBoundary({
       name,
       elements: () => [element, ...(latest.current.roots?.() ?? [])],
       ...(source ? { source } : {}),
+      ...(generated ? { generated } : {}),
       ready: () => latest.current.ready?.() ?? true,
       facts: () => latest.current.facts?.() ?? {},
     });
-  }, [bridge, id, name, source?.file, source?.line, source?.column]);
+  }, [
+    bridge,
+    generated?.column,
+    generated?.endColumn,
+    generated?.endLine,
+    generated?.file,
+    generated?.line,
+    id,
+    name,
+    source?.column,
+    source?.endColumn,
+    source?.endLine,
+    source?.file,
+    source?.line,
+  ]);
   return (
     <Tag ref={ref as never} className={className} style={style}>
       {children}

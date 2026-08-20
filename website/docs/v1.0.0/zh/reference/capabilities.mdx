@@ -176,6 +176,7 @@ Web 在一次页面求值中解析两个目标并读取两个矩形。CSS 保留
 | --------------- | --------------------------------------------- | -------------------------------------------------------- | -------------------------------------------------------- |
 | 自动 DOM 上下文 | `A3STestKit` 或 `installTestKit`              | Light DOM、开放 Shadow DOM、语义、状态、定位器与几何     | Test Kit 是增强项，未接入时 Web 可访问快照仍可工作       |
 | 组件归属        | `A3STestBoundary`                             | 组件 ID、名称、父级、ready、facts、source 与多根 boxes   | source 只是定位提示，不授权文件读取或修改                |
+| 排序源码映射    | `registerSource`、`registerSourceMap`         | 点选节点上按置信度排序的 exact 或 ancestor 源码跨度      | 只使用显式声明，不读取框架私有状态或源码正文             |
 | 三套几何        | `geometry.viewport`、`document`、`normalized` | CSS 像素、文档位置和 visual viewport 标准化位置          | 坐标是证据和最后退化，不优先于语义定位                   |
 | 稳定定位器链    | `locators`                                    | role、label、test ID、placeholder、text 与 CSS 候选      | 候选仍需在最新页面修订解析                               |
 | 布局图          | `ui.layout`                                   | Flex、Grid、普通流、box model、overflow 与关系边         | 缺失端点、循环包含和预算不一致会被 Web 驱动拒绝          |

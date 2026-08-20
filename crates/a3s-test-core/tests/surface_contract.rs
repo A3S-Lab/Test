@@ -565,5 +565,6 @@ fn node(
         classes: None,
         attributes: None,
         computed_styles: None,
+        source_mapping: None,
     }
 }

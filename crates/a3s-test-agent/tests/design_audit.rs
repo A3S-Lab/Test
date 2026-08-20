@@ -443,6 +443,7 @@ fn page_context() -> PageContextSnapshot {
                 "font-size".to_string(),
                 serde_json::Value::String("16px".to_string()),
             )]))),
+            source_mapping: None,
         }],
         facts: serde_json::Map::new(),
         ui: None,
