@@ -161,7 +161,7 @@ mod tests {
             check(
                 "focused",
                 VerificationCheckTier::Focused,
-                &["--version"],
+                &["__a3s_verification_noop__", "--exact"],
                 &working_directory,
             ),
             check(
@@ -175,7 +175,7 @@ mod tests {
 
         assert_eq!(results.len(), 1);
         assert_eq!(results[0].status, RepairCheckStatus::Passed);
-        assert!(results[0].command.contains("--version"));
+        assert!(results[0].command.contains("__a3s_verification_noop__"));
     }
 
     #[tokio::test]
@@ -185,7 +185,7 @@ mod tests {
             check(
                 "focused",
                 VerificationCheckTier::Focused,
-                &["--version"],
+                &["__a3s_verification_noop__", "--exact"],
                 &working_directory,
             ),
             check(
@@ -349,7 +349,7 @@ mod tests {
         VerificationCheckProfile {
             id: id.to_string(),
             tier,
-            executable: "rustc".to_string(),
+            executable: test_executable(),
             arguments: arguments.iter().map(|value| (*value).to_string()).collect(),
             working_directory: working_directory.to_path_buf(),
             file_prefixes: if tier == VerificationCheckTier::Focused {
@@ -362,47 +362,61 @@ mod tests {
         }
     }
 
-    fn verification_profile() -> &'static str {
-        r#"project "fixture" {
+    fn verification_profile() -> String {
+        let executable =
+            serde_json::to_string(&test_executable()).expect("encoded test executable");
+        format!(
+            r#"project "fixture" {{
   version = 1
   root = ".."
 
-  dev_server {
-    executable = "rustc"
-    args = ["--version"]
+  dev_server {{
+    executable = {executable}
+    args = ["__a3s_verification_noop__", "--exact"]
     working_directory = "."
     url = "http://127.0.0.1:5173/"
-  }
+  }}
 
-  browser {
+  browser {{
     driver = "a3s"
     session = "dev"
     headed = true
-  }
+  }}
 
-  verification {
-    check "component" {
+  verification {{
+    check "component" {{
       tier = "focused"
-      executable = "rustc"
-      args = ["--version"]
+      executable = {executable}
+      args = ["__a3s_verification_noop__", "--exact"]
       working_directory = "."
       file_prefixes = ["src"]
-    }
+    }}
 
-    check "workspace" {
+    check "workspace" {{
       tier = "regression"
-      executable = "rustc"
+      executable = {executable}
       args = ["--definitely-invalid"]
       working_directory = "."
       file_prefixes = []
-    }
-  }
+    }}
+  }}
 
-  testkit {
+  testkit {{
     required = true
-  }
-}
+  }}
+}}
 "#
+        )
+    }
+
+    fn test_executable() -> String {
+        // Toolchain shims can create transient descendants on Windows. The
+        // current test binary exercises the same owned-process path directly.
+        std::env::current_exe()
+            .expect("current test executable")
+            .into_os_string()
+            .into_string()
+            .expect("UTF-8 test executable path")
     }
 
     fn mapped_finding() -> RepairFinding {
