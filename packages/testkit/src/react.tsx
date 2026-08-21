@@ -15,7 +15,7 @@ import { invokeCallback, useLatest, writeClipboard } from "./review-integration"
 import { bridgeIsCompatible, deepActiveElement, isOverlayEvent, nodeForElement, selectionElement, targetElement } from "./review-dom";
 import { REVIEW_KEY_SHORTCUTS, useGlobalReviewShortcuts, useHostPointerBlocking, useLastApplicationFocus } from "./review-input-policy";
 import { useReviewOverlayHost } from "./review-overlay-host";
-import { useReviewGeometryRefresh, useReviewOverlayFocus } from "./review-overlay-effects";
+import { useReviewGeometryRefresh, useReviewMobileScrollLock, useReviewOverlayFocus } from "./review-overlay-effects";
 import type { A3SReviewOverlayProps } from "./review-overlay-types";
 export type { A3SReviewCopyEvent, A3SReviewOverlayProps } from "./review-overlay-types";
 export type { A3SReviewLocale, A3SReviewMessageKey, A3SReviewMessageOverrides } from "./review-locale";
@@ -133,6 +133,7 @@ export function A3SReviewOverlay({
     focusLauncherOnCloseRef,
   });
   useReviewGeometryRefresh(open);
+  useReviewMobileScrollLock(enabled && Boolean(bridge) && Boolean(mount) && !tabHidden && open && !marking);
   areaRef.current = area;
   drawingRef.current = drawing;
 
@@ -936,7 +937,7 @@ export function A3SReviewOverlay({
       </button>
       <div className="a3s-announcer" role="status" aria-live="polite" aria-atomic="true">{announcement}</div>
       <ReviewDesignReferenceBoard active={candidate !== null} design={designReference} idPrefix={idPrefix} theme={preferences.theme} onAnnounce={announce} />
-      {open && !designReference.boardOpen && <aside ref={panelRef} id={`${idPrefix}-review-panel`} className={`a3s-panel task-pane${marking ? " is-marking" : ""}`} data-responsive="overlay" aria-labelledby={`${idPrefix}-review-title`} aria-describedby={`${idPrefix}-review-description`} aria-keyshortcuts={REVIEW_KEY_SHORTCUTS.escape} role="region" tabIndex={-1}>
+      {open && !designReference.boardOpen && <aside ref={panelRef} id={`${idPrefix}-review-panel`} className={`a3s-panel task-pane${marking ? " is-marking" : ""}`} data-responsive="overlay" aria-labelledby={`${idPrefix}-review-title`} aria-describedby={`${idPrefix}-review-description`} aria-hidden={marking ? true : undefined} aria-keyshortcuts={REVIEW_KEY_SHORTCUTS.escape} role="region" tabIndex={-1} {...(marking ? { inert: "inert" } : {})}>
         <ReviewPanelHeader idPrefix={idPrefix} view={panelView} findingCount={findingCount} onClose={closeOverlayFromControl} onView={showPanelView} />
         <div className="a3s-panel-body">
           {panelView === "compose" && <section className="a3s-compose" aria-label={t("newFeedback")}>
@@ -987,6 +988,7 @@ export function A3SReviewOverlay({
             onDeleteDraft={deleteDraft} onStartReply={setReplyFindingId} onReplyMessage={setReplyMessage}
             onCancelReply={(findingId) => { setRestoreReplyFocusId(findingId); setReplyFindingId(null); setReplyMessage(""); }}
             onHumanAction={submitHumanAction} onClearDrafts={clearDrafts}
+            onCreateFinding={() => setPanelView("compose")}
             onCopyDrafts={(format) => { void copyDrafts(format); }}
             onSubmitSelected={() => { submit(drafts.filter((item) => item.selected).map((item) => item.draft)); }}
           />}

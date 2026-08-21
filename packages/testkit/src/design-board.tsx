@@ -75,6 +75,14 @@ export function DesignBoard({
   const statusId = `${idPrefix}-design-board-status`;
   const busy = busyAction !== null;
   const summaryLabel = designSummaryLabel(t, summary);
+  const busyStatus = busyAction === "import"
+    ? t("importing")
+    : busyAction === "export"
+      ? t("exporting")
+      : busyAction === "capture"
+        ? t("capturingPage")
+        : "";
+  const statusMessage = error || busyStatus || t("status", { summary: summaryLabel, help: t("canvasHelp") });
   const showHistory = history.past.length > 0 || history.future.length > 0 || Boolean(summary.kind);
   const showStyles = tool !== "select";
 
@@ -269,7 +277,9 @@ export function DesignBoard({
       ref={dialogRef}
       className="a3s-design-board"
       data-theme={theme}
+      data-busy-action={busyAction ?? undefined}
       role="region"
+      aria-busy={busy}
       aria-labelledby={titleId}
       aria-describedby={descriptionId}
       onKeyDownCapture={onDialogKeyDownCapture}
@@ -287,7 +297,7 @@ export function DesignBoard({
       </div>
       <div className="a3s-design-body">
         <div className="a3s-design-toolbar toolbar" role="toolbar" aria-label={t("boardActions")}>
-          <div className="a3s-design-tool-group" aria-label={t("tools")}>
+          <div className="a3s-design-tool-group a3s-design-tools" aria-label={t("tools")}>
             {tools.map((value) => {
               const label = designToolLabel(t, value);
               return <button
@@ -370,7 +380,8 @@ export function DesignBoard({
       <div className="a3s-design-footer">
         <output className="a3s-sr-only" aria-label={t("objectCount")}>{history.present.length}/{MAX_DESIGN_ELEMENTS}</output>
         <p id={statusId} className={`a3s-design-status${error ? " is-error" : ""}`} role={error ? "alert" : "status"}>
-          {error || t("status", { summary: summaryLabel, help: t("canvasHelp") })}
+          {busyStatus && !error && <span className="a3s-design-spinner" aria-hidden="true" />}
+          <span>{statusMessage}</span>
         </p>
         <div className="a3s-design-actions">
           <button type="button" className="quiet" onClick={onCancel}>{t("cancel")}</button>

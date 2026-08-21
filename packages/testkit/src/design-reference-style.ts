@@ -12,7 +12,7 @@ export const DESIGN_REFERENCE_CSS = `
 }
 
 .a3s-design-reference.has-reference {
-  grid-template-columns: 64px minmax(0, 1fr) auto auto;
+  grid-template-columns: 64px minmax(0, 1fr) auto;
 }
 
 .a3s-design-reference > div {
@@ -71,6 +71,13 @@ export const DESIGN_REFERENCE_CSS = `
   gap: 5px;
 }
 
+.a3s-design-reference-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 2px;
+}
+
 .a3s-design-reference-action {
   min-height: 30px;
   padding: 0 7px;
@@ -79,5 +86,36 @@ export const DESIGN_REFERENCE_CSS = `
 
 .a3s-design-reference-open {
   min-height: 34px;
+}
+
+@media (max-width: 420px) {
+  .a3s-design-reference:not(.has-reference) {
+    grid-template-columns: 36px minmax(0, 1fr);
+  }
+
+  .a3s-design-reference:not(.has-reference) .a3s-design-reference-open {
+    width: 100%;
+    min-height: 44px;
+    grid-column: 1 / -1;
+    justify-content: center;
+  }
+
+  .a3s-design-reference.has-reference {
+    grid-template-columns: 56px minmax(0, 1fr);
+  }
+
+  .a3s-design-reference.has-reference img {
+    width: 56px;
+    height: 40px;
+  }
+
+  .a3s-design-reference-actions {
+    grid-column: 2;
+    justify-content: flex-start;
+  }
+
+  .a3s-design-reference-action {
+    min-height: 40px;
+  }
 }
 `;

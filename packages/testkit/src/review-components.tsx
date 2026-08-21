@@ -115,7 +115,7 @@ export function ToolGlyph({ name }: { name: ToolIcon }) {
   if (name === "send") return <svg {...common}><path d="m3.5 4 13 6-13 6 2.2-5.1L12 10l-6.3-.9Z" /></svg>;
   if (name === "theme") return <svg {...common}><path d="M10 2.8a7.2 7.2 0 1 0 7.2 7.2A5.8 5.8 0 0 1 10 2.8Z" /></svg>;
   if (name === "inbox") return <svg {...common}><path d="M3.5 5.5h13v10h-13Z" /><path d="M3.5 11h3l1.4 2h4.2l1.4-2h3" /></svg>;
-  if (name === "settings") return <svg {...common}><circle cx="10" cy="10" r="2.4" /><path d="M10 3.3v1.3M10 15.4v1.3M3.3 10h1.3M15.4 10h1.3M5.3 5.3l.9.9M13.8 13.8l.9.9M14.7 5.3l-.9.9M6.2 13.8l-.9.9" /></svg>;
+  if (name === "settings") return <svg {...common}><path d="M3.5 5.5h4M10.5 5.5h6M3.5 10h8M14.5 10h2M3.5 14.5h2M8.5 14.5h8" /><circle cx="9" cy="5.5" r="1.5" /><circle cx="13" cy="10" r="1.5" /><circle cx="7" cy="14.5" r="1.5" /></svg>;
   if (name === "more") return <svg {...common}><circle cx="4.5" cy="10" r="1" /><circle cx="10" cy="10" r="1" /><circle cx="15.5" cy="10" r="1" /></svg>;
   return <svg {...common}><path d="m5 5 10 10M15 5 5 15" /></svg>;
 }
@@ -163,8 +163,10 @@ export function FindingEditor(props: FindingEditorProps) {
         {props.designReference ? <>
           {props.designReference.image.kind === "inline" && <img src={props.designReference.image.dataUrl} alt={designT(props.designReference.kind === "sketch" ? "referenceSketchAlt" : "referenceScreenshotAlt")} />}
           <div><strong>{designT(props.designReference.kind === "sketch" ? "referenceSketchAttached" : "referenceScreenshotAttached")}</strong><small>{props.designReference.width} × {props.designReference.height} · {designT("referenceStored")}</small></div>
-          <button type="button" className="quiet a3s-design-reference-action" onClick={props.onOpenDesignBoard}><DesignGlyph name="draw" /><span>{designT("editReference")}</span></button>
-          <button type="button" className="quiet danger a3s-design-reference-action" onClick={props.onRemoveDesignReference}><DesignGlyph name="trash" /><span>{designT("removeReference")}</span></button>
+          <span className="a3s-design-reference-actions">
+            <button type="button" className="quiet a3s-design-reference-action" onClick={props.onOpenDesignBoard}><DesignGlyph name="draw" /><span>{designT("editReference")}</span></button>
+            <button type="button" className="quiet danger a3s-design-reference-action" onClick={props.onRemoveDesignReference}><DesignGlyph name="trash" /><span>{designT("removeReference")}</span></button>
+          </span>
         </> : <>
           <span className="a3s-design-reference-icon" aria-hidden="true"><DesignGlyph name="image" /></span>
           <div><strong>{designT("referencePromptTitle")}</strong><small>{designT("referencePromptDescription")}</small></div>

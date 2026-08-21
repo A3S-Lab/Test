@@ -54,3 +54,54 @@ export function useReviewGeometryRefresh(open: boolean): void {
     };
   }, [open]);
 }
+
+type InlineOverflowSnapshot = {
+  element: HTMLElement;
+  priority: string;
+  value: string;
+};
+
+function lockDocumentScroll(): () => void {
+  const snapshots: InlineOverflowSnapshot[] = [document.documentElement, document.body]
+    .filter((element): element is HTMLElement => Boolean(element))
+    .map((element) => ({
+      element,
+      priority: element.style.getPropertyPriority("overflow"),
+      value: element.style.getPropertyValue("overflow"),
+    }));
+
+  for (const { element } of snapshots) {
+    element.style.setProperty("overflow", "hidden", "important");
+  }
+
+  return () => {
+    for (const { element, priority, value } of snapshots) {
+      if (value) element.style.setProperty("overflow", value, priority);
+      else element.style.removeProperty("overflow");
+    }
+  };
+}
+
+export function useReviewMobileScrollLock(active: boolean): void {
+  useEffect(() => {
+    if (!active || typeof window.matchMedia !== "function") return;
+    const compactViewport = window.matchMedia("(max-width: 420px)");
+    let unlock: (() => void) | null = null;
+
+    const sync = () => {
+      if (compactViewport.matches && !unlock) {
+        unlock = lockDocumentScroll();
+      } else if (!compactViewport.matches && unlock) {
+        unlock();
+        unlock = null;
+      }
+    };
+
+    sync();
+    compactViewport.addEventListener("change", sync);
+    return () => {
+      compactViewport.removeEventListener("change", sync);
+      unlock?.();
+    };
+  }, [active]);
+}

@@ -26,6 +26,37 @@ function shadowButton(text: string): HTMLButtonElement {
   return button;
 }
 
+function installCompactMediaQuery(initialMatches = true) {
+  const condition = "(max-width: 420px)";
+  const listeners = new Set<(event: MediaQueryListEvent) => void>();
+  let matches = initialMatches;
+  const compactQuery = {
+    get matches() { return matches; },
+    media: condition,
+    addEventListener: (_type: string, listener: EventListenerOrEventListenerObject) => {
+      if (typeof listener === "function") listeners.add(listener as (event: MediaQueryListEvent) => void);
+    },
+    removeEventListener: (_type: string, listener: EventListenerOrEventListenerObject) => {
+      if (typeof listener === "function") listeners.delete(listener as (event: MediaQueryListEvent) => void);
+    },
+  } as unknown as MediaQueryList;
+  const desktopQuery = {
+    ...compactQuery,
+    matches: false,
+  } as MediaQueryList;
+  Object.defineProperty(window, "matchMedia", {
+    configurable: true,
+    value: vi.fn((query: string) => query === condition ? compactQuery : desktopQuery),
+  });
+  return {
+    setMatches(value: boolean) {
+      matches = value;
+      const event = { matches: value, media: condition } as MediaQueryListEvent;
+      for (const listener of listeners) listener(event);
+    },
+  };
+}
+
 describe("React adapter and review overlay", () => {
   it("survives StrictMode and registers component context", async () => {
     const view = render(<StrictMode><A3STestKit enabled page={{ id: "react" }} repairStorage="memory"><A3STestBoundary id="card" name="Card" source={{ file: "src/Card.tsx" }}><button>Buy</button></A3STestBoundary></A3STestKit></StrictMode>);
@@ -96,6 +127,69 @@ describe("React adapter and review overlay", () => {
 
     view.unmount();
     document.documentElement.lang = previousLanguage;
+  });
+
+  it("offers one direct action from the empty findings workspace", async () => {
+    render(<A3STestKit enabled page={{ id: "empty-workspace" }} repairStorage="memory"><A3SReviewOverlay enabled defaultOpen locale="en" /></A3STestKit>);
+    await waitFor(() => expect(shadowQuery(".a3s-panel")).toBeTruthy());
+
+    fireEvent.click(shadowButton("Findings"));
+    const empty = shadowQuery(".a3s-empty");
+    expect(empty.querySelector("strong")?.textContent).toBe("No findings yet");
+    expect(empty.querySelector(".a3s-empty-icon svg")).toBeTruthy();
+    const create = empty.querySelector("button");
+    expect(create?.textContent).toBe("Create feedback");
+    expect(create?.querySelector("svg")).toBeTruthy();
+    const buttons = Array.from((empty.getRootNode() as ShadowRoot).querySelectorAll("button"));
+    expect(buttons.filter((button) => button.textContent === "New feedback")).toHaveLength(1);
+    expect(buttons.filter((button) => button.textContent === "Create feedback")).toHaveLength(1);
+
+    fireEvent.click(create!);
+    expect(shadowQuery(".a3s-compose")).toBeTruthy();
+    expect(shadowButton("New feedback").getAttribute("aria-pressed")).toBe("true");
+  });
+
+  it("locks host scrolling only while a compact review surface is open", async () => {
+    const compactViewport = installCompactMediaQuery();
+    document.documentElement.style.setProperty("overflow", "clip", "important");
+    document.body.style.setProperty("overflow", "auto");
+    const view = render(<A3STestKit enabled page={{ id: "compact-scroll-lock" }} repairStorage="memory"><button id="compact-target">Target</button><A3SReviewOverlay enabled defaultOpen locale="en" /></A3STestKit>);
+
+    const panel = await waitFor(() => shadowQuery(".a3s-panel"));
+    await waitFor(() => expect(document.documentElement.style.getPropertyValue("overflow")).toBe("hidden"));
+    expect(document.documentElement.style.getPropertyPriority("overflow")).toBe("important");
+    expect(document.body.style.getPropertyValue("overflow")).toBe("hidden");
+
+    compactViewport.setMatches(false);
+    expect(document.documentElement.style.getPropertyValue("overflow")).toBe("clip");
+    expect(document.documentElement.style.getPropertyPriority("overflow")).toBe("important");
+    expect(document.body.style.getPropertyValue("overflow")).toBe("auto");
+    compactViewport.setMatches(true);
+    expect(document.documentElement.style.getPropertyValue("overflow")).toBe("hidden");
+
+    fireEvent.click(shadowButton("Element"));
+    await waitFor(() => expect(document.documentElement.style.getPropertyValue("overflow")).toBe("clip"));
+    expect(document.body.style.getPropertyValue("overflow")).toBe("auto");
+    expect(panel.getAttribute("aria-hidden")).toBe("true");
+    expect(panel.hasAttribute("inert")).toBe(true);
+
+    fireEvent.click(shadowQuery(".a3s-mobile-marking-actions button"));
+    await waitFor(() => expect(document.documentElement.style.getPropertyValue("overflow")).toBe("hidden"));
+    expect(panel.hasAttribute("aria-hidden")).toBe(false);
+    expect(panel.hasAttribute("inert")).toBe(false);
+
+    fireEvent.click(shadowQuery(".a3s-panel-header .a3s-close"));
+    await waitFor(() => expect(document.documentElement.style.getPropertyValue("overflow")).toBe("clip"));
+    expect(document.body.style.getPropertyValue("overflow")).toBe("auto");
+
+    fireEvent.click(shadowQuery(".a3s-launch"));
+    await waitFor(() => expect(document.documentElement.style.getPropertyValue("overflow")).toBe("hidden"));
+    view.unmount();
+    expect(document.documentElement.style.getPropertyValue("overflow")).toBe("clip");
+    expect(document.documentElement.style.getPropertyPriority("overflow")).toBe("important");
+    expect(document.body.style.getPropertyValue("overflow")).toBe("auto");
+    document.documentElement.style.removeProperty("overflow");
+    document.body.style.removeProperty("overflow");
   });
 
   it("opens a localized design board as a simple right-side drawer", async () => {
@@ -240,6 +334,7 @@ describe("React adapter and review overlay", () => {
 
     fireEvent.click(await waitFor(() => shadowButton("Open design board")));
     const input = await waitFor(() => shadowQuery("input[type=file]"));
+    expect(shadowQuery(".a3s-design-board").getAttribute("aria-busy")).toBe("false");
     fireEvent.change(input, {
       target: {
         files: [new File([new Uint8Array([1, 2, 3])], "desired-ui.png", { type: "image/png" })],
@@ -250,6 +345,7 @@ describe("React adapter and review overlay", () => {
     fireEvent.click(shadowButton("Attach to finding"));
 
     await waitFor(() => expect(shadowQuery(".a3s-design-reference").textContent).toContain("Screenshot attached"));
+    expect(shadowQuery(".a3s-design-reference-actions").querySelectorAll("button")).toHaveLength(2);
     fireEvent.change(shadowQuery(".a3s-editor textarea"), { target: { value: "Match the attached screenshot" } });
     fireEvent.click(shadowButton("Send and auto-fix"));
     await waitFor(() => expect(onSubmitted).toHaveBeenCalledTimes(1));
@@ -299,8 +395,14 @@ describe("React adapter and review overlay", () => {
     fireEvent.click(capture);
     const selector = await waitFor(() => shadowQuery(".a3s-page-capture"));
     expect(selector.getAttribute("role")).toBe("dialog");
+    expect(selector.dataset.state).toBe("idle");
     expect(selector.textContent).toContain("Drag to select a screenshot area");
     expect(domToJpeg).not.toHaveBeenCalled();
+
+    fireEvent(selector, capturePointerEvent("pointerdown", selector, 100, 150, 1));
+    fireEvent(selector, capturePointerEvent("pointerup", selector, 105, 155, 1));
+    expect(selector.dataset.state).toBe("error");
+    expect(selector.textContent).toContain("Drag a larger area to capture it");
 
     fireEvent.keyDown(selector, { key: "Escape" });
     await waitFor(() => expect(document.querySelector<HTMLElement>("[data-a3s-testkit-overlay]")!.shadowRoot!.querySelector(".a3s-page-capture")).toBeNull());
@@ -346,6 +448,7 @@ describe("React adapter and review overlay", () => {
     expect(shadowQuery("[data-testid='design-tool-draw']")).toBeTruthy();
     expect(shadowQuery("[data-testid='design-tool-rectangle']")).toBeTruthy();
     expect(shadowQuery("[data-testid='design-tool-text']")).toBeTruthy();
+    expect(shadowQuery(".a3s-design-tools").querySelectorAll("button")).toHaveLength(4);
     expect(document.querySelector<HTMLElement>("[data-a3s-testkit-overlay]")!.shadowRoot!.querySelector(".a3s-design-history")).toBeNull();
     expect(document.querySelector<HTMLElement>("[data-a3s-testkit-overlay]")!.shadowRoot!.querySelector(".a3s-design-style")).toBeNull();
     fireEvent.click(shadowQuery("[data-testid='design-tool-draw']"));
@@ -436,6 +539,9 @@ describe("React adapter and review overlay", () => {
 
     expect(bridge.reportQuality(report)).toBe(true);
     await waitFor(() => expect(shadowQuery(".a3s-quality").textContent).toContain("Use the contracted role"));
+    const qualityItem = shadowQuery(".a3s-quality-item");
+    expect(qualityItem.querySelector("header .a3s-status")?.textContent).toBe("Blocking");
+    expect(qualityItem.querySelector("footer")?.querySelectorAll("button")).toHaveLength(2);
     fireEvent.click(shadowQuery("[aria-label='Review contract finding: Use the contracted role']"));
     await waitFor(() => expect(shadowQuery(".a3s-editor").textContent).toContain("checkout-action"));
     expect(bridge.listQualityReports()[0]!.findings).toHaveLength(2);
@@ -499,6 +605,9 @@ describe("React adapter and review overlay", () => {
 
     expect(bridge.reportDesignAudit(report)).toBe(true);
     await waitFor(() => expect(shadowQuery(".a3s-design-audit").textContent).toContain("The primary action lacks emphasis"));
+    const designAuditItem = shadowQuery(".a3s-design-audit .a3s-quality-item");
+    expect(designAuditItem.querySelector("header .a3s-status")?.textContent).toBe("high");
+    expect(designAuditItem.querySelector("footer")?.querySelectorAll("button")).toHaveLength(2);
     expect(bridge.listRepairs()).toEqual([]);
     fireEvent.click(shadowQuery("[aria-label='Review design suggestion: The primary action lacks emphasis']"));
     await waitFor(() => expect((shadowQuery("textarea") as HTMLTextAreaElement).value).toContain("Increase the primary action contrast"));
@@ -638,6 +747,14 @@ describe("React adapter and review overlay", () => {
     rect = DOMRect.fromRect({ x: 24, y: 24, width: 140, height: 36 });
     fireEvent.scroll(window);
     await waitFor(() => expect(shadowQuery(".a3s-marker").style.top).toBe("24px"));
+    expect(shadowQuery(".a3s-marker-action").dataset.tooltipAlign).toBe("start");
+    expect(shadowQuery(".a3s-marker-action").dataset.tooltipSide).toBe("bottom");
+
+    rect = DOMRect.fromRect({ x: 900, y: 760, width: 80, height: 30 });
+    fireEvent.scroll(window);
+    await waitFor(() => expect(shadowQuery(".a3s-marker").style.left).toBe("900px"));
+    expect(shadowQuery(".a3s-marker-action").dataset.tooltipAlign).toBe("end");
+    expect(shadowQuery(".a3s-marker-action").dataset.tooltipSide).toBe("top");
   });
 
   it("restores page-local drafts and semantic targets after a React reload", async () => {
@@ -770,10 +887,12 @@ describe("React adapter and review overlay", () => {
     const catalog = shadowQuery(".a3s-catalog");
     expect(Number(catalog.dataset.componentCount)).toBeGreaterThanOrEqual(65);
     const catalogToggle = shadowButton("Component catalog · 90");
+    expect(catalogToggle.querySelector(".a3s-catalog-icon svg")).toBeTruthy();
     expect(catalogToggle.getAttribute("aria-label")).toBe("Component catalog · 90");
     expect(catalogToggle.getAttribute("aria-expanded")).toBe("false");
     fireEvent.click(catalogToggle);
     expect(catalogToggle.getAttribute("aria-expanded")).toBe("true");
+    expect(shadowQuery(".a3s-catalog-search-control svg")).toBeTruthy();
     fireEvent.change(shadowQuery("[aria-label='Search component catalog']"), { target: { value: "checkout" } });
     expect(shadowQuery(".a3s-catalog-results").textContent).toContain("Checkout Form");
     expect(shadowQuery(".a3s-catalog-results").textContent).not.toContain("Breadcrumbs");
@@ -982,6 +1101,8 @@ describe("React adapter and review overlay", () => {
     expect(shadowQuery(".a3s-root").dataset.dock).toBe("left");
     expect(shadowQuery(".a3s-root").style.getPropertyValue("--a3s-marker-color")).toBe("#2563eb");
     expect(shadowQuery(".a3s-root").style.getPropertyValue("--a3s-wireframe-fade")).toBe("0.42");
+    expect(shadowQuery("[aria-label='Clear drafts after copy']").getAttribute("role")).toBe("switch");
+    expect((shadowQuery("[aria-label='Wireframe page fade']") as HTMLElement).style.getPropertyValue("--a3s-range-value")).toBe("52.5%");
 
     await addElementDraft(target, "Clear after copy");
     fireEvent.click(shadowButton("Copy Markdown"));

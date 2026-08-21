@@ -99,11 +99,11 @@ export const OVERLAY_MARKING_CSS = `
 .a3s-marker-action::after {
   position: absolute;
   top: calc(100% + 8px);
-  left: 0;
+  left: 12px;
   z-index: 12;
+  width: max-content;
   max-width: min(260px, calc(100vw - 24px));
   padding: 7px 9px;
-  overflow: hidden;
   border: 1px solid var(--a3s-toolbar-line);
   border-radius: 9px;
   background: var(--a3s-toolbar);
@@ -113,17 +113,34 @@ export const OVERLAY_MARKING_CSS = `
   font-size: 11px;
   font-weight: 550;
   opacity: 0;
+  overflow-wrap: anywhere;
   pointer-events: none;
-  text-overflow: ellipsis;
   transform: translateY(-3px);
   transition: opacity 120ms ease, transform 120ms ease;
-  white-space: nowrap;
+  white-space: normal;
+}
+
+.a3s-marker-action[data-tooltip-align="end"]::after {
+  right: 12px;
+  left: auto;
+}
+
+.a3s-marker-action[data-tooltip-side="top"]::after {
+  top: auto;
+  bottom: calc(100% + 8px);
+  transform: translateY(3px);
 }
 
 .a3s-marker-action:hover::after,
 .a3s-marker-action:focus-visible::after {
   opacity: 1;
   transform: translateY(0);
+}
+
+.a3s-marker-action:focus-visible {
+  outline: 2px solid #ffffff;
+  outline-offset: 1px;
+  box-shadow: 0 0 0 4px var(--a3s-marker-color);
 }
 
 .a3s-marker-action .a3s-marker-index {

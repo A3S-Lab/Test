@@ -161,6 +161,18 @@ ${DESIGN_REFERENCE_CSS}
   cursor: progress;
 }
 
+.a3s-page-capture[data-state="error"] .a3s-page-capture-bar {
+  border-color: rgb(242 119 119 / 70%);
+}
+
+.a3s-page-capture[data-state="error"] .a3s-page-capture-icon {
+  background: #c9363c;
+}
+
+.a3s-page-capture[data-state="error"] .a3s-page-capture-copy small {
+  color: #ffd3d3;
+}
+
 .a3s-design-board {
   display: flex;
   width: min(880px, calc(100vw - 24px));
@@ -263,6 +275,7 @@ ${DESIGN_REFERENCE_CSS}
   align-items: center;
   flex: 0 0 auto;
   flex-wrap: wrap;
+  align-content: center;
   gap: 5px;
 }
 
@@ -353,6 +366,20 @@ ${DESIGN_REFERENCE_CSS}
   background: var(--a3s-bg);
   color: var(--a3s-text);
   font-size: 10px;
+  transition: background-color var(--a3s-motion-normal) ease, border-color var(--a3s-motion-normal) ease, box-shadow var(--a3s-motion-normal) ease;
+}
+
+.a3s-design-style select:hover:not(:disabled),
+.a3s-design-style input[type="color"]:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--a3s-blue) 48%, var(--a3s-line));
+  background: var(--a3s-soft);
+}
+
+.a3s-design-style select:focus-visible,
+.a3s-design-style input[type="color"]:focus-visible {
+  border-color: var(--a3s-blue);
+  outline: 0;
+  box-shadow: var(--a3s-shadow-focus);
 }
 
 .a3s-design-style select:disabled,
@@ -496,18 +523,44 @@ ${DESIGN_REFERENCE_CSS}
 }
 
 .a3s-design-status {
+  display: flex;
   min-width: 0;
   margin: 0;
-  overflow: hidden;
   color: var(--a3s-faint);
   font-size: 10px;
+  align-items: center;
+  gap: 6px;
+}
+
+.a3s-design-status > span:last-child {
+  min-width: 0;
+  overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .a3s-design-status.is-error {
   color: var(--a3s-danger);
+}
+
+.a3s-design-status.is-error > span:last-child {
   white-space: normal;
+}
+
+.a3s-design-spinner {
+  width: 12px;
+  height: 12px;
+  border: 2px solid color-mix(in srgb, var(--a3s-blue) 24%, transparent);
+  border-top-color: var(--a3s-blue);
+  border-radius: 999px;
+  flex: 0 0 auto;
+  animation: a3s-design-spin 700ms linear infinite;
+}
+
+@keyframes a3s-design-spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .a3s-design-actions {
@@ -530,6 +583,68 @@ ${DESIGN_REFERENCE_CSS}
 .a3s-design-attach:hover {
   border-color: var(--a3s-blue-strong);
   background: var(--a3s-blue-strong);
+}
+
+@container (max-width: 720px) {
+  .a3s-design-tools button {
+    width: 34px;
+    padding: 0;
+  }
+
+  .a3s-design-tools button > span {
+    display: none;
+  }
+}
+
+@container (max-width: 520px) {
+  .a3s-design-toolbar {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+  }
+
+  .a3s-design-divider {
+    display: none;
+  }
+
+  .a3s-design-tools {
+    width: 100%;
+    grid-column: 1 / -1;
+  }
+
+  .a3s-design-tools button {
+    width: auto;
+    flex: 1 1 0;
+  }
+
+  .a3s-design-media {
+    min-width: 0;
+    grid-column: 1;
+  }
+
+  .a3s-design-media button {
+    min-width: 0;
+    flex: 1 1 0;
+  }
+
+  .a3s-design-history {
+    grid-column: 2;
+  }
+
+  .a3s-design-style {
+    grid-column: 1 / -1;
+  }
+}
+
+@container (max-width: 360px) {
+  .a3s-design-media button {
+    width: 44px;
+    padding: 0;
+  }
+
+  .a3s-design-media button > span {
+    display: none;
+  }
 }
 
 @media (max-width: 600px) {
@@ -568,7 +683,7 @@ ${DESIGN_REFERENCE_CSS}
   }
 
   .a3s-design-toolbar {
-    max-height: 158px;
+    max-height: 166px;
     padding: 5px;
     overflow-y: auto;
   }
@@ -604,6 +719,9 @@ ${DESIGN_REFERENCE_CSS}
 
   .a3s-design-status {
     min-height: 16px;
+  }
+
+  .a3s-design-status > span:last-child {
     white-space: normal;
   }
 

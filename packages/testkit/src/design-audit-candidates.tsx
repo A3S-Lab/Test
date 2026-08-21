@@ -39,13 +39,15 @@ export function DesignAuditCandidates({ reports, onReview, onDismiss }: DesignAu
     </div>
     {reports.flatMap((report) => report.findings.map((finding) => (
       <article key={`${report.id}:${finding.id}`} className="a3s-quality-item">
-        <span className={`a3s-status status-badge status-${prioritySeverity(finding.priority)}`}>{t(finding.priority === "high" ? "priorityHigh" : finding.priority === "medium" ? "priorityMedium" : "priorityLow")}</span>
-        <strong>{finding.summary}</strong>
+        <header>
+          <span className={`a3s-status status-badge status-${prioritySeverity(finding.priority)}`}>{t(finding.priority === "high" ? "priorityHigh" : finding.priority === "medium" ? "priorityMedium" : "priorityLow")}</span>
+          <strong>{finding.summary}</strong>
+        </header>
         <p>{finding.rationale}</p>
         <small>
           {dimensionLabel(finding.dimension, t)} · {t("confidence", { confidence: finding.confidence })} · {targetLabel(finding, t)}
         </small>
-        <div>
+        <footer>
           <button
             type="button"
             aria-label={t("reviewDesignSuggestion", { message: finding.summary })}
@@ -61,7 +63,7 @@ export function DesignAuditCandidates({ reports, onReview, onDismiss }: DesignAu
           >
             {t("dismiss")}
           </button>
-        </div>
+        </footer>
       </article>
     )))}
   </section>;

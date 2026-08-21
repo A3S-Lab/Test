@@ -146,6 +146,7 @@ export function PageCaptureOverlay(props: PageCaptureOverlayProps) {
     <div
       ref={rootRef}
       className={`a3s-page-capture${selection ? " has-selection" : ""}`}
+      data-state={props.busy ? "busy" : tooSmall ? "error" : selection ? "selecting" : "idle"}
       role="dialog"
       aria-modal="true"
       aria-label={props.title}

@@ -39,13 +39,15 @@ export function QualityCandidates({ reports, onReview, onDismiss }: QualityCandi
     </div>
     {reports.flatMap((report) => report.findings.map((finding) => (
       <article key={finding.id} className="a3s-quality-item">
-        <span className={`a3s-status status-badge status-${finding.severity}`}>{t(finding.severity === "blocking" ? "severityBlocking" : finding.severity === "important" ? "severityImportant" : "severitySuggestion")}</span>
-        <strong>{finding.message}</strong>
+        <header>
+          <span className={`a3s-status status-badge status-${finding.severity}`}>{t(finding.severity === "blocking" ? "severityBlocking" : finding.severity === "important" ? "severityImportant" : "severitySuggestion")}</span>
+          <strong>{finding.message}</strong>
+        </header>
         <small>
           {report.contract} · {finding.rule_id}
           {` · ${t(finding.observed_node_id ? "targetFound" : "chooseTarget")}`}
         </small>
-        <div>
+        <footer>
           <button
             type="button"
             aria-label={t("reviewContractFinding", { message: finding.message })}
@@ -61,7 +63,7 @@ export function QualityCandidates({ reports, onReview, onDismiss }: QualityCandi
           >
             {t("dismiss")}
           </button>
-        </div>
+        </footer>
       </article>
     )))}
   </section>;

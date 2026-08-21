@@ -1,5 +1,6 @@
 import { DesignAuditCandidates } from "./design-audit-candidates";
 import { QualityCandidates } from "./quality-candidates";
+import { ToolGlyph } from "./review-components";
 import { REVIEW_KEY_SHORTCUTS } from "./review-input-policy";
 import { reviewActorLabel, reviewStatusLabel, reviewTargetSummary, useReviewI18n } from "./review-locale";
 import type { ReviewDraftItem } from "./review-storage";
@@ -40,6 +41,7 @@ export type ReviewWorkspaceProps = {
   onCancelReply(findingId: string): void;
   onHumanAction(findingId: string, action: RepairHumanActionKind, message?: string): void;
   onClearDrafts(): void;
+  onCreateFinding(): void;
   onCopyDrafts(format: "markdown" | "json"): void;
   onSubmitSelected(): void;
 };
@@ -70,7 +72,7 @@ export function ReviewWorkspace(props: ReviewWorkspaceProps) {
         onReview={props.onReviewDesignAudit}
         onDismiss={props.onDismissDesignAudit}
       />
-      <section className="a3s-list" aria-label={t("draftAndSubmittedFindings")} tabIndex={0}>
+      <section className={`a3s-list${isEmpty ? " is-empty" : ""}`} aria-label={t("draftAndSubmittedFindings")} tabIndex={0}>
         {props.drafts.map((item) => <article key={item.draft.id} className={`a3s-item${item.hidden ? " is-hidden" : ""}`}>
           <label>
             <input
@@ -127,7 +129,12 @@ export function ReviewWorkspace(props: ReviewWorkspaceProps) {
             </div>}
           </article>;
         })}
-        {isEmpty && <p className="a3s-empty">{t("emptyWorkspace")}</p>}
+        {isEmpty && <div className="a3s-empty">
+          <span className="a3s-empty-icon" aria-hidden="true"><ToolGlyph name="inbox" /></span>
+          <strong>{t("emptyWorkspaceTitle")}</strong>
+          <p>{t("emptyWorkspace")}</p>
+          <button type="button" onClick={props.onCreateFinding}><ToolGlyph name="element" /><span>{t("createFeedback")}</span></button>
+        </div>}
       </section>
     </div>
     {props.drafts.length > 0 && <footer>

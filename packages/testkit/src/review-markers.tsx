@@ -6,6 +6,7 @@ import type {
   PageContextBridge,
   DesignAuditReportRecord,
   QualityReportRecord,
+  Rect,
   SubmittedRepair,
 } from "./types";
 
@@ -52,11 +53,14 @@ export function ReviewMarkers(props: ReviewMarkersProps) {
         >{index === 0 && <span className="a3s-marker-index">{markerIndex + 1}</span>}</span>;
       }
       const draft = props.drafts.find((item) => item.draft.id === marker.id);
+      const tooltip = markerTooltipPlacement(rect);
       return <span key={`${marker.id}-${index}`} className="a3s-marker status-draft" style={rectStyle(rect)}>
         <button
           type="button"
           className="a3s-marker-action"
           data-tooltip={draft?.draft.instruction ?? t("openFinding")}
+          data-tooltip-align={tooltip.align}
+          data-tooltip-side={tooltip.side}
           aria-label={t("editDraftMarker", { message: draft?.draft.instruction ?? marker.id })}
           onClick={() => { if (draft) props.onEditDraft(draft); }}
         >
@@ -65,4 +69,17 @@ export function ReviewMarkers(props: ReviewMarkersProps) {
       </span>;
     }))}
   </div>;
+}
+
+function markerTooltipPlacement(rect: Rect): {
+  align: "start" | "end";
+  side: "bottom" | "top";
+} {
+  const viewport = typeof window === "undefined" ? null : window.visualViewport;
+  const width = viewport?.width ?? (typeof window === "undefined" ? 1024 : window.innerWidth);
+  const height = viewport?.height ?? (typeof window === "undefined" ? 768 : window.innerHeight);
+  return {
+    align: rect.x > width / 2 ? "end" : "start",
+    side: rect.y > height - 96 ? "top" : "bottom",
+  };
 }

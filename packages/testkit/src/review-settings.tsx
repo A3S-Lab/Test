@@ -1,4 +1,4 @@
-import { useId } from "react";
+import { useId, type CSSProperties } from "react";
 import { REVIEW_KEY_SHORTCUTS, REVIEW_SHORTCUT_HELP } from "./review-input-policy";
 import type { ReviewPreferences } from "./review-preferences";
 import { ToolGlyph } from "./review-components";
@@ -34,6 +34,11 @@ export function ReviewSettings({
     key: Key,
     value: ReviewPreferences[Key],
   ) => onChange({ ...preferences, [key]: value });
+  const wireframeFadePercent = Math.round(preferences.wireframeFade * 100);
+  const wireframeRangePercent = Number((preferences.wireframeFade * 125).toFixed(2));
+  const wireframeRangeStyle = {
+    "--a3s-range-value": `${wireframeRangePercent}%`,
+  } as CSSProperties;
 
   return <section className="a3s-settings-content" aria-label={t("reviewPreferences")}>
       <header className="a3s-settings-heading"><strong>{t("reviewPreferences")}</strong><small>{t("settingsHelp")}</small></header>
@@ -43,13 +48,15 @@ export function ReviewSettings({
         <button type="button" aria-pressed={autoSendEnabled} aria-label={t(autoSendEnabled ? "turnAutoSendOff" : "turnAutoSendOn")} onClick={onToggleAutoSend}><ToolGlyph name="send" /><span>{t(autoSendEnabled ? "autoSendOn" : "autoSendOff")}</span></button>
       </div>
       <div className="a3s-settings-grid">
-      <label>{t("theme")}<select aria-label={t("overlayTheme")} value={preferences.theme} onChange={(event) => update("theme", event.target.value as ReviewPreferences["theme"])}><option value="system">{t("themeSystem")}</option><option value="light">{t("themeLight")}</option><option value="dark">{t("themeDark")}</option></select></label>
-      <label>{t("panelDock")}<select aria-label={t("panelDock")} value={preferences.dock} onChange={(event) => update("dock", event.target.value as ReviewPreferences["dock"])}><option value="right">{t("dockRight")}</option><option value="left">{t("dockLeft")}</option></select></label>
-      <label>{t("markerColor")}<input type="color" aria-label={t("markerColor")} value={preferences.markerColor} onChange={(event) => update("markerColor", event.target.value)} /></label>
-      <label>{t("wireframePageFade")} <output>{Math.round(preferences.wireframeFade * 100)}%</output><input type="range" aria-label={t("wireframePageFade")} min="0" max="0.8" step="0.01" value={preferences.wireframeFade} onChange={(event) => update("wireframeFade", event.currentTarget.valueAsNumber)} /></label>
+        <label className="a3s-setting-field">{t("theme")}<select aria-label={t("overlayTheme")} value={preferences.theme} onChange={(event) => update("theme", event.target.value as ReviewPreferences["theme"])}><option value="system">{t("themeSystem")}</option><option value="light">{t("themeLight")}</option><option value="dark">{t("themeDark")}</option></select></label>
+        <label className="a3s-setting-field">{t("panelDock")}<select aria-label={t("panelDock")} value={preferences.dock} onChange={(event) => update("dock", event.target.value as ReviewPreferences["dock"])}><option value="right">{t("dockRight")}</option><option value="left">{t("dockLeft")}</option></select></label>
+        <label className="a3s-setting-field">{t("markerColor")}<span className="a3s-color-control"><input type="color" aria-label={t("markerColor")} value={preferences.markerColor} onChange={(event) => update("markerColor", event.target.value)} /><output>{preferences.markerColor.toUpperCase()}</output></span></label>
+        <label className="a3s-setting-field a3s-setting-range"><span className="a3s-setting-label"><span>{t("wireframePageFade")}</span><output>{wireframeFadePercent}%</output></span><input type="range" aria-label={t("wireframePageFade")} min="0" max="0.8" step="0.01" value={preferences.wireframeFade} style={wireframeRangeStyle} onChange={(event) => update("wireframeFade", event.currentTarget.valueAsNumber)} /></label>
       </div>
-      <label className="a3s-setting-toggle"><input type="checkbox" aria-label={t("clearDraftsAfterCopy")} checked={preferences.clearOnCopy} onChange={(event) => update("clearOnCopy", event.target.checked)} /><span>{t("clearDraftsAfterCopyHelp")}</span></label>
-      <label className="a3s-setting-toggle"><input type="checkbox" aria-label={t("blockPagePointerInput")} checked={preferences.blockInteractions} onChange={(event) => update("blockInteractions", event.target.checked)} /><span>{t("blockPagePointerInputHelp")}</span></label>
+      <div className="a3s-setting-toggles">
+        <label className="a3s-setting-toggle"><span><strong>{t("clearDraftsAfterCopy")}</strong><small>{t("clearDraftsAfterCopyHelp")}</small></span><input className="a3s-setting-switch" type="checkbox" role="switch" aria-label={t("clearDraftsAfterCopy")} checked={preferences.clearOnCopy} onChange={(event) => update("clearOnCopy", event.target.checked)} /></label>
+        <label className="a3s-setting-toggle"><span><strong>{t("blockPagePointerInput")}</strong><small>{t("blockPagePointerInputHelp")}</small></span><input className="a3s-setting-switch" type="checkbox" role="switch" aria-label={t("blockPagePointerInput")} checked={preferences.blockInteractions} onChange={(event) => update("blockInteractions", event.target.checked)} /></label>
+      </div>
       <section className="a3s-shortcuts" aria-labelledby={shortcutsTitleId}>
         <h3 id={shortcutsTitleId} className="a3s-shortcuts-title">{t("keyboardShortcuts")}</h3>
         <dl>{REVIEW_SHORTCUT_HELP.map((shortcut) => <div key={shortcut.action}><dt>{reviewShortcutLabel(t, shortcut.action)}</dt><dd><kbd>{shortcut.keys}</kbd></dd></div>)}</dl>
