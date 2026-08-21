@@ -1,0 +1,75 @@
+benchmark "ui-execution-layer" {
+  protocol = 1
+  repetitions = 3
+  viewport = {height = 214, width = 332}
+  source "browsergym" {
+    commit = "9e779f087de9a65668b6974d11f9ce9816026e96"
+    license = "Apache-2.0"
+    package = "browsergym-core"
+    version = "0.14.3"
+  }
+  source "miniwob-plusplus" {
+    commit = "7fd85d71a4b60325c6585396ec4f48377d049838"
+    license = "MIT"
+    repository = "https://github.com/Farama-Foundation/miniwob-plusplus.git"
+  }
+  candidate "a3s-test" {
+    browser_driver = "standalone"
+    protocol_revision = 15
+    version = "1.0.0"
+  }
+  candidate "agent-browser" {
+    version = "0.26.0"
+  }
+  task "click-button" {
+    dimension = "semantic-click"
+    seed = 1337
+  }
+  task "enter-text" {
+    dimension = "form-fill"
+    seed = 7331
+  }
+  task "choose-list" {
+    dimension = "single-select"
+    seed = 424242
+  }
+  task "click-checkboxes" {
+    dimension = "multi-target-state"
+    seed = 17
+  }
+  task "click-scroll-list" {
+    dimension = "multi-select-scroll"
+    seed = 23
+  }
+  task "grid-coordinate" {
+    dimension = "geometry-targeting"
+    seed = 42
+  }
+  task "enter-text-dynamic" {
+    dimension = "dynamic-layout-form"
+    seed = 101
+  }
+  task "click-menu-2" {
+    dimension = "dynamic-disclosure"
+    seed = 1337
+  }
+  task "click-dialog-2" {
+    dimension = "dialog-targeting"
+    seed = 202
+  }
+  probe "stale-ref" {
+    repetitions = 3
+    seed = 1337
+    task = "click-button"
+  }
+  probe "drag-box" {
+    repetitions = 1
+    seed = 42
+    task = "drag-box"
+  }
+  probe "wheel-scroll" {
+    repetitions = 1
+    seed = 303
+    task = "scroll-text-2"
+  }
+}

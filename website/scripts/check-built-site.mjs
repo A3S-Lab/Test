@@ -177,58 +177,65 @@ if (!englishHtml.includes('<html lang="en">')) {
   failures.push('English homepage does not declare English');
 }
 if (
-  !rootHtml.includes('让 Agent 看懂真实界面') ||
-  !rootHtml.includes('找到源码，留下回归') ||
-  !rootHtml.includes('A3S Test 只解决三个关键问题') ||
-  !rootHtml.includes('四层技术实现支撑这三个结果') ||
-  !rootHtml.includes('data-testid="capability-group-context"') ||
-  !rootHtml.includes('data-testid="capability-group-core"') ||
-  !rootHtml.includes('data-testid="capability-group-execution"') ||
-  !rootHtml.includes('data-testid="capability-group-evidence"') ||
-  !rootHtml.includes('查看完整能力的入口、输出、证据和失败边界') ||
-  !rootHtml.includes('组合浏览器语义与页面上下文') ||
-  !rootHtml.includes('显式声明源码归属') ||
-  !rootHtml.includes('四种权限互不冒充') ||
-  !rootHtml.includes('在一个右侧界面完成标记') ||
-  !rootHtml.includes('ACL 固化已证明路径')
+  !rootHtml.includes('让 Agent 基于真实页面行动') ||
+  !rootHtml.includes('把每次修改证明给你看') ||
+  !rootHtml.includes('读取当前渲染') ||
+  !rootHtml.includes('绑定负责源码') ||
+  !rootHtml.includes('只认新证据') ||
+  !rootHtml.includes('给 Agent 的不只是一句“这里有问题”') ||
+  !rootHtml.includes('a3s.test.repair/1') ||
+  !rootHtml.includes('三步跑通第一个真实页面') ||
+  !rootHtml.includes('普通 Web 测试必须接入 Test Kit 吗？') ||
+  !rootHtml.includes('页面截图会请求整个屏幕的权限吗？')
 ) {
   failures.push('default homepage lacks Chinese product copy');
 }
 if (
-  !englishHtml.includes('Understand the real interface.') ||
-  !englishHtml.includes('Find the source. Keep the proof.') ||
-  !englishHtml.includes('A3S Test solves three essential problems') ||
-  !englishHtml.includes('Four implementation layers produce those results') ||
-  !englishHtml.includes(
-    'Inspect every capability entry point, output, evidence rule, and failure boundary',
-  ) ||
-  !englishHtml.includes('Combine browser semantics and page context') ||
-  !englishHtml.includes('Declare source ownership explicitly') ||
-  !englishHtml.includes('Keep four authorities independent') ||
-  !englishHtml.includes('Keep marking in one right-side surface') ||
-  !englishHtml.includes('Preserve proven paths as ACL')
+  !englishHtml.includes('Ground the agent in the real page.') ||
+  !englishHtml.includes('Keep proof of every change.') ||
+  !englishHtml.includes('Read the current render') ||
+  !englishHtml.includes('Bind the owning source') ||
+  !englishHtml.includes('Accept only fresh proof') ||
+  !englishHtml.includes('Give the agent more than “something is wrong here”') ||
+  !englishHtml.includes('a3s.test.repair/1') ||
+  !englishHtml.includes('Run one real page in three steps') ||
+  !englishHtml.includes('Does ordinary Web testing require Test Kit?') ||
+  !englishHtml.includes('Does page capture request whole-screen permission?')
 ) {
   failures.push('English homepage lacks English product copy');
 }
 if (
-  !rootMarkdown.includes('四层技术实现支撑这三个结果') ||
-  !rootMarkdown.includes('用页面修订绑定节点身份') ||
-  !rootMarkdown.includes('显式声明源码归属') ||
-  !rootMarkdown.includes('类型化控制层') ||
-  !rootMarkdown.includes('驱动只实现能够证明的能力') ||
-  !rootMarkdown.includes('用更新后的页面验证修改') ||
-  !rootMarkdown.includes('ACL 固化已证明路径')
+  !rootMarkdown.includes('读取当前渲染') ||
+  !rootMarkdown.includes('绑定负责源码') ||
+  !rootMarkdown.includes('只认新证据') ||
+  !rootMarkdown.includes('a3s.test.repair/1') ||
+  !rootMarkdown.includes('human submitted') ||
+  !rootMarkdown.includes('三步跑通第一个真实页面') ||
+  !rootMarkdown.includes('页面截图会请求整个屏幕的权限吗？')
 ) {
-  failures.push('homepage Markdown lacks the core implementation ledger');
+  failures.push('homepage Markdown lacks the evidence handoff path');
 }
 if (
-  !rootHtml.includes('高效 vibe coding 依赖一条可信反馈闭环') ||
+  !rootHtml.includes('把这条反馈闭环变成可执行、可复查的测试') ||
   !englishHtml.includes(
-    'Fast vibe coding depends on a trustworthy feedback loop',
+    'turns that feedback loop into an executable, inspectable test',
   ) ||
-  !rootMarkdown.includes('高效 vibe coding 依赖一条可信反馈闭环')
+  !rootMarkdown.includes('把这条反馈闭环变成可执行、可复查的测试')
 ) {
   failures.push('homepage lacks the first-principles product thesis');
+}
+if (
+  !rootHtml.includes('同一组任务，先看完成率，再看安全与代价') ||
+  !englishHtml.includes('Same tasks. Compare completion, safety, and cost.') ||
+  !rootHtml.includes('20260821T171716Z') ||
+  !englishHtml.includes('20260821T171716Z') ||
+  !rootHtml.includes('88.9%') ||
+  !englishHtml.includes('88.9%') ||
+  !rootMarkdown.includes('同一组任务，先看完成率，再看安全与代价') ||
+  !rootMarkdown.includes('20260821T171716Z') ||
+  !rootMarkdown.includes('88.9%')
+) {
+  failures.push('homepage lacks the reproducible UI benchmark comparison');
 }
 if (
   !rootHtml.includes('data-testid="a3s-experience-submit"') ||

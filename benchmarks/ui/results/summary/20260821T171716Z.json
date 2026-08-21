@@ -1,0 +1,340 @@
+{
+  "schema": "a3s.test.ui-benchmark-summary/1",
+  "run_id": "20260821T171716Z",
+  "generated_at": "2026-08-21T17:30:59.436Z",
+  "lock_digest": "sha256:19d4374a4ebdcb23b0f1db4c7c57f5f4c4d320b008fe984bd12c36dc9b4fdcaf",
+  "protocol": {
+    "repetitions": 3,
+    "viewport": {
+      "width": 332,
+      "height": 214
+    },
+    "task_count": 9,
+    "tasks": [
+      {
+        "id": "click-button",
+        "dimension": "semantic-click",
+        "seed": 1337
+      },
+      {
+        "id": "enter-text",
+        "dimension": "form-fill",
+        "seed": 7331
+      },
+      {
+        "id": "choose-list",
+        "dimension": "single-select",
+        "seed": 424242
+      },
+      {
+        "id": "click-checkboxes",
+        "dimension": "multi-target-state",
+        "seed": 17
+      },
+      {
+        "id": "click-scroll-list",
+        "dimension": "multi-select-scroll",
+        "seed": 23
+      },
+      {
+        "id": "grid-coordinate",
+        "dimension": "geometry-targeting",
+        "seed": 42
+      },
+      {
+        "id": "enter-text-dynamic",
+        "dimension": "dynamic-layout-form",
+        "seed": 101
+      },
+      {
+        "id": "click-menu-2",
+        "dimension": "dynamic-disclosure",
+        "seed": 1337
+      },
+      {
+        "id": "click-dialog-2",
+        "dimension": "dialog-targeting",
+        "seed": 202
+      }
+    ],
+    "solver": "deterministic-common-plan",
+    "scoring": "MiniWoB WOB_RAW_REWARD_GLOBAL > 0",
+    "execution_timing_phases": [
+      "setup",
+      "observation",
+      "action"
+    ],
+    "excluded_timing_phases": [
+      "score",
+      "cleanup"
+    ],
+    "candidate_order": "alternating-by-repetition"
+  },
+  "host": {
+    "platform": "darwin",
+    "release": "25.3.0",
+    "architecture": "arm64",
+    "cpu_model": "Apple M2 Pro",
+    "cpu_count": 10,
+    "memory_bytes": 17179869184,
+    "node": "v26.7.0"
+  },
+  "candidates": {
+    "a3s-test": {
+      "runs": 27,
+      "passed": 27,
+      "success_rate": 1,
+      "first_attempt_success_rate": 1,
+      "execution_ms": {
+        "p50": 7488.491,
+        "p95": 19313.249,
+        "mean": 10032.984
+      },
+      "mean_action_count": 1.889,
+      "mean_observation_count": 1.444,
+      "mean_observation_bytes": 2547.556,
+      "mean_action_request_bytes": 122.222,
+      "mean_action_response_bytes": 743.556,
+      "flake_rate": 0,
+      "flaky_task_instances": 0,
+      "cleanup_success_rate": 1,
+      "mean_cleanup_ms": 381.156,
+      "mean_scoring_ms": 417.072,
+      "mean_builtin_artifact_bytes": 6265.778,
+      "evidence_file_rate": 1,
+      "failure_attribution": {
+        "product": 0,
+        "benchmark_spec": 0,
+        "infrastructure": 0
+      },
+      "dimensions": {
+        "semantic-click": {
+          "runs": 3,
+          "passed": 3,
+          "success_rate": 1
+        },
+        "form-fill": {
+          "runs": 3,
+          "passed": 3,
+          "success_rate": 1
+        },
+        "single-select": {
+          "runs": 3,
+          "passed": 3,
+          "success_rate": 1
+        },
+        "multi-target-state": {
+          "runs": 3,
+          "passed": 3,
+          "success_rate": 1
+        },
+        "multi-select-scroll": {
+          "runs": 3,
+          "passed": 3,
+          "success_rate": 1
+        },
+        "geometry-targeting": {
+          "runs": 3,
+          "passed": 3,
+          "success_rate": 1
+        },
+        "dynamic-layout-form": {
+          "runs": 3,
+          "passed": 3,
+          "success_rate": 1
+        },
+        "dynamic-disclosure": {
+          "runs": 3,
+          "passed": 3,
+          "success_rate": 1
+        },
+        "dialog-targeting": {
+          "runs": 3,
+          "passed": 3,
+          "success_rate": 1
+        }
+      },
+      "probes": {
+        "stale_ref": {
+          "runs": 3,
+          "rejection_rate": 1,
+          "page_mutation_rate": 0
+        },
+        "drag_box": {
+          "runs": 1,
+          "success_rate": 0,
+          "timeout_rate": 1,
+          "cleanup_success_rate": 1,
+          "cleanup_recovery_rate": 0
+        },
+        "wheel_scroll": {
+          "runs": 1,
+          "success_rate": 0,
+          "timeout_rate": 1,
+          "cleanup_success_rate": 1,
+          "cleanup_recovery_rate": 0
+        }
+      }
+    },
+    "agent-browser": {
+      "runs": 27,
+      "passed": 24,
+      "success_rate": 0.889,
+      "first_attempt_success_rate": 0.889,
+      "execution_ms": {
+        "p50": 6754.729,
+        "p95": 17269.54,
+        "mean": 8488.733
+      },
+      "mean_action_count": 1.778,
+      "mean_observation_count": 1.444,
+      "mean_observation_bytes": 1273.111,
+      "mean_action_request_bytes": 39.667,
+      "mean_action_response_bytes": 106.889,
+      "flake_rate": 0,
+      "flaky_task_instances": 0,
+      "cleanup_success_rate": 1,
+      "mean_cleanup_ms": 311.388,
+      "mean_scoring_ms": 442.853,
+      "mean_builtin_artifact_bytes": 0,
+      "evidence_file_rate": 0,
+      "failure_attribution": {
+        "product": 3,
+        "benchmark_spec": 0,
+        "infrastructure": 0
+      },
+      "dimensions": {
+        "semantic-click": {
+          "runs": 3,
+          "passed": 3,
+          "success_rate": 1
+        },
+        "form-fill": {
+          "runs": 3,
+          "passed": 3,
+          "success_rate": 1
+        },
+        "single-select": {
+          "runs": 3,
+          "passed": 3,
+          "success_rate": 1
+        },
+        "multi-target-state": {
+          "runs": 3,
+          "passed": 3,
+          "success_rate": 1
+        },
+        "multi-select-scroll": {
+          "runs": 3,
+          "passed": 3,
+          "success_rate": 1
+        },
+        "geometry-targeting": {
+          "runs": 3,
+          "passed": 3,
+          "success_rate": 1
+        },
+        "dynamic-layout-form": {
+          "runs": 3,
+          "passed": 3,
+          "success_rate": 1
+        },
+        "dynamic-disclosure": {
+          "runs": 3,
+          "passed": 0,
+          "success_rate": 0
+        },
+        "dialog-targeting": {
+          "runs": 3,
+          "passed": 3,
+          "success_rate": 1
+        }
+      },
+      "probes": {
+        "stale_ref": {
+          "runs": 3,
+          "rejection_rate": 0,
+          "page_mutation_rate": 1
+        },
+        "drag_box": {
+          "runs": 1,
+          "success_rate": 0,
+          "timeout_rate": 1,
+          "cleanup_success_rate": 1,
+          "cleanup_recovery_rate": 1
+        },
+        "wheel_scroll": {
+          "runs": 1,
+          "success_rate": 0,
+          "timeout_rate": 1,
+          "cleanup_success_rate": 1,
+          "cleanup_recovery_rate": 0
+        }
+      }
+    }
+  },
+  "paired_common_success": {
+    "candidate": "a3s-test",
+    "baseline": "agent-browser",
+    "pair_key": [
+      "task",
+      "seed",
+      "repetition"
+    ],
+    "total_pair_count": 27,
+    "common_success_pair_count": 24,
+    "excluded_pair_count": 3,
+    "excluded_pairs": [
+      {
+        "task": "click-menu-2",
+        "seed": 1337,
+        "repetition": 1,
+        "candidate_passed": true,
+        "baseline_passed": false
+      },
+      {
+        "task": "click-menu-2",
+        "seed": 1337,
+        "repetition": 2,
+        "candidate_passed": true,
+        "baseline_passed": false
+      },
+      {
+        "task": "click-menu-2",
+        "seed": 1337,
+        "repetition": 3,
+        "candidate_passed": true,
+        "baseline_passed": false
+      }
+    ],
+    "candidate_execution_ms": {
+      "median": 7479.56,
+      "mean": 8860.784,
+      "p95": 18896.995
+    },
+    "baseline_execution_ms": {
+      "median": 6743.979,
+      "mean": 8022.88,
+      "p95": 17269.54
+    },
+    "overhead_ms": {
+      "median": 715.492,
+      "mean": 837.904,
+      "p95": 1634.273
+    },
+    "overhead_ratio": {
+      "median": 0.106,
+      "mean": 0.106,
+      "p95": 0.117
+    },
+    "candidate_faster_pairs": 0,
+    "baseline_faster_pairs": 24,
+    "tied_pairs": 0
+  },
+  "limitations": [
+    "This compares execution layers with a deterministic solver, not model reasoning quality.",
+    "The locked MiniWoB subset covers 9 interaction mechanisms, not all 125 registered tasks.",
+    "Timing includes a fresh CLI process for each turn and is specific to this host.",
+    "WebArena and VisualWebArena remain gated behind their multi-service environment setup."
+  ]
+}

@@ -9,7 +9,7 @@ const DIRECTION_CONTRACT = `<!--
 THESIS: A3S Test makes the evidence path visible in one operating surface and refuses the generic developer-tool hero followed by a card grid.
 OWN-WORLD: A bright cool canvas, electric control blue, precise white interface planes, cool hairlines, compact enterprise controls, and green or violet only for evidence or review authority.
 STORY: Visitors see a rendered page become revisioned context, open real human review, then install the CLI or enter the documentation.
-FIRST VIEWPORT: A shallow two-column promise band leads into a 56/24/20 rendered-page, context, and review/evidence stage; the primary experience action sits beside the promise and repeats inside review.
+FIRST VIEWPORT: A centered two-line promise and two actions lead directly into one full-width evidence stage: rendered checkout and live Page Context above, human review and evidence below; a three-part proof strip and slim installer rail complete the opening.
 FORM: Wide Evidence Stage, composition 2 of 3, seed bf8ff2ac.
 FINISH: unreviewed and undocumented is unfinished; this build ends with the finish review, the verdict, and DESIGN.md
 -->`;

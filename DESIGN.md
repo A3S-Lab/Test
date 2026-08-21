@@ -2,46 +2,46 @@
 name: A3S Test
 description: A visible evidence path for autonomous interface testing.
 colors:
-  control-blue: "#1264ff"
-  control-blue-deep: "#084ed0"
-  control-blue-soft: "#eaf2ff"
-  canvas: "#f8fbff"
-  paper: "#f3f5f8"
+  control-blue: "#1456f0"
+  control-blue-deep: "#0f46c7"
+  control-blue-soft: "#e8efff"
+  canvas: "#f5f7fb"
+  paper: "#eaf0f8"
   panel: "#ffffff"
-  panel-strong: "#0e1b35"
-  line: "#dce4f0"
-  line-strong: "#bfd0e8"
-  ink: "#101827"
-  slate: "#56657b"
-  faint: "#5f6d84"
-  evidence-green: "#0c9b70"
-  review-violet: "#7157c9"
+  panel-strong: "#0d1728"
+  line: "#dce3ec"
+  line-strong: "#cbd4e0"
+  ink: "#142033"
+  slate: "#526078"
+  faint: "#748095"
+  evidence-green: "#16845b"
+  review-violet: "#5b57d9"
 typography:
   display:
-    fontFamily: "Geist Variable, PingFang SC, Microsoft YaHei, ui-sans-serif, system-ui, sans-serif"
-    fontSize: "clamp(50px, 4.4vw, 68px)"
+    fontFamily: "Geist Variable, Avenir Next, HarmonyOS Sans SC, PingFang SC, Microsoft YaHei, ui-sans-serif, system-ui, sans-serif"
+    fontSize: "clamp(50px, 5.4vw, 76px)"
     fontWeight: 740
-    lineHeight: 1.02
+    lineHeight: 1.01
     letterSpacing: "-0.04em"
   headline:
-    fontFamily: "Geist Variable, PingFang SC, Microsoft YaHei, ui-sans-serif, system-ui, sans-serif"
-    fontSize: "clamp(36px, 4vw, 56px)"
+    fontFamily: "Geist Variable, Avenir Next, HarmonyOS Sans SC, PingFang SC, Microsoft YaHei, ui-sans-serif, system-ui, sans-serif"
+    fontSize: "clamp(38px, 4vw, 56px)"
     fontWeight: 720
     lineHeight: 1.06
     letterSpacing: "-0.035em"
   title:
-    fontFamily: "Geist Variable, PingFang SC, Microsoft YaHei, ui-sans-serif, system-ui, sans-serif"
+    fontFamily: "Geist Variable, Avenir Next, HarmonyOS Sans SC, PingFang SC, Microsoft YaHei, ui-sans-serif, system-ui, sans-serif"
     fontSize: "20px"
     fontWeight: 720
     lineHeight: 1.25
     letterSpacing: "-0.025em"
   body:
-    fontFamily: "Geist Variable, PingFang SC, Microsoft YaHei, ui-sans-serif, system-ui, sans-serif"
+    fontFamily: "Geist Variable, Avenir Next, HarmonyOS Sans SC, PingFang SC, Microsoft YaHei, ui-sans-serif, system-ui, sans-serif"
     fontSize: "16px"
     fontWeight: 400
     lineHeight: 1.7
   label:
-    fontFamily: "Geist Mono Variable, SFMono-Regular, Cascadia Code, Consolas, monospace"
+    fontFamily: "Geist Mono Variable, SFMono-Regular, Cascadia Code, Menlo, Consolas, monospace"
     fontSize: "11px"
     fontWeight: 700
     lineHeight: 1.4
@@ -132,7 +132,7 @@ The palette uses A3S Control Blue for action and wayfinding, cool neutrals for d
 
 The site uses a 72px navigation bar and a 1440px maximum product canvas. The first viewport is an evidence runway: the product promise and actions lead into a real Test Kit surface, live context, and review state. Major sections alternate between quiet white explanation and one stronger blue or pale-blue operating field.
 
-At 1100px, wide evidence modules compact. At 900px, two-column scenes stack. At 767px, navigation becomes a modal, touch targets remain at least 44px, and every evidence or install control uses the full width. Hidden drawers and sidebars leave both the accessibility tree and keyboard order.
+At 1100px, wide evidence modules compact. At 900px, two-column scenes stack. At 768px, navigation becomes a modal, touch targets remain at least 44px, and every evidence or install control uses the full width. Hidden drawers and sidebars leave both the accessibility tree and keyboard order.
 
 ## Elevation & Depth
 

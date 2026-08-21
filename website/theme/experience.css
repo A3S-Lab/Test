@@ -426,7 +426,7 @@
   cursor: pointer;
   align-items: center;
   gap: 5px;
-  font-size: 9px;
+  font-size: 11px;
 }
 
 .test-context-panel > header button:hover {
@@ -452,7 +452,7 @@
 .test-context-data dt {
   margin-bottom: 7px;
   color: var(--test-faint);
-  font-size: 9px;
+  font-size: 11px;
   font-weight: 600;
 }
 
@@ -460,14 +460,14 @@
   overflow: hidden;
   margin: 0;
   color: var(--test-text);
-  font-size: 10px;
+  font-size: 11px;
   line-height: 1.45;
   text-overflow: ellipsis;
 }
 
 .test-context-data code {
   color: var(--test-accent-ink);
-  font: 550 9px/1.45 var(--test-mono);
+  font: 550 11px/1.45 var(--test-mono);
   overflow-wrap: anywhere;
 }
 
@@ -485,7 +485,7 @@
   padding-left: 8px;
   border-left: 1px solid var(--test-line-strong);
   color: var(--test-muted);
-  font: 550 9px/1 var(--test-mono);
+  font: 550 11px/1 var(--test-mono);
 }
 
 .test-context-split {
@@ -564,7 +564,7 @@
 .test-evidence-receipt > header > span {
   padding: 4px 6px;
   border-radius: 999px;
-  font: 650 8px/1 var(--test-mono);
+  font: 650 11px/1 var(--test-mono);
 }
 
 .test-review-panel > header > span {
@@ -576,7 +576,7 @@
   margin: 0;
   padding: 12px 14px 9px;
   color: var(--test-muted);
-  font-size: 10px;
+  font-size: 11px;
   line-height: 1.55;
 }
 
@@ -593,7 +593,7 @@
   cursor: pointer;
   align-items: center;
   justify-content: center;
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 680;
 }
 
@@ -612,7 +612,7 @@
   display: block;
   padding: 9px 14px 12px;
   color: var(--test-faint);
-  font-size: 8px;
+  font-size: 11px;
   line-height: 1.5;
 }
 
@@ -649,14 +649,14 @@
 
 .test-evidence-receipt dt {
   color: var(--test-faint);
-  font: 600 8px/1.4 var(--test-mono);
+  font: 600 11px/1.4 var(--test-mono);
 }
 
 .test-evidence-receipt dd {
   overflow: hidden;
   margin: 0;
   color: var(--test-text);
-  font: 550 8px/1.4 var(--test-mono);
+  font: 550 11px/1.4 var(--test-mono);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -710,26 +710,28 @@
 }
 
 .test-stage-timeline::after {
-  width: 0;
+  width: 72%;
   border-top-width: 2px;
   border-color: var(--test-accent);
-  transition: width 420ms cubic-bezier(0.16, 1, 0.3, 1);
+  transform: translateY(-50%) scaleX(0);
+  transform-origin: left center;
+  transition: transform 420ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .test-stage-timeline.is-motion-step-1::after {
-  width: 18%;
+  transform: translateY(-50%) scaleX(0.25);
 }
 
 .test-stage-timeline.is-motion-step-2::after {
-  width: 36%;
+  transform: translateY(-50%) scaleX(0.5);
 }
 
 .test-stage-timeline.is-motion-step-3::after {
-  width: 54%;
+  transform: translateY(-50%) scaleX(0.75);
 }
 
 .test-stage-timeline.is-motion-step-4::after {
-  width: 72%;
+  transform: translateY(-50%) scaleX(1);
 }
 
 .test-stage-status {
@@ -752,7 +754,7 @@
   justify-content: center;
   gap: 8px;
   color: var(--test-muted);
-  font-size: 10px;
+  font-size: 11px;
   transition:
     color 220ms ease,
     font-weight 220ms ease,
@@ -767,7 +769,7 @@
   border-radius: 50%;
   background: var(--test-bg);
   color: var(--test-faint);
-  font: 650 8px/1 var(--test-mono);
+  font: 650 11px/1 var(--test-mono);
   place-items: center;
   transition:
     background-color 220ms ease,

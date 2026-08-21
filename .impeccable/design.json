@@ -1,51 +1,113 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-08-15T00:00:00.000Z",
+  "generatedAt": "2026-08-21T16:04:37Z",
   "title": "Design System: A3S Test",
   "extensions": {
     "colorMeta": {
       "control-blue": {
         "role": "primary",
         "displayName": "Control Blue",
-        "canonical": "#1264ff",
-        "tonalRamp": ["#04183f", "#06317e", "#084bbd", "#1264ff", "#4b89ff", "#83adff", "#bdd4ff", "#edf4ff"]
+        "canonical": "#1456f0",
+        "tonalRamp": ["#00062a", "#021d63", "#0234aa", "#0f51eb", "#4881fc", "#83adfe", "#c0d5fd", "#ecf2fe"]
+      },
+      "control-blue-deep": {
+        "role": "primary",
+        "displayName": "Deep Control Blue",
+        "canonical": "#0f46c7",
+        "tonalRamp": ["#000729", "#011b67", "#0635a6", "#2058da", "#4a82f8", "#85adfc", "#c0d5fc", "#ebf2ff"]
+      },
+      "control-blue-soft": {
+        "role": "primary",
+        "displayName": "Soft Control Blue",
+        "canonical": "#e8efff",
+        "tonalRamp": ["#070b15", "#212632", "#3f4552", "#606674", "#838997", "#a7aebd", "#cdd4e4", "#ecf2ff"]
       },
       "canvas": {
         "role": "neutral",
         "displayName": "Evidence Canvas",
-        "canonical": "#f8fbff",
-        "tonalRamp": ["#17202d", "#303d4d", "#4d5c6d", "#6d7b8c", "#98a4b2", "#c1cad4", "#e2e8ef", "#f8fbff"]
+        "canonical": "#f5f7fb",
+        "tonalRamp": ["#0a0b0e", "#252629", "#434548", "#646669", "#87898d", "#acaeb2", "#d2d4d8", "#f0f2f6"]
+      },
+      "paper": {
+        "role": "neutral",
+        "displayName": "Cool Paper",
+        "canonical": "#eaf0f8",
+        "tonalRamp": ["#080b10", "#22272d", "#41454c", "#61676d", "#848a91", "#a9aeb6", "#cfd5dd", "#ecf2fa"]
+      },
+      "panel": {
+        "role": "neutral",
+        "displayName": "Operating White",
+        "canonical": "#ffffff",
+        "tonalRamp": ["#0b0b0b", "#262626", "#454545", "#666666", "#898989", "#aeaeae", "#d4d4d4", "#f2f2f2"]
+      },
+      "panel-strong": {
+        "role": "neutral",
+        "displayName": "Protocol Navy",
+        "canonical": "#0d1728",
+        "tonalRamp": ["#030b1b", "#1c2739", "#3a4559", "#5a677c", "#7c8aa0", "#a1afc6", "#c6d5ed", "#ebf2fe"]
+      },
+      "line": {
+        "role": "neutral",
+        "displayName": "Cool Hairline",
+        "canonical": "#dce3ec",
+        "tonalRamp": ["#070b11", "#22272e", "#40464d", "#61676e", "#838a92", "#a8afb7", "#ced5de", "#ebf3fc"]
+      },
+      "line-strong": {
+        "role": "neutral",
+        "displayName": "Strong Hairline",
+        "canonical": "#cbd4e0",
+        "tonalRamp": ["#060b13", "#202730", "#3e464f", "#5f6771", "#828a95", "#a6afba", "#ccd5e1", "#eaf3fe"]
+      },
+      "ink": {
+        "role": "neutral",
+        "displayName": "Interface Ink",
+        "canonical": "#142033",
+        "tonalRamp": ["#030b1c", "#1a273a", "#38465b", "#58677e", "#7b8aa2", "#9fafc8", "#c5d5ef", "#ebf2fe"]
+      },
+      "slate": {
+        "role": "neutral",
+        "displayName": "Explanation Slate",
+        "canonical": "#526078",
+        "tonalRamp": ["#030a1d", "#1a263b", "#38455c", "#58677f", "#7b8aa3", "#9fafca", "#c5d5f1", "#ebf2ff"]
+      },
+      "faint": {
+        "role": "neutral",
+        "displayName": "Quiet Metadata",
+        "canonical": "#748095",
+        "tonalRamp": ["#040b1a", "#1d2738", "#3b4558", "#5b677b", "#7e8a9f", "#a2afc5", "#c8d5ec", "#ebf2ff"]
       },
       "evidence-green": {
         "role": "secondary",
         "displayName": "Evidence Green",
-        "canonical": "#0c9b70",
-        "tonalRamp": ["#032f23", "#075740", "#087b59", "#0c9b70", "#41b994", "#78d1b3", "#b8ead7", "#effaf6"]
+        "canonical": "#16845b",
+        "tonalRamp": ["#000f07", "#052e1e", "#065237", "#1b7853", "#3b9e74", "#64c498", "#8becbd", "#d2fee7"]
       },
       "review-violet": {
         "role": "tertiary",
         "displayName": "Review Violet",
-        "canonical": "#7157c9",
-        "tonalRamp": ["#21183f", "#392b69", "#554296", "#7157c9", "#927cdb", "#b4a3e8", "#d8cdf5", "#f5f1ff"]
+        "canonical": "#5b57d9",
+        "tonalRamp": ["#08022c", "#1f066f", "#3826a8", "#544fd0", "#7475fa", "#9da5fd", "#cbd1fc", "#eff1ff"]
       }
     },
     "typographyMeta": {
-      "display": { "displayName": "Product Display", "purpose": "Homepage promise and A3S Test name only." },
-      "body": { "displayName": "Readable Body", "purpose": "Documentation and product explanation." },
-      "label": { "displayName": "Evidence Label", "purpose": "Commands, refs, revisions, coordinates, and digests." }
+      "display": { "displayName": "Product Display", "purpose": "Product name and first-viewport promise only." },
+      "headline": { "displayName": "Narrative Headline", "purpose": "Major narrative transitions and final calls to action." },
+      "title": { "displayName": "Interface Title", "purpose": "Interface modules, documentation sections, and capability headings." },
+      "body": { "displayName": "Readable Body", "purpose": "Explanations held near 65 to 75 characters per line." },
+      "label": { "displayName": "Evidence Label", "purpose": "Commands, node refs, revisions, coordinates, and evidence identifiers." }
     },
     "shadows": [
-      { "name": "surface-shell", "value": "0 24px 64px rgba(36, 76, 137, 0.14)", "purpose": "Interactive product surfaces." },
-      { "name": "surface-raised", "value": "0 34px 84px rgba(36, 76, 137, 0.18)", "purpose": "The primary live Test Kit experience." }
+      { "name": "surface-shell", "value": "0 20px 32px -18px rgb(15 35 70 / 28%)", "purpose": "Menus and compact interfaces that genuinely sit above the page." },
+      { "name": "surface-raised", "value": "0 30px 72px rgb(36 76 137 / 16%)", "purpose": "The primary live Test Kit experience." }
     ],
     "motion": [
-      { "name": "state", "value": "180ms ease", "purpose": "Hover, selection, and copy-result state changes." },
-      { "name": "reveal", "value": "620ms cubic-bezier(0.2, 0.8, 0.2, 1)", "purpose": "One restrained homepage reveal sequence." }
+      { "name": "state", "value": "180ms ease", "purpose": "Hover, selection, expansion, and copy-result state changes." },
+      { "name": "walkthrough", "value": "2.6s cubic-bezier(0.16, 1, 0.3, 1)", "purpose": "The pausable desktop evidence walkthrough; disabled for reduced motion and mobile." }
     ],
     "breakpoints": [
       { "name": "compact", "value": "1100px" },
       { "name": "stack", "value": "900px" },
-      { "name": "mobile", "value": "767px" }
+      { "name": "mobile", "value": "768px" }
     ]
   },
   "components": [
@@ -55,7 +117,7 @@
       "refersTo": "button-primary",
       "description": "The single strongest action in a region.",
       "html": "<button class=\"ds-button-primary\">START REVIEW</button>",
-      "css": ".ds-button-primary { min-height: 48px; padding: 0 20px; border: 0; border-radius: 9px; background: #1264ff; color: #fff; font: 720 13px/1 system-ui, sans-serif; transition: background 180ms ease, transform 180ms ease; } .ds-button-primary:hover { background: #084ed0; transform: translateY(-2px); } .ds-button-primary:focus-visible { outline: 3px solid rgba(18,100,255,.28); outline-offset: 3px; }"
+      "css": ".ds-button-primary { min-height: 48px; padding: 0 20px; border: 1px solid #1456f0; border-radius: 9px; background: #1456f0; box-shadow: 0 10px 24px rgb(18 86 240 / 20%); color: #fff; font: 720 13px/1 system-ui, sans-serif; transition: background 180ms ease, border-color 180ms ease, transform 180ms ease; } .ds-button-primary:hover { border-color: #0f46c7; background: #0f46c7; transform: translateY(-2px); } .ds-button-primary:focus-visible { outline: 3px solid rgb(20 86 240 / 46%); outline-offset: 3px; } .ds-button-primary:active { transform: translateY(1px); }"
     },
     {
       "name": "Secondary Button",
@@ -63,21 +125,29 @@
       "refersTo": "button-secondary",
       "description": "A supporting route or reversible action.",
       "html": "<button class=\"ds-button-secondary\">VIEW CONTEXT</button>",
-      "css": ".ds-button-secondary { min-height: 48px; padding: 0 20px; border: 1px solid #bfd0e8; border-radius: 9px; background: #fff; color: #101827; font: 720 13px/1 system-ui, sans-serif; transition: border-color 180ms ease, color 180ms ease, transform 180ms ease; } .ds-button-secondary:hover { border-color: #7ea1d8; color: #1264ff; transform: translateY(-2px); } .ds-button-secondary:focus-visible { outline: 3px solid rgba(18,100,255,.28); outline-offset: 3px; }"
+      "css": ".ds-button-secondary { min-height: 48px; padding: 0 20px; border: 1px solid #cbd4e0; border-radius: 9px; background: #fff; color: #142033; font: 720 13px/1 system-ui, sans-serif; transition: border-color 180ms ease, transform 180ms ease; } .ds-button-secondary:hover { border-color: #1456f0; transform: translateY(-2px); } .ds-button-secondary:focus-visible { outline: 3px solid rgb(20 86 240 / 46%); outline-offset: 3px; } .ds-button-secondary:active { transform: translateY(1px); }"
+    },
+    {
+      "name": "Primary Navigation",
+      "kind": "nav",
+      "description": "The 72px translucent enterprise bar for product, documentation, search, version, and language controls.",
+      "html": "<nav class=\"ds-nav\"><a class=\"ds-nav-brand\" href=\"#\">A3S Test</a><div class=\"ds-nav-links\"><a class=\"is-active\" href=\"#\">Product</a><a href=\"#\">Docs</a><button type=\"button\">Search</button></div></nav>",
+      "css": ".ds-nav { display: flex; min-height: 72px; padding: 0 24px; border-bottom: 1px solid #dce3ec; background: rgb(255 255 255 / 94%); align-items: center; justify-content: space-between; gap: 32px; color: #142033; font-family: system-ui, sans-serif; } .ds-nav-brand { color: #142033; font-size: 17px; font-weight: 740; letter-spacing: -.025em; text-decoration: none; } .ds-nav-links { display: flex; align-items: center; gap: 24px; } .ds-nav-links a { color: #526078; font-size: 14px; font-weight: 560; text-decoration: none; } .ds-nav-links a:hover, .ds-nav-links a.is-active { color: #1456f0; } .ds-nav-links button { min-height: 44px; padding: 0 14px; border: 1px solid #dce3ec; border-radius: 9px; background: #fff; color: #142033; } .ds-nav-links button:hover { border-color: #1456f0; } .ds-nav-links :focus-visible { outline: 3px solid rgb(20 86 240 / 46%); outline-offset: 3px; }"
     },
     {
       "name": "Evidence Chip",
       "kind": "chip",
       "description": "Reports a real verified or ready state.",
       "html": "<span class=\"ds-evidence-chip\">EVIDENCE READY</span>",
-      "css": ".ds-evidence-chip { display: inline-flex; min-height: 28px; padding: 0 10px; align-items: center; border: 1px solid #b7dfd1; border-radius: 999px; background: #effaf6; color: #087353; font: 700 10px/1.4 ui-monospace, monospace; letter-spacing: .04em; }"
+      "css": ".ds-evidence-chip { display: inline-flex; min-height: 28px; padding: 0 10px; border: 1px solid #a7dfcc; border-radius: 999px; background: #e7f5ef; align-items: center; color: #087855; font: 700 11px/1.4 ui-monospace, monospace; letter-spacing: .04em; }"
     },
     {
       "name": "Live Surface",
       "kind": "custom",
+      "refersTo": "surface",
       "description": "The real Test Kit-powered interface proof.",
       "html": "<section class=\"ds-live-surface\"><strong>Checkout surface</strong><span>@c7 button · revision 42</span></section>",
-      "css": ".ds-live-surface { display: grid; gap: 10px; padding: 24px; border: 1px solid #bfd0e8; border-radius: 14px; background: #fff; color: #101827; box-shadow: 0 24px 64px rgba(36,76,137,.14); } .ds-live-surface strong { font: 720 20px/1.25 system-ui, sans-serif; } .ds-live-surface span { color: #56657b; font: 700 11px/1.4 ui-monospace, monospace; }"
+      "css": ".ds-live-surface { display: grid; gap: 10px; padding: 24px; border: 1px solid #cbd4e0; border-radius: 14px; background: #fff; box-shadow: 0 30px 72px rgb(36 76 137 / 16%); color: #142033; } .ds-live-surface strong { font: 720 20px/1.25 system-ui, sans-serif; } .ds-live-surface span { color: #526078; font: 700 11px/1.4 ui-monospace, monospace; }"
     },
     {
       "name": "Install Command",
@@ -85,28 +155,35 @@
       "refersTo": "code-field",
       "description": "Copyable version-aware release installer.",
       "html": "<code class=\"ds-install-command\">$ curl -fsSL …/install.sh | sh</code>",
-      "css": ".ds-install-command { display: block; padding: 18px; border-radius: 9px; background: #0e1b35; color: #dce9ff; font: 600 12px/1.65 ui-monospace, monospace; }"
+      "css": ".ds-install-command { display: block; padding: 18px; border-radius: 9px; background: #0d1728; color: #edf4ff; font: 600 12px/1.65 ui-monospace, monospace; }"
     }
   ],
   "narrative": {
     "northStar": "The Visible Evidence Path",
-    "overview": "A bright A3S family surface makes the path from rendered interface to typed action, human authorization, and inspectable evidence visible before implementation detail.",
+    "overview": "A3S Test inherits the current A3S Cloud visual language and turns it toward interface understanding. A bright cool canvas, one electric-blue field, precise product UI, and a visible path from rendered page to typed action to evidence make the testing mechanism understandable before the visitor reads implementation detail.\n\nThe site is confident and technical without becoming a generic dark developer-tool page. Real Test Kit behavior is the first proof. Documentation stays quiet, light, and highly readable while the homepage uses larger fields and product-scale interface demonstrations.",
     "keyCharacteristics": [
       "White and pale-blue operating surfaces with one decisive electric-blue field per viewport.",
       "A real Test Kit-powered page experience as the primary visual proof.",
-      "Cool hairlines, compact controls, restrained blue-tinted elevation, and generous section spacing."
+      "Cool hairlines, compact controls, restrained blue-tinted elevation, and generous section spacing.",
+      "Product prose in the humanist sans; monospace only for commands, identifiers, coordinates, and evidence.",
+      "Complete Chinese and English layouts with structural mobile reflow."
     ],
     "rules": [
-      { "name": "The One Blue Field Rule", "body": "One major blue region may carry a viewport; elsewhere blue is action and wayfinding.", "section": "colors" },
+      { "name": "The One Blue Field Rule", "body": "One major blue region may carry a viewport. Everywhere else, blue is reserved for actions, selection, and wayfinding.", "section": "colors" },
+      { "name": "The Semantic Color Rule", "body": "Green and violet communicate evidence and review authority; they do not decorate neutral content.", "section": "colors" },
       { "name": "The Data Voice Rule", "body": "Monospace communicates data and protocol state, never general product personality.", "section": "typography" },
-      { "name": "The Hairline Before Shadow Rule", "body": "Structural regions use a cool boundary; floating interfaces receive elevation.", "section": "elevation" }
+      { "name": "The Hairline Before Shadow Rule", "body": "Structural regions use a cool boundary; only floating or overlapping interfaces receive visible elevation.", "section": "elevation" }
     ],
     "dos": [
       "Do demonstrate rendered semantics, revision binding, coordinates, human review, and evidence with real product behavior.",
-      "Do keep Chinese and English content, routes, labels, and accessible names in parity."
+      "Do keep Chinese and English content, routes, labels, and accessible names in parity.",
+      "Do reserve the strongest visual field for the page's current proof or action.",
+      "Do keep documentation reading surfaces quiet and code samples on one approved dark field."
     ],
     "donts": [
+      "Don't recreate the former dark-green homepage inside the new A3S family system.",
       "Don't invent repair success, customer evidence, benchmark results, or unsupported platform availability.",
+      "Don't use hidden off-canvas navigation that remains keyboard reachable.",
       "Don't replace the real Test Kit experience with a static illustration or fake overlay."
     ]
   }

@@ -49,6 +49,7 @@ A3S Test combines fresh rendered-page context, revision-bound typed actions, hum
 - Product behavior and adoption path: `README.md` and `CHANGELOG.md`.
 - Architecture, protocol, and safety boundaries: `docs/architecture.md`, `docs/agentic.md`, and `docs/specification.md`.
 - Embedded context and review contracts: `docs/testkit.md`, `packages/testkit/README.md`, and `packages/testkit/src/`.
+- Reproducible UI execution evidence: `benchmarks/ui/`, including the locked protocol, lossless raw run, generated summary, and offline rebuild tooling.
 - Current documentation implementation: `website/`.
 - Binding A3S family visual reference: the sibling A3S Cloud website and its committed design system.
 - No approved customer logos, testimonials, commercial metrics, or pricing are available.

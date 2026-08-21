@@ -2,7 +2,16 @@
 version: 1
 slug: "website-theme-components-homelayout-tsx"
 primary_target: "website/theme/components/HomeLayout.tsx"
-related_targets: ["website/theme/home-copy.ts","website/theme/home.css","website/theme/responsive.css","website/theme/components/TestKitExperience.tsx","website/theme/components/Layout.tsx"]
+related_targets:
+  [
+    "website/theme/home-copy.ts",
+    "website/theme/home.css",
+    "website/theme/home-sections.css",
+    "website/theme/experience.css",
+    "website/theme/responsive.css",
+    "website/theme/components/TestKitExperience.tsx",
+    "website/theme/components/Layout.tsx",
+  ]
 ---
 
 # Homepage surface brief
@@ -17,24 +26,36 @@ related_targets: ["website/theme/home-copy.ts","website/theme/home.css","website
 
 ## Chosen direction
 
-- Approved comp: `.impeccable/mocks/comp-b-wide-evidence-stage.png`.
-- Composition: a shallow promise band above one broad evidence stage. Rendered page occupies about 56%, live context about 24%, and review/evidence about 20%; a slim installer rail closes the viewport.
-- Memorable moment: a pausable five-stage walkthrough scans, locates, annotates, and dispatches the highlighted order action. The visitor can then open the real compact review dock, where the target-attached editor preserves the adjacent live inspector and batch workspace.
+- Visual foundation: `.impeccable/mocks/comp-b-wide-evidence-stage.png`, simplified around a product-first information architecture.
+- Composition: one centered two-line promise and two actions lead directly into a full-width real evidence stage. Checkout and current Page Context occupy the upper field; review and evidence share the lower rail. A three-part proof strip and one slim installer rail finish the opening story; a compact benchmark sheet then turns the checked-in execution evidence into an honest comparison before the implementation details.
+- Memorable moment: the live checkout, current Page Context, review control, and evidence receipt remain the authored product proof. The rest of the page contains only one bounded repair handoff packet, three runnable steps, a single-layer FAQ, and the final call to action.
 
 ## Fidelity inventory
 
-| Ingredient | Commitment | Medium |
-| --- | --- | --- |
-| Navigation | 72px white enterprise bar, compact search, product/docs/version/language/GitHub controls | Existing Rspress React controls, restyled with CSS; Phosphor icons where needed |
-| Promise band | Large two-line Chinese or English headline at left, concise value and two actions at right | Semantic HTML and responsive CSS |
-| Rendered page | Dense checkout specimen with hierarchy, line-item table, summary, payment choice, and highlighted submit action | Real semantic React inside `A3STestBoundary`; illustrative demo data labeled by context |
-| Context inspector | Revision, role/name, locator, real multi-space geometry, and component source | Live `getPageContextBridge()` snapshots rendered as HTML/data |
-| Human review | Explicit start control and local-only disclosure; real marking experience after activation | Real `A3SReviewOverlay` mounted only after user action |
-| Evidence receipt | Local submission count and bounded status without claiming source mutation | React state from `onSubmitted`; semantic status region |
-| Evidence path | Thin blue connectors and stage footer states | Authored CSS geometry and inline SVG where a connector is needed |
-| Installer rail | macOS, Linux, Windows tabs plus one dark copyable official release command | Existing React installer switcher, compacted and restyled |
-| Icons and mark | Consistent precise single-weight control icons and A3S family mark | Existing SVG mark plus `@phosphor-icons/react`; no raster |
-| Later narrative | Workflow, authority boundary, surface support, and closing action with varied density | Semantic HTML/CSS; no card-wall composition |
+| Ingredient        | Commitment                                                                                                                                                                                    | Medium                                                                                                                              |
+| ----------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| Navigation        | 72px white enterprise bar, compact search, product/docs/version/language/GitHub controls                                                                                                      | Existing Rspress React controls, restyled with CSS; Phosphor icons where needed                                                     |
+| Promise band      | Centered two-line Chinese or English promise, concise value, and two actions                                                                                                                  | Semantic HTML and responsive CSS                                                                                                    |
+| Rendered page     | Dense checkout specimen with hierarchy, line-item table, summary, payment choice, and highlighted submit action                                                                               | Real semantic React inside `A3STestBoundary`; illustrative demo data labeled by context                                             |
+| Context inspector | Revision, role/name, locator, real multi-space geometry, and component source; labels and values remain at least 11px                                                                         | Live `getPageContextBridge()` snapshots rendered as HTML/data                                                                       |
+| Human review      | Explicit start control and local-only disclosure; real marking experience after activation; review labels and body remain at least 11px                                                       | Real `A3SReviewOverlay` mounted only after user action                                                                              |
+| Evidence receipt  | Local submission count and bounded status without claiming source mutation; evidence labels and values remain at least 11px                                                                   | React state from `onSubmitted`; semantic status region                                                                              |
+| Evidence path     | Thin blue connector plus five-step desktop footer with labels at least 11px; the duplicate timeline, product motion, and motion toggle are removed on mobile                                  | Authored CSS geometry and responsive visibility                                                                                     |
+| Installer rail    | macOS, Linux, Windows tabs plus one dark copyable official release command                                                                                                                    | Existing React installer switcher, compacted and restyled                                                                           |
+| UI benchmark      | The checked-in MiniWoB++ run compares completion, stale-reference safety, built-in evidence, and paired latency while disclosing the same solver, browser foundation, host, and failed probes | One responsive semantic table sourced directly from the generated benchmark summary, with a link to raw data and reproduction steps |
+| Icons and mark    | Consistent precise single-weight control icons and A3S family mark                                                                                                                            | Existing SVG mark plus `@phosphor-icons/react`; no raster                                                                           |
+| Proof strip       | Current render, owning source, and fresh verification in three short statements                                                                                                               | Semantic articles with Phosphor icons; no feature-card wall                                                                         |
+| Handoff packet    | A truthful `a3s.test.repair/1` example with revision, target, source hint, intent, context, and authority                                                                                     | Localized copy rendered in one dark code field on the single strong blue section                                                    |
+| Quick start       | Run the existing app, open a goal-bound session, then observe before acting                                                                                                                   | Three ordered rows with copyable-looking but non-interactive code examples and a guide link                                         |
+| FAQ               | Direct answers about optional Test Kit use, page-only capture, edit authority, marker freshness, and session/ACL roles                                                                        | Accessible inline accordion buttons; no modal or nested navigation                                                                  |
+| Final action      | Re-enter the runnable guide or the optional Test Kit path after the decision questions                                                                                                        | One restrained closing CTA with two links                                                                                           |
+
+## Final review
+
+- Disposition: **Ship**.
+- Benchmark contract: the checked-in generated MiniWoB++ summary JSON feeds one responsive semantic table directly. The comparison states the shared deterministic solver, browser foundation, and host; its single-host scope and failed probes remain explicit. Simplified Chinese stays the default with complete English parity.
+- Acceptance: passed at desktop and 390px. The benchmark remains readable without horizontal page overflow, and the localized heading and report link remain present.
+- Reviewer fixes: **3/3 resolved**. Benchmark data labels meet AA contrast; the Chinese phrase “完成率” stays intact without overflow at 390px; the mobile report link provides a 44px target and a clear focus ring.
 
 ## Unresolved decisions
 

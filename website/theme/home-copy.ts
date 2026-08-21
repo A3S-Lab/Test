@@ -1,22 +1,32 @@
 import type { ExperienceCopy, Locale, LocalizedCopy } from './home-copy-types';
 
-export type {
-  CapabilityGroupId,
-  ExperienceCopy,
-  Locale,
-} from './home-copy-types';
+export type { ExperienceCopy, Locale } from './home-copy-types';
 
 export const homeCopy: Record<Locale, LocalizedCopy> = {
   zh: {
-    heroTitle: ['让 Agent 看懂真实界面', '找到源码，留下回归'],
+    heroTitle: ['让 Agent 基于真实页面行动', '把每次修改证明给你看'],
     heroBody:
-      '高效 vibe coding 依赖一条可信反馈闭环：页面现在是什么、哪段源码负责、修改是否真的有效。A3S Test 用当前浏览器修订、类型化动作和可复查证据回答这三个问题。',
-    startExperience: '在本页标记一个问题',
+      '选中界面问题，带着当前修订、组件与源码线索交给 Agent，再用更新后的页面验证结果。A3S Test 把这条反馈闭环变成可执行、可复查的测试。',
+    startExperience: '在本页试用 Test Kit',
     readDocs: '运行第一个测试',
-    installTitle: '只安装当前需要的部分',
+    proofItems: [
+      {
+        title: '读取当前渲染',
+        body: '语义、状态、几何与页面修订来自正在运行的浏览器。',
+      },
+      {
+        title: '绑定负责源码',
+        body: '组件、定位器、区域与源码候选跟随同一个问题。',
+      },
+      {
+        title: '只认新证据',
+        body: '更新后的页面重新验证结果，再把稳定路径写成 ACL。',
+      },
+    ],
+    installTitle: '一个命令安装运行核心',
     installBody:
-      '运行会话与 ACL 请安装 CLI 和 Agent Skill；在页面中点选、框选、截图或画草图请安装 Test Kit。',
-    testkitInstallLink: '安装 Web Test Kit',
+      'CLI 与 Agent Skill 用于会话和 ACL。需要在页面中点选、框选、截图或画草图时，再接入 Test Kit。',
+    testkitInstallLink: '按需接入 Web Test Kit',
     installTabs: '选择安装平台',
     installPackage: 'CLI + Agent Skill',
     installNote: '安装器校验发布归档的 SHA-256，并保持 CLI 与 Skill 版本一致。',
@@ -25,152 +35,104 @@ export const homeCopy: Record<Locale, LocalizedCopy> = {
     copy: '复制命令',
     copied: '命令已复制',
     copyError: '复制失败，请手动选择命令',
-    capabilitiesTitle: 'A3S Test 只解决三个关键问题',
-    capabilitiesBody:
-      '先理解当前界面，再把问题交到负责它的源码，最后用更新后的页面证明修改并留下回归。其他能力都服务于这条闭环。',
-    capabilities: [
+    benchmark: {
+      title: '同一组任务，先看完成率，再看安全与代价',
+      body: '这次对比隔离了执行层：双方使用同一个确定性求解器和相同的浏览器底层，MiniWoB 官方 reward 是唯一成功判定。',
+      tableCaption: 'A3S Test 与直接 agent-browser 的 UI 执行层对比',
+      dimension: '对比维度',
+      candidate: 'A3S Test 1.0.0',
+      baseline: '直接 agent-browser 0.26.0',
+      metrics: {
+        success: '任务成功',
+        staleReference: '旧引用防护',
+        evidence: '内置运行证据',
+        latency: '共同成功中位执行时间',
+      },
+      labels: {
+        mainRuns: '次主运行',
+        staleRejected: '旧引用被拒绝',
+        pageMutations: '次页面修改',
+        artifactRuns: '次运行生成内置证据文件',
+        versusDirect: '相对直接客户端',
+        hostBaseline: '本机基线',
+        lockedProtocol: 'MiniWoB++ 锁定协议',
+        tasks: '项任务',
+        repetitions: '次重复',
+      },
+      limitation:
+        '这是单机开发证据，不比较模型推理，也不代表通用性能。拖拽与滚轮探针在双方均超时，未计入主成功率。',
+      reportLink: '查看完整协议、原始数据与复现步骤',
+    },
+    packetTitle: '给 Agent 的不只是一句“这里有问题”',
+    packetBody:
+      'Test Kit 把人工意图与浏览器已经计算出的上下文组成一个有界交接包。Agent 能知道目标是什么、由谁负责、证据来自哪一版页面。',
+    packetLabel: '交接包示例',
+    packetLines: [
+      'protocol    a3s.test.repair/1',
+      'page        /checkout · revision 18',
+      'selection   button “提交订单”',
+      'source      TestKitExperience.tsx',
+      'intent      提高文字对比度',
+      'context     role · locator · viewport geometry',
+      'authority   human submitted',
+    ],
+    packetTrust:
+      '页面内容始终按不可信证据处理。点选、截图或保存草稿都不会自动授权修改源码。',
+    packetLink: '查看 Page Context、权限与失败关闭规则',
+    quickStartTitle: '三步跑通第一个真实页面',
+    quickStartBody:
+      '先让应用照常运行，再为一次明确目标开启会话。每次只依据最新观察执行一个类型化动作。',
+    quickStartSteps: [
       {
-        title: '看懂当前界面',
-        body: '组合浏览器语义与有界 Page Context，得到绑定当前页面修订的组件、状态、定位器和几何。',
-        code: 'OBSERVE · REVISION',
+        title: '运行你的页面',
+        body: '使用项目原来的开发命令，不需要为 A3S Test 改构建流程。',
+        command: 'npm run dev',
       },
       {
-        title: '找到负责源码',
-        body: '把点选、框选、截图或草图与组件归属、排序后的源码跨度和人工期望一起提交。',
-        code: 'REVIEW · SOURCE',
+        title: '开启一个有成功条件的会话',
+        body: '目标和成功条件必须能从页面直接观察。',
+        command:
+          'a3s-test agent start http://127.0.0.1:3000 \\\n  --session ui \\\n  --goal "复现提交失败" \\\n  --success "确认页标题可见"',
       },
       {
-        title: '证明修改并防止回退',
-        body: '从更高页面修订验证成功条件，再把最小动作、断言和证据固化为可重复 ACL。',
-        code: 'VERIFY · ACL',
+        title: '先观察，再行动',
+        body: '读取最新引用，完成验证后再把稳定路径收敛成 ACL。',
+        command: 'a3s-test agent observe --session ui --interactive --json',
       },
     ],
-    capabilityLedgerTitle: '四层技术实现支撑这三个结果',
-    capabilityLedgerBody:
-      '每层只拥有一种责任，并通过版本化、有界、失败关闭的契约连接。展开即可查看实现，不需要先读完整协议。',
-    capabilityReference: '查看完整能力的入口、输出、证据和失败边界',
-    capabilityItemCount: '项实现',
-    capabilityGroups: [
+    quickStartLink: '打开完整快速开始',
+    faqTitle: '先回答会影响你决定的问题',
+    faqBody: '边界说清楚，比把所有能力一次铺开更重要。',
+    faqItems: [
       {
-        id: 'context',
-        code: 'BROWSER + TEST KIT',
-        title: '渲染后事实层',
-        summary: '读取浏览器已经计算出的语义、布局和状态，不从截图重新猜页面。',
-        href: '/concepts/page-context.html',
-        linkLabel: '查看 Page Context 字段、预算与失效规则',
-        items: [
-          {
-            signal: 'AX · DOM · LAYOUT',
-            title: '组合浏览器语义与页面上下文',
-            body: '可访问快照负责角色、名称和原生状态；Test Kit 补充组件、定位器、几何、布局、样式和动效。',
-          },
-          {
-            signal: 'REVISION · DIFF · @cN',
-            title: '用页面修订绑定节点身份',
-            body: '页面变化推进单调修订；精确差异只保留未受影响节点的稳定定位器，缺失或超预算就要求全量重置。',
-          },
-          {
-            signal: 'BOUNDARY · SOURCE MAP',
-            title: '显式声明源码归属',
-            body: '组件边界、DOM owner 与可选 Source Map v3 生成排序后的源码候选，不读取框架私有状态。',
-          },
-        ],
+        question: '普通 Web 测试必须接入 Test Kit 吗？',
+        answer:
+          '不需要。CLI 可以直接驱动浏览器。只有当组件归属、源码候选、页面几何、截图草图或人工标记确实能帮助任务时，才接入 Test Kit。',
       },
       {
-        id: 'core',
-        code: 'RUST CORE + SESSION',
-        title: '类型化控制层',
-        summary: '把观察、动作、权限和会话状态变成可校验契约。',
-        href: '/concepts/authority-and-safety.html',
-        linkLabel: '查看权限、安全和失败关闭规则',
-        items: [
-          {
-            signal: 'ACTION · SCHEMA · POLICY',
-            title: '先准入，再执行动作',
-            body: '动作先校验封闭类型、字段、目标、能力和策略，未知字段或不支持行为不会到达驱动。',
-          },
-          {
-            signal: 'OBSERVATION · REF · SESSION',
-            title: '引用只属于当前观察',
-            body: '会话把目标引用绑定到观察和页面修订；过期、歧义或无法证明未变化的目标直接失效。',
-          },
-          {
-            signal: 'FACT · ADVICE · HUMAN · EDIT',
-            title: '四种权限互不冒充',
-            body: '浏览器事实、模型建议、人工授权和源码修改相互独立，测试 verdict 始终由确定性规则负责。',
-          },
-        ],
+        question: '页面截图会请求整个屏幕的权限吗？',
+        answer:
+          '不会。Test Kit 截取的是当前浏览器页面内容，并在页面内框选区域；它不调用整屏共享或系统级屏幕录制。',
       },
       {
-        id: 'execution',
-        code: 'REVIEW + SURFACE DRIVERS',
-        title: '评审与界面执行层',
-        summary:
-          '把人工指出的问题交给工作区 Agent，并由对应界面驱动执行已准入动作。',
-        href: '/concepts/architecture.html',
-        linkLabel: '查看修复桥、界面驱动与运行时边界',
-        items: [
-          {
-            signal: 'ELEMENT · REGION · DRAW · CAPTURE',
-            title: '在一个右侧界面完成标记',
-            body: '点选、文本、多选、框选、手绘、画板和浏览器内容截图都在同一侧栏完成，不堆叠弹窗。',
-          },
-          {
-            signal: 'CONTEXT · SOURCE · REPAIR',
-            title: '明确发送才进入修复链路',
-            body: 'finding 绑定当前修订、组件、定位器、几何与源码候选，保存草稿或打开编辑器都不会授权修改。',
-          },
-          {
-            signal: 'WEB · GUI · TUI · PROCESS',
-            title: '驱动只实现能够证明的能力',
-            body: 'Web、GUI 与 TUI 共享 Core 契约，各自拥有感知、派发和清理；不支持的能力失败关闭。',
-          },
-        ],
+        question: '点选元素后会直接让 Agent 修改源码吗？',
+        answer:
+          '不会。点选和草稿只生成证据。只有用户明确提交的问题才进入修复队列，工作区修改仍属于单独授权的编码 Agent。',
       },
       {
-        id: 'evidence',
-        code: 'EVIDENCE + ACL',
-        title: '验证与回归层',
-        summary: '从更新后的界面证明结果，并把探索收敛为确定性测试。',
-        href: '/guide/workflows.html',
-        linkLabel: '查看 Agent 会话与 ACL 回归工作流',
-        items: [
-          {
-            signal: 'BEFORE · AFTER · ERRORS',
-            title: '用更新后的页面验证修改',
-            body: '重新定位目标并比较成功条件、截图、console 与 page errors；旧修订的证据不能冒充新结果。',
-          },
-          {
-            signal: 'EVENTS · REPORT · ARTIFACT',
-            title: '保留可复查的最小证据',
-            body: '观察、动作、断言、失败归属和自有工件写入追加式会话记录与终态报告。',
-          },
-          {
-            signal: 'CHECK · RUN · CI',
-            title: 'ACL 固化已证明路径',
-            body: '关闭式清单在执行前静态准入，再在本地和 CI 重复明确动作、等待、断言与证据。',
-          },
-        ],
+        question: '页面滚动或更新后，旧标记会不会漂移？',
+        answer:
+          '标记会根据当前滚动位置重新计算。页面修订变化后，无法证明仍然有效的旧引用和几何会失效，不会悄悄指向另一个元素。',
+      },
+      {
+        question: 'Agent 会话和 ACL 为什么同时存在？',
+        answer:
+          '会话用于路径未知的探索，每次根据最新观察选择动作。ACL 只保存已经证明过的明确动作、等待、断言与证据，用于本地和 CI 重复。',
       },
     ],
-    workflowTitle: '同一个执行核心，两个使用阶段',
-    workflowBody:
-      '路径未知时，Agent 会话保留浏览器状态并从最新观察选择下一步。路径证明后，只把最小稳定形式写入 ACL。',
-    workflowAgent: '探索未知路径',
-    workflowAgentBody:
-      '每次读取当前页面，只执行一个动作，用于复现问题、理解陌生流程并证明成功条件。',
-    workflowAcl: '重复已证明路径',
-    workflowAclBody:
-      '把明确动作、等待、断言和证据写成关闭式套件，在本地、CI 和界面契约检查中运行。',
-    workflowAgentLink: '了解 Agent 会话',
-    workflowAclLink: '编写 ACL 套件',
-    workflowObserve: '当前事实',
-    workflowDecide: '类型化动作',
-    workflowAct: '新页面证据',
-    workflowProve: 'ACL 回归',
     ctaTitle: '从一个真实页面开始',
     ctaBody:
-      '先用 CLI 跑通一个带可观察成功条件的会话。需要组件、源码、坐标或人工标记时再接入 Test Kit，最后把证明过的路径写成 ACL。',
+      '先用 CLI 跑通一个带可观察成功条件的会话。需要更多页面上下文时再接入 Test Kit。',
     quickStart: '运行第一个测试',
     testkitGuide: '接入 Test Kit',
     footer: '依据当前页面行动，把证明过的路径变成回归。',
@@ -251,17 +213,31 @@ export const homeCopy: Record<Locale, LocalizedCopy> = {
   },
   en: {
     heroTitle: [
-      'Understand the real interface.',
-      'Find the source. Keep the proof.',
+      'Ground the agent in the real page.',
+      'Keep proof of every change.',
     ],
     heroBody:
-      'Fast vibe coding depends on a trustworthy feedback loop: what the page renders now, which source owns it, and whether a change truly worked. A3S Test answers all three with current browser revisions, typed actions, and inspectable evidence.',
-    startExperience: 'Mark an issue on this page',
+      'Select an interface problem, carry the current revision, component, and source hints to the agent, then verify the result against the changed page. A3S Test turns that feedback loop into an executable, inspectable test.',
+    startExperience: 'Try Test Kit on this page',
     readDocs: 'Run your first test',
-    installTitle: 'Install only what this task needs',
+    proofItems: [
+      {
+        title: 'Read the current render',
+        body: 'Semantics, state, geometry, and page revision come from the running browser.',
+      },
+      {
+        title: 'Bind the owning source',
+        body: 'Components, locators, regions, and source candidates travel with one finding.',
+      },
+      {
+        title: 'Accept only fresh proof',
+        body: 'Verify against the changed page, then preserve the stable path as ACL.',
+      },
+    ],
+    installTitle: 'Install the execution core with one command',
     installBody:
-      'Install the CLI and Agent Skill for sessions and ACL. Install Test Kit to select, draw, capture, or sketch inside a development page.',
-    testkitInstallLink: 'Install Web Test Kit',
+      'The CLI and Agent Skill run sessions and ACL. Add Test Kit only when selecting, drawing, capturing, or sketching inside the page helps.',
+    testkitInstallLink: 'Add Web Test Kit when needed',
     installTabs: 'Choose an installation platform',
     installPackage: 'CLI + Agent Skill',
     installNote:
@@ -271,157 +247,106 @@ export const homeCopy: Record<Locale, LocalizedCopy> = {
     copy: 'Copy command',
     copied: 'Command copied',
     copyError: 'Copy failed. Select the command manually.',
-    capabilitiesTitle: 'A3S Test solves three essential problems',
-    capabilitiesBody:
-      'Understand the current interface, connect a problem to the source that owns it, then prove the changed page and preserve a regression. Every other capability serves this loop.',
-    capabilities: [
+    benchmark: {
+      title: 'Same tasks. Compare completion, safety, and cost.',
+      body: 'This comparison isolates the execution layer: both candidates use one deterministic solver and the same browser foundation, with official MiniWoB reward as the only success verdict.',
+      tableCaption:
+        'UI execution-layer comparison between A3S Test and direct agent-browser',
+      dimension: 'Measure',
+      candidate: 'A3S Test 1.0.0',
+      baseline: 'Direct agent-browser 0.26.0',
+      metrics: {
+        success: 'Task success',
+        staleReference: 'Stale-reference protection',
+        evidence: 'Built-in run evidence',
+        latency: 'Paired common-success median',
+      },
+      labels: {
+        mainRuns: 'main runs',
+        staleRejected: 'old refs rejected',
+        pageMutations: 'page mutations',
+        artifactRuns: 'runs with built-in evidence files',
+        versusDirect: 'versus the direct client',
+        hostBaseline: 'host-local baseline',
+        lockedProtocol: 'Locked MiniWoB++ protocol',
+        tasks: 'tasks',
+        repetitions: 'repetitions',
+      },
+      limitation:
+        'This is single-host development evidence, not a model-reasoning or universal-performance claim. Drag and wheel probes timed out for both candidates and are excluded from the main success rate.',
+      reportLink: 'Read the full protocol, raw data, and reproduction steps',
+    },
+    packetTitle: 'Give the agent more than “something is wrong here”',
+    packetBody:
+      'Test Kit combines human intent with bounded context the browser already computed. The agent can see the target, its likely owner, and the exact page revision that produced the evidence.',
+    packetLabel: 'Example handoff packet',
+    packetLines: [
+      'protocol    a3s.test.repair/1',
+      'page        /checkout · revision 18',
+      'selection   button “Submit order”',
+      'source      TestKitExperience.tsx',
+      'intent      Increase text contrast',
+      'context     role · locator · viewport geometry',
+      'authority   human submitted',
+    ],
+    packetTrust:
+      'Page-derived content remains untrusted evidence. Selecting, capturing, or saving a draft never grants source-edit authority.',
+    packetLink: 'Inspect Page Context, authority, and fail-closed rules',
+    quickStartTitle: 'Run one real page in three steps',
+    quickStartBody:
+      'Keep the application running as usual, then open a session around one explicit goal. Execute one typed action at a time from the latest observation.',
+    quickStartSteps: [
       {
-        title: 'Understand the current interface',
-        body: 'Combine browser semantics with bounded Page Context for revision-bound components, state, locators, and geometry.',
-        code: 'OBSERVE · REVISION',
+        title: 'Run your page',
+        body: 'Use the project command you already have. A3S Test does not need a custom build step.',
+        command: 'npm run dev',
       },
       {
-        title: 'Find the source that owns it',
-        body: 'Submit a selected element, region, page capture, or sketch with component ownership, ranked source spans, and human intent.',
-        code: 'REVIEW · SOURCE',
+        title: 'Start a session with a visible outcome',
+        body: 'The goal and success condition must be observable from the page.',
+        command:
+          'a3s-test agent start http://127.0.0.1:3000 \\\n  --session ui \\\n  --goal "Reproduce the submit failure" \\\n  --success "The confirmation heading is visible"',
       },
       {
-        title: 'Prove the change and prevent drift',
-        body: 'Verify success against a newer page revision, then preserve the smallest actions, assertions, and evidence as ACL.',
-        code: 'VERIFY · ACL',
+        title: 'Observe before acting',
+        body: 'Use fresh refs, verify the result, then distill the stable path into ACL.',
+        command: 'a3s-test agent observe --session ui --interactive --json',
       },
     ],
-    capabilityLedgerTitle: 'Four implementation layers produce those results',
-    capabilityLedgerBody:
-      'Each layer owns one responsibility and connects through versioned, bounded, fail-closed contracts. Expand a layer for implementation detail without reading the full protocol first.',
-    capabilityReference:
-      'Inspect every capability entry point, output, evidence rule, and failure boundary',
-    capabilityItemCount: 'details',
-    capabilityGroups: [
+    quickStartLink: 'Open the complete quick start',
+    faqTitle: 'Answers that should shape the decision',
+    faqBody:
+      'Clear boundaries matter more than putting every capability on one page.',
+    faqItems: [
       {
-        id: 'context',
-        code: 'BROWSER + TEST KIT',
-        title: 'Post-render fact layer',
-        summary:
-          'Read semantics, layout, and state the browser already computed instead of reconstructing a page from screenshots.',
-        href: '/concepts/page-context.html',
-        linkLabel: 'Inspect Page Context fields, budgets, and expiry rules',
-        items: [
-          {
-            signal: 'AX · DOM · LAYOUT',
-            title: 'Combine browser semantics and page context',
-            body: 'Accessibility owns roles, names, and native state. Test Kit adds components, locators, geometry, layout, style, and motion.',
-          },
-          {
-            signal: 'REVISION · DIFF · @cN',
-            title: 'Bind node identity to a page revision',
-            body: 'Page changes advance a monotonic revision. Exact deltas retain only unaffected stable locators; missing or oversized history requires a full reset.',
-          },
-          {
-            signal: 'BOUNDARY · SOURCE MAP',
-            title: 'Declare source ownership explicitly',
-            body: 'Component boundaries, DOM owners, and optional Source Map v3 produce ranked candidates without reading framework private state.',
-          },
-        ],
+        question: 'Does ordinary Web testing require Test Kit?',
+        answer:
+          'No. The CLI can drive a browser directly. Add Test Kit only when component ownership, source candidates, page geometry, visual references, or human marking materially helps the task.',
       },
       {
-        id: 'core',
-        code: 'RUST CORE + SESSION',
-        title: 'Typed control layer',
-        summary:
-          'Turn observations, actions, authority, and persistent session state into validated contracts.',
-        href: '/concepts/authority-and-safety.html',
-        linkLabel: 'Inspect authority, safety, and fail-closed behavior',
-        items: [
-          {
-            signal: 'ACTION · SCHEMA · POLICY',
-            title: 'Admit an action before execution',
-            body: 'Closed variants validate fields, targets, capabilities, and policy before unsupported or unknown input can reach a driver.',
-          },
-          {
-            signal: 'OBSERVATION · REF · SESSION',
-            title: 'Keep refs inside the current observation',
-            body: 'Sessions bind target refs to an observation and page revision. Stale, ambiguous, or unproven targets expire instead of drifting.',
-          },
-          {
-            signal: 'FACT · ADVICE · HUMAN · EDIT',
-            title: 'Keep four authorities independent',
-            body: 'Browser facts, model advice, human authorization, and source mutation cannot impersonate one another. Deterministic rules own verdicts.',
-          },
-        ],
+        question: 'Does page capture request whole-screen permission?',
+        answer:
+          'No. Test Kit captures browser-page content and lets the user crop inside the page. It does not invoke whole-screen sharing or operating-system screen recording.',
       },
       {
-        id: 'execution',
-        code: 'REVIEW + SURFACE DRIVERS',
-        title: 'Review and surface execution layer',
-        summary:
-          'Send a human-identified problem to the workspace agent, then execute admitted actions through the owning surface driver.',
-        href: '/concepts/architecture.html',
-        linkLabel:
-          'Inspect the repair bridge, surface drivers, and runtime boundaries',
-        items: [
-          {
-            signal: 'ELEMENT · REGION · DRAW · CAPTURE',
-            title: 'Keep marking in one right-side surface',
-            body: 'Element, text, multi-select, region, freehand, board, and browser-page capture stay in one panel without stacked dialogs.',
-          },
-          {
-            signal: 'CONTEXT · SOURCE · REPAIR',
-            title: 'Enter repair only on explicit submission',
-            body: 'A finding binds the current revision, component, locator, geometry, and source candidates. Saving a draft or opening an editor grants no edit authority.',
-          },
-          {
-            signal: 'WEB · GUI · TUI · PROCESS',
-            title: 'Implement only provable driver capability',
-            body: 'Web, GUI, and TUI share Core contracts but separately own perception, dispatch, and cleanup. Unsupported behavior fails closed.',
-          },
-        ],
+        question: 'Does selecting an element let the agent edit source?',
+        answer:
+          'No. A selection and a draft are evidence only. A finding enters the repair queue only after explicit submission, and workspace mutation still belongs to a separately authorized coding agent.',
       },
       {
-        id: 'evidence',
-        code: 'EVIDENCE + ACL',
-        title: 'Verification and regression layer',
-        summary:
-          'Prove the result from the changed surface, then turn exploration into deterministic coverage.',
-        href: '/guide/workflows.html',
-        linkLabel: 'Inspect agent-session and ACL regression workflows',
-        items: [
-          {
-            signal: 'BEFORE · AFTER · ERRORS',
-            title: 'Verify against the changed page',
-            body: 'Re-resolve the target and compare success criteria, screenshots, console, and page errors. Old-revision evidence cannot prove the new result.',
-          },
-          {
-            signal: 'EVENTS · REPORT · ARTIFACT',
-            title: 'Retain the smallest inspectable proof',
-            body: 'Observations, actions, assertions, failure ownership, and owned artifacts remain in an append-only session record and terminal report.',
-          },
-          {
-            signal: 'CHECK · RUN · CI',
-            title: 'Preserve proven paths as ACL',
-            body: 'A closed manifest passes static admission before explicit actions, waits, assertions, and evidence repeat locally or in CI.',
-          },
-        ],
+        question: 'Can a marker drift after scrolling or a page update?',
+        answer:
+          'Markers recompute from the current scroll position. After a revision change, refs and geometry that cannot be proven current expire instead of silently resolving to another element.',
+      },
+      {
+        question: 'Why keep both agent sessions and ACL?',
+        answer:
+          'Sessions explore unknown paths from each fresh observation. ACL retains only proven actions, waits, assertions, and evidence so the same path can repeat locally and in CI.',
       },
     ],
-    workflowTitle: 'One execution core, two stages of use',
-    workflowBody:
-      'When the path is unknown, an agent session keeps browser state and chooses from each current observation. After proof, preserve only the smallest stable form as ACL.',
-    workflowAgent: 'Explore an unknown path',
-    workflowAgentBody:
-      'Read the current page and execute one action at a time to reproduce a bug, understand an unfamiliar flow, and prove the success condition.',
-    workflowAcl: 'Repeat a proven path',
-    workflowAclBody:
-      'Encode explicit actions, waits, assertions, and evidence as a closed suite for local, CI, and Surface Contract checks.',
-    workflowAgentLink: 'Learn agent sessions',
-    workflowAclLink: 'Write an ACL suite',
-    workflowObserve: 'Current facts',
-    workflowDecide: 'Typed action',
-    workflowAct: 'Fresh evidence',
-    workflowProve: 'ACL regression',
     ctaTitle: 'Start with one real page',
     ctaBody:
-      'Use the CLI to prove one session with an observable success condition. Add Test Kit only for components, source, geometry, or human marking, then preserve the proven path as ACL.',
+      'Prove one session with an observable success condition. Add Test Kit only when richer page context helps.',
     quickStart: 'Run your first test',
     testkitGuide: 'Add Test Kit',
     footer: 'Act from the current page. Turn proven paths into regressions.',

@@ -1,17 +1,200 @@
 import { useLang, useSite, useVersion, withBase } from '@rspress/core/runtime';
-import { ArrowRight, ArrowUpRight, CaretDown } from '@phosphor-icons/react';
+import {
+  ArrowRight,
+  ArrowUpRight,
+  CaretDown,
+  ChartBar,
+  CheckCircle,
+  Code,
+  CursorClick,
+  FileText,
+  ShieldCheck,
+  Timer,
+} from '@phosphor-icons/react';
 import { useState } from 'react';
 import { InstallSwitcher, installCommandFor } from './InstallSwitcher';
 import { TestKitExperience } from './TestKitExperience';
-import { homeCopy, type CapabilityGroupId, type Locale } from '../home-copy';
+import { homeCopy, type Locale } from '../home-copy';
+import type { BenchmarkCopy } from '../home-copy-types';
 import { publishedVersion } from '../../versions.mjs';
+import benchmarkSummary from '../../../benchmarks/ui/results/summary/20260821T171716Z.json';
 
-const archivedCapabilityHrefs: Record<CapabilityGroupId, string> = {
-  context: '/guide/testkit.html',
-  core: '/concepts/architecture.html',
-  execution: '/reference/cli.html',
-  evidence: '/guide/workflows.html',
+const benchmarkReportUrl =
+  'https://github.com/A3S-Lab/Test/tree/main/benchmarks/ui';
+
+const benchmarkCandidate = benchmarkSummary.candidates['a3s-test'];
+const benchmarkBaseline = benchmarkSummary.candidates['agent-browser'];
+const benchmarkPairs = benchmarkSummary.paired_common_success;
+
+type BenchmarkRow = {
+  label: string;
+  candidateValue: string;
+  candidateDetail: string;
+  baselineValue: string;
+  baselineDetail: string;
 };
+
+function formatPercent(value: number) {
+  const percentage = value * 100;
+  return `${percentage.toFixed(Number.isInteger(percentage) ? 0 : 1)}%`;
+}
+
+function formatDuration(milliseconds: number, locale: Locale) {
+  return `${(milliseconds / 1000).toFixed(2)} ${locale === 'zh' ? '秒' : 's'}`;
+}
+
+function benchmarkScope(copy: BenchmarkCopy) {
+  const { protocol, host } = benchmarkSummary;
+  return `${copy.labels.lockedProtocol} · ${protocol.task_count} ${copy.labels.tasks} × ${protocol.repetitions} ${copy.labels.repetitions} · ${host.cpu_model} · ${protocol.viewport.width} × ${protocol.viewport.height}`;
+}
+
+function benchmarkRows(copy: BenchmarkCopy, locale: Locale): BenchmarkRow[] {
+  const candidateStale = benchmarkCandidate.probes.stale_ref;
+  const baselineStale = benchmarkBaseline.probes.stale_ref;
+  const candidateRejected = Math.round(
+    candidateStale.rejection_rate * candidateStale.runs,
+  );
+  const baselineRejected = Math.round(
+    baselineStale.rejection_rate * baselineStale.runs,
+  );
+  const candidateMutations = Math.round(
+    candidateStale.page_mutation_rate * candidateStale.runs,
+  );
+  const baselineMutations = Math.round(
+    baselineStale.page_mutation_rate * baselineStale.runs,
+  );
+  const candidateArtifactRuns = Math.round(
+    benchmarkCandidate.evidence_file_rate * benchmarkCandidate.runs,
+  );
+  const baselineArtifactRuns = Math.round(
+    benchmarkBaseline.evidence_file_rate * benchmarkBaseline.runs,
+  );
+
+  return [
+    {
+      label: copy.metrics.success,
+      candidateValue: formatPercent(benchmarkCandidate.success_rate),
+      candidateDetail: `${benchmarkCandidate.passed} / ${benchmarkCandidate.runs} ${copy.labels.mainRuns}`,
+      baselineValue: formatPercent(benchmarkBaseline.success_rate),
+      baselineDetail: `${benchmarkBaseline.passed} / ${benchmarkBaseline.runs} ${copy.labels.mainRuns}`,
+    },
+    {
+      label: copy.metrics.staleReference,
+      candidateValue: `${candidateRejected} / ${candidateStale.runs}`,
+      candidateDetail: `${copy.labels.staleRejected} · ${candidateMutations} ${copy.labels.pageMutations}`,
+      baselineValue: `${baselineRejected} / ${baselineStale.runs}`,
+      baselineDetail: `${copy.labels.staleRejected} · ${baselineMutations} ${copy.labels.pageMutations}`,
+    },
+    {
+      label: copy.metrics.evidence,
+      candidateValue: `${candidateArtifactRuns} / ${benchmarkCandidate.runs}`,
+      candidateDetail: copy.labels.artifactRuns,
+      baselineValue: `${baselineArtifactRuns} / ${benchmarkBaseline.runs}`,
+      baselineDetail: copy.labels.artifactRuns,
+    },
+    {
+      label: copy.metrics.latency,
+      candidateValue: formatDuration(
+        benchmarkPairs.candidate_execution_ms.median,
+        locale,
+      ),
+      candidateDetail: `+${formatPercent(benchmarkPairs.overhead_ratio.median)} ${copy.labels.versusDirect}`,
+      baselineValue: formatDuration(
+        benchmarkPairs.baseline_execution_ms.median,
+        locale,
+      ),
+      baselineDetail: copy.labels.hostBaseline,
+    },
+  ];
+}
+
+const benchmarkIcons = [CheckCircle, ShieldCheck, FileText, Timer];
+
+function BenchmarkSection({
+  copy,
+  locale,
+}: {
+  copy: BenchmarkCopy;
+  locale: Locale;
+}) {
+  const rows = benchmarkRows(copy, locale);
+
+  return (
+    <section
+      aria-labelledby="test-benchmark-title"
+      className="test-section test-benchmark"
+    >
+      <header>
+        <h2 id="test-benchmark-title">{copy.title}</h2>
+        <p>{copy.body}</p>
+      </header>
+
+      <div className="test-benchmark-sheet">
+        <div className="test-benchmark-sheet-meta">
+          <span>
+            <ChartBar aria-hidden="true" size={17} weight="bold" />
+            {benchmarkScope(copy)}
+          </span>
+          <code>run {benchmarkSummary.run_id}</code>
+        </div>
+
+        <div className="test-benchmark-table">
+          <table>
+            <caption>{copy.tableCaption}</caption>
+            <thead>
+              <tr>
+                <th scope="col">{copy.dimension}</th>
+                <th scope="col">
+                  <span className="test-benchmark-candidate is-a3s">
+                    <i aria-hidden="true" />
+                    {copy.candidate}
+                  </span>
+                </th>
+                <th scope="col">
+                  <span className="test-benchmark-candidate">
+                    <i aria-hidden="true" />
+                    {copy.baseline}
+                  </span>
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((row, index) => {
+                const Icon = benchmarkIcons[index];
+                return (
+                  <tr key={row.label}>
+                    <th scope="row">
+                      <span className="test-benchmark-metric">
+                        <Icon aria-hidden="true" size={18} weight="bold" />
+                        {row.label}
+                      </span>
+                    </th>
+                    <td data-label={copy.candidate}>
+                      <strong>{row.candidateValue}</strong>
+                      <span>{row.candidateDetail}</span>
+                    </td>
+                    <td data-label={copy.baseline}>
+                      <strong>{row.baselineValue}</strong>
+                      <span>{row.baselineDetail}</span>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+
+        <div className="test-benchmark-footnote">
+          <p>{copy.limitation}</p>
+          <a href={benchmarkReportUrl}>
+            {copy.reportLink}
+            <ArrowUpRight aria-hidden="true" size={15} weight="bold" />
+          </a>
+        </div>
+      </div>
+    </section>
+  );
+}
 
 function MarkdownHome({
   installVersion,
@@ -25,12 +208,20 @@ function MarkdownHome({
   const copy = homeCopy[locale];
   const unixInstall = installCommandFor('macos', installVersion);
   const windowsInstall = installCommandFor('windows', installVersion);
+  const rows = benchmarkRows(copy.benchmark, locale);
 
   return (
     <main>
       <h1>{copy.heroTitle.join(locale === 'zh' ? '' : ' ')}</h1>
       <p>{copy.heroBody}</p>
+      {copy.proofItems.map((item) => (
+        <section key={item.title}>
+          <h2>{item.title}</h2>
+          <p>{item.body}</p>
+        </section>
+      ))}
       <h2>{copy.installTitle}</h2>
+      <p>{copy.installBody}</p>
       {version !== installVersion && <p>{copy.installCandidateNote}</p>}
       <p>{copy.testkitInstallLink}</p>
       <h3>macOS / Linux</h3>
@@ -41,47 +232,72 @@ function MarkdownHome({
       <pre>
         <code>{windowsInstall}</code>
       </pre>
-      <h2>{copy.experience.contextTitle}</h2>
-      <p>{copy.experience.localOnly}</p>
-      <h2>{copy.capabilitiesTitle}</h2>
-      {copy.capabilities.map((item) => (
-        <section key={item.title}>
-          <h3>{item.title}</h3>
-          <p>{item.body}</p>
-          <code>{item.code}</code>
+      <h2>{copy.benchmark.title}</h2>
+      <p>{copy.benchmark.body}</p>
+      <table>
+        <caption>{copy.benchmark.tableCaption}</caption>
+        <thead>
+          <tr>
+            <th>{copy.benchmark.dimension}</th>
+            <th>{copy.benchmark.candidate}</th>
+            <th>{copy.benchmark.baseline}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row) => (
+            <tr key={row.label}>
+              <th>{row.label}</th>
+              <td>{`${row.candidateValue} · ${row.candidateDetail}`}</td>
+              <td>{`${row.baselineValue} · ${row.baselineDetail}`}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <p>
+        <code>{`run ${benchmarkSummary.run_id}`}</code>
+      </p>
+      <p>{benchmarkScope(copy.benchmark)}</p>
+      <p>{copy.benchmark.limitation}</p>
+      <p>
+        <a href={benchmarkReportUrl}>{copy.benchmark.reportLink}</a>
+      </p>
+      <h2>{copy.packetTitle}</h2>
+      <p>{copy.packetBody}</p>
+      <pre>
+        <code>{copy.packetLines.join('\n')}</code>
+      </pre>
+      <p>{copy.packetTrust}</p>
+      <h2>{copy.quickStartTitle}</h2>
+      <p>{copy.quickStartBody}</p>
+      {copy.quickStartSteps.map((step) => (
+        <section key={step.title}>
+          <h3>{step.title}</h3>
+          <p>{step.body}</p>
+          <pre>
+            <code>{step.command}</code>
+          </pre>
         </section>
       ))}
-      <h2>{copy.capabilityLedgerTitle}</h2>
-      <p>{copy.capabilityLedgerBody}</p>
-      <p>{copy.capabilityReference}</p>
-      {copy.capabilityGroups.map((group) => (
-        <section key={group.id}>
-          <h3>{group.title}</h3>
-          <p>{group.summary}</p>
-          <ul>
-            {group.items.map((item) => (
-              <li key={item.title}>
-                <code>{item.signal}</code> <strong>{item.title}</strong>{' '}
-                {item.body}
-              </li>
-            ))}
-          </ul>
+      <h2>{copy.faqTitle}</h2>
+      <p>{copy.faqBody}</p>
+      {copy.faqItems.map((item) => (
+        <section key={item.question}>
+          <h3>{item.question}</h3>
+          <p>{item.answer}</p>
         </section>
       ))}
-      <h2>{copy.workflowTitle}</h2>
-      <p>{copy.workflowBody}</p>
     </main>
   );
 }
+
+const proofIcons = [CursorClick, Code, CheckCircle];
 
 export function HomeLayout() {
   const language = useLang();
   const locale: Locale = language === 'zh' ? 'zh' : 'en';
   const copy = homeCopy[locale];
   const [reviewStarted, setReviewStarted] = useState(false);
-  const [openCapabilityGroups, setOpenCapabilityGroups] = useState(
-    () => new Set(['context']),
-  );
+  const [openFaqs, setOpenFaqs] = useState(() => new Set<number>());
   const version = useVersion();
   const { site } = useSite();
   const defaultVersion = site.multiVersion.default;
@@ -121,7 +337,6 @@ export function HomeLayout() {
       <section className="test-hero">
         <div className="test-hero-copy">
           <h1>
-            <span className="test-hero-brand">A3S Test</span>
             {copy.heroTitle.map((line) => (
               <span key={line}>{line}</span>
             ))}
@@ -145,12 +360,28 @@ export function HomeLayout() {
             </a>
           </div>
         </div>
+
         <TestKitExperience
           copy={copy.experience}
           locale={locale}
           onStartReview={startExperience}
           reviewStarted={reviewStarted}
         />
+
+        <div className="test-proof-strip">
+          {copy.proofItems.map((item, index) => {
+            const Icon = proofIcons[index];
+            return (
+              <article key={item.title}>
+                <Icon aria-hidden="true" size={18} weight="bold" />
+                <div>
+                  <h2>{item.title}</h2>
+                  <p>{item.body}</p>
+                </div>
+              </article>
+            );
+          })}
+        </div>
       </section>
 
       <section className="test-installer-rail">
@@ -165,156 +396,112 @@ export function HomeLayout() {
             <ArrowRight aria-hidden="true" size={14} weight="bold" />
           </a>
         </header>
-        <div>
-          <InstallSwitcher
-            docsVersion={version}
-            installVersion={installVersion}
-            labels={copy}
-          />
+        <InstallSwitcher
+          docsVersion={version}
+          installVersion={installVersion}
+          labels={copy}
+        />
+      </section>
+
+      <BenchmarkSection copy={copy.benchmark} locale={locale} />
+
+      <section className="test-section test-packet">
+        <div className="test-packet-copy">
+          <h2>{copy.packetTitle}</h2>
+          <p>{copy.packetBody}</p>
+          <a
+            href={route(
+              version === defaultVersion
+                ? '/concepts/authority-and-safety.html'
+                : '/concepts/architecture.html',
+            )}
+          >
+            {copy.packetLink}
+            <ArrowRight aria-hidden="true" size={15} weight="bold" />
+          </a>
+        </div>
+        <div className="test-packet-code">
+          <header>
+            <Code aria-hidden="true" size={17} weight="bold" />
+            <span>{copy.packetLabel}</span>
+          </header>
+          <pre>
+            <code>{copy.packetLines.join('\n')}</code>
+          </pre>
+          <p>
+            <ShieldCheck aria-hidden="true" size={17} weight="fill" />
+            {copy.packetTrust}
+          </p>
         </div>
       </section>
 
-      <section className="test-section test-capabilities">
+      <section className="test-section test-quickstart">
         <header>
-          <h2>{copy.capabilitiesTitle}</h2>
-          <p>{copy.capabilitiesBody}</p>
+          <h2>{copy.quickStartTitle}</h2>
+          <p>{copy.quickStartBody}</p>
         </header>
-        <div className="test-capability-grid">
-          {copy.capabilities.map((item, index) => (
-            <article
-              className={`test-capability test-capability-${index + 1}`}
-              key={item.title}
-            >
-              <code>{item.code}</code>
-              <h3>{item.title}</h3>
-              <p>{item.body}</p>
-            </article>
+        <ol className="test-quickstart-steps">
+          {copy.quickStartSteps.map((step, index) => (
+            <li key={step.title}>
+              <span aria-hidden="true">{index + 1}</span>
+              <div>
+                <h3>{step.title}</h3>
+                <p>{step.body}</p>
+              </div>
+              <pre>
+                <code>{step.command}</code>
+              </pre>
+            </li>
           ))}
-        </div>
-        <div className="test-capability-ledger">
-          <div className="test-capability-ledger-intro">
-            <h3>{copy.capabilityLedgerTitle}</h3>
-            <div className="test-capability-ledger-intro-copy">
-              <p>{copy.capabilityLedgerBody}</p>
-              <a
-                href={route(
-                  version === defaultVersion
-                    ? '/reference/capabilities.html'
-                    : '/reference/cli.html',
-                )}
-              >
-                {copy.capabilityReference}{' '}
-                <ArrowRight aria-hidden="true" size={15} weight="bold" />
-              </a>
-            </div>
-          </div>
-          <div className="test-capability-groups">
-            {copy.capabilityGroups.map((group) => {
-              const isOpen = openCapabilityGroups.has(group.id);
-              const triggerId = `test-capability-trigger-${group.id}`;
-              const panelId = `test-capability-panel-${group.id}`;
-              return (
-                <section
-                  className={`test-capability-group${isOpen ? ' is-open' : ''}`}
-                  key={group.id}
-                >
-                  <h4>
-                    <button
-                      aria-controls={panelId}
-                      aria-expanded={isOpen}
-                      data-testid={`capability-group-${group.id}`}
-                      id={triggerId}
-                      onClick={() =>
-                        setOpenCapabilityGroups((current) => {
-                          const next = new Set(current);
-                          if (next.has(group.id)) next.delete(group.id);
-                          else next.add(group.id);
-                          return next;
-                        })
-                      }
-                      type="button"
-                    >
-                      <code>{group.code}</code>
-                      <span className="test-capability-group-title">
-                        <strong>{group.title}</strong>
-                        <small>{group.summary}</small>
-                      </span>
-                      <span className="test-capability-group-count">
-                        {group.items.length} {copy.capabilityItemCount}
-                      </span>
-                      <CaretDown
-                        aria-hidden="true"
-                        className="test-capability-group-caret"
-                        size={18}
-                        weight="bold"
-                      />
-                    </button>
-                  </h4>
-                  <div
-                    aria-labelledby={triggerId}
-                    className="test-capability-group-body"
-                    data-testid={`capability-panel-${group.id}`}
-                    hidden={!isOpen}
-                    id={panelId}
-                    role="region"
-                  >
-                    <dl>
-                      {group.items.map((item) => (
-                        <div key={item.title}>
-                          <dt>
-                            <strong>{item.title}</strong>
-                            <code>{item.signal}</code>
-                          </dt>
-                          <dd>{item.body}</dd>
-                        </div>
-                      ))}
-                    </dl>
-                    <a
-                      href={route(
-                        version === defaultVersion
-                          ? group.href
-                          : archivedCapabilityHrefs[group.id],
-                      )}
-                    >
-                      {group.linkLabel}{' '}
-                      <ArrowRight aria-hidden="true" size={15} weight="bold" />
-                    </a>
-                  </div>
-                </section>
-              );
-            })}
-          </div>
-        </div>
+        </ol>
+        <a className="test-inline-link" href={route('/guide/')}>
+          {copy.quickStartLink}
+          <ArrowRight aria-hidden="true" size={15} weight="bold" />
+        </a>
       </section>
 
-      <section className="test-section test-workflows">
+      <section className="test-section test-faq">
         <header>
-          <h2>{copy.workflowTitle}</h2>
-          <p>{copy.workflowBody}</p>
+          <h2>{copy.faqTitle}</h2>
+          <p>{copy.faqBody}</p>
         </header>
-        <div className="test-workflow-track" aria-label={copy.workflowTitle}>
-          <span>{copy.workflowObserve}</span>
-          <span>{copy.workflowDecide}</span>
-          <span>{copy.workflowAct}</span>
-          <span>{copy.workflowProve}</span>
-        </div>
-        <div className="test-workflow-details">
-          <article>
-            <h3>{copy.workflowAgent}</h3>
-            <p>{copy.workflowAgentBody}</p>
-            <a href={route('/guide/workflows.html')}>
-              {copy.workflowAgentLink}{' '}
-              <ArrowRight aria-hidden="true" size={15} weight="bold" />
-            </a>
-          </article>
-          <article>
-            <h3>{copy.workflowAcl}</h3>
-            <p>{copy.workflowAclBody}</p>
-            <a href={route('/guide/workflows.html')}>
-              {copy.workflowAclLink}{' '}
-              <ArrowRight aria-hidden="true" size={15} weight="bold" />
-            </a>
-          </article>
+        <div className="test-faq-list">
+          {copy.faqItems.map((item, index) => {
+            const isOpen = openFaqs.has(index);
+            const triggerId = `test-faq-trigger-${index}`;
+            const panelId = `test-faq-panel-${index}`;
+            return (
+              <section className="test-faq-item" key={item.question}>
+                <h3>
+                  <button
+                    aria-controls={panelId}
+                    aria-expanded={isOpen}
+                    id={triggerId}
+                    onClick={() =>
+                      setOpenFaqs((current) => {
+                        const next = new Set(current);
+                        if (next.has(index)) next.delete(index);
+                        else next.add(index);
+                        return next;
+                      })
+                    }
+                    type="button"
+                  >
+                    <span>{item.question}</span>
+                    <CaretDown aria-hidden="true" size={18} weight="bold" />
+                  </button>
+                </h3>
+                <div
+                  aria-labelledby={triggerId}
+                  hidden={!isOpen}
+                  id={panelId}
+                  role="region"
+                >
+                  <p>{item.answer}</p>
+                </div>
+              </section>
+            );
+          })}
         </div>
       </section>
 

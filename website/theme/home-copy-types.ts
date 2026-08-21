@@ -1,7 +1,5 @@
 export type Locale = 'zh' | 'en';
 
-export type CapabilityGroupId = 'context' | 'core' | 'execution' | 'evidence';
-
 export type ExperienceCopy = {
   stageAria: string;
   boundaryName: string;
@@ -76,11 +74,44 @@ export type ExperienceCopy = {
   motionResume: string;
 };
 
+export type BenchmarkCopy = {
+  title: string;
+  body: string;
+  tableCaption: string;
+  dimension: string;
+  candidate: string;
+  baseline: string;
+  metrics: {
+    success: string;
+    staleReference: string;
+    evidence: string;
+    latency: string;
+  };
+  labels: {
+    mainRuns: string;
+    staleRejected: string;
+    pageMutations: string;
+    artifactRuns: string;
+    versusDirect: string;
+    hostBaseline: string;
+    lockedProtocol: string;
+    tasks: string;
+    repetitions: string;
+  };
+  limitation: string;
+  reportLink: string;
+};
+
 export type LocalizedCopy = {
   heroTitle: [string, string];
   heroBody: string;
   startExperience: string;
   readDocs: string;
+  proofItems: [
+    { title: string; body: string },
+    { title: string; body: string },
+    { title: string; body: string },
+  ];
   installTitle: string;
   installBody: string;
   testkitInstallLink: string;
@@ -91,34 +122,24 @@ export type LocalizedCopy = {
   copy: string;
   copied: string;
   copyError: string;
-  capabilitiesTitle: string;
-  capabilitiesBody: string;
-  capabilities: Array<{ title: string; body: string; code: string }>;
-  capabilityLedgerTitle: string;
-  capabilityLedgerBody: string;
-  capabilityReference: string;
-  capabilityItemCount: string;
-  capabilityGroups: Array<{
-    id: CapabilityGroupId;
-    code: string;
-    title: string;
-    summary: string;
-    href: string;
-    linkLabel: string;
-    items: Array<{ signal: string; title: string; body: string }>;
-  }>;
-  workflowTitle: string;
-  workflowBody: string;
-  workflowAgent: string;
-  workflowAgentBody: string;
-  workflowAcl: string;
-  workflowAclBody: string;
-  workflowAgentLink: string;
-  workflowAclLink: string;
-  workflowObserve: string;
-  workflowDecide: string;
-  workflowAct: string;
-  workflowProve: string;
+  benchmark: BenchmarkCopy;
+  packetTitle: string;
+  packetBody: string;
+  packetLabel: string;
+  packetLines: string[];
+  packetTrust: string;
+  packetLink: string;
+  quickStartTitle: string;
+  quickStartBody: string;
+  quickStartSteps: [
+    { title: string; body: string; command: string },
+    { title: string; body: string; command: string },
+    { title: string; body: string; command: string },
+  ];
+  quickStartLink: string;
+  faqTitle: string;
+  faqBody: string;
+  faqItems: Array<{ question: string; answer: string }>;
   ctaTitle: string;
   ctaBody: string;
   quickStart: string;
