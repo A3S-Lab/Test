@@ -56,7 +56,7 @@
       <rect width="320" height="96" rx="14" fill="#ffffff" stroke="#bfd0e8" stroke-width="1.5"/>
       <circle cx="26" cy="27" r="6" fill="#7c94b6"/>
       <text x="46" y="34" fill="#101827" font-size="23" font-weight="750">GUI</text>
-      <text x="22" y="70" fill="#56657b" font-size="19">macOS · A3S CUA 0.10.0</text>
+      <text x="22" y="70" fill="#56657b" font-size="19">macOS · certified CUA adapter</text>
     </g>
 
     <g transform="translate(824 454)">

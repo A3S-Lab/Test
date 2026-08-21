@@ -158,6 +158,7 @@ jobs:
             CHANGELOG.md
             assets/readme/hero.svg
             assets/readme/architecture.svg
+            assets/readme/testkit-review.png
             scripts/install.sh
             scripts/install.ps1
           leading-dir: true

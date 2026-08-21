@@ -1,90 +1,71 @@
 <p align="center">
-  <img src="./assets/readme/hero.svg" width="100%" alt="A3S Test turns fresh interface context into typed actions and inspectable evidence">
+  <img src="./assets/readme/hero.svg" width="100%" alt="A3S Test connects a selected rendered element to its current page revision, owning source, and fresh verification evidence">
 </p>
 
 <p align="center">
   <a href="https://github.com/A3S-Lab/Test/releases/latest"><img src="https://img.shields.io/github/v/release/A3S-Lab/Test?style=flat-square&color=1264ff&label=release" alt="Latest release"></a>
   <a href="https://github.com/A3S-Lab/Test/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/A3S-Lab/Test/ci.yml?branch=main&style=flat-square&label=CI" alt="CI status"></a>
+  <a href="https://www.npmjs.com/package/@a3s-lab/testkit"><img src="https://img.shields.io/npm/v/@a3s-lab/testkit?style=flat-square&color=1264ff&label=testkit" alt="Test Kit npm version"></a>
   <a href="https://a3s-lab.github.io/Test/"><img src="https://img.shields.io/badge/docs-%E4%B8%AD%E6%96%87%20%7C%20English-1264ff?style=flat-square" alt="Chinese and English documentation"></a>
   <img src="https://img.shields.io/badge/Rust-1.85%2B-56657b?style=flat-square" alt="Rust 1.85 or newer">
   <a href="./LICENSE"><img src="https://img.shields.io/badge/license-MIT-56657b?style=flat-square" alt="MIT License"></a>
 </p>
 
-<h3 align="center">Understand the rendered interface. Find the owning source. Keep the proof.</h3>
+<h3 align="center">See what actually rendered. Find the source that owns it. Prove the change.</h3>
 
 <p align="center">
-  A3S Test closes the feedback loop from current browser facts to source-aware repair,<br>
-  fresh verification, and deterministic ACL regression.
+  A3S Test gives coding agents a trustworthy interface feedback loop:<br>
+  fresh browser facts, revision-bound actions, source-aware review, and inspectable evidence.
 </p>
 
 <p align="center">
   <a href="https://a3s-lab.github.io/Test/"><strong>中文文档</strong></a> ·
-  <a href="https://a3s-lab.github.io/Test/en/"><strong>English</strong></a> ·
-  <a href="#install">Install</a> ·
-  <a href="#run-the-shortest-trustworthy-loop">Quick start</a> ·
-  <a href="#add-rendered-page-context">Test Kit</a> ·
-  <a href="#how-it-works">Architecture</a>
+  <a href="https://a3s-lab.github.io/Test/en/"><strong>English docs</strong></a> ·
+  <a href="#install-only-what-you-need">Install</a> ·
+  <a href="#run-one-real-browser-loop">Quick start</a> ·
+  <a href="#add-the-page-context-test-kit">Test Kit</a> ·
+  <a href="#architecture">Architecture</a>
 </p>
 
-## Why A3S Test exists
+## The product is the proof
 
-Fast code generation is not enough. A coding agent needs a trustworthy
-feedback loop that answers three questions:
+<p align="center">
+  <img src="./assets/readme/testkit-review.png" width="100%" alt="The real A3S Test documentation experience with a rendered checkout page and the Test Kit review panel open on the right">
+</p>
 
-1. What did the current interface actually render?
-2. Which source code owns the visible result?
-3. What proves the change worked, and what regression will detect drift?
+<p align="center"><sub>The real Test Kit package running inside the documentation site. This public demo keeps findings in the current tab; it does not connect to a repair agent or edit source.</sub></p>
 
-Ordinary browser automation answers only part of this. Screenshots lose DOM
-semantics and source ownership. Raw DOM dumps lose layout and revision context.
-Natural-language actions are ambiguous. A passing exploratory session is not a
-repeatable regression.
+A coding agent should never repair an interface it only imagines. A3S Test keeps
+the path from page to regression short and checkable:
 
-A3S Test closes those gaps with one evidence boundary:
+|                  | Question                              | A3S Test answer                                                                             |
+| ---------------- | ------------------------------------- | ------------------------------------------------------------------------------------------- |
+| **01 · Observe** | What does the page render now?        | Browser semantics plus bounded Test Kit context tied to the current page revision           |
+| **02 · Locate**  | Which source owns the visible result? | Stable locator candidates, component ownership, geometry, and ranked source spans           |
+| **03 · Prove**   | Did the change work without drift?    | Evidence from a newer revision, append-only session records, and deterministic ACL coverage |
 
-| Fundamental risk                                           | A3S Test mechanism                                                                  |
-| ---------------------------------------------------------- | ----------------------------------------------------------------------------------- |
-| The model acts on an old or imagined page                  | Fresh browser observations and monotonic page revisions                             |
-| A target moves, disappears, or changes identity            | Revision-scoped diffs retain only unaffected `@cN` refs and reject every uncertain one |
-| Natural language reaches the browser unchecked             | Typed actions admitted through schema, capability, policy, and origin checks        |
-| The visible defect is disconnected from its implementation | Component boundaries and ranked rendered-node source spans                          |
-| A suggestion silently becomes a source edit                | Separate browser-fact, model-advice, human-authorization, and mutation authorities  |
-| Context loss hides which repair should resume               | A workspace Repair Inbox derived from the authoritative append-only ledger          |
-| A repair reruns too much or accepts too little proof        | Source-bound verification slices with evidence-driven regression expansion          |
-| A successful exploration cannot be repeated                | The same action and evidence contracts can be preserved as deterministic ACL suites |
+Browser facts, model advice, human authorization, and workspace mutation remain
+separate authorities. A source span can explain where to look; it never grants
+permission to edit.
 
-## The shortest trustworthy loop
+## Choose the shortest entry point
 
-```text
-intent
-  -> fresh rendered facts
-  -> smallest observable difference
-  -> owning source span
-  -> explicit repair authority
-  -> smallest deterministic verification slice
-  -> fresh affected evidence and browser proof
-  -> deterministic ACL regression
-```
+| You need to…                                         | Start with…       | You keep…                                                                           |
+| ---------------------------------------------------- | ----------------- | ----------------------------------------------------------------------------------- |
+| Explore an unfamiliar flow or reproduce a bug        | CLI + Agent Skill | Observations, admitted actions, screenshots, events, and a terminal report          |
+| Point at a rendered issue and carry it back to code  | Web Test Kit      | Current revision, element or region, component, source candidates, and human intent |
+| Repeat a path whose actions and assertions are known | ACL suite         | A deterministic local or CI regression with owned evidence                          |
 
-The loop is intentionally narrow:
+Test Kit is optional for ordinary browser automation. Add it when component
+ownership, source mapping, rendered geometry, visual references, or human
+marking materially improves the task.
 
-1. Declare an observable goal instead of a vague instruction.
-2. Read the current browser revision after rendering.
-3. Choose one typed action or one explicit difference.
-4. Use Test Kit source mapping when the visible node must lead back to code.
-5. Require a person to submit the repair scope before workspace mutation.
-6. Select the smallest trusted project checks that cover the changed source.
-7. Verify from a newer page revision and expand only when observed impact
-   evidence requires broader regression.
-8. Preserve the smallest proven browser path as ACL for local and CI runs.
-
-## Install
+## Install only what you need
 
 ### CLI and Agent Skill
 
-The release installer downloads the matching CLI archive, verifies its
-SHA-256, and installs the same portable A3S Test Skill for detected coding
-agents.
+The release installer downloads the platform archive, verifies its SHA-256,
+and installs the matching portable A3S Test Skill for detected coding agents.
 
 macOS or Linux:
 
@@ -98,7 +79,7 @@ Windows PowerShell:
 & ([scriptblock]::Create((irm 'https://github.com/A3S-Lab/Test/releases/latest/download/install.ps1')))
 ```
 
-Pin the published release for reproducible environments:
+Pin the current stable release when reproducibility matters:
 
 ```bash
 curl -fsSL https://github.com/A3S-Lab/Test/releases/latest/download/install.sh |
@@ -111,8 +92,7 @@ curl -fsSL https://github.com/A3S-Lab/Test/releases/latest/download/install.sh |
 
 ### Web Test Kit
 
-Install Test Kit only when a page needs component ownership, source mapping,
-rendered geometry, or the in-page review surface:
+Install the development-only React integration from npm:
 
 ```bash
 npm install --save-dev @a3s-lab/testkit@0.6.2
@@ -120,16 +100,13 @@ npm ls @a3s-lab/testkit
 ```
 
 `@a3s-lab/testkit` 0.6.2 is published on the official npm Registry with
-GitHub OIDC provenance. Its version advances independently from the CLI
-release.
+GitHub OIDC provenance. Its version advances independently from the CLI.
 
-See the [installation guide](https://a3s-lab.github.io/Test/guide/installation.html)
-for package-manager commands, agent targets, custom destinations, and build
-from source.
+[Open the complete installation guide](https://a3s-lab.github.io/Test/guide/installation.html)
 
-## Run the shortest trustworthy loop
+## Run one real browser loop
 
-Start a persistent Web session with a goal the page can prove:
+Start a persistent session with a result the page can prove:
 
 ```bash
 a3s-test agent start http://127.0.0.1:3000/checkout \
@@ -141,14 +118,15 @@ a3s-test agent start http://127.0.0.1:3000/checkout \
 a3s-test agent observe --session checkout --interactive --json
 ```
 
-The observation returns a fresh generation and semantic refs:
+The observation returns fresh semantic refs bound to one observation:
 
 ```text
 observation_id: 1
 @e1 [button] Continue
 ```
 
-Bind one action to that observation, then capture evidence and finish:
+Admit one action against that observation, retain the minimum evidence, and
+finish explicitly:
 
 ```bash
 a3s-test agent click @e1 \
@@ -167,7 +145,7 @@ a3s-test agent finish \
   --json
 ```
 
-The session remains inspectable after the browser closes:
+The browser can close; the result remains inspectable:
 
 ```text
 .a3s-test/agent-sessions/checkout/
@@ -178,15 +156,12 @@ The session remains inspectable after the browser closes:
     └── screenshots/confirmation.png
 ```
 
-`events.jsonl` explains every admitted step. `report.json` stores the terminal
-result. `artifacts/` contains only evidence owned by this session.
+[Continue through the first Web test](https://a3s-lab.github.io/Test/guide/)
 
-[Continue through the quick start](https://a3s-lab.github.io/Test/guide/)
+## Add the Page Context Test Kit
 
-## Add rendered page context
-
-The React integration needs two components. Keep both explicitly disabled in
-production:
+Mount two components at the application root and keep both explicitly disabled
+in production:
 
 ```tsx
 import { A3SReviewOverlay, A3STestKit } from "@a3s-lab/testkit/react";
@@ -199,39 +174,23 @@ const testKitEnabled = import.meta.env.DEV;
 </A3STestKit>;
 ```
 
-This adds two independent layers:
+That is enough for the default review path:
 
-- The headless Context Runtime publishes bounded, revisioned facts after the
-  browser has computed DOM, accessibility, layout, scrolling, and viewports;
-  `waitForDiff` reports only evidence invalidated by a newer revision.
-- The optional Review Overlay keeps the default feedback path to two decisions:
-  choose an element or area, then describe the requested result. Text,
-  multi-select, drawing, and Layout stay available under **More tools**; the
-  right-side design board can add a sketch or browser-page crop without a
-  screen-sharing prompt.
+1. Open the right-side Review panel.
+2. Select an element or drag over an area.
+3. Describe the expected result and submit deliberately.
 
-Test Kit does not need a drawing SDK, screen-sharing permission, framework
-private state, workspace credential, or source-editing capability. Its Shadow
-DOM surface bundles the A3S UI foundation, task-pane, toolbar, and status
-contracts at build time, while the page bridge stays non-enumerable and
-Symbol-addressed. Private node IDs remain in a `WeakMap`; observer and
-navigation signals advance the page revision.
+Text, multi-select, drawing, and Layout stay under **More tools**. The design
+board slides out on the right and can hold a sketch or a crop of browser-page
+content without requesting whole-screen sharing permission. The headless
+Context Runtime can also run without the visible Review Overlay.
 
-When the CLI from `main` is used for the staged local review loop, it validates
-the live `a3s.test.testkit-handshake/1` before reporting ready:
+The local project loop currently on `main` validates the live
+`a3s.test.testkit-handshake/1` after hydration before it reports ready. Its
+`init`, `doctor`, and `dev` commands are staged after the published v1.0.0
+binary.
 
-```bash
-a3s-test init
-a3s-test doctor
-a3s-test dev --json
-```
-
-These project-loop commands are recorded under [Unreleased](CHANGELOG.md) and
-are not part of the published v1.0.0 binary.
-
-### Map a rendered node to source
-
-Add a coarse component owner only where it helps:
+Add an explicit source boundary only where it helps:
 
 ```tsx
 import { A3STestBoundary } from "@a3s-lab/testkit/react";
@@ -245,109 +204,47 @@ import { A3STestBoundary } from "@a3s-lab/testkit/react";
 </A3STestBoundary>;
 ```
 
-Framework adapters can call `registerSource` for an exact DOM owner and
-`registerSourceMap` for an explicitly supplied Source Map v3. The resulting
-`a3s.test.source-mapping/1` record keeps ranked spans, confidence, origin, and
-`exact` or `ancestor` relation. A source span is navigation evidence, never
-permission to read or edit a file.
+Framework adapters may register an exact DOM owner and an explicitly supplied
+Source Map v3. A resulting source-mapping record keeps ranked spans,
+confidence, origin, and exact or ancestor relation. It is navigation evidence,
+not source-edit authority.
 
-[Read the Test Kit guide](https://a3s-lab.github.io/Test/guide/testkit.html)
+[Read the Test Kit integration guide](https://a3s-lab.github.io/Test/guide/testkit.html)
 
-## Verify only the observed impact
+## What makes the loop trustworthy
 
-`a3s-test init` writes the project profile but deliberately does not guess which
-package scripts are safe, deterministic tests. Projects that want automatic
-repair verification declare an explicit trusted catalog inside
-`.a3s-test/project.acl`:
+### Freshness before action
 
-```acl
-verification {
-  check "component" {
-    tier = "focused"
-    executable = "npm"
-    args = ["run", "test:component"]
-    working_directory = "."
-    file_prefixes = ["src/components"]
-    timeout_ms = 120000
-    cleanup_timeout_ms = 10000
-  }
+Every actionable ref belongs to an observation or page revision. Page changes
+expire browser semantics, geometry, screenshots, and any Test Kit locator that
+an exact delta cannot prove unchanged.
 
-  check "workspace" {
-    tier = "regression"
-    executable = "npm"
-    args = ["run", "test"]
-    working_directory = "."
-    file_prefixes = []
-    timeout_ms = 300000
-    cleanup_timeout_ms = 10000
-  }
-}
-```
+### Typed control before execution
 
-When `agent repair-verify` omits `--checks-json`, A3S Test maps the changed
-files to focused checks and runs a deterministic greedy coverage set. Missing
-source ownership, an unstable locator, an uncovered or cross-source change,
-new browser errors, or a failed prior ACL proof expands the slice to regression.
-The selected commands run without a shell in owned process trees, and the
-versioned slice is stored beside the before/after evidence and fresh ACL proof.
+Actions are closed variants. Schema, target type, driver capability, origin
+policy, and session state are validated before input reaches Web, GUI, or TUI.
+Unsupported behavior fails closed instead of being approximated.
 
-[Read the repair verification guide](https://a3s-lab.github.io/Test/guide/repairs.html#how-a3s-test-verifies-a-repair)
+### Human authority before mutation
 
-## Resume a repair without chat history
+Selecting, sketching, capturing, or saving a draft does not authorize a source
+change. A finding crosses into the repair ledger only through explicit
+submission; workspace mutation belongs to a separately authorized coding
+agent.
 
-Discover the highest-priority durable work before relying on a remembered
-session or finding ID:
+### New evidence before success
 
-```bash
-a3s-test agent repair-inbox --json
-```
+A repair must prove its success against a newer rendered revision. A3S Test can
+select focused project checks from trusted configuration, expand to broader
+regression when observed impact demands it, and preserve the smallest proven
+browser path as ACL.
 
-The browserless `a3s.test.repair-inbox/1` projection scans active and closed
-session ledgers in the current workspace. It returns expired leases first,
-then in-progress work, the oldest queued findings, human-blocked work, and
-inspect-only records. Resolved, dismissed, cancelled, and failed records are
-hidden unless `--include-terminal` is explicit. Each item contains bounded
-intent, lease state, and a typed `next` disposition generated only from
-validated ledger identifiers. Narrow discovery with `--session <session>` or
-`--limit <1-100>` when needed.
+[Read the authority and safety model](https://a3s-lab.github.io/Test/concepts/authority-and-safety.html)
 
-Inspect the selected loop for its complete recovery context:
+## Preserve a proven path as ACL
 
-```bash
-a3s-test agent repair-inspect finding-checkout --session dev --json
-```
-
-Then report the exact workspace-relative change when editing finishes:
-
-```bash
-a3s-test agent repair-complete finding-checkout \
-  --session dev \
-  --request-id complete-1 \
-  --attempt-id attempt-1 \
-  --changed-file src/Checkout.tsx \
-  --json
-```
-
-The `a3s.test.repair-loop-record/1` response deterministically projects the
-existing append-only `repairs.jsonl`. One bounded record contains the submitted
-intent and success criteria, target and ranked source spans, completion-time
-changed files, attempt replies, verification slice and check results, compact
-before/after evidence paths plus SHA-256 digests, ACL candidate/proof state,
-and a typed `resume` action for the current status. It does not duplicate the
-ledger or repeat complete Page Context snapshots. Verification must report the
-same changed files recorded at completion, so an interrupted agent cannot
-silently redefine the scope on resume.
-
-MCP clients use `test_repair_inbox` to prioritize one active owning session and
-`test_repair_inspect` for the selected record. An expired mutation lease never
-returns a stale edit command: its next action requires bounded `repair-watch`
-reconciliation first. A passing ACL proof means the candidate is ready for
-review; it does not commit that candidate to the application repository.
-
-## Preserve the proven path as ACL
-
-Agent sessions discover unknown paths. ACL repeats paths whose actions, waits,
-and success conditions are already explicit:
+Agent sessions discover unknown paths. ACL repeats only paths whose actions,
+waits, and success conditions are explicit:
 
 ```acl
 suite "product-smoke" {
@@ -384,78 +281,49 @@ a3s-test check tests/e2e/smoke.acl --json
 a3s-test run tests/e2e/smoke.acl --json
 ```
 
-The runner retries no ordinary action. Only an explicitly sampled read-only
-assertion repeats inside its bounded stability window. A later false sample
-fails instead of hiding flicker or an optimistic rollback.
+Ordinary actions are never retried implicitly. Only an explicitly sampled,
+read-only assertion repeats inside its bounded stability window.
 
-## How it works
+## Architecture
 
-```text
-PRD / design / human intent
-             |
-             v
-      reviewed expectation
-             |
-browser render + accessibility + Test Kit Page Context
-             |
-             v
-   revision-bound observation
-             |
-      typed Action admission
-             |
- Web / GUI / TUI surface driver
-             |
-             v
- events + assertions + owned artifacts
-             |
-     human-authorized repair
-             |
-             v
- fresh verification -> ACL regression
-```
+<p align="center">
+  <img src="./assets/readme/architecture.svg" width="100%" alt="Agent exploration and deterministic ACL regression enter one typed core, dispatch through owned Web, GUI, or TUI drivers, and retain evidence and cleanup results">
+</p>
 
-| Layer                     | Technical responsibility                                                                                                         |
-| ------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
-| Browser facts + Test Kit  | Derive bounded post-render context, exact revision deltas, component/source ownership, multi-space geometry, and optional review |
-| Rust Core + Session       | Define typed actions, observation refs, policy, authority, persistent state, evidence, results, and lifecycle contracts          |
-| Review + Surface drivers  | Explicitly submit repair scope and own Web, GUI, or TUI perception, action dispatch, process trees, and cleanup                  |
-| Verification + ACL        | Plan source-bound project checks, expand from observed impact, retain fresh proof, and repeat only explicit deterministic steps  |
+| Layer                    | Responsibility                                                                                                                     |
+| ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------- |
+| Browser + Test Kit       | Post-render semantics, page revisions, stable locator candidates, geometry, component ownership, source spans, and optional review |
+| Rust Core + Session      | Typed actions, observation refs, policy, authority, persistent state, evidence, result, and lifecycle contracts                    |
+| Review + Surface Drivers | Explicit repair submission plus Web, GUI, and TUI perception, dispatch, process ownership, and cleanup                             |
+| Verification + ACL       | Source-bound checks, impact-driven expansion, fresh proof, and repeatable deterministic coverage                                   |
 
-The browser remains the source of rendered facts. Models can propose
-provenance-bound candidates, but they cannot set a verdict or authorize a
-workspace mutation. Every launched program belongs to an owned process tree;
-timeouts and cancellation reap that tree without closing unrelated developer
-sessions.
-
-[Read the architecture](https://a3s-lab.github.io/Test/concepts/architecture.html)
+Every launched program belongs to an owned process tree. Timeouts and
+cancellation reap that tree without closing unrelated developer sessions.
 
 ## Surface support
 
-| Surface | Current boundary                                                                                |
-| ------- | ----------------------------------------------------------------------------------------------- |
-| Web     | Persistent agent sessions and ACL through A3S Browser or a compatible standalone browser        |
-| GUI     | macOS CUA integration verified on a real arm64 host; other desktop backends remain under review |
-| TUI     | ACL suites through owned PTY / ConPTY process trees with bounded terminal semantics             |
+| Surface | Current boundary                                                                                 |
+| ------- | ------------------------------------------------------------------------------------------------ |
+| Web     | Persistent agent sessions and ACL through A3S Browser or a compatible standalone browser         |
+| GUI     | macOS CUA integration certified on a real arm64 host; other desktop backends remain under review |
+| TUI     | ACL suites through owned PTY / ConPTY process trees with bounded terminal semantics              |
 
-All surfaces share Core action, policy, evidence, result, and cleanup contracts.
-Each adapter still owns perception and execution, and unsupported behavior
-fails closed instead of being approximated.
+All surfaces share Core action, policy, evidence, result, and cleanup contracts;
+each adapter still owns perception and execution.
 
 ## Documentation
 
-- [Start with one Web test](https://a3s-lab.github.io/Test/guide/)
+- [Run the first Web test](https://a3s-lab.github.io/Test/guide/)
 - [Install only the parts you need](https://a3s-lab.github.io/Test/guide/installation.html)
 - [Add Web Test Kit](https://a3s-lab.github.io/Test/guide/testkit.html)
 - [Understand Page Context](https://a3s-lab.github.io/Test/concepts/page-context.html)
 - [Compare exploration and ACL](https://a3s-lab.github.io/Test/guide/workflows.html)
-- [Review actions and evidence](https://a3s-lab.github.io/Test/guide/actions-and-evidence.html)
 - [Inspect every capability](https://a3s-lab.github.io/Test/reference/capabilities.html)
 
-Repository-level references remain in [`docs/`](docs/), including the full
-[architecture](docs/architecture.md), [Test Kit protocol](docs/testkit.md),
-[agentic workflow](docs/agentic.md), and [specification](docs/specification.md).
+Repository-level protocol and implementation references remain in [`docs/`](docs/).
 
-## Development
+<details>
+<summary><strong>Development checks</strong></summary>
 
 Run checks from this repository, not from the parent monorepo:
 
@@ -463,17 +331,14 @@ Run checks from this repository, not from the parent monorepo:
 cargo fmt --all -- --check
 cargo test --workspace --all-targets --locked
 cargo clippy --workspace --all-targets --locked -- -D warnings
-```
 
-Validate Test Kit and the documentation website with their package-local
-scripts:
-
-```bash
 npm --prefix packages/testkit test
 npm --prefix website run check
 npm --prefix website run build
 npm --prefix website run check:site
 ```
+
+</details>
 
 ## License
 
