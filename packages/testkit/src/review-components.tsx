@@ -180,7 +180,7 @@ export function FindingEditor(props: FindingEditorProps) {
         {props.conflictOptions.length > 0 && <fieldset className="a3s-conflicts"><legend>{t("conflictsWithDraft")} <span>{t("optional")}</span></legend><small>{t("conflictHelp")}</small>{props.conflictOptions.map((option) => <label key={option.id}><input type="checkbox" checked={option.checked} onChange={(event) => props.onConflict(option.id, event.target.checked)} /><span>{option.label}</span></label>)}</fieldset>}
       </div>}
     </div>
-    <div className="a3s-actions">{props.onDelete && <button type="button" className="danger" onClick={props.onDelete}>{t("deleteDraft")}</button>}<button type="button" className="quiet" onClick={props.onCancel}>{t("cancel")}</button><button type="button" className="a3s-save-draft" disabled={!props.instruction.trim()} onClick={props.onSave}>{t(props.editing ? "saveChanges" : "addDraft")}</button><button type="button" className="a3s-send-now" disabled={!props.instruction.trim()} onClick={props.onSend}>{t("sendAndAutoFix")}</button></div>
+    <div className="a3s-actions">{props.onDelete && <button type="button" className="danger" onClick={props.onDelete}>{t("deleteDraft")}</button>}<button type="button" className="quiet" onClick={props.onCancel}>{t("cancel")}</button><button type="button" className="quiet a3s-save-draft" disabled={!props.instruction.trim()} onClick={props.onSave}>{t(props.editing ? "saveChanges" : "addDraft")}</button><button type="button" className="a3s-send-now" disabled={!props.instruction.trim()} onClick={props.onSend}>{t("sendAndAutoFix")}</button></div>
   </section>;
 }
 

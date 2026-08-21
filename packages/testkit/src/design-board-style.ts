@@ -283,6 +283,8 @@ ${DESIGN_REFERENCE_CSS}
 .a3s-design-history,
 .a3s-design-style {
   display: flex;
+  height: auto;
+  min-height: 34px;
   flex: 0 0 auto;
   align-items: center;
   gap: 4px;
@@ -326,6 +328,8 @@ ${DESIGN_REFERENCE_CSS}
 .a3s-design-divider {
   width: 1px;
   height: 24px;
+  margin: 0;
+  border: 0;
   background: var(--a3s-line);
   flex: 0 0 auto;
 }

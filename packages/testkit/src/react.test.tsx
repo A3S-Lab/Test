@@ -234,6 +234,8 @@ describe("React adapter and review overlay", () => {
     await waitFor(() => expect(shadowQuery("textarea")).toBeTruthy());
     fireEvent.change(shadowQuery("textarea"), { target: { value: "Make this action work" } });
     const send = Array.from(document.querySelector<HTMLElement>("[data-a3s-testkit-overlay]")!.shadowRoot!.querySelectorAll("button")).find((button) => button.textContent === "Send and auto-fix")!;
+    expect(shadowButton("Add draft").classList.contains("quiet")).toBe(true);
+    expect(send.classList.contains("quiet")).toBe(false);
     fireEvent.click(send);
     await waitFor(() => expect(onSubmitted).toHaveBeenCalledTimes(1));
     const repair = onSubmitted.mock.calls[0]![0][0];
@@ -448,11 +450,15 @@ describe("React adapter and review overlay", () => {
     expect(shadowQuery("[data-testid='design-tool-draw']")).toBeTruthy();
     expect(shadowQuery("[data-testid='design-tool-rectangle']")).toBeTruthy();
     expect(shadowQuery("[data-testid='design-tool-text']")).toBeTruthy();
+    const toolbar = shadowQuery(".a3s-design-toolbar");
+    expect(toolbar.dataset.wrap).toBe("true");
+    expect(toolbar.querySelectorAll(":scope > [role='group']")).toHaveLength(2);
+    expect(toolbar.querySelectorAll(":scope > hr[role='separator']")).toHaveLength(1);
     expect(shadowQuery(".a3s-design-tools").querySelectorAll("button")).toHaveLength(4);
     expect(document.querySelector<HTMLElement>("[data-a3s-testkit-overlay]")!.shadowRoot!.querySelector(".a3s-design-history")).toBeNull();
     expect(document.querySelector<HTMLElement>("[data-a3s-testkit-overlay]")!.shadowRoot!.querySelector(".a3s-design-style")).toBeNull();
     fireEvent.click(shadowQuery("[data-testid='design-tool-draw']"));
-    expect(shadowQuery(".a3s-design-style")).toBeTruthy();
+    expect(shadowQuery(".a3s-design-style").getAttribute("role")).toBe("group");
     expect(document.querySelector<HTMLElement>("[data-a3s-testkit-overlay]")!.shadowRoot!.querySelector("style")!.textContent).toContain(".a3s-design-canvas-surface");
   });
 
@@ -1278,6 +1284,7 @@ describe("React adapter and review overlay", () => {
     expect(shadowQuery(".a3s-secondary-tools").hasAttribute("hidden")).toBe(false);
     expect(shadowButton("Layout").getAttribute("aria-label")).toBe("Layout");
     expect(document.querySelector<HTMLElement>("[data-a3s-testkit-overlay]")!.shadowRoot!.querySelector("style")!.textContent).toContain("--a3s-control-height");
+    expect(document.querySelector<HTMLElement>("[data-a3s-testkit-overlay]")!.shadowRoot!.querySelector("style")!.textContent).toContain("font: 13px/1.55 var(--a3s-ui-font)");
     expect(shadowQuery(".a3s-announcer").getAttribute("aria-atomic")).toBe("true");
     fireEvent.click(shadowButton("Findings"));
     expect(shadowQuery(".a3s-list").hasAttribute("aria-live")).toBe(false);

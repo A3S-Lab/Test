@@ -296,8 +296,8 @@ export function DesignBoard({
         </button>
       </div>
       <div className="a3s-design-body">
-        <div className="a3s-design-toolbar toolbar" role="toolbar" aria-label={t("boardActions")}>
-          <div className="a3s-design-tool-group a3s-design-tools" aria-label={t("tools")}>
+        <div className="a3s-design-toolbar toolbar" data-wrap="true" role="toolbar" aria-label={t("boardActions")}>
+          <div className="a3s-design-tool-group a3s-design-tools" role="group" aria-label={t("tools")}>
             {tools.map((value) => {
               const label = designToolLabel(t, value);
               return <button
@@ -313,8 +313,8 @@ export function DesignBoard({
               ><DesignGlyph name={value as DesignGlyphName} /><span>{label}</span></button>;
             })}
           </div>
-          <span className="a3s-design-divider" aria-hidden="true" />
-          <div className="a3s-design-tool-group a3s-design-media" aria-label={t("imageHelp")}>
+          <hr className="a3s-design-divider" role="separator" aria-orientation="vertical" />
+          <div className="a3s-design-tool-group a3s-design-media" role="group" aria-label={t("imageHelp")}>
             <button ref={captureButtonRef} type="button" disabled={busy} aria-label={t("capturePage")} title={t("capturePageHelp")} onClick={startPageCapture}>
               <DesignGlyph name="capture" /><span>{busyAction === "capture" ? t("capturingPage") : t("capturePage")}</span>
             </button>
@@ -324,14 +324,14 @@ export function DesignBoard({
             <input ref={fileInputRef} aria-label={t("screenshotInput")} hidden type="file" accept="image/png,image/jpeg" onChange={(event) => void importFile(event.target.files?.[0])} />
           </div>
           {showHistory && <>
-            <span className="a3s-design-divider" aria-hidden="true" />
-            <div className="a3s-design-history" aria-label={t("history")}>
+            <hr className="a3s-design-divider" role="separator" aria-orientation="vertical" />
+            <div className="a3s-design-history" role="group" aria-label={t("history")}>
               <IconButton icon="undo" label={t("undo")} disabled={busy || history.past.length === 0} onClick={undo} />
               <IconButton icon="redo" label={t("redo")} disabled={busy || history.future.length === 0} onClick={redo} />
               <IconButton icon="trash" label={t("clearBoard")} disabled={busy || !summary.kind} onClick={clearBoard} />
             </div>
           </>}
-          {showStyles && <div className="a3s-design-style" aria-label={t("styles")}>
+          {showStyles && <div className="a3s-design-style" role="group" aria-label={t("styles")}>
             <label className="a3s-design-color" title={t("strokeColor")}>
               <span className="a3s-sr-only">{t("strokeColor")}</span>
               <input aria-label={t("strokeColor")} type="color" value={color} disabled={busy} onChange={(event) => setColor(event.target.value)} />

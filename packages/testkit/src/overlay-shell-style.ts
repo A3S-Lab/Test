@@ -22,7 +22,7 @@ button, input, textarea, select {
   inset: 0;
   pointer-events: none;
   color: var(--a3s-text);
-  font: 13px/1.55 "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font: 13px/1.55 var(--a3s-ui-font);
   --a3s-marker-color: #7157c9;
   --a3s-wireframe-fade: .16;
   --a3s-panel-raised: var(--a3s-panel);
