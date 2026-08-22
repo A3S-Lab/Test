@@ -14,6 +14,7 @@ import {
 import { useState } from 'react';
 import { InstallSwitcher, installCommandFor } from './InstallSwitcher';
 import { TestKitExperience } from './TestKitExperience';
+import { WorkflowExperience } from './WorkflowExperience';
 import { homeCopy, type Locale } from '../home-copy';
 import type { BenchmarkCopy } from '../home-copy-types';
 import { publishedVersion } from '../../versions.mjs';
@@ -220,6 +221,18 @@ function MarkdownHome({
           <p>{item.body}</p>
         </section>
       ))}
+      <h2>{copy.workflow.title}</h2>
+      <p>{copy.workflow.body}</p>
+      {copy.workflow.steps.map((step) => (
+        <section key={step.label}>
+          <h3>{step.title}</h3>
+          <p>{step.body}</p>
+          <pre>
+            <code>{step.outputLines.join('\n')}</code>
+          </pre>
+        </section>
+      ))}
+      <p>{copy.workflow.evidenceNote}</p>
       <h2>{copy.installTitle}</h2>
       <p>{copy.installBody}</p>
       {version !== installVersion && <p>{copy.installCandidateNote}</p>}
@@ -383,6 +396,8 @@ export function HomeLayout() {
           })}
         </div>
       </section>
+
+      <WorkflowExperience copy={copy.workflow} />
 
       <section className="test-installer-rail">
         <header>

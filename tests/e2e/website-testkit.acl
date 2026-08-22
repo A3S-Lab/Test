@@ -17,7 +17,7 @@ suite "website-testkit-experience" {
         }
 
         wait "homepage-ready" {
-            text = "让 Agent 看懂真实界面"
+            text = "让 Agent 基于真实页面行动"
         }
 
         expect "published-install-version" {
@@ -44,48 +44,56 @@ suite "website-testkit-experience" {
             visible = css(".test-motion-toggle[aria-pressed='false']")
         }
 
-        expect "first-principles-thesis" {
-            text = "高效 vibe coding 依赖一条可信反馈闭环"
+        wait "complete-workflow-visible" {
+            text = "把需求、界面与证据连成一条可回放路径"
         }
 
-        expect "core-implementation-ledger" {
-            text = "四层技术实现支撑这三个结果"
+        click "pause-workflow-walkthrough" {
+            target = role("button", "暂停工作流导览")
         }
 
-        click "open-execution-layer" {
-            target = testid("capability-group-execution")
+        wait "workflow-walkthrough-paused" {
+            visible = role("button", "继续工作流导览")
         }
 
-        wait "execution-layer-expanded" {
-            visible = css(".test-capability-group.is-open [data-testid='capability-panel-execution']")
+        click "select-ui-understanding-phase" {
+            target = testid("workflow-step-2")
         }
 
-        expect "typed-surface-drivers" {
-            text = "驱动只实现能够证明的能力"
+        wait "ui-understanding-phase-active" {
+            visible = css("[data-testid='workflow-step-2'][aria-current='step']")
         }
 
-        click "open-core-layer" {
-            target = testid("capability-group-core")
+        expect "ui-understanding-phase-copy" {
+            text = "读取语义、状态与几何，再对照设计意图"
         }
 
-        wait "core-layer-expanded" {
-            visible = css(".test-capability-group.is-open [data-testid='capability-panel-core']")
+        click "select-evidence-loop-phase" {
+            target = testid("workflow-step-6")
         }
 
-        expect "independent-authorities" {
-            text = "四种权限互不冒充"
+        wait "evidence-loop-phase-active" {
+            visible = css("[data-testid='workflow-step-6'][aria-current='step']")
         }
 
-        click "open-evidence-capabilities" {
-            target = testid("capability-group-evidence")
+        expect "failure-classification-visible" {
+            text = "product / specification / infrastructure"
         }
 
-        wait "evidence-capabilities-expanded" {
-            visible = css(".test-capability-group.is-open [data-testid='capability-panel-evidence']")
+        click "resume-workflow-walkthrough" {
+            target = role("button", "继续工作流导览")
         }
 
-        expect "acl-preservation" {
-            text = "ACL 固化已证明路径"
+        expect "current-render-proof" {
+            text = "读取当前渲染"
+        }
+
+        expect "fresh-evidence-proof" {
+            text = "只认新证据"
+        }
+
+        expect "execution-benchmark" {
+            text = "同一组任务，先看完成率，再看安全与代价"
         }
 
         expect "local-only-disclosure" {
@@ -268,7 +276,23 @@ suite "website-testkit-experience" {
         }
 
         wait "mobile-homepage-ready" {
-            text = "让 Agent 看懂真实界面"
+            text = "让 Agent 基于真实页面行动"
+        }
+
+        wait "mobile-workflow-manual-mode" {
+            text = "手动选择阶段"
+        }
+
+        click "mobile-select-ui-understanding-phase" {
+            target = testid("workflow-step-2")
+        }
+
+        wait "mobile-ui-understanding-phase-active" {
+            visible = css("[data-testid='workflow-step-2'][aria-current='step']")
+        }
+
+        expect "mobile-ui-understanding-phase-copy" {
+            text = "读取语义、状态与几何，再对照设计意图"
         }
 
         expect "mobile-rendered-context" {

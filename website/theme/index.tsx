@@ -4,6 +4,7 @@ import './index.css';
 import './home.css';
 import './experience.css';
 import './experience-motion.css';
+import './workflow.css';
 import './home-sections.css';
 import './responsive.css';
 

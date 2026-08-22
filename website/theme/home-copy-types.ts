@@ -102,6 +102,58 @@ export type BenchmarkCopy = {
   reportLink: string;
 };
 
+export type WorkflowStepCopy = {
+  label: string;
+  status: string;
+  title: string;
+  body: string;
+  sourceTitle: string;
+  sources: [
+    { label: string; detail: string },
+    { label: string; detail: string },
+    { label: string; detail: string },
+  ];
+  processTitle: string;
+  processLead: string;
+  processRows: [
+    { label: string; value: string },
+    { label: string; value: string },
+    { label: string; value: string },
+    { label: string; value: string },
+  ];
+  outputTitle: string;
+  outputLines: [string, string, string, string];
+};
+
+export type WorkflowCopy = {
+  title: string;
+  body: string;
+  stageAria: string;
+  stageLabel: string;
+  pause: string;
+  resume: string;
+  manual: string;
+  boundaryTitle: string;
+  boundaryBody: string;
+  steps: [
+    WorkflowStepCopy,
+    WorkflowStepCopy,
+    WorkflowStepCopy,
+    WorkflowStepCopy,
+    WorkflowStepCopy,
+    WorkflowStepCopy,
+  ];
+  evidenceTitle: string;
+  evidenceItems: [
+    { label: string; detail: string },
+    { label: string; detail: string },
+    { label: string; detail: string },
+    { label: string; detail: string },
+    { label: string; detail: string },
+  ];
+  evidenceNote: string;
+};
+
 export type LocalizedCopy = {
   heroTitle: [string, string];
   heroBody: string;
@@ -112,6 +164,7 @@ export type LocalizedCopy = {
     { title: string; body: string },
     { title: string; body: string },
   ];
+  workflow: WorkflowCopy;
   installTitle: string;
   installBody: string;
   testkitInstallLink: string;
