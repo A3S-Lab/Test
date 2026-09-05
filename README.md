@@ -83,11 +83,11 @@ Pin the current stable release when reproducibility matters:
 
 ```bash
 curl -fsSL https://github.com/A3S-Lab/Test/releases/latest/download/install.sh |
-  sh -s -- --version v1.0.0
+  sh -s -- --version v1.0.1
 ```
 
 ```powershell
-& ([scriptblock]::Create((irm 'https://github.com/A3S-Lab/Test/releases/latest/download/install.ps1'))) -Version v1.0.0
+& ([scriptblock]::Create((irm 'https://github.com/A3S-Lab/Test/releases/latest/download/install.ps1'))) -Version v1.0.1
 ```
 
 ### Web Test Kit
@@ -185,10 +185,9 @@ board slides out on the right and can hold a sketch or a crop of browser-page
 content without requesting whole-screen sharing permission. The headless
 Context Runtime can also run without the visible Review Overlay.
 
-The local project loop currently on `main` validates the live
-`a3s.test.testkit-handshake/1` after hydration before it reports ready. Its
-`init`, `doctor`, and `dev` commands are staged after the published v1.0.0
-binary.
+The local project loop validates the live `a3s.test.testkit-handshake/1` after
+hydration before it reports ready. Its `init`, `doctor`, and `dev` commands are
+included in the v1.0.1 release.
 
 Add an explicit source boundary only where it helps:
 

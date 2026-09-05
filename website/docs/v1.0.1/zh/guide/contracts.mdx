@@ -1,0 +1,116 @@
+---
+title: 把 PRD 与设计稿变成可核对的界面契约
+description: 从 PRD 片段和设计区域生成带精确来源的候选结构，经人工审阅后与当前浏览器页面逐项核对。
+---
+
+# 把 PRD 与设计稿变成可核对的界面契约
+
+A3S Test 通过部署方注入的 provider，把 PRD 片段和设计区域解释为带精确来源的候选结构。人需要逐项审阅候选、处理冲突和未决事项，随后才能发布 Surface Contract。运行时再把契约与浏览器可访问树、Test Kit Page Context 对照，差异会保留来源、当前页面修订和证据。
+
+:::info 为什么生成 Surface Contract，而不是“设计稿可访问树”
+可访问树是浏览器基于真实 DOM、原生控件语义和当前状态计算出的事实。PRD 与设计稿只描述期望，无法证明页面已经实现这些语义。Surface Contract 保留期望、来源和不确定性，再与浏览器事实核对，避免把模型推测伪装成页面观察。
+:::
+
+## 先分清期望与事实
+
+| 数据       | 它能证明什么                                 | 它不能证明什么                       |
+| ---------- | -------------------------------------------- | ------------------------------------ |
+| PRD        | 产品意图、文案要求、用户结果、业务约束       | 当前 DOM 已经实现这些要求            |
+| 设计稿     | 区域、层级、几何、视觉关系和来源图像摘要     | 浏览器角色、可访问名称或真实交互状态 |
+| 页面上下文 | 当前修订的语义结构、状态、组件、定位器和几何 | 产品意图本身正确                     |
+
+只有评审后的选择才能进入阻断式 Surface Contract。模型输出、未解决冲突和低置信度候选保持建议状态。
+
+## 生成候选
+
+ACL 配置需要声明来源、预算和部署方 provider。
+
+```acl
+contract_generation "checkout" {
+    max_cost_microusd = 50000
+
+    context {
+        mode = "operate"
+        audience = ["customer"]
+        primary_outcome = "place_order"
+    }
+
+    provider {
+        name = "deployment-gateway"
+        model = "interface-contract-model"
+        endpoint = "https://inference.example.test/v1/contracts"
+        authorization_env = "A3S_TEST_PROVIDER_AUTHORIZATION_CONTRACTS"
+    }
+
+    source "requirements" {
+        kind = "prd"
+        path = "./checkout.md"
+        uri = "./checkout.md"
+    }
+
+    source "desktop-design" {
+        kind = "design"
+        path = "./checkout.png"
+        uri = "./checkout.png"
+        media_type = "image/png"
+        width = 1440
+        height = 900
+    }
+}
+```
+
+```bash
+export A3S_TEST_PROVIDER_AUTHORIZATION_CONTRACTS='Bearer ...'
+a3s-test contract generate \
+  --config tests/contracts/checkout.generate.acl \
+  --output tests/contracts/checkout.draft.json
+```
+
+草稿只包含候选、冲突、开放决策、provider 用量和来源摘要，没有可执行权限。
+
+## 人工评审并发布
+
+```acl
+contract_review {
+    reviewer = "product-owner@example.test"
+
+    candidate "requirements:desktop:place-order" {
+        action = "approve"
+    }
+
+    conflict "conflict:0123456789abcdef" {
+        select = "requirements:desktop:place-order"
+        rationale = "Approved product terminology"
+    }
+}
+```
+
+```bash
+a3s-test contract review \
+  --draft tests/contracts/checkout.draft.json \
+  --review tests/contracts/checkout.review.acl \
+  --output tests/contracts/checkout.acl \
+  --audit tests/contracts/checkout.reviewed.json
+```
+
+评审阶段会重新计算来源摘要、检查引用字节范围、拒绝未解决冲突或产品问题，并在本地重新生成规范 ACL。工作流校验和用于发现意外或未评审修改，不是数字签名。
+
+## 与真实页面对账
+
+套件通过 `verify_contract` 引用评审结果。
+
+```acl
+verify_contract "checkout-ready" {
+    contract = "./contracts/checkout.acl"
+    variant = "desktop"
+    state = "ready"
+}
+```
+
+对账优先使用 test ID、组件身份、角色与可访问名称，最后才退化到角色。缺失或截断的 Test Kit 上下文属于不确定结果并关闭失败。阻断差异决定套件结果，建议差异只进入报告。
+
+## 可选视觉定位与设计审计
+
+视觉定位 provider 接收绑定观察和 SHA-256 的 PNG，返回点或矩形候选。A3S Test 会重新哈希、做几何准入并与当前 Test Kit 节点命中测试。唯一命中可以转换为当前语义目标，歧义或未映射结果保持图像绑定建议。它从不自动点击。
+
+设计审计 provider 同时接收截图和完整页面上下文，可针对层级、构图、间距、排版、色彩、一致性、交互清晰度、内容清晰度和响应式构图提出建议。建议没有 verdict、动作或修复权限，只有人工评审后才能进入 Repair Ledger。

@@ -1,0 +1,390 @@
+---
+title: 断言与稳定性
+description: 从基础可见性到控件状态、渲染文本、布局、视口、焦点和稳定窗口，完整理解 A3S Test 的断言模型。
+---
+
+# 断言与稳定性
+
+断言的职责很窄。它读取当前 surface 的权威证据，把实际值和一个明确预期进行比较，然后返回通过或结构化失败。模型建议、截图印象、最近一次动作成功都不能替代断言。
+
+每个 `expect` block 只允许一个条件。需要证明多个事实时，请写多个带稳定名称的步骤。
+
+```acl
+expect "confirmation-visible" {
+    visible = role("heading", "Order confirmed")
+}
+
+expect "total-copy" {
+    target = testid("order-total")
+    rendered_text = "Total $42.00"
+}
+```
+
+这种拆分让报告能够精确指出哪条产品约束失败，也让 quarantine 和 Surface Contract 差异保持可审计。
+
+## 先理解错误归属
+
+一条负向断言不能用定位失败来证明自己。A3S Test 先确认目标和证据有效，再比较产品状态。
+
+| 观察结果                         | 错误归属                                |
+| -------------------------------- | --------------------------------------- |
+| ACL 条件冲突、字段缺失或值越界   | `test.spec.*`                           |
+| 单目标断言无法解析出唯一元素     | `test.driver.<surface>.*`               |
+| 合法的稳定可见性探测没有可见匹配 | `test.assert.visible`                   |
+| surface 没有等价证据             | `test.driver.<surface>.*_unsupported`   |
+| 证据结构或数值畸形               | `test.driver.<surface>.*output_invalid` |
+| 有效证据与预期不同               | 对应的 `test.assert.*`                  |
+| 首次通过，稳定窗口后续出现反例   | `test.assert.unstable`                  |
+
+因此，找不到 checkbox 不能证明 `unchecked`，找不到 dialog 也不能证明一个 observation ref 指向的目标已经隐藏。
+
+## 基础页面断言
+
+### 可见文本、URL 与目标
+
+```acl
+expect "saved-copy" {
+    text = "Saved"
+}
+
+expect "confirmation-url" {
+    url = "http://127.0.0.1:3000/orders/42"
+}
+
+expect "confirmation-heading" {
+    visible = role("heading", "Order confirmed")
+}
+```
+
+`text` 证明当前 surface 中存在可见文本。TUI 也支持这一条件，并从有界 viewport 与 scrollback 语义中读取。`url` 是 Web 专用精确页面状态。`visible` 先解析目标，再要求它具有当前 surface 定义的可见证据。
+
+### 证明稳定目标没有可见匹配
+
+```acl
+expect "dialog-closed" {
+    hidden = role("dialog", "Checkout")
+}
+```
+
+`hidden` 是 Runner 为正向 `Visible(target)` 增加的断言策略，Action 仍使用原有变体。它的判断表如下。
+
+| 正向可见性探测                  | `hidden` 结果                          |
+| ------------------------------- | -------------------------------------- |
+| 返回目标可见证据                | 以 `test.assert.hidden` 失败并保留反证 |
+| 返回 `test.assert.visible`      | 通过并记录 `visible = false`           |
+| 返回过期、歧义、驱动或 I/O 错误 | 保留原错误，未知状态不能变成通过       |
+
+语义和 CSS 定位器可以重复解析，所以允许用于 `hidden`。`ref()` 与 `visual_point()` 绑定某次观察，准入会以 `test.spec.hidden_target_unstable` 拒绝它们。
+
+需要等待消失时使用 `wait hidden`。需要证明消失后持续没有回来时使用 `expect hidden` 加稳定窗口。
+
+## 控件值与布尔状态
+
+### 精确值
+
+```acl
+expect "display-name" {
+    target = label("Display name")
+    value = "Ada"
+}
+```
+
+Web 读取实时 DOM `value`。GUI 只有在 CUA 语义元素确实暴露 value 时才支持比较。TUI 不从终端文案推断控件值。
+
+### Enabled、checked 与 selected
+
+```acl
+expect "submit-disabled" {
+    disabled = role("button", "Submit")
+}
+
+expect "terms-checked" {
+    checked = label("Accept terms")
+}
+
+expect "review-selected" {
+    selected = role("option", "Review")
+}
+```
+
+每个正向状态都有对应负向写法。
+
+| 状态维度 | 正向       | 负向         |
+| -------- | ---------- | ------------ |
+| 可用性   | `enabled`  | `disabled`   |
+| 勾选     | `checked`  | `unchecked`  |
+| 选中     | `selected` | `unselected` |
+
+Web 原生 checkbox 和 radio 属性优先于矛盾 ARIA。自定义控件可以通过合法布尔 ARIA 暴露状态。目标不存在、歧义或控件类型不适用时仍是驱动错误。
+
+### 精确选中集合
+
+```acl
+expect "publication-status" {
+    target = role("listbox", "Publication status")
+    selected_values = ["review", "published"]
+}
+
+expect "nothing-selected" {
+    target = css("#status")
+    selected_values = []
+}
+```
+
+`selected_values` 比较去重并规范排序后的精确集合。预期重复值在准入阶段失败，空数组是合法预期。实际值多一个或少一个都会返回 `test.assert.selected_values`，不会退化成“至少包含”。
+
+## 实时语义状态
+
+五个维度彼此独立，每个维度都有正向和负向写法。
+
+```acl
+expect "filters-expanded" {
+    expanded = testid("filters")
+}
+
+expect "pin-unpressed" {
+    unpressed = role("button", "Pin")
+}
+
+expect "name-readonly" {
+    readonly = label("Display name")
+}
+
+expect "email-required" {
+    required = placeholder("Email")
+}
+
+expect "email-invalid" {
+    invalid = testid("email")
+}
+```
+
+| 状态维度 | 两种写法                | Web 权威来源                                             |
+| -------- | ----------------------- | -------------------------------------------------------- |
+| 展开     | `expanded`、`collapsed` | `<details>.open`，否则读取合法 `aria-expanded`           |
+| 按压     | `pressed`、`unpressed`  | 精确布尔 `aria-pressed`                                  |
+| 只读     | `readonly`、`writable`  | 适用原生 `readOnly`，否则读取合法 `aria-readonly`        |
+| 必填     | `required`、`optional`  | 适用原生 `required`，否则读取合法 `aria-required`        |
+| 有效性   | `invalid`、`valid`      | Constraint Validation，未参与时读取定义内 `aria-invalid` |
+
+原生状态适用时优先于 ARIA。布尔 ARIA 只接受精确的 `true` 与 `false`。`aria-pressed="mixed"` 不会被猜成 true 或 false。`aria-invalid` 的 `grammar` 和 `spelling` 映射为 invalid。
+
+状态之间不互相蕴含。一个 disabled input 仍可能观察为 writable，所以证明用户能够编辑时应同时断言 `enabled` 与 `writable`。负向写法只反转已经观察到的布尔值，缺失或未知状态不能证明 `collapsed`、`valid` 或其他负向结论。
+
+这些条件要求可重复解析的稳定目标。ACL 拒绝 browser ref 与 visual point。GUI 和 TUI 当前没有等价语义状态协议，因此关闭失败。
+
+## 渲染文本、列表与数量
+
+### 一个目标的实际渲染文案
+
+```acl
+expect "total-copy" {
+    target = testid("total")
+    rendered_text = "Total $42.00"
+}
+```
+
+Web 要求唯一可见目标。HTML 元素读取 `innerText`，其他渲染元素读取 `textContent`。预期和实际都会去掉两端空白，并把连续空白规范成一个 ASCII 空格。文本不同才是 `test.assert.rendered_text`，零匹配、多个匹配和非法 selector 保持为驱动错误。
+
+### 完整有序文本集合
+
+```acl
+expect "line-items" {
+    target = css("[data-line-item]")
+    rendered_texts = [
+        "Keyboard × 1",
+        "Mouse × 2",
+        "Shipping",
+        "Shipping"
+    ]
+}
+
+expect "empty-items" {
+    target = css("[data-line-item]")
+    rendered_texts = []
+}
+```
+
+`rendered_texts` 保留 DOM 遍历顺序和重复项，并比较完整向量。预期与实际最多 256 项。空匹配会产生 `[]`，可以证明列表为空。它要求稳定语义或 CSS 定位器，不接受单元素 ref。
+
+### 可见集合数量
+
+```acl
+expect "three-rows" {
+    target = css("[data-row]")
+    visible_count = 3
+}
+
+expect "no-alerts" {
+    target = role("alert", "Checkout error")
+    visible_count = 0
+}
+```
+
+`visible_count` 比较完整可见匹配集合，零是合法的观察值。CSS 采用视觉渲染平面，单独的 `aria-hidden` 不会让像素消失。语义定位器还会排除可访问性隐藏祖先，并穿透开放 Shadow DOM。两者都会排除 hidden、`display: none`、`visibility: hidden`、完全透明和零几何目标。
+
+这三种渲染输出断言目前由 Web 提供。GUI 和 TUI 不从标签、像素或终端输出估算等价集合。
+
+## 两个目标的布局关系
+
+```acl
+expect "checkout-below-summary" {
+    target = testid("checkout")
+    relative_to = role("region", "Order summary")
+    layout = "below"
+    tolerance_px = 1
+}
+```
+
+Web 在一次页面求值中解析两个目标并读取两个 `getBoundingClientRect()`，避免把不同页面状态中的矩形拼在一起。GUI 要求两个语义元素在同一份新鲜 CUA snapshot 中都提供合法 frame。TUI 不提供页面几何。
+
+| 关系组 | 可用值                                                                                                   | tolerance 的含义           |
+| ------ | -------------------------------------------------------------------------------------------------------- | -------------------------- |
+| 方向   | `above`、`below`、`left_of`、`right_of`                                                                  | 允许边界最多侵入指定像素   |
+| 包含   | `contains`、`inside`                                                                                     | 每条包含边可以偏差指定像素 |
+| 相交   | `overlaps`、`not_overlapping`                                                                            | 两轴重叠和不重叠阈值       |
+| 对齐   | `aligned_left`、`aligned_right`、`aligned_top`、`aligned_bottom`、`aligned_center_x`、`aligned_center_y` | 边缘或中心绝对差           |
+| 尺寸   | `same_width`、`same_height`、`same_size`                                                                 | 宽高绝对差                 |
+
+`tolerance_px` 默认为 0，范围是 0 到 1,024。两个目标都必须稳定且唯一。ref 与 visual point 会以 `test.spec.layout_target_unstable` 被拒绝。合法矩形不符合关系时才返回 `test.assert.layout`。
+
+## 视口覆盖与指针可达
+
+```acl
+expect "checkout-in-view" {
+    in_viewport = testid("checkout")
+}
+
+expect "checkout-mostly-visible" {
+    target = testid("checkout")
+    viewport_coverage_at_least = 80
+}
+
+expect "drawer-mostly-outside" {
+    target = css("#drawer")
+    viewport_coverage_at_most = 10
+}
+
+expect "checkout-pointer-hit" {
+    pointer_reachable = role("button", "Checkout")
+}
+```
+
+`in_viewport` 要求目标矩形与视觉视口有正面积交集。仅仅接触边界或完全离屏都会失败。
+
+覆盖率是目标矩形与视口交集面积除以目标完整面积。`viewport_coverage_at_least` 接受 1 到 100，`viewport_coverage_at_most` 接受 0 到 99。`at_least = 100` 证明完整几何包含，`at_most = 0` 证明没有正面积交集。覆盖率不证明像素没有被遮挡。
+
+`pointer_reachable` 在交集矩形的 3 乘 3 固定采样网格上执行深层 `elementFromPoint`。至少一个点命中目标或 composed-tree 后代时通过。它证明浏览器 hit test 可达，不证明控件 enabled、有事件处理器或满足业务规则。
+
+浏览器返回后，Rust 会重新计算交集、覆盖率、九个点的坐标和顺序。畸形几何或样本不能通过伪造的 `matched` 字段。GUI 与 TUI 当前没有等价视觉视口和点级命中证据，因此关闭失败。
+
+## 焦点归属
+
+```acl
+expect "checkout-focused" {
+    focused = role("button", "Checkout")
+}
+
+expect "cancel-unfocused" {
+    unfocused = testid("cancel")
+}
+
+expect "dialog-owns-focus" {
+    focus_within = role("dialog", "Checkout")
+}
+
+expect "page-does-not-own-focus" {
+    focus_outside = testid("page-shell")
+}
+```
+
+`focused` 把目标与当前 document 以及嵌套开放 Shadow DOM 中最深层可观察 active element 比较。`focus_within` 还会沿 assigned slot、DOM parent 和 Shadow host 检查渲染扁平树祖先。
+
+`unfocused` 与 `focus_outside` 只反转同一份有效观察。找不到目标不能证明它没有焦点。封闭 Shadow root 仍然不可见，host 是 document 能观察到的最深元素。GUI 与 TUI 当前不会从 frame、最近动作或 cursor cell 猜测焦点归属。
+
+## 给断言增加稳定窗口
+
+单次断言只证明一个观察点。水合、动画、乐观更新或延迟回滚可能让它碰巧命中一帧。产品要求状态持续成立时，显式增加时间条件。
+
+```acl
+expect "settled-total" {
+    target = testid("order-total")
+    rendered_text = "Total $42.00"
+    stable_for_ms = 300
+    sample_interval_ms = 25
+}
+
+expect "dialog-stays-closed" {
+    hidden = role("dialog", "Checkout")
+    stable_for_ms = 300
+    sample_interval_ms = 25
+}
+```
+
+| 字段                 | 规则                           | 默认值             |
+| -------------------- | ------------------------------ | ------------------ |
+| `stable_for_ms`      | 开启采样，范围 10 到 60,000 ms | 不启用             |
+| `sample_interval_ms` | 正数且不大于稳定窗口           | 50 ms 或更短的窗口 |
+
+计划样本数为 `ceil(stable_for_ms / sample_interval_ms) + 1`，包含第一次断言，最多 1,001 个样本。Runner 的执行顺序固定。
+
+1. 先执行一次原始断言。首次失败保留具体 `test.assert.*`。
+2. 第一次通过后才开始稳定窗口。
+3. 按间隔采样，并在窗口边界再采样一次。
+4. 后续有效反例返回 `test.assert.unstable`。
+5. 后续定位或驱动失败仍归驱动所有，不会伪装成产品抖动。
+
+稳定窗口包含在 scenario deadline 内。结果会保存第一次和最后一次完整断言数据，以及 required time、实际观察时间、间隔和样本数。采样只能发现采样点上的变化，不能证明两个采样点之间从未发生短暂变化。
+
+## 当前 Surface 支持矩阵
+
+| 断言组                       | Web                    | GUI                         | TUI            |
+| ---------------------------- | ---------------------- | --------------------------- | -------------- |
+| 可见文本                     | 支持                   | 支持                        | 支持           |
+| URL                          | 支持                   | 不支持                      | 不支持         |
+| visible 与稳定目标 hidden    | 支持                   | 支持语义目标                | 不支持         |
+| 精确 value                   | 支持                   | CUA 暴露 value 时支持       | 不支持         |
+| enabled、checked、selected   | 支持                   | 不支持                      | 不支持         |
+| selected values              | 支持                   | 不支持                      | 不支持         |
+| rendered text、texts、count  | 支持                   | 不支持                      | 不支持         |
+| layout                       | 支持                   | 两个语义 frame 都可用时支持 | 不支持         |
+| viewport coverage 与 pointer | 支持                   | 不支持                      | 不支持         |
+| focus ownership              | 支持                   | 不支持                      | 不支持         |
+| expanded 等实时语义状态      | 支持                   | 不支持                      | 不支持         |
+| bounded stability            | 支持的只读断言均可组合 | 支持的只读断言均可组合      | 可见文本可组合 |
+
+调用前可用 `a3s-test capabilities --json` 核对本机 adapter。协议明确不支持的断言会返回稳定的 unsupported 错误，不会用视觉模型或启发式推断补齐。
+
+## 一个可复查的结算结果
+
+```acl
+wait "checkout-ready" {
+    visible = testid("checkout-ready")
+}
+
+expect "dialog-closed" {
+    hidden = role("dialog", "Checkout")
+    stable_for_ms = 300
+    sample_interval_ms = 25
+}
+
+expect "confirmation-visible" {
+    visible = role("heading", "Order confirmed")
+}
+
+expect "total-copy" {
+    target = testid("order-total")
+    rendered_text = "Total $42.00"
+}
+
+expect "submit-in-view" {
+    target = testid("checkout")
+    viewport_coverage_at_least = 100
+}
+
+expect "submit-pointer-hit" {
+    pointer_reachable = testid("checkout")
+}
+```
+
+这组断言分别证明 ready 条件、负向可见性稳定、成功文案、目标绑定的精确输出、完整视口包含和真实 hit test。任何一项失败都有自己的步骤 ID、错误码、expected、actual 和几何或定位证据。

@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 1.0.1 - 2026-09-05
+
+A3S Test 1.0.1 promotes the current Test Kit workflow and the refreshed macOS
+CUA integration to the stable release line. The release keeps unsupported
+Windows and Linux GUI combinations explicit and fail-closed.
+
 ### Added
 
 - Added `a3s.test.repair-inbox/1`, a deterministic browserless projection that

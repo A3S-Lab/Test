@@ -1,0 +1,160 @@
+---
+title: 安装 A3S Test
+description: 分清 CLI、Agent Skill 与 Web Test Kit，按使用场景安装所需部分并验证结果。
+---
+
+# 安装 A3S Test
+
+A3S Test 包含两个独立版本的安装部分，因为它们负责不同的信任边界。
+
+- **Web Test Kit** 安装为前端开发依赖，提供渲染后的 Page Context、源码映射与可选页面评审界面。
+- **CLI 与 Agent Skill** 安装在开发者机器和编码 Agent 的 Skill 目录中，负责会话、类型化动作、ACL、证据、修复协调与进程清理。
+
+页面点选、框选、截图或草图只需安装 [Web Test Kit](#安装-web-test-kit)，终端探索与 ACL 使用 [CLI 与 Agent Skill](#安装-cli-与-agent-skill)。要把页面问题交给编码 Agent 修复并验证，两者都安装。
+
+## 安装 Web Test Kit
+
+在前端工程目录执行：
+
+```bash
+npm install --save-dev @a3s-lab/testkit@0.6.2
+```
+
+项目使用其他包管理器时，执行对应的一条命令即可：
+
+| 包管理器 | 命令                                            |
+| -------- | ----------------------------------------------- |
+| npm      | `npm install --save-dev @a3s-lab/testkit@0.6.2` |
+| pnpm     | `pnpm add --save-dev @a3s-lab/testkit@0.6.2`    |
+| Yarn     | `yarn add --dev @a3s-lab/testkit@0.6.2`         |
+| Bun      | `bun add --dev @a3s-lab/testkit@0.6.2`          |
+
+`@a3s-lab/testkit` 0.6.2 已通过 GitHub OIDC provenance 发布到官方 npm Registry。固定版本可以让安装结果可复现，包管理器也会把完整性信息写入项目 lockfile。
+
+确认安装结果：
+
+```bash
+npm ls @a3s-lab/testkit
+```
+
+Test Kit 的包版本独立于 A3S Test 的 Release 标签，因此两个版本号不必相同。安装完成后，按[三步接入 Web Test Kit](./testkit.mdx#三步完成-react-接入)挂载评审界面。Test Kit 0.6.2 已包含简化评审侧栏、有界 SVG 画板、页面内框选截图、CLI 实时兼容握手、渲染节点源码映射和修订级 Page Context 差异，不需要浏览器扩展、绘图库、截图插件或屏幕共享权限。
+
+## 安装 CLI 与 Agent Skill
+
+下方安装器会识别当前系统、下载预编译 CLI、校验 SHA-256，并安装版本匹配的 Agent Skill。以后运行同一条命令即可升级。
+
+### macOS 与 Linux
+
+```bash
+curl -fsSL https://github.com/A3S-Lab/Test/releases/latest/download/install.sh | sh
+```
+
+只为 Codex 安装 Skill：
+
+```bash
+curl -fsSL https://github.com/A3S-Lab/Test/releases/latest/download/install.sh |
+  sh -s -- --agent codex
+```
+
+固定版本：
+
+```bash
+curl -fsSL https://github.com/A3S-Lab/Test/releases/latest/download/install.sh |
+  sh -s -- --version v1.0.1
+```
+
+### Windows PowerShell
+
+```powershell
+& ([scriptblock]::Create((irm 'https://github.com/A3S-Lab/Test/releases/latest/download/install.ps1')))
+```
+
+指定 Agent 或版本：
+
+```powershell
+& ([scriptblock]::Create((irm 'https://github.com/A3S-Lab/Test/releases/latest/download/install.ps1'))) -Agent codex
+& ([scriptblock]::Create((irm 'https://github.com/A3S-Lab/Test/releases/latest/download/install.ps1'))) -Version v1.0.1
+```
+
+### 支持的 Agent 目标
+
+| 工具                  | 参数值           | 默认用户级目录               |
+| --------------------- | ---------------- | ---------------------------- |
+| A3S Code              | `a3s-code`       | `~/.a3s/skills`              |
+| Codex                 | `codex`          | `~/.codex/skills`            |
+| Claude Code           | `claude-code`    | `~/.claude/skills`           |
+| Cursor                | `cursor`         | `~/.cursor/skills`           |
+| Gemini CLI            | `gemini-cli`     | `~/.gemini/skills`           |
+| GitHub Copilot CLI    | `github-copilot` | `~/.copilot/skills`          |
+| OpenCode              | `opencode`       | `~/.config/opencode/skills`  |
+| Cline                 | `cline`          | `~/.cline/skills`            |
+| Roo Code              | `roo`            | `~/.roo/skills`              |
+| Windsurf              | `windsurf`       | `~/.codeium/windsurf/skills` |
+| Agent Skills 兼容工具 | `universal`      | `~/.agents/skills`           |
+
+`auto` 只安装到检测到的工具，没有命中时回退到通用目录。`all` 安装到所有目标。安装器也支持 `--skill-only`、`--cli-only`、`--install-dir` 和 `--skill-dir`，PowerShell 使用对应的 PascalCase 参数。
+
+## 其他 CLI 安装方式
+
+从 Git 标签构建 CLI：
+
+```bash
+cargo install --git https://github.com/A3S-Lab/Test \
+  --tag v1.0.1 --locked a3s-test-cli
+```
+
+每个发布还包含可手动安装的 `a3s-test.skill`、各平台归档、校验文件、Test Kit 包和 Linux runner 镜像引用。不要跳过校验文件或用未固定的镜像标签代替发布的 digest。
+
+## 启动一次本地页面评审
+
+本节命令已包含在 v1.0.1 发布中，安装后即可直接使用。
+
+前端挂载 Test Kit 后，在工程根目录执行：
+
+```bash
+a3s-test init
+a3s-test doctor
+a3s-test dev --json
+```
+
+`init` 只发现包管理器、开发脚本、端口和 Test Kit 声明，再写入 `.a3s-test/project.acl`，不会自动安装或启动。`doctor` 区分未声明、未安装和版本不兼容。`dev` 会复用已经可访问的 URL；否则拥有并启动配置中的开发进程，然后打开一个页面评审浏览器。按 Ctrl+C 时，它只关闭自己打开的浏览器和自己启动的服务器。
+
+实时 Test Kit 握手通过后，`dev --json` 会从同一条 stdout JSONL 流发出 `a3s.test.local-repair-bridge/1` 的 `repair_batch`。每个 finding 都会先保存到权威 repair ledger 并捕获修改前证据，事件也会带上生成的 session ID，因此 Agent 不需要再启动一个手工协调的 `repair-watch` 进程。开发服务器日志始终写入 stderr。
+
+### 声明可信验证检查
+
+`init` 不会猜测测试命令。项目脚本可能会启动 watch、等待输入或产生副作用。要让 `agent repair-verify` 自动运行项目检查，需要在生成的 `project` 块中显式加入可信目录：
+
+```acl
+verification {
+  check "component" {
+    tier = "focused"
+    executable = "npm"
+    args = ["run", "test:component"]
+    working_directory = "."
+    file_prefixes = ["src/components"]
+    timeout_ms = 120000
+    cleanup_timeout_ms = 10000
+  }
+
+  check "workspace" {
+    tier = "regression"
+    executable = "npm"
+    args = ["run", "test"]
+    working_directory = "."
+    file_prefixes = []
+    timeout_ms = 300000
+    cleanup_timeout_ms = 10000
+  }
+}
+```
+
+Focused 检查把工程内相对源码前缀映射到最小可用命令。Regression 检查不声明前缀，只在源码映射、检查覆盖、浏览器错误差异或既有证明显示影响可能扩大时选中。命令不经过 Shell，运行在 A3S Test 拥有的进程树中，执行和清理都有明确时限。
+
+调用 `agent repair-verify` 时省略 `--checks-json` 即使用这个目录。传入 `--checks-json` 会保留调用方报告模式，适合已经自行运行检查的 orchestrator。Expanded 验证找不到任何可信项目检查时会失败关闭，不会声称已经完成广泛验证。
+
+只使用浏览器可访问语义、明确不挂载页面评审侧栏的工程可以执行：
+
+```bash
+a3s-test init --testkit optional
+```

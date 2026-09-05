@@ -1,0 +1,155 @@
+---
+title: From a page problem to repeatable regression
+description: Help a coding agent read the current page, find the owning source, verify the change, and preserve the proven path as ACL.
+---
+
+# From a page problem to repeatable regression
+
+From first principles, a trustworthy interface change must answer three questions.
+
+| Question                       | A3S Test output                                                               |
+| ------------------------------ | ----------------------------------------------------------------------------- |
+| What does the page render now? | An observation bound to the current browser revision, semantics, and geometry |
+| Which source owns that result? | A stable locator, component ownership, and ranked source spans                |
+| Did the change truly work?     | Assertions and evidence from the changed page, plus an ACL regression         |
+
+A3S Test connects those results in one short, checkable loop. The browser supplies current facts. The coding agent chooses one typed action or explicit difference. Core admits it, verification reads the changed page again, and only then does the stable path become ACL.
+
+## The shortest trustworthy path
+
+```text
+current page facts
+  -> one typed action or explicit difference
+  -> source ownership and human repair authority when needed
+  -> evidence from the changed page
+  -> deterministic ACL regression
+```
+
+This order matters. A screenshot cannot prove component ownership. A source hint cannot prove the page rendered correctly. Model advice cannot grant edit authority. Each stage contributes one kind of truth and keeps its own boundary.
+
+## Choose one entry point
+
+| Current task                                         | Use                                    | Result                                                       |
+| ---------------------------------------------------- | -------------------------------------- | ------------------------------------------------------------ |
+| Review a local page and point out a change           | Web Test Kit and the local review loop | A revision-bound finding with page and source context        |
+| Explore an unfamiliar flow or reproduce a bug        | Persistent agent session               | An append-only record of observations, actions, and evidence |
+| Repeat a flow whose actions and assertions are known | ACL suite                              | A deterministic local or CI regression                       |
+
+Test Kit is optional for ordinary browser automation. Add it when the task needs component ownership, ranked source spans, rendered geometry, visual evidence, or human marking.
+
+The `init`, `doctor`, and `dev` local project loop is included in the v1.0.1
+release. This guide covers both the local project loop and the released
+persistent-session commands below.
+
+## Install the CLI and Agent Skill
+
+macOS or Linux
+
+```bash
+curl -fsSL https://github.com/A3S-Lab/Test/releases/latest/download/install.sh |
+  sh -s -- --version v1.0.1
+```
+
+Windows PowerShell
+
+```powershell
+& ([scriptblock]::Create((irm 'https://github.com/A3S-Lab/Test/releases/latest/download/install.ps1'))) -Version v1.0.1
+```
+
+The installer downloads the platform CLI, verifies its SHA-256, and installs the matching Skill for detected coding agents. See [Installation](./installation.mdx) to choose only Test Kit, only the CLI, or a specific agent destination.
+
+## 1. Declare a result the page can prove
+
+Start the local product, then name the goal and an observable success condition.
+
+```bash
+a3s-test agent start http://127.0.0.1:3000/checkout \
+  --session checkout \
+  --goal "Complete checkout with the fixture account" \
+  --success "The confirmation heading is visible" \
+  --json
+```
+
+The session retains its browser, exact-origin policy, and append-only event log until it is explicitly finished, aborted, or timed out.
+
+## 2. Read the page that actually rendered
+
+```bash
+a3s-test agent observe --session checkout --interactive --json
+```
+
+The response contains a new `observation_id` and refs bound to that observation.
+
+```text
+observation_id: 1
+@e1 [button] Continue
+```
+
+| Ref   | Source                                 | Authority                                                         |
+| ----- | -------------------------------------- | ----------------------------------------------------------------- |
+| `@eN` | Browser accessibility semantics        | Actionable only in the observation that created it                |
+| `@cN` | Test Kit Page Context                  | Actionable only when the current node is unique and valid         |
+| `@uN` | Supplemental UI-understanding evidence | Always read-only; connects style, layout, state, and motion facts |
+
+Page changes expire `@eN`, `@uN`, geometry, and screenshots. An `@cN` stable locator survives only inside the latest observation when an exact complete delta proves its private node unchanged; every changed, reset, legacy, or uncertain binding expires. This prevents an agent from silently applying an old decision to a new page state.
+
+## 3. Execute one admitted action
+
+Bind the action to the observation you just read.
+
+```bash
+a3s-test agent click @e1 \
+  --session checkout \
+  --observation 1 \
+  --json
+```
+
+Before the driver runs, A3S Test validates the action schema, session capability, target type, origin policy, and observation revision. Continue by observing again, not by reusing the old ref.
+
+## 4. Verify the changed page and retain evidence
+
+After the success condition appears, save the minimum evidence that another person or agent needs to inspect the result.
+
+```bash
+a3s-test agent screenshot screenshots/confirmation.png \
+  --session checkout \
+  --json
+
+a3s-test agent finish \
+  --session checkout \
+  --status passed \
+  --summary "Checkout completed and confirmation was observed" \
+  --json
+```
+
+```text
+.a3s-test/agent-sessions/checkout/
+├── session.json
+├── events.jsonl
+├── report.json
+└── artifacts/
+    └── screenshots/confirmation.png
+```
+
+`events.jsonl` explains each admitted step. `report.json` holds the terminal result. `artifacts/` contains only files owned by this session.
+
+## 5. Preserve only the proven path
+
+Exploration discovers the path. ACL keeps its smallest stable form. Encode explicit actions, bounded waits, assertions, and evidence, then admit the suite before running it.
+
+```bash
+a3s-test check tests/e2e/checkout.acl --json
+a3s-test run tests/e2e/checkout.acl --json
+```
+
+Continue with [Exploration and regression workflows](./workflows.mdx) for a complete ACL example. Use [Assertions and stability](./assertions.mdx) when the success condition depends on control state, rendered text, collections, layout, viewport coverage, pointer reachability, or focus ownership.
+
+## Where Test Kit enters
+
+Test Kit derives bounded context after browser rendering. It adds component ownership, stable locator candidates, multi-space geometry, ranked source spans, and a human review surface without replacing the browser accessibility tree.
+
+- [Install and mount Web Test Kit](./testkit.mdx)
+- [Understand Page Context and revision expiry](../concepts/page-context.mdx)
+- [Follow human-authorized repair](./repairs.mdx)
+- [Review architecture and authority boundaries](../concepts/architecture.mdx)
+- [Inspect the complete capability reference](../reference/capabilities.mdx)
