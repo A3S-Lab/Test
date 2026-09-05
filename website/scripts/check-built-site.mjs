@@ -39,6 +39,16 @@ function routeForMdx(filename) {
     .join('/');
 }
 
+function isVersionSelectorLink(html, offset) {
+  const anchorStart = html.lastIndexOf('<a ', offset);
+  const anchorEnd = html.indexOf('>', anchorStart);
+  return (
+    anchorStart >= 0 &&
+    anchorEnd >= offset &&
+    html.slice(anchorStart, anchorEnd).includes('rp-hover-group__item__link')
+  );
+}
+
 const requiredFiles = new Set([
   '404.html',
   'a3s-logo.png',
@@ -497,7 +507,8 @@ async function resolvesToBuiltFile(relativeReference) {
 const referencePattern = /(?:href|src)="([^"]+)"/g;
 for (const htmlFile of htmlFiles) {
   const html = await readFile(htmlFile, 'utf8');
-  for (const [, rawReference] of html.matchAll(referencePattern)) {
+  for (const match of html.matchAll(referencePattern)) {
+    const rawReference = match[1];
     if (
       rawReference.startsWith('#') ||
       rawReference.startsWith('//') ||
@@ -521,6 +532,9 @@ for (const htmlFile of htmlFiles) {
       .split(/[?#]/, 1)[0]
       .replace(/\/+/g, '/');
     if (!(await resolvesToBuiltFile(withoutBase))) {
+      // Rspress renders every version in the selector, even when a historical
+      // snapshot intentionally does not contain the current page route.
+      if (isVersionSelectorLink(html, match.index ?? 0)) continue;
       failures.push(
         `${path.relative(outputRoot, htmlFile)} has broken reference ${rawReference}`,
       );
