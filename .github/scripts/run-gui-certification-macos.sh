@@ -52,7 +52,7 @@ records_root="$(cd "$records_root" && pwd -P)"
 lock_record="$records_root/cua-lock.json"
 "$a3s_test_bin" gui-certification --json > "$lock_record"
 
-expected_cua_repository="https://github.com/A3S-Lab/cua"
+expected_cua_repository="https://github.com/trycua/cua"
 expected_cua_revision="$(jq -er '.cua_revision' "$lock_record")"
 expected_cua_version="$(jq -er '.cua_driver_version' "$lock_record")"
 expected_mcp_protocol="$(jq -er '.mcp_protocol' "$lock_record")"

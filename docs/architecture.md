@@ -1458,7 +1458,7 @@ permission attribution, bounded observation summaries, session cleanup, and
 fixture inventory. A detached checksum and GitHub OIDC/Sigstore SLSA
 provenance make the record independently verifiable; successful version tags
 publish the record and checksum. Windows and Linux still fail during
-configuration, before a transport starts, because the locked CUA 0.10.0
+configuration, before a transport starts, because the locked CUA 0.23.2
 revision has no reviewed application backend for them.
 
 The CUA stdio proxy has lifecycle ownership independent of the target

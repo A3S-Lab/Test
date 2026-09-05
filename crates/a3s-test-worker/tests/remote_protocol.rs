@@ -123,7 +123,7 @@ fn gui_submission_requires_the_exact_probed_host_permission_grant() {
                 perception: WorkerGuiPerception::Semantic,
                 target: WorkerGuiTarget::Launch,
                 application,
-                cua_driver_version: "0.10.0".to_string(),
+                cua_driver_version: "0.23.2".to_string(),
                 mcp_protocol: "2025-06-18".to_string(),
                 capability_vocabulary: "cua.capabilities/1".to_string(),
                 tools_schema: "cua.tools/1".to_string(),

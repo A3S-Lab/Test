@@ -156,7 +156,7 @@ fn platform_unsupported(identity: &ApplicationIdentity) -> DriverError {
     };
     DriverError::new(
         "test.driver.gui.platform_unsupported",
-        format!("the locked CUA 0.10.0 adapter does not implement {platform} application identity"),
+        format!("the locked CUA adapter does not implement {platform} application identity"),
     )
 }
 
@@ -195,12 +195,12 @@ fn select_window(
 ) -> Result<CuaWindow, DriverError> {
     let matches = match selector {
         WindowSelector::Primary => {
-            let Some(highest) = windows.iter().map(|window| window.z_index).max() else {
+            let Some(highest) = windows.iter().map(primary_window_score).max() else {
                 return Err(window_not_found());
             };
             windows
                 .into_iter()
-                .filter(|window| window.z_index == highest)
+                .filter(|window| primary_window_score(window) == highest)
                 .collect::<Vec<_>>()
         }
         WindowSelector::ExactTitle(title) => windows
@@ -220,6 +220,18 @@ fn select_window(
             "multiple top-level windows matched the configured selector",
         )),
     }
+}
+
+/// Prefer a visible window on the active Space over an off-screen auxiliary
+/// window, even when that auxiliary window has a higher WindowServer z-index.
+/// Newer CUA versions expose every layer-0 window and explicitly document that
+/// z-index alone is not a primary-window selector.
+fn primary_window_score(window: &CuaWindow) -> (u8, u8, i64) {
+    (
+        u8::from(window.is_on_screen),
+        u8::from(window.on_current_space == Some(true)),
+        window.z_index.unwrap_or(i64::MIN),
+    )
 }
 
 fn window_not_found() -> DriverError {
@@ -362,4 +374,70 @@ fn retryable_cleanup_error(error: DriverError) -> DriverError {
             | "test.driver.gui.cua_output_invalid"
     );
     error.with_retryable(retryable)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    fn window(
+        window_id: u32,
+        z_index: Option<i64>,
+        is_on_screen: bool,
+        on_current_space: Option<bool>,
+    ) -> CuaWindow {
+        CuaWindow {
+            window_id,
+            pid: 1,
+            title: String::new(),
+            z_index,
+            is_on_screen,
+            on_current_space,
+            automation_id: None,
+        }
+    }
+
+    #[test]
+    fn primary_prefers_visible_active_space_over_higher_z_index_auxiliary_window() {
+        let selected = select_window(
+            vec![
+                window(10, Some(106), false, None),
+                window(11, Some(105), true, Some(true)),
+            ],
+            &WindowSelector::Primary,
+        )
+        .expect("primary window");
+
+        assert_eq!(selected.window_id, 11);
+    }
+
+    #[test]
+    fn primary_falls_back_to_z_index_when_visibility_is_unknown() {
+        let selected = select_window(
+            vec![
+                window(10, Some(106), false, None),
+                window(11, Some(105), false, None),
+            ],
+            &WindowSelector::Primary,
+        )
+        .expect("primary window");
+
+        assert_eq!(selected.window_id, 10);
+    }
+
+    #[test]
+    fn cua_window_accepts_nullable_z_index_and_missing_visibility_metadata() {
+        let parsed: CuaWindow = serde_json::from_value(json!({
+            "window_id": 10,
+            "pid": 1,
+            "title": "Auxiliary",
+            "z_index": null,
+        }))
+        .expect("CUA window with nullable z-index");
+
+        assert_eq!(parsed.z_index, None);
+        assert!(!parsed.is_on_screen);
+        assert_eq!(parsed.on_current_space, None);
+    }
 }

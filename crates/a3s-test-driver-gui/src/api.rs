@@ -262,7 +262,16 @@ pub(crate) struct CuaWindow {
     pub window_id: u32,
     pub pid: i32,
     pub title: String,
-    pub z_index: i64,
+    /// WindowServer stacking order. CUA may return `null` when the host cannot
+    /// prove a stable order; callers must not infer one from array order.
+    #[serde(default)]
+    pub z_index: Option<i64>,
+    /// Whether the window is visible on the current desktop display.
+    #[serde(default)]
+    pub is_on_screen: bool,
+    /// Whether the window belongs to the active Space. `null` means unknown.
+    #[serde(default)]
+    pub on_current_space: Option<bool>,
     #[serde(default, alias = "automationId", alias = "identifier")]
     pub automation_id: Option<String>,
 }

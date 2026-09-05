@@ -1,8 +1,8 @@
 cua_stack "gui" {
     schema_version = 2
-    repository = "https://github.com/A3S-Lab/cua"
-    revision = "96103fe14da7ca960a092a234d0b20081707e3ff"
-    driver_version = "0.10.0"
+    repository = "https://github.com/trycua/cua"
+    revision = "e88e9d899ac5effaeae38619527ebaa46b26ce72"
+    driver_version = "0.23.2"
     mcp_protocol = "2025-06-18"
     tools_schema = "1"
     capability_vocabulary = "1"
@@ -14,7 +14,7 @@ cua_stack "gui" {
         window_vision = false
         lifecycle = false
         status = "unsupported"
-        reason = "The locked CUA 0.10.0 revision has no reviewed Linux application backend."
+        reason = "The locked CUA 0.23.2 revision has no reviewed Linux application backend."
     }
 
     profile "linux-installed" {
@@ -24,7 +24,7 @@ cua_stack "gui" {
         window_vision = false
         lifecycle = false
         status = "unsupported"
-        reason = "The locked CUA 0.10.0 revision has no reviewed Linux application backend."
+        reason = "The locked CUA 0.23.2 revision has no reviewed Linux application backend."
     }
 
     profile "macos-embedded" {
@@ -52,7 +52,7 @@ cua_stack "gui" {
         window_vision = false
         lifecycle = false
         status = "unsupported"
-        reason = "The locked CUA 0.10.0 revision has no reviewed Windows application backend."
+        reason = "The locked CUA 0.23.2 revision has no reviewed Windows application backend."
     }
 
     profile "windows-installed" {
@@ -62,7 +62,7 @@ cua_stack "gui" {
         window_vision = false
         lifecycle = false
         status = "unsupported"
-        reason = "The locked CUA 0.10.0 revision has no reviewed Windows application backend."
+        reason = "The locked CUA 0.23.2 revision has no reviewed Windows application backend."
     }
 
     observation "get_window_state" {

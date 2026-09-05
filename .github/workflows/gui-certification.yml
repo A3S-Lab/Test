@@ -45,7 +45,7 @@ jobs:
           set -euo pipefail
           target/release/a3s-test gui-certification --json > "$RUNNER_TEMP/cua-lock.json"
           test "$(jq -r '.cua_repository' "$RUNNER_TEMP/cua-lock.json")" = \
-            "https://github.com/A3S-Lab/cua"
+            "https://github.com/trycua/cua"
           revision="$(jq -er '.cua_revision' "$RUNNER_TEMP/cua-lock.json")"
           [[ "$revision" =~ ^[0-9a-f]{40}$ ]]
           printf 'revision=%s\n' "$revision" >> "$GITHUB_OUTPUT"
@@ -53,7 +53,7 @@ jobs:
       - name: Check out the locked CUA source
         uses: actions/checkout@v6
         with:
-          repository: A3S-Lab/cua
+          repository: trycua/cua
           ref: ${{ steps.cua-lock.outputs.revision }}
           path: .gui-certification/cua
           persist-credentials: false

@@ -15,7 +15,7 @@ Inspect the platform matrix before configuring a worker:
 a3s-test gui-certification --json
 ```
 
-The locked CUA 0.10.0 adapter admits macOS installed-daemon and embedded-socket
+The locked CUA 0.23.2 adapter admits macOS installed-daemon and embedded-socket
 profiles. Windows and Linux GUI profiles fail closed until their CUA backends
 are reviewed. A macOS worker should pass `a3s-test gui-certify` with its real
 application and permissions before use.

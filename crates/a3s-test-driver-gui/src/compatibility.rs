@@ -609,7 +609,7 @@ mod tests {
     fn checked_in_lock_is_canonical_and_complete() {
         let compatibility = CuaCompatibility::locked().expect("locked compatibility");
         assert_eq!(compatibility.schema_version(), 2);
-        assert_eq!(compatibility.driver_version(), &Version::new(0, 10, 0));
+        assert_eq!(compatibility.driver_version(), &Version::new(0, 23, 2));
         assert_eq!(compatibility.mcp_protocol(), "2025-06-18");
         assert_eq!(compatibility.tools_schema(), "1");
         assert_eq!(compatibility.capability_vocabulary(), "1");

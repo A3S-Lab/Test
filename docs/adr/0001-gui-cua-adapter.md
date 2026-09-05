@@ -49,7 +49,7 @@ contract is rejected until the compatibility lock and contract tests are
 reviewed together.
 
 macOS deployments use the installed CuaDriver application or an embedded
-socket owned by the application that holds the grants. The locked CUA 0.10.0
+socket owned by the application that holds the grants. The locked CUA 0.23.2
 revision has no reviewed Windows or Linux application backend, so those four
 platform/endpoint combinations are explicit unsupported profiles and fail
 before transport startup.

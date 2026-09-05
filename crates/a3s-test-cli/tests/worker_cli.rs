@@ -217,7 +217,7 @@ fn worker_inventory_adds_gui_only_after_a_real_host_probe() {
         "result": {
             "protocolVersion": "2025-06-18",
             "capabilities": { "tools": {} },
-            "serverInfo": { "name": "cua-driver", "version": "0.10.0" },
+            "serverInfo": { "name": "cua-driver", "version": "0.23.2" },
         },
     })
     .to_string();

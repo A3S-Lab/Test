@@ -106,6 +106,11 @@
 
 ### Fixed
 
+- Updated the GUI CUA compatibility lock to the reviewed `trycua/cua`
+  `0.23.2` revision and taught the macOS window adapter to prefer an on-screen
+  window in the active Space over hidden auxiliary windows with a higher
+  z-index. CUA window ordering now accepts nullable z-index values, and the
+  primary-window regression is covered by adapter tests.
 - Raised the Test Kit 0.6.2 semantic blue, muted, warning, danger, and success
   text contrast across A3S UI light and dark surfaces, and updated the real
   browser regression to verify button semantics plus the collapsed More tools

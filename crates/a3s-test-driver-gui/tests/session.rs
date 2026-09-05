@@ -136,7 +136,7 @@ impl CuaTransport for FakeTransport {
                 json!({
                     "protocolVersion": "2025-06-18",
                     "capabilities": { "tools": {} },
-                    "serverInfo": { "name": "cua-driver", "version": "0.10.0" },
+                    "serverInfo": { "name": "cua-driver", "version": "0.23.2" },
                 }),
             )),
             "tools/list" => Ok(JsonRpcResponse::success(request.id, tools_list())),
@@ -315,6 +315,8 @@ fn dispatch_tool(
                     "pid": APP_PID,
                     "title": "Document",
                     "z_index": 10,
+                    "is_on_screen": true,
+                    "on_current_space": true,
                 })]
             } else {
                 Vec::new()
@@ -486,7 +488,7 @@ async fn host_probe_is_read_only_and_returns_exact_permissions() {
             GuiHostPermission::ScreenRecording,
         ]
     );
-    assert_eq!(probe.driver_version, "0.10.0");
+    assert_eq!(probe.driver_version, "0.23.2");
     assert!(probe.permissions.digest().starts_with("sha256:"));
     let names = transport.tool_names().await;
     assert_eq!(names, ["check_permissions"]);
