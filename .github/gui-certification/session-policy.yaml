@@ -1,8 +1,15 @@
-version: 1
+version: 2
 mode: bounded
 expires_after: 1h
 idle_timeout: 10m
-resources: {}
+resources:
+  desktop:
+    display: true
+  apps:
+    - bundle_id: com.trycua.harness.appkit
+      launch: true
+      windows: all
+      terminate: driver_launched
 allow:
   tools:
     - get_config

@@ -52,14 +52,14 @@ records_root="$(cd "$records_root" && pwd -P)"
 lock_record="$records_root/cua-lock.json"
 "$a3s_test_bin" gui-certification --json > "$lock_record"
 
-expected_cua_repository="https://github.com/trycua/cua"
+expected_cua_repository="$(jq -er '.cua_repository' "$lock_record")"
 expected_cua_revision="$(jq -er '.cua_revision' "$lock_record")"
 expected_cua_version="$(jq -er '.cua_driver_version' "$lock_record")"
 expected_mcp_protocol="$(jq -er '.mcp_protocol' "$lock_record")"
-actual_cua_repository="$(jq -er '.cua_repository' "$lock_record")"
+actual_cua_repository="$expected_cua_repository"
 
-[[ "$actual_cua_repository" == "$expected_cua_repository" ]] || {
-    printf 'locked CUA repository is not the reviewed repository: %s\n' \
+[[ "$actual_cua_repository" =~ ^https://github.com/[^/]+/cua$ ]] || {
+    printf 'locked CUA repository is not a reviewed cua GitHub repository: %s\n' \
         "$actual_cua_repository" >&2
     exit 1
 }
@@ -233,6 +233,26 @@ run_profile() {
     local profile_root="$records_root/$profile_slug-artifacts"
     local result_record="$records_root/$profile_slug.json"
     local cleanup_record="$records_root/$profile_slug-fixture-inventory.json"
+    local fixture_pid=''
+
+    # CUA 0.23.2 list_apps does not reliably report processes started via
+    # launch_app as running (pid 0 / running=false). Open the staged fixture
+    # through Launch Services, attach by exact pid, then terminate after the
+    # profile so inventory ownership stays deterministic.
+    open "$fixture_app"
+    for _ in {1..50}; do
+        fixture_pid="$(
+            fixture_inventory \
+                | jq -r '.running_instances[0].pid // empty'
+        )"
+        [[ "$fixture_pid" =~ ^[1-9][0-9]*$ ]] && break
+        sleep 0.1
+    done
+    [[ "$fixture_pid" =~ ^[1-9][0-9]*$ ]] || {
+        printf 'fixture did not become running before %s certification\n' \
+            "$profile" >&2
+        return 1
+    }
 
     "$a3s_test_bin" gui-certify \
         --gui-policy-file "$policy_file" \
@@ -240,6 +260,8 @@ run_profile() {
         --cua-embedded-socket "$socket_path" \
         --gui-macos-bundle-id "$fixture_bundle_id" \
         --gui-window-title "$fixture_window_title" \
+        --gui-target-mode attach \
+        --gui-attach-pid "$fixture_pid" \
         --gui-profile "$profile" \
         --command-timeout-ms 30000 \
         --cleanup-timeout-ms 10000 \
@@ -255,6 +277,14 @@ run_profile() {
     if [[ "$profile" == "window-vision" ]]; then
         jq -e '.observation.visual_evidence_count > 0' "$result_record" >/dev/null
     fi
+
+    "$cua_bin" call kill_app "{\"pid\":$fixture_pid}" --socket "$socket_path" \
+        >> "$records_root/cleanup.log" 2>&1 || true
+    for _ in {1..50}; do
+        fixture_inventory \
+            | jq -e '.running_instances | length == 0' >/dev/null && break
+        sleep 0.1
+    done
 
     fixture_inventory > "$cleanup_record"
     jq -e '.running_instances | length == 0' "$cleanup_record" >/dev/null

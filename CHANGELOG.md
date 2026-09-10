@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+### Changed
+
+- macOS GUI host certification now opens the staged AppKit fixture through
+  Launch Services and attaches by exact pid. Locked CUA 0.23.2 `list_apps`
+  does not reliably report `launch_app`-started processes as running, which
+  made launch-mode binding validation fail closed even when the process was
+  alive. Session policy grants desktop display observation plus the harness
+  app identity required for bounded certification.
+
 ## 1.0.1 - 2026-09-05
 
 A3S Test 1.0.1 promotes the current Test Kit workflow and the refreshed macOS

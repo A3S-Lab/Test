@@ -20,6 +20,13 @@ profiles. Windows and Linux GUI profiles fail closed until their CUA backends
 are reviewed. A macOS worker should pass `a3s-test gui-certify` with its real
 application and permissions before use.
 
+On locked CUA 0.23.2, prefer Launch Services `open` plus
+`--gui-target-mode attach --gui-attach-pid <pid>` for AppKit fixtures.
+`launch_app` can return a live pid while `list_apps` still reports
+`running=false` / `pid=0`, which fails closed in binding validation. The
+repository macOS certification script stages the AppKit harness, opens it,
+attaches by exact pid, then terminates it after each profile.
+
 Version tags additionally require the repository's reusable real macOS
 certification workflow. Its `a3s.test.gui-host-certification/1` record binds
 the exact A3S Test and CUA source revisions, binary and policy digests, host
