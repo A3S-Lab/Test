@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use a3s_test_core::{
-    PageContextInspectRequest, PageContextInspectScope, RepairActor, RepairStatus,
+    PageContextInspectRequest, PageContextInspectScope, RepairActor, RepairStatus, Surface,
     ACTION_PROTOCOL_REVISION,
 };
 use a3s_test_session::{
@@ -197,12 +197,16 @@ async fn call_tool(
                 .map(|value| tool_success("surface observed", value))
         }
         "test_inspect" => {
-            let request = parse_value::<InspectArgument>(arguments, "inspect arguments")?;
-            let (session, request) = request.into_parts();
-            manager
-                .inspect_page_context(&session, request)
-                .await
-                .map(|value| tool_success("scoped page context inspected", value))
+            if let Err(error) = require_web_mcp_host(manager) {
+                Err(error)
+            } else {
+                let request = parse_value::<InspectArgument>(arguments, "inspect arguments")?;
+                let (session, request) = request.into_parts();
+                manager
+                    .inspect_page_context(&session, request)
+                    .await
+                    .map(|value| tool_success("scoped page context inspected", value))
+            }
         }
         "test_act" => {
             let request = parse_value::<ActSessionRequest>(arguments, "act arguments")?;
@@ -225,91 +229,129 @@ async fn call_tool(
                 .await
                 .map(|value| tool_success("test session aborted", value))
         }
-        "test_repair_watch" => {
-            let request = parse_value::<RepairWatchArgument>(arguments, "repair watch arguments")?;
-            let limit = request.limit();
-            match manager
-                .watch_repairs(
-                    &request.session,
-                    limit,
-                    request.timeout_ms(),
-                    request.batch_window_ms(),
+        "test_repair_watch" => match require_web_mcp_host(manager) {
+            Err(error) => Err(error),
+            Ok(()) => {
+                let request =
+                    parse_value::<RepairWatchArgument>(arguments, "repair watch arguments")?;
+                let limit = request.limit();
+                match manager
+                    .watch_repairs(
+                        &request.session,
+                        limit,
+                        request.timeout_ms(),
+                        request.batch_window_ms(),
+                    )
+                    .await
+                {
+                    Ok(queued) => {
+                        manager.repair_batches(&request.session).await.map(|batches| {
+                            tool_success(
+                                "queued repairs",
+                                json!({ "session": request.session, "repairs": queued, "batches": batches }),
+                            )
+                        })
+                    }
+                    Err(error) => Err(error),
+                }
+            }
+        },
+        "test_repair_inspect" => match require_web_mcp_host(manager) {
+            Err(error) => Err(error),
+            Ok(()) => {
+                let request = parse_value::<RepairInspectArgument>(
+                    arguments,
+                    "repair inspect arguments",
+                )?;
+                manager
+                    .inspect_repair_loop(&request.session, &request.finding_id)
+                    .await
+                    .map(|value| tool_success("durable repair loop inspected", value))
+            }
+        },
+        "test_repair_inbox" => match require_web_mcp_host(manager) {
+            Err(error) => Err(error),
+            Ok(()) => {
+                let request =
+                    parse_value::<RepairInboxArgument>(arguments, "repair inbox arguments")?;
+                manager
+                    .repair_inbox(&request.session, request.include_terminal, request.limit())
+                    .await
+                    .map(|value| tool_success("repair inbox inspected", value))
+            }
+        },
+        "test_repair_claim" => match require_web_mcp_host(manager) {
+            Err(error) => Err(error),
+            Ok(()) => {
+                repair_transition(manager, arguments, RepairStatus::Claimed, "repair claimed")
+                    .await
+            }
+        },
+        "test_repair_progress" => match require_web_mcp_host(manager) {
+            Err(error) => Err(error),
+            Ok(()) => {
+                repair_transition(
+                    manager,
+                    arguments,
+                    RepairStatus::Repairing,
+                    "repair progress recorded",
                 )
                 .await
-            {
-                Ok(queued) => manager.repair_batches(&request.session).await.map(|batches| {
-                    tool_success(
-                        "queued repairs",
-                        json!({ "session": request.session, "repairs": queued, "batches": batches }),
-                    )
-                }),
-                Err(error) => Err(error),
             }
-        }
-        "test_repair_inspect" => {
-            let request =
-                parse_value::<RepairInspectArgument>(arguments, "repair inspect arguments")?;
-            manager
-                .inspect_repair_loop(&request.session, &request.finding_id)
+        },
+        "test_repair_reply" => match require_web_mcp_host(manager) {
+            Err(error) => Err(error),
+            Ok(()) => {
+                repair_transition(
+                    manager,
+                    arguments,
+                    RepairStatus::NeedsInput,
+                    "repair reply requested",
+                )
                 .await
-                .map(|value| tool_success("durable repair loop inspected", value))
-        }
-        "test_repair_inbox" => {
-            let request = parse_value::<RepairInboxArgument>(arguments, "repair inbox arguments")?;
-            manager
-                .repair_inbox(&request.session, request.include_terminal, request.limit())
+            }
+        },
+        "test_repair_complete" => match require_web_mcp_host(manager) {
+            Err(error) => Err(error),
+            Ok(()) => {
+                repair_transition(
+                    manager,
+                    arguments,
+                    RepairStatus::Verifying,
+                    "repair queued for verification",
+                )
                 .await
-                .map(|value| tool_success("repair inbox inspected", value))
-        }
-        "test_repair_claim" => {
-            repair_transition(manager, arguments, RepairStatus::Claimed, "repair claimed").await
-        }
-        "test_repair_progress" => {
-            repair_transition(
-                manager,
-                arguments,
-                RepairStatus::Repairing,
-                "repair progress recorded",
-            )
-            .await
-        }
-        "test_repair_reply" => {
-            repair_transition(
-                manager,
-                arguments,
-                RepairStatus::NeedsInput,
-                "repair reply requested",
-            )
-            .await
-        }
-        "test_repair_complete" => {
-            repair_transition(
-                manager,
-                arguments,
-                RepairStatus::Verifying,
-                "repair queued for verification",
-            )
-            .await
-        }
-        "test_repair_verify" => {
-            let request = parse_value::<RepairVerifyRequest>(arguments, "repair verify arguments")?;
-            manager
-                .verify_repair(request)
+            }
+        },
+        "test_repair_verify" => match require_web_mcp_host(manager) {
+            Err(error) => Err(error),
+            Ok(()) => {
+                let request =
+                    parse_value::<RepairVerifyRequest>(arguments, "repair verify arguments")?;
+                manager
+                    .verify_repair(request)
+                    .await
+                    .map(|value| tool_success("repair verification completed", value))
+            }
+        },
+        "test_repair_fail" => match require_web_mcp_host(manager) {
+            Err(error) => Err(error),
+            Ok(()) => {
+                repair_transition(manager, arguments, RepairStatus::Failed, "repair failed").await
+            }
+        },
+        "test_repair_cancel" => match require_web_mcp_host(manager) {
+            Err(error) => Err(error),
+            Ok(()) => {
+                repair_transition(
+                    manager,
+                    arguments,
+                    RepairStatus::Cancelled,
+                    "repair cancelled",
+                )
                 .await
-                .map(|value| tool_success("repair verification completed", value))
-        }
-        "test_repair_fail" => {
-            repair_transition(manager, arguments, RepairStatus::Failed, "repair failed").await
-        }
-        "test_repair_cancel" => {
-            repair_transition(
-                manager,
-                arguments,
-                RepairStatus::Cancelled,
-                "repair cancelled",
-            )
-            .await
-        }
+            }
+        },
         "test_schema" => Ok(tool_success(
             "typed action schema",
             json!({
@@ -428,8 +470,9 @@ fn tool_failure(error: SessionError) -> Value {
 
 fn tool_definitions(surfaces: &[a3s_test_core::Surface]) -> Vec<Value> {
     let action_schema = interactive_action_schema();
-    let surfaces = serde_json::to_value(surfaces).unwrap_or_else(|_| json!([]));
-    vec![
+    let surfaces_json = serde_json::to_value(surfaces).unwrap_or_else(|_| json!([]));
+    let web_registered = surfaces.contains(&Surface::Web);
+    let mut tools = vec![
         tool_definition(
             "test_session_start",
             "Open one typed surface session. Host-side GUI application configuration is fixed when the MCP server starts.",
@@ -438,7 +481,7 @@ fn tool_definitions(surfaces: &[a3s_test_core::Surface]) -> Vec<Value> {
                 "required": ["session", "surface", "goal", "success_criteria"],
                 "properties": {
                     "session": { "type": "string", "minLength": 1, "maxLength": 48 },
-                    "surface": { "type": "string", "enum": surfaces },
+                    "surface": { "type": "string", "enum": surfaces_json },
                     "goal": { "type": "string", "minLength": 1 },
                     "success_criteria": {
                         "type": "array",
@@ -448,7 +491,7 @@ fn tool_definitions(surfaces: &[a3s_test_core::Surface]) -> Vec<Value> {
                     "auto_resolve_repairs": {
                         "type": "boolean",
                         "default": false,
-                        "description": "Resolve only after every A3S-owned verification gate passes; human review remains the default."
+                        "description": "Resolve only after every A3S-owned verification gate passes; human review remains the default. Only meaningful when this MCP host registered a Web surface."
                     }
                 },
                 "additionalProperties": false
@@ -460,13 +503,6 @@ fn tool_definitions(surfaces: &[a3s_test_core::Surface]) -> Vec<Value> {
             "test_observe",
             "Capture the next semantic observation and bind its refs to a new observation id.",
             session_schema(),
-            true,
-            false,
-        ),
-        tool_definition(
-            "test_inspect",
-            "Inspect one bounded current Test Kit node, component, region, or page scope and bind fresh @cN refs.",
-            inspect_schema(),
             true,
             false,
         ),
@@ -516,17 +552,38 @@ fn tool_definitions(surfaces: &[a3s_test_core::Surface]) -> Vec<Value> {
             true,
             false,
         ),
-        tool_definition("test_repair_watch", "Drain already queued Test Kit findings, then perform one bounded page pickup.", repair_watch_schema(), true, false),
-        tool_definition("test_repair_inbox", "Read the prioritized repair inbox for one active session without observing or mutating the page.", repair_inbox_schema(), true, false),
-        tool_definition("test_repair_inspect", "Read one versioned durable repair loop without observing or mutating the page.", repair_inspect_schema(), true, false),
-        tool_definition("test_repair_claim", "Claim one queued repair with an explicit attempt and lease.", repair_transition_schema(), false, false),
-        tool_definition("test_repair_progress", "Report that workspace editing has begun for the claimed attempt.", repair_transition_schema(), false, false),
-        tool_definition("test_repair_reply", "Request bounded human clarification for a claimed or repairing finding.", repair_transition_schema(), false, false),
-        tool_definition("test_repair_complete", "Append the exact changed-files report, then move editing to A3S Test-owned verification, not resolved.", repair_complete_schema(), false, false),
-        tool_definition("test_repair_verify", "Run A3S Test-owned browser verification against a newer ready page revision and produce a validated ACL candidate when possible.", repair_verify_schema(), false, false),
-        tool_definition("test_repair_fail", "Record a failed repair attempt without discarding its history.", repair_transition_schema(), false, false),
-        tool_definition("test_repair_cancel", "Cancel a queued or claimed repair finding.", repair_transition_schema(), false, true),
-    ]
+    ];
+    if web_registered {
+        tools.push(tool_definition(
+            "test_inspect",
+            "Inspect one bounded current Test Kit node, component, region, or page scope and bind fresh @cN refs.",
+            inspect_schema(),
+            true,
+            false,
+        ));
+        tools.push(tool_definition("test_repair_watch", "Drain already queued Test Kit findings, then perform one bounded page pickup.", repair_watch_schema(), true, false));
+        tools.push(tool_definition("test_repair_inbox", "Read the prioritized repair inbox for one active session without observing or mutating the page.", repair_inbox_schema(), true, false));
+        tools.push(tool_definition("test_repair_inspect", "Read one versioned durable repair loop without observing or mutating the page.", repair_inspect_schema(), true, false));
+        tools.push(tool_definition("test_repair_claim", "Claim one queued repair with an explicit attempt and lease.", repair_transition_schema(), false, false));
+        tools.push(tool_definition("test_repair_progress", "Report that workspace editing has begun for the claimed attempt.", repair_transition_schema(), false, false));
+        tools.push(tool_definition("test_repair_reply", "Request bounded human clarification for a claimed or repairing finding.", repair_transition_schema(), false, false));
+        tools.push(tool_definition("test_repair_complete", "Append the exact changed-files report, then move editing to A3S Test-owned verification, not resolved.", repair_complete_schema(), false, false));
+        tools.push(tool_definition("test_repair_verify", "Run A3S Test-owned browser verification against a newer ready page revision and produce a validated ACL candidate when possible.", repair_verify_schema(), false, false));
+        tools.push(tool_definition("test_repair_fail", "Record a failed repair attempt without discarding its history.", repair_transition_schema(), false, false));
+        tools.push(tool_definition("test_repair_cancel", "Cancel a queued or claimed repair finding.", repair_transition_schema(), false, true));
+    }
+    tools
+}
+
+fn require_web_mcp_host(manager: &AgentSessionManager) -> Result<(), SessionError> {
+    if manager.surfaces().contains(&Surface::Web) {
+        Ok(())
+    } else {
+        Err(SessionError::new(
+            "test.session.web_surface_required",
+            "page inspection and repair tools require a Web surface on this MCP host; configure --web-url",
+        ))
+    }
 }
 
 fn repair_watch_schema() -> Value {

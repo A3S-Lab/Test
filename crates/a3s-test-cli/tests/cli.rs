@@ -133,6 +133,28 @@ fn agent_run_help_exposes_the_acl_driven_embedded_host() {
 }
 
 #[test]
+fn mcp_help_exposes_multi_surface_host_options() {
+    let output = Command::new(binary())
+        .args(["mcp", "--help"])
+        .output()
+        .expect("run MCP help");
+
+    assert!(output.status.success(), "{output:?}");
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.contains("Web, GUI, and/or TUI agent sessions"),
+        "{stdout}"
+    );
+    assert!(stdout.contains("--web-url"), "{stdout}");
+    assert!(stdout.contains("--tui-executable"), "{stdout}");
+    assert!(stdout.contains("--gui-macos-process-name"), "{stdout}");
+    assert!(
+        stdout.contains("unpackaged macOS") || stdout.contains("missing bundle"),
+        "{stdout}"
+    );
+}
+
+#[test]
 fn agent_ground_help_exposes_revision_bound_advisory_grounding() {
     let output = Command::new(binary())
         .args(["agent", "ground", "--help"])

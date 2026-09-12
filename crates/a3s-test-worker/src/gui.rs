@@ -86,6 +86,11 @@ pub struct WorkerGuiCapability {
     pub perception: WorkerGuiPerception,
     pub target: WorkerGuiTarget,
     pub application: WorkerGuiApplication,
+    /// Exact CUA `list_apps` process name for attach-only unpackaged macOS identity.
+    /// Absent for launch targets and packaged attach that matches on bundle id alone.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[schemars(length(min = 1, max = 256))]
+    pub macos_process_name: Option<String>,
     #[schemars(length(min = 1, max = 128))]
     pub cua_driver_version: String,
     #[schemars(length(min = 1, max = 128))]
@@ -108,6 +113,18 @@ impl WorkerGuiCapability {
         validate_identifier(&self.profile_id, "GUI profile ID")?;
         validate_identifier(&self.compatibility_profile, "GUI compatibility profile ID")?;
         self.application.validate()?;
+        match (self.target, self.macos_process_name.as_deref()) {
+            (WorkerGuiTarget::Launch, Some(_)) => {
+                return Err(inventory_error(
+                    "test.worker.inventory.gui_capability_invalid",
+                    "macos_process_name is only valid for GUI attach targets",
+                ));
+            }
+            (WorkerGuiTarget::Attach, Some(process_name)) => {
+                validate_text(process_name, 256, "macOS process name")?;
+            }
+            (WorkerGuiTarget::Launch | WorkerGuiTarget::Attach, None) => {}
+        }
         Version::parse(&self.cua_driver_version).map_err(|_| {
             inventory_error(
                 "test.worker.inventory.gui_capability_invalid",

@@ -316,6 +316,208 @@ done
             .is_some_and(|digest| digest.starts_with("sha256:"))
     );
     assert_eq!(inventory["surfaces"][1]["surface"], "tui");
+    assert!(
+        inventory["surfaces"][0]["desktop"]
+            .get("macos_process_name")
+            .is_none_or(|value| value.is_null()),
+        "launch inventory must omit attach-only macos_process_name: {}",
+        inventory["surfaces"][0]["desktop"]
+    );
+}
+
+#[cfg(target_os = "macos")]
+#[test]
+fn worker_inventory_advertises_attach_macos_process_name() {
+    use a3s_test_driver_gui::CuaCompatibility;
+    use serde_json::json;
+    use std::fs;
+    use std::os::unix::fs::PermissionsExt;
+
+    let temp = tempfile::tempdir().expect("tempdir");
+    let proxy = temp.path().join("fake-cua-driver");
+    let compatibility = CuaCompatibility::locked().expect("locked CUA compatibility");
+    let tools = compatibility
+        .tools()
+        .iter()
+        .map(|(name, requirement)| {
+            json!({
+                "name": name,
+                "description": format!("fake {name}"),
+                "inputSchema": { "type": "object" },
+                "annotations": {
+                    "readOnlyHint": false,
+                    "destructiveHint": false,
+                    "idempotentHint": false,
+                    "openWorldHint": false,
+                },
+                "capabilities": requirement.capabilities(),
+            })
+        })
+        .collect::<Vec<_>>();
+    let initialize = json!({
+        "jsonrpc": "2.0",
+        "id": 1,
+        "result": {
+            "protocolVersion": "2025-06-18",
+            "capabilities": { "tools": {} },
+            "serverInfo": { "name": "cua-driver", "version": "0.23.2" },
+        },
+    })
+    .to_string();
+    let tools_list = json!({
+        "jsonrpc": "2.0",
+        "id": 2,
+        "result": {
+            "tools": tools,
+            "capability_version": compatibility.capability_vocabulary(),
+            "schema_version": compatibility.tools_schema(),
+        },
+    })
+    .to_string();
+    let permissions = json!({
+        "jsonrpc": "2.0",
+        "id": 3,
+        "result": {
+            "content": [{ "type": "text", "text": "permissions ready" }],
+            "structuredContent": {
+                "accessibility": true,
+                "screen_recording": true,
+                "source": { "attribution": "driver-daemon" },
+            },
+        },
+    })
+    .to_string();
+    assert!([&initialize, &tools_list, &permissions]
+        .into_iter()
+        .all(|response| !response.contains('\'')));
+    fs::write(
+        &proxy,
+        format!(
+            r#"#!/bin/sh
+while IFS= read -r request; do
+  case "$request" in
+    *'"method":"initialize"'*) printf '%s\n' '{initialize}' ;;
+    *'"method":"notifications/initialized"'*) ;;
+    *'"method":"tools/list"'*) printf '%s\n' '{tools_list}' ;;
+    *'"name":"check_permissions"'*) printf '%s\n' '{permissions}' ;;
+    *) exit 99 ;;
+  esac
+done
+"#
+        ),
+    )
+    .expect("fake CUA proxy");
+    fs::set_permissions(&proxy, fs::Permissions::from_mode(0o755)).expect("proxy permissions");
+    fs::write(temp.path().join("policy.yaml"), "version: 1\n").expect("GUI policy");
+    fs::write(
+        temp.path().join("gui-host.acl"),
+        r#"gui_host "desktop-attach" {
+  endpoint = "installed_daemon"
+  proxy_executable = "fake-cua-driver"
+  policy_file = "policy.yaml"
+  macos_bundle_id = "dev.a3s.desktop"
+  target = "attach"
+  attach_pid = 4242
+  macos_process_name = "A3S"
+  profile = "semantic"
+  permission_source = "driver_daemon"
+  permissions = ["accessibility", "screen_recording"]
+}
+"#,
+    )
+    .expect("GUI host profile");
+
+    let output = Command::new(binary())
+        .args([
+            "worker",
+            "inventory",
+            "--max-parallel-scenarios",
+            "1",
+            "--gui-host-profile",
+            temp.path()
+                .join("gui-host.acl")
+                .to_str()
+                .expect("GUI profile path"),
+            "--compact",
+        ])
+        .output()
+        .expect("run attach GUI worker inventory");
+
+    assert!(output.status.success(), "{output:?}");
+    let inventory: serde_json::Value =
+        serde_json::from_slice(&output.stdout).expect("GUI inventory JSON");
+    assert_eq!(inventory["surfaces"][0]["surface"], "gui");
+    assert_eq!(
+        inventory["surfaces"][0]["desktop"]["profile_id"],
+        "desktop-attach"
+    );
+    assert_eq!(inventory["surfaces"][0]["desktop"]["target"], "attach");
+    assert_eq!(
+        inventory["surfaces"][0]["desktop"]["macos_process_name"],
+        "A3S"
+    );
+}
+
+#[cfg(target_os = "macos")]
+#[test]
+fn worker_inventory_rejects_launch_macos_process_name_before_probe() {
+    use std::fs;
+
+    let temp = tempfile::tempdir().expect("tempdir");
+    fs::write(temp.path().join("policy.yaml"), "version: 1\n").expect("GUI policy");
+    fs::write(
+        temp.path().join("fake-cua-driver"),
+        "#!/bin/sh\nexit 1\n",
+    )
+    .expect("unused proxy stub");
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        fs::set_permissions(
+            temp.path().join("fake-cua-driver"),
+            fs::Permissions::from_mode(0o755),
+        )
+        .expect("proxy permissions");
+    }
+    fs::write(
+        temp.path().join("gui-host.acl"),
+        r#"gui_host "desktop-launch" {
+  endpoint = "installed_daemon"
+  proxy_executable = "fake-cua-driver"
+  policy_file = "policy.yaml"
+  macos_bundle_id = "com.example.Editor"
+  target = "launch"
+  macos_process_name = "Editor"
+  profile = "semantic"
+  permission_source = "driver_daemon"
+  permissions = ["accessibility", "screen_recording"]
+}
+"#,
+    )
+    .expect("invalid launch profile");
+
+    let output = Command::new(binary())
+        .args([
+            "worker",
+            "inventory",
+            "--max-parallel-scenarios",
+            "1",
+            "--gui-host-profile",
+            temp.path()
+                .join("gui-host.acl")
+                .to_str()
+                .expect("GUI profile path"),
+            "--compact",
+        ])
+        .output()
+        .expect("run invalid launch inventory");
+
+    assert!(!output.status.success(), "{output:?}");
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("macos_process_name"),
+        "expected attach-only process name rejection, got {stderr}"
+    );
 }
 
 #[test]

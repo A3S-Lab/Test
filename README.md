@@ -90,11 +90,11 @@ Pin the current stable release when reproducibility matters:
 
 ```bash
 curl -fsSL https://github.com/A3S-Lab/Test/releases/latest/download/install.sh |
-  sh -s -- --version v1.0.1
+  sh -s -- --version v1.0.2
 ```
 
 ```powershell
-& ([scriptblock]::Create((irm 'https://github.com/A3S-Lab/Test/releases/latest/download/install.ps1'))) -Version v1.0.1
+& ([scriptblock]::Create((irm 'https://github.com/A3S-Lab/Test/releases/latest/download/install.ps1'))) -Version v1.0.2
 ```
 
 ### Web Test Kit
@@ -194,7 +194,7 @@ Context Runtime can also run without the visible Review Overlay.
 
 The local project loop validates the live `a3s.test.testkit-handshake/1` after
 hydration before it reports ready. Its `init`, `doctor`, and `dev` commands are
-included in the v1.0.1 release.
+included in the v1.0.2 release.
 
 Add an explicit source boundary only where it helps:
 

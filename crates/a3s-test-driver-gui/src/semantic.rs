@@ -235,7 +235,7 @@ impl SemanticSnapshot {
                 .iter()
                 .find(|element| element.reference == *value)
                 .map(SemanticElement::address)
-                .ok_or_else(target_not_found);
+                .ok_or_else(|| target_not_found_for(target));
         }
 
         validate_target_text(target)?;
@@ -245,7 +245,7 @@ impl SemanticSnapshot {
             .filter(|element| element.matches(target))
             .collect::<Vec<_>>();
         match matches.as_slice() {
-            [] => Err(target_not_found()),
+            [] => Err(target_not_found_for(target)),
             [element] => Ok(element.address()),
             _ => Err(DriverError::new(
                 "test.driver.gui.target_ambiguous",
@@ -329,6 +329,7 @@ impl SemanticElement {
         ElementAddress {
             reference: self.reference.clone(),
             token: self.token.clone(),
+            name: self.name.clone(),
             value: self.value.clone(),
             frame: self.frame.as_ref().map(|frame| LayoutRect {
                 x: frame.x,
@@ -342,7 +343,7 @@ impl SemanticElement {
     fn matches(&self, target: &Target) -> bool {
         match target {
             Target::Role { role, name } => {
-                self.role == *role && self.name.as_deref() == Some(name.as_str())
+                role_matches(&self.role, role) && self.name.as_deref() == Some(name.as_str())
             }
             Target::Text { value, exact } => {
                 self.name.iter().chain(self.value.iter()).any(|candidate| {
@@ -368,6 +369,7 @@ impl SemanticElement {
 pub(crate) struct ElementAddress {
     pub reference: String,
     pub token: String,
+    pub name: Option<String>,
     pub value: Option<String>,
     pub frame: Option<LayoutRect>,
 }
@@ -387,6 +389,52 @@ pub(crate) struct VisualAddress {
     pub y: u32,
     pub evidence_path: String,
     pub digest: String,
+}
+
+/// Match ACL protocol roles (`button`, `textbox`, …) against platform AX/UIA
+/// role strings (`AXButton`, `Button`, …) without rewriting observation JSON.
+fn role_matches(observed: &str, requested: &str) -> bool {
+    if observed == requested {
+        return true;
+    }
+    normalize_role(observed) == normalize_role(requested)
+}
+
+fn normalize_role(role: &str) -> String {
+    let lower = role.trim().to_ascii_lowercase();
+    let stripped = lower
+        .strip_prefix("ax")
+        .or_else(|| lower.strip_prefix("uia_"))
+        .or_else(|| lower.strip_prefix("controltype."))
+        .unwrap_or(lower.as_str());
+    match stripped {
+        "button" | "btn" | "popupbutton" => "button".to_string(),
+        "statictext" | "text" | "label" => "text".to_string(),
+        "textfield" | "textbox" | "edit" | "edittext" => "textbox".to_string(),
+        "checkbox" | "check box" => "checkbox".to_string(),
+        "radiobutton" | "radio" => "radio".to_string(),
+        "link" | "alink" => "link".to_string(),
+        "combobox" | "combo box" => "combobox".to_string(),
+        "menuitem" | "menu item" => "menuitem".to_string(),
+        "menu" | "menubar" => "menu".to_string(),
+        "window" => "window".to_string(),
+        "group" | "groupbox" => "group".to_string(),
+        "image" | "img" => "img".to_string(),
+        "heading" => "heading".to_string(),
+        "list" | "listbox" => "list".to_string(),
+        "table" | "grid" => "table".to_string(),
+        "row" => "row".to_string(),
+        "cell" | "gridcell" => "cell".to_string(),
+        "tab" => "tab".to_string(),
+        "tabgroup" | "tablist" => "tablist".to_string(),
+        "toolbar" => "toolbar".to_string(),
+        "slider" => "slider".to_string(),
+        "progressindicator" | "progressbar" => "progressbar".to_string(),
+        "switch" => "switch".to_string(),
+        "dialog" | "sheet" => "dialog".to_string(),
+        "scrollbar" | "scrollarea" => "scrollbar".to_string(),
+        other => other.to_string(),
+    }
 }
 
 fn validate_target_text(target: &Target) -> Result<(), DriverError> {
@@ -448,9 +496,75 @@ fn stale_image() -> DriverError {
     )
 }
 
-fn target_not_found() -> DriverError {
+fn target_not_found_for(target: &Target) -> DriverError {
     DriverError::new(
         "test.driver.gui.target_not_found",
-        "no GUI element matched the semantic target",
+        format!(
+            "no GUI element matched the semantic target ({})",
+            describe_target(target)
+        ),
     )
+}
+
+fn describe_target(target: &Target) -> String {
+    match target {
+        Target::Ref { value } => format!("ref={value}"),
+        Target::Role { role, name } => format!("role={role:?} name={name:?}"),
+        Target::Text { value, exact } => format!("text={value:?} exact={exact}"),
+        Target::Label { value } => format!("label={value:?}"),
+        Target::AutomationId { value } => format!("automation_id={value:?}"),
+        Target::Css { .. }
+        | Target::VisualPoint { .. }
+        | Target::TestId { .. }
+        | Target::Placeholder { .. } => "unsupported GUI semantic form".to_string(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{describe_target, normalize_role, role_matches};
+    use a3s_test_core::Target;
+
+    #[test]
+    fn protocol_button_matches_macos_ax_button() {
+        assert!(role_matches("AXButton", "button"));
+        assert!(role_matches("button", "AXButton"));
+        assert!(role_matches("AXButton", "AXButton"));
+        assert!(role_matches("Button", "button"));
+    }
+
+    #[test]
+    fn protocol_textbox_matches_ax_text_field() {
+        assert!(role_matches("AXTextField", "textbox"));
+        assert_eq!(normalize_role("AXStaticText"), "text");
+        assert_eq!(normalize_role("AXCheckBox"), "checkbox");
+    }
+
+    #[test]
+    fn protocol_roles_cover_common_ax_and_uia_forms() {
+        assert!(role_matches("AXLink", "link"));
+        assert!(role_matches("AXMenuItem", "menuitem"));
+        assert!(role_matches("AXPopUpButton", "button"));
+        assert!(role_matches("UIA_Button", "button"));
+        assert!(role_matches("ControlType.Button", "button"));
+        assert_eq!(normalize_role("AXTabGroup"), "tablist");
+        assert_eq!(normalize_role("AXProgressIndicator"), "progressbar");
+    }
+
+    #[test]
+    fn unrelated_roles_do_not_collapse() {
+        assert!(!role_matches("AXButton", "textbox"));
+        assert!(!role_matches("AXStaticText", "button"));
+        assert!(!role_matches("AXWindow", "dialog"));
+    }
+
+    #[test]
+    fn missing_target_description_includes_protocol_role() {
+        let description = describe_target(&Target::Role {
+            role: "button".to_string(),
+            name: "Save".to_string(),
+        });
+        assert!(description.contains("button"));
+        assert!(description.contains("Save"));
+    }
 }

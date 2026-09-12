@@ -31,6 +31,8 @@ struct FakeOptions {
     permission_attribution: &'static str,
     has_window: bool,
     ambiguous_elements: bool,
+    /// After this many window snapshots, return an empty element tree.
+    hide_elements_after_snapshots: Option<u64>,
     launch_response_delay: Duration,
     kill_failures: usize,
     kill_visibility_polls: usize,
@@ -46,6 +48,7 @@ impl Default for FakeOptions {
             permission_attribution: "driver-daemon",
             has_window: true,
             ambiguous_elements: false,
+            hide_elements_after_snapshots: None,
             launch_response_delay: Duration::ZERO,
             kill_failures: 0,
             kill_visibility_polls: 0,
@@ -57,7 +60,7 @@ impl Default for FakeOptions {
 struct FakeState {
     options: FakeOptions,
     running: bool,
-    bundle_id: String,
+    bundle_id: Option<String>,
     snapshots: u64,
     tool_calls: Vec<(String, Value)>,
     notifications: Vec<String>,
@@ -77,7 +80,7 @@ impl FakeTransport {
             state: Mutex::new(FakeState {
                 options,
                 running: options.initially_running,
-                bundle_id: BUNDLE_ID.to_string(),
+                bundle_id: Some(BUNDLE_ID.to_string()),
                 snapshots: 0,
                 tool_calls: Vec::new(),
                 notifications: Vec::new(),
@@ -119,7 +122,11 @@ impl FakeTransport {
     }
 
     async fn replace_running_identity(&self, bundle_id: &str) {
-        self.state.lock().await.bundle_id = bundle_id.to_string();
+        self.state.lock().await.bundle_id = Some(bundle_id.to_string());
+    }
+
+    async fn clear_running_bundle_id(&self) {
+        self.state.lock().await.bundle_id = None;
     }
 
     async fn set_window_available(&self, available: bool) {
@@ -357,6 +364,29 @@ fn dispatch_tool(
 fn window_state(state: &mut FakeState, arguments: &Value) -> Result<Value, CuaTransportError> {
     state.snapshots += 1;
     let snapshot = state.snapshots;
+    if state
+        .options
+        .hide_elements_after_snapshots
+        .is_some_and(|limit| snapshot > limit)
+    {
+        let mut structured = json!({
+            "window_id": WINDOW_ID,
+            "pid": APP_PID,
+            "element_count": 0,
+            "tree_markdown": "empty tree",
+            "elements": [],
+            "snapshot_id": format!("cua:{snapshot}"),
+        });
+        if let Some(path) = arguments.get("screenshot_out_file").and_then(Value::as_str) {
+            std::fs::write(path, b"fake-png")
+                .map_err(|error| CuaTransportError::protocol(error.to_string()))?;
+            structured["screenshot_width"] = Value::from(800);
+            structured["screenshot_height"] = Value::from(600);
+            structured["screenshot_mime_type"] = Value::String("image/png".to_string());
+            structured["screenshot_file_path"] = Value::String(path.to_string());
+        }
+        return Ok(structured);
+    }
     let second_label = if state.options.ambiguous_elements {
         "Save"
     } else {
@@ -443,6 +473,7 @@ fn attach_config(temp: &TempDir) -> GuiDriverConfig {
             bundle_id: BUNDLE_ID.to_string(),
         },
         process_id: NonZeroU32::new(APP_PID as u32),
+        process_name: None,
     });
     config
 }
@@ -571,6 +602,38 @@ async fn semantic_actions_use_opaque_refs_and_owned_cleanup() {
 }
 
 #[tokio::test]
+async fn protocol_role_button_matches_macos_ax_button_labels() {
+    let temp = TempDir::new().expect("temp dir");
+    let transport = FakeTransport::new(FakeOptions::default());
+    let mut session = driver(launch_config(&temp), Arc::clone(&transport))
+        .open(&context(&temp))
+        .await
+        .expect("GUI session");
+
+    session.observe().await.expect("semantic observation");
+    session
+        .execute(&TestStep {
+            id: "save-by-protocol-role".to_string(),
+            action: Action::Click {
+                target: Target::Role {
+                    role: "button".to_string(),
+                    name: "Save".to_string(),
+                },
+            },
+            stability: None,
+            assertion_mode: Default::default(),
+            wait_mode: Default::default(),
+        })
+        .await
+        .expect("protocol role click against AXButton");
+    let click = transport.calls_for("click").await;
+    assert_eq!(click.len(), 1);
+    assert_eq!(click[0]["element_token"], "cua:1:1");
+
+    session.close().await.expect("close GUI session");
+}
+
+#[tokio::test]
 async fn attached_application_is_never_terminated() {
     let temp = TempDir::new().expect("temp dir");
     let transport = FakeTransport::new(FakeOptions {
@@ -586,6 +649,55 @@ async fn attached_application_is_never_terminated() {
     let names = transport.tool_names().await;
     assert!(!names.iter().any(|name| name == "kill_app"));
     assert!(transport.closed().await);
+}
+
+#[tokio::test]
+async fn attaches_unpackaged_macos_app_by_pid_and_process_name() {
+    let temp = TempDir::new().expect("temp dir");
+    let transport = FakeTransport::new(FakeOptions {
+        initially_running: true,
+        ..FakeOptions::default()
+    });
+    transport.clear_running_bundle_id().await;
+
+    let mut config = attach_config(&temp);
+    config.target = GuiAppTarget::Attach(AttachSpec {
+        application: ApplicationIdentity::MacOsBundle {
+            bundle_id: BUNDLE_ID.to_string(),
+        },
+        process_id: NonZeroU32::new(APP_PID as u32),
+        process_name: Some("Editor".to_string()),
+    });
+    let mut session = driver(config, Arc::clone(&transport))
+        .open(&context(&temp))
+        .await
+        .expect("attached unpackaged GUI session");
+
+    session.close().await.expect("close attached session");
+    assert!(!transport
+        .tool_names()
+        .await
+        .iter()
+        .any(|name| name == "kill_app"));
+}
+
+#[tokio::test]
+async fn refuses_unpackaged_macos_attach_without_process_name() {
+    let temp = TempDir::new().expect("temp dir");
+    let transport = FakeTransport::new(FakeOptions {
+        initially_running: true,
+        ..FakeOptions::default()
+    });
+    transport.clear_running_bundle_id().await;
+
+    let error = match driver(attach_config(&temp), Arc::clone(&transport))
+        .open(&context(&temp))
+        .await
+    {
+        Ok(_) => panic!("unpackaged attach without process name should fail"),
+        Err(error) => error,
+    };
+    assert_eq!(error.code(), "test.driver.gui.app_identity_incomplete");
 }
 
 #[tokio::test]
@@ -685,6 +797,75 @@ async fn visible_assertions_classify_missing_targets_without_hiding_reference_er
 }
 
 #[tokio::test]
+async fn gui_visible_probe_codes_support_runner_hidden_mode() {
+    let temp = TempDir::new().expect("temp dir");
+    let transport = FakeTransport::new(FakeOptions {
+        hide_elements_after_snapshots: Some(1),
+        ..FakeOptions::default()
+    });
+    let mut session = driver(launch_config(&temp), Arc::clone(&transport))
+        .open(&context(&temp))
+        .await
+        .expect("GUI session");
+
+    let save = Target::AutomationId {
+        value: "save-button".to_string(),
+    };
+    session
+        .execute(&TestStep {
+            id: "visible-while-present".to_string(),
+            action: Action::Assert {
+                expectation: Expectation::Visible(save.clone()),
+            },
+            stability: None,
+            assertion_mode: Default::default(),
+            wait_mode: Default::default(),
+        })
+        .await
+        .expect("visible match while the element exists");
+
+    let hidden_probe = session
+        .execute(&TestStep {
+            id: "hidden-after-removal".to_string(),
+            action: Action::Assert {
+                expectation: Expectation::Visible(save.clone()),
+            },
+            stability: None,
+            assertion_mode: Default::default(),
+            wait_mode: Default::default(),
+        })
+        .await
+        .expect_err("absent semantic target must yield test.assert.visible");
+    assert_eq!(
+        hidden_probe.code(),
+        "test.assert.visible",
+        "runner Hidden mode maps this code to a passing expect/wait hidden"
+    );
+
+    let observation = session.observe().await.expect("empty observation");
+    let generation = observation.data["snapshot"]["generation"]
+        .as_u64()
+        .expect("snapshot generation");
+    let stale = session
+        .execute(&TestStep {
+            id: "stale-ref-not-hidden".to_string(),
+            action: Action::Assert {
+                expectation: Expectation::Visible(Target::Ref {
+                    value: format!("@g{generation}.1"),
+                }),
+            },
+            stability: None,
+            assertion_mode: Default::default(),
+            wait_mode: Default::default(),
+        })
+        .await
+        .expect_err("stale refs stay driver errors");
+    assert_eq!(stale.code(), "test.driver.gui.stale_reference");
+
+    session.close().await.expect("close GUI session");
+}
+
+#[tokio::test]
 async fn gui_value_assertions_use_cua_values_without_inventing_boolean_state() {
     let temp = TempDir::new().expect("temp dir");
     let transport = FakeTransport::new(FakeOptions::default());
@@ -750,10 +931,6 @@ async fn gui_value_assertions_use_cua_values_without_inventing_boolean_state() {
     assert_eq!(missing.code(), "test.driver.gui.target_not_found");
 
     for expectation in [
-        Expectation::RenderedText {
-            target: value_target.clone(),
-            value: "draft@example.test".to_string(),
-        },
         Expectation::RenderedTexts {
             target: value_target.clone(),
             values: vec!["draft@example.test".to_string()],
@@ -826,6 +1003,95 @@ async fn gui_value_assertions_use_cua_values_without_inventing_boolean_state() {
             .expect_err("CUA does not expose this state");
         assert_eq!(unsupported.code(), "test.driver.gui.assertion_unsupported");
     }
+
+    session.close().await.expect("close GUI session");
+}
+
+#[tokio::test]
+async fn gui_rendered_text_uses_cua_value_then_label_without_collections() {
+    let temp = TempDir::new().expect("temp dir");
+    let transport = FakeTransport::new(FakeOptions::default());
+    let mut session = driver(launch_config(&temp), Arc::clone(&transport))
+        .open(&context(&temp))
+        .await
+        .expect("GUI session");
+
+    let email = Target::Label {
+        value: "Email".to_string(),
+    };
+    let from_value = session
+        .execute(&TestStep {
+            id: "email-rendered-text".to_string(),
+            action: Action::Assert {
+                expectation: Expectation::RenderedText {
+                    target: email.clone(),
+                    value: "draft@example.test".to_string(),
+                },
+            },
+            stability: None,
+            assertion_mode: Default::default(),
+            wait_mode: Default::default(),
+        })
+        .await
+        .expect("value-backed rendered text");
+    assert_eq!(from_value.data["actual"], "draft@example.test");
+    assert_eq!(from_value.data["source"], "value");
+
+    let mismatch = session
+        .execute(&TestStep {
+            id: "email-rendered-text-mismatch".to_string(),
+            action: Action::Assert {
+                expectation: Expectation::RenderedText {
+                    target: email,
+                    value: "published@example.test".to_string(),
+                },
+            },
+            stability: None,
+            assertion_mode: Default::default(),
+            wait_mode: Default::default(),
+        })
+        .await
+        .expect_err("observed copy mismatch");
+    assert_eq!(mismatch.code(), "test.assert.rendered_text");
+
+    let from_label = session
+        .execute(&TestStep {
+            id: "save-rendered-text".to_string(),
+            action: Action::Assert {
+                expectation: Expectation::RenderedText {
+                    target: Target::AutomationId {
+                        value: "save-button".to_string(),
+                    },
+                    value: "Save".to_string(),
+                },
+            },
+            stability: None,
+            assertion_mode: Default::default(),
+            wait_mode: Default::default(),
+        })
+        .await
+        .expect("label-backed rendered text");
+    assert_eq!(from_label.data["actual"], "Save");
+    assert_eq!(from_label.data["source"], "label");
+
+    let collections = session
+        .execute(&TestStep {
+            id: "rendered-texts-still-closed".to_string(),
+            action: Action::Assert {
+                expectation: Expectation::RenderedTexts {
+                    target: Target::AutomationId {
+                        value: "save-button".to_string(),
+                    },
+                    values: vec!["Save".to_string()],
+                },
+            },
+            stability: None,
+            assertion_mode: Default::default(),
+            wait_mode: Default::default(),
+        })
+        .await
+        .expect_err("collections stay unsupported");
+    assert_eq!(collections.code(), "test.driver.gui.assertion_unsupported");
 
     session.close().await.expect("close GUI session");
 }

@@ -20,6 +20,7 @@ use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::sync::{Mutex, Notify};
 
 struct FakeDriver {
+    surface: Surface,
     closed: Arc<Mutex<usize>>,
     fail_first_close: bool,
     close_gate: Option<Arc<Notify>>,
@@ -28,7 +29,7 @@ struct FakeDriver {
 #[async_trait]
 impl SurfaceDriver for FakeDriver {
     fn surface(&self) -> Surface {
-        Surface::Gui
+        self.surface
     }
 
     async fn open(
@@ -138,8 +139,8 @@ impl CommandExecutor for RepairWebExecutor {
 #[async_trait]
 impl DriverSession for FakeSession {
     async fn observe(&mut self) -> Result<SurfaceObservation, DriverError> {
-        Ok(SurfaceObservation::new("GUI").with_data(json!({
-            "elements": [{ "ref": "@g1.1", "role": "AXButton", "name": "Save" }]
+        Ok(SurfaceObservation::new("fake surface").with_data(json!({
+            "elements": [{ "ref": "@e1", "role": "button", "name": "Save" }]
         })))
     }
 
@@ -178,6 +179,7 @@ async fn projects_the_session_application_layer_over_mcp() {
     let manager = Arc::new(
         AgentSessionManager::new(
             vec![Arc::new(FakeDriver {
+                surface: Surface::Gui,
                 closed: Arc::clone(&closed),
                 fail_first_close: false,
                 close_gate: None,
@@ -214,20 +216,21 @@ async fn projects_the_session_application_layer_over_mcp() {
         json!({ "jsonrpc": "2.0", "id": 2, "method": "tools/list" }),
     )
     .await;
-    assert!(listed["result"]["tools"]
+    let tools = listed["result"]["tools"]
         .as_array()
-        .is_some_and(|tools| tools.iter().any(|tool| tool["name"] == "test_act")));
-    assert!(listed["result"]["tools"]
-        .as_array()
-        .is_some_and(|tools| tools.iter().any(|tool| tool["name"] == "test_inspect")));
-    assert!(listed["result"]["tools"].as_array().is_some_and(|tools| {
-        tools
-            .iter()
-            .any(|tool| tool["name"] == "test_repair_inspect")
-    }));
-    assert!(listed["result"]["tools"]
-        .as_array()
-        .is_some_and(|tools| { tools.iter().any(|tool| tool["name"] == "test_repair_inbox") }));
+        .expect("tools list")
+        .iter()
+        .filter_map(|tool| tool["name"].as_str().map(str::to_string))
+        .collect::<Vec<_>>();
+    assert!(tools.iter().any(|name| name == "test_act"));
+    assert!(
+        !tools.iter().any(|name| name == "test_inspect"),
+        "GUI-only MCP hosts must not advertise page inspect"
+    );
+    assert!(
+        !tools.iter().any(|name| name.starts_with("test_repair_")),
+        "GUI-only MCP hosts must not advertise repair tools"
+    );
     let start_tool = listed["result"]["tools"]
         .as_array()
         .and_then(|tools| {
@@ -243,6 +246,12 @@ async fn projects_the_session_application_layer_over_mcp() {
     assert_eq!(
         start_tool["inputSchema"]["properties"]["auto_resolve_repairs"]["default"],
         false
+    );
+    assert!(
+        start_tool["inputSchema"]["properties"]["auto_resolve_repairs"]["description"]
+            .as_str()
+            .is_some_and(|text| text.contains("Web surface")),
+        "auto_resolve_repairs must disclose Web-only repair meaning"
     );
 
     let started = call(
@@ -265,10 +274,24 @@ async fn projects_the_session_application_layer_over_mcp() {
         true
     );
 
-    let observed = call(
+    let rejected_repair = call(
         &mut client_writer,
         &mut client_reader,
         4,
+        "test_repair_inbox",
+        json!({ "session": "editor" }),
+    )
+    .await;
+    assert_eq!(rejected_repair["result"]["isError"], true);
+    assert_eq!(
+        rejected_repair["result"]["structuredContent"]["code"],
+        "test.session.web_surface_required"
+    );
+
+    let observed = call(
+        &mut client_writer,
+        &mut client_reader,
+        5,
         "test_observe",
         json!({ "session": "editor" }),
     )
@@ -280,14 +303,14 @@ async fn projects_the_session_application_layer_over_mcp() {
     let acted = call(
         &mut client_writer,
         &mut client_reader,
-        5,
+        6,
         "test_act",
         json!({
             "session": "editor",
             "observation_id": observation_id,
             "action": {
                 "type": "click",
-                "target": { "type": "ref", "value": "@g1.1" }
+                "target": { "type": "ref", "value": "@e1" }
             }
         }),
     )
@@ -300,7 +323,7 @@ async fn projects_the_session_application_layer_over_mcp() {
     let finished = call(
         &mut client_writer,
         &mut client_reader,
-        6,
+        7,
         "test_finish",
         json!({ "session": "editor", "status": "passed", "summary": "Saved" }),
     )
@@ -313,12 +336,306 @@ async fn projects_the_session_application_layer_over_mcp() {
 }
 
 #[tokio::test]
+async fn projects_tui_lifecycle_without_web_only_tools() {
+    let closed = Arc::new(Mutex::new(0));
+    let manager = Arc::new(
+        AgentSessionManager::new(
+            vec![Arc::new(FakeDriver {
+                surface: Surface::Tui,
+                closed: Arc::clone(&closed),
+                fail_first_close: false,
+                close_gate: None,
+            })],
+            SessionManagerOptions {
+                artifacts_root: std::env::temp_dir().join("a3s-test-mcp-tui-tests"),
+                cleanup_timeout: Duration::from_secs(1),
+                max_sessions: 2,
+            },
+        )
+        .expect("manager"),
+    );
+    let (mut client_writer, server_reader) = tokio::io::duplex(64 * 1_024);
+    let (server_writer, client_reader) = tokio::io::duplex(64 * 1_024);
+    let server = tokio::spawn(serve_io(server_reader, server_writer, manager));
+    let mut client_reader = BufReader::new(client_reader);
+
+    exchange(
+        &mut client_writer,
+        &mut client_reader,
+        initialize_request(1, MCP_PROTOCOL),
+    )
+    .await;
+    notify(
+        &mut client_writer,
+        json!({ "jsonrpc": "2.0", "method": "notifications/initialized" }),
+    )
+    .await;
+
+    let listed = exchange(
+        &mut client_writer,
+        &mut client_reader,
+        json!({ "jsonrpc": "2.0", "id": 2, "method": "tools/list" }),
+    )
+    .await;
+    let tools = listed["result"]["tools"]
+        .as_array()
+        .expect("tools list")
+        .iter()
+        .filter_map(|tool| tool["name"].as_str().map(str::to_string))
+        .collect::<Vec<_>>();
+    assert_eq!(
+        listed["result"]["tools"]
+            .as_array()
+            .and_then(|tools| {
+                tools
+                    .iter()
+                    .find(|tool| tool["name"] == "test_session_start")
+            })
+            .map(|tool| tool["inputSchema"]["properties"]["surface"]["enum"].clone()),
+        Some(json!(["tui"]))
+    );
+    assert!(!tools.iter().any(|name| name == "test_inspect"));
+    assert!(!tools.iter().any(|name| name.starts_with("test_repair_")));
+
+    let started = call(
+        &mut client_writer,
+        &mut client_reader,
+        3,
+        "test_session_start",
+        json!({
+            "session": "shell",
+            "surface": "tui",
+            "goal": "Quit",
+            "success_criteria": ["Exited"]
+        }),
+    )
+    .await;
+    assert_eq!(started["result"]["structuredContent"]["surface"], "tui");
+
+    let rejected_inspect = call(
+        &mut client_writer,
+        &mut client_reader,
+        4,
+        "test_inspect",
+        json!({
+            "session": "shell",
+            "scope": { "type": "page" }
+        }),
+    )
+    .await;
+    assert_eq!(rejected_inspect["result"]["isError"], true);
+    assert_eq!(
+        rejected_inspect["result"]["structuredContent"]["code"],
+        "test.session.web_surface_required"
+    );
+
+    let observed = call(
+        &mut client_writer,
+        &mut client_reader,
+        5,
+        "test_observe",
+        json!({ "session": "shell" }),
+    )
+    .await;
+    let observation_id = observed["result"]["structuredContent"]["observation_id"]
+        .as_u64()
+        .expect("observation id");
+
+    let acted = call(
+        &mut client_writer,
+        &mut client_reader,
+        6,
+        "test_act",
+        json!({
+            "session": "shell",
+            "observation_id": observation_id,
+            "action": {
+                "type": "click",
+                "target": { "type": "ref", "value": "@e1" }
+            }
+        }),
+    )
+    .await;
+    assert_eq!(
+        acted["result"]["structuredContent"]["output"]["summary"],
+        "clicked"
+    );
+
+    let finished = call(
+        &mut client_writer,
+        &mut client_reader,
+        7,
+        "test_finish",
+        json!({ "session": "shell", "status": "passed", "summary": "Exited" }),
+    )
+    .await;
+    assert_eq!(finished["result"]["structuredContent"]["status"], "passed");
+
+    drop(client_writer);
+    server.await.expect("server task").expect("MCP server");
+    assert_eq!(*closed.lock().await, 1);
+}
+
+#[tokio::test]
+async fn multi_surface_mcp_hosts_gate_repair_tools_on_web_registration() {
+    let closed = Arc::new(Mutex::new(0));
+    let gui_tui = Arc::new(
+        AgentSessionManager::new(
+            vec![
+                Arc::new(FakeDriver {
+                    surface: Surface::Gui,
+                    closed: Arc::clone(&closed),
+                    fail_first_close: false,
+                    close_gate: None,
+                }),
+                Arc::new(FakeDriver {
+                    surface: Surface::Tui,
+                    closed: Arc::clone(&closed),
+                    fail_first_close: false,
+                    close_gate: None,
+                }),
+            ],
+            SessionManagerOptions {
+                artifacts_root: std::env::temp_dir().join("a3s-test-mcp-gui-tui"),
+                cleanup_timeout: Duration::from_secs(1),
+                max_sessions: 2,
+            },
+        )
+        .expect("gui+tui manager"),
+    );
+    let (mut client_writer, server_reader) = tokio::io::duplex(64 * 1_024);
+    let (server_writer, client_reader) = tokio::io::duplex(64 * 1_024);
+    let server = tokio::spawn(serve_io(server_reader, server_writer, gui_tui));
+    let mut client_reader = BufReader::new(client_reader);
+    exchange(
+        &mut client_writer,
+        &mut client_reader,
+        initialize_request(1, MCP_PROTOCOL),
+    )
+    .await;
+    notify(
+        &mut client_writer,
+        json!({ "jsonrpc": "2.0", "method": "notifications/initialized" }),
+    )
+    .await;
+    let listed = exchange(
+        &mut client_writer,
+        &mut client_reader,
+        json!({ "jsonrpc": "2.0", "id": 2, "method": "tools/list" }),
+    )
+    .await;
+    let start = listed["result"]["tools"]
+        .as_array()
+        .and_then(|tools| {
+            tools
+                .iter()
+                .find(|tool| tool["name"] == "test_session_start")
+        })
+        .expect("start tool");
+    assert_eq!(
+        start["inputSchema"]["properties"]["surface"]["enum"],
+        json!(["gui", "tui"])
+    );
+    let tools = listed["result"]["tools"]
+        .as_array()
+        .expect("tools")
+        .iter()
+        .filter_map(|tool| tool["name"].as_str())
+        .collect::<Vec<_>>();
+    assert!(!tools.iter().any(|name| *name == "test_inspect"));
+    assert!(!tools.iter().any(|name| name.starts_with("test_repair_")));
+    drop(client_writer);
+    server.await.expect("server task").expect("MCP server");
+
+    let executor = Arc::new(RepairWebExecutor::default());
+    let web = super::super::mcp_web::McpWebDriver::with_executor(
+        AgentBrowserConfig {
+            command: BrowserCommand::Standalone {
+                executable: PathBuf::from("/opt/agent-browser"),
+            },
+            namespace: String::new(),
+            headed: false,
+            command_timeout: Duration::from_secs(5),
+            idle_timeout: Duration::from_secs(30),
+            microphone: Default::default(),
+            network_policy: BrowserNetworkPolicy::restricted_to_domains(["127.0.0.1"])
+                .expect("network policy"),
+        },
+        executor,
+        "http://127.0.0.1/repair".to_string(),
+    );
+    let web_gui = Arc::new(
+        AgentSessionManager::new(
+            vec![
+                Arc::new(web),
+                Arc::new(FakeDriver {
+                    surface: Surface::Gui,
+                    closed: Arc::new(Mutex::new(0)),
+                    fail_first_close: false,
+                    close_gate: None,
+                }),
+            ],
+            SessionManagerOptions {
+                artifacts_root: std::env::temp_dir().join("a3s-test-mcp-web-gui"),
+                cleanup_timeout: Duration::from_secs(1),
+                max_sessions: 2,
+            },
+        )
+        .expect("web+gui manager"),
+    );
+    let (mut client_writer, server_reader) = tokio::io::duplex(64 * 1_024);
+    let (server_writer, client_reader) = tokio::io::duplex(64 * 1_024);
+    let server = tokio::spawn(serve_io(server_reader, server_writer, web_gui));
+    let mut client_reader = BufReader::new(client_reader);
+    exchange(
+        &mut client_writer,
+        &mut client_reader,
+        initialize_request(1, MCP_PROTOCOL),
+    )
+    .await;
+    notify(
+        &mut client_writer,
+        json!({ "jsonrpc": "2.0", "method": "notifications/initialized" }),
+    )
+    .await;
+    let listed = exchange(
+        &mut client_writer,
+        &mut client_reader,
+        json!({ "jsonrpc": "2.0", "id": 2, "method": "tools/list" }),
+    )
+    .await;
+    let start = listed["result"]["tools"]
+        .as_array()
+        .and_then(|tools| {
+            tools
+                .iter()
+                .find(|tool| tool["name"] == "test_session_start")
+        })
+        .expect("start tool");
+    assert_eq!(
+        start["inputSchema"]["properties"]["surface"]["enum"],
+        json!(["web", "gui"])
+    );
+    let tools = listed["result"]["tools"]
+        .as_array()
+        .expect("tools")
+        .iter()
+        .filter_map(|tool| tool["name"].as_str())
+        .collect::<Vec<_>>();
+    assert!(tools.iter().any(|name| *name == "test_inspect"));
+    assert!(tools.iter().any(|name| *name == "test_repair_inbox"));
+    drop(client_writer);
+    server.await.expect("server task").expect("MCP server");
+}
+
+#[tokio::test]
 async fn mcp_exposes_retryable_cleanup_without_allowing_another_turn() {
     let closed = Arc::new(Mutex::new(0));
     let close_gate = Arc::new(Notify::new());
     let manager = Arc::new(
         AgentSessionManager::new(
             vec![Arc::new(FakeDriver {
+                surface: Surface::Gui,
                 closed: Arc::clone(&closed),
                 fail_first_close: true,
                 close_gate: Some(Arc::clone(&close_gate)),
@@ -449,6 +766,7 @@ async fn enforces_mcp_initialization_and_protocol_negotiation() {
     let manager = Arc::new(
         AgentSessionManager::new(
             vec![Arc::new(FakeDriver {
+                surface: Surface::Gui,
                 closed: Arc::new(Mutex::new(0)),
                 fail_first_close: false,
                 close_gate: None,

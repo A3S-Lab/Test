@@ -89,11 +89,11 @@ Windows PowerShell：
 
 ```bash
 curl -fsSL https://github.com/A3S-Lab/Test/releases/latest/download/install.sh |
-  sh -s -- --version v1.0.1
+  sh -s -- --version v1.0.2
 ```
 
 ```powershell
-& ([scriptblock]::Create((irm 'https://github.com/A3S-Lab/Test/releases/latest/download/install.ps1'))) -Version v1.0.1
+& ([scriptblock]::Create((irm 'https://github.com/A3S-Lab/Test/releases/latest/download/install.ps1'))) -Version v1.0.2
 ```
 
 ### 网络测试套件
@@ -193,7 +193,7 @@ const testKitEnabled = import.meta.env.DEV;
 
 本地项目循环在之后验证实时`a3s.test.testkit-handshake/1`
 在报告准备就绪之前进行水合作用。其 `init`、`doctor` 和 `dev` 命令为
-包含在 v1.0.1 版本中。
+包含在 v1.0.2 版本中。
 
 仅在有帮助的地方添加显式源边界：
 

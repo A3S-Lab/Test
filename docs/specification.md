@@ -522,9 +522,11 @@ one observed element and the native browser command returns its text. The
 current standalone protocol cannot enumerate a ref as a locator set, so
 `visible_count` and `rendered_texts` never accept refs. A programmatic Page
 Context ref may be resolved to a stable semantic or CSS locator before Web
-dispatch. GUI and TUI return stable surface-specific unsupported errors for
-all three expectations rather than estimating them from pixels, labels, or
-terminal output.
+dispatch. GUI supports single-target `rendered_text` from CUA accessibility
+`value`, falling back to `label` when value is absent, using the same
+whitespace normalization as Web. GUI and TUI still return stable
+surface-specific unsupported errors for `rendered_texts` and `visible_count`
+rather than estimating collections from pixels or terminal output.
 
 All three expectations compose with `stable_for_ms`. After the first match, the
 runner repeats the identical read-only action through the scenario deadline
@@ -1447,6 +1449,15 @@ observation-scoped pixel target: its first argument must be the latest visual
 reference returned by a window-vision observation and its coordinates are
 unsigned 32-bit image pixels. Web drivers reject both GUI-only target forms.
 
+GUI `role(role, name)` targets use surface-neutral protocol roles such as
+`button`, `textbox`, `checkbox`, `menuitem`, and `link`. The GUI driver matches
+those names against platform AX/UIA role strings (`AXButton`, `Button`,
+`AXTextField`, …) without rewriting observation JSON, which continues to report
+the platform role for evidence fidelity. Exact platform role strings remain
+valid ACL targets. Role matching is case-insensitive after stripping common
+`AX` / `UIA_` / `ControlType.` prefixes; the accessible `name` must still match
+exactly.
+
 TUI scenarios share `snapshot`, `press`, `wait`, and `expect`. Their
 surface-specific actions are:
 
@@ -1711,13 +1722,17 @@ the complete command.
 A GUI entry represents exactly one deployment-owned desktop and therefore
 requires `max_parallel_scenarios = 1`. It contains the fixed profile ID,
 locked compatibility profile, endpoint and perception kinds, launch or attach
-target, typed application identity, CUA version and schema identifiers,
+target, typed application identity, optional attach-only `macos_process_name`
+for unpackaged macOS identity, CUA version and schema identifiers,
 configuration and policy digests, and the exact host-permission grant and
-digest. The CLI emits it only after a real CUA probe validates the locked
-contract and returns both `accessibility` and `screen_recording`. The probe is
-read-only and does not launch or attach to the application. Installed-daemon
-grants must use `driver_daemon` attribution; embedded-socket grants must use
-`host` attribution. The digest must exactly match the canonical typed grant.
+digest. `macos_process_name` is inventory-visible scheduling identity for
+attach profiles; launch inventories must omit it. Ephemeral `attach_pid` is
+never advertised. The CLI emits the GUI entry only after a real CUA probe
+validates the locked contract and returns both `accessibility` and
+`screen_recording`. The probe is read-only and does not launch or attach to
+the application. Installed-daemon grants must use `driver_daemon`
+attribution; embedded-socket grants must use `host` attribution. The digest
+must exactly match the canonical typed grant.
 
 A TUI entry embeds protocol `a3s.test.driver-tui/1`, the backend compiled for
 the host (`unix_pty` or `windows_con_pty`), the reviewed feature set, and hard
@@ -1834,8 +1849,9 @@ gui_host "desktop-primary" {
 
 `endpoint` is `installed_daemon` or `embedded_socket`; the latter also
 requires `embedded_socket` and `permission_source = "host"`. `target` is
-`launch` or `attach`; attach may specify `attach_pid`, while launch may specify
-up to 32 bounded `arguments`. A window may be selected by exactly one of
+`launch` or `attach`; attach may specify `attach_pid` and, for unpackaged
+macOS binaries with a missing CUA `bundle_id`, `macos_process_name`. Launch may
+specify up to 32 bounded `arguments`. A window may be selected by exactly one of
 `window_title` or `window_automation_id`, otherwise the primary window is
 used. `profile` is `semantic` or `window_vision`. The profile and policy are
 bounded regular non-link files, and the CUA proxy is a regular non-link file.

@@ -74,6 +74,7 @@ fn gui() -> WorkerSurfaceCapability {
             perception: WorkerGuiPerception::Semantic,
             target: WorkerGuiTarget::Launch,
             application,
+            macos_process_name: None,
             cua_driver_version: "0.23.2".to_string(),
             mcp_protocol: "2025-06-18".to_string(),
             capability_vocabulary: "cua.capabilities/1".to_string(),
@@ -144,6 +145,49 @@ fn inventory_requires_exclusive_gui_slots_and_exact_permission_evidence() {
         error.code(),
         "test.worker.inventory.host_permission_digest_mismatch"
     );
+}
+
+#[test]
+fn inventory_rejects_macos_process_name_on_launch_targets() {
+    let mut inventory =
+        WorkerCapabilityInventory::local(1, vec![gui()]).expect("exclusive GUI inventory");
+    let WorkerSurfaceCapability::Gui { desktop } = &mut inventory.surfaces[0] else {
+        panic!("GUI capability");
+    };
+    desktop.macos_process_name = Some("Editor".to_string());
+    let error = inventory
+        .validate()
+        .expect_err("launch inventory cannot advertise attach-only process name");
+    assert_eq!(error.code(), "test.worker.inventory.gui_capability_invalid");
+}
+
+#[test]
+fn inventory_round_trips_attach_macos_process_name() {
+    let host_permissions = GuiHostPermissionGrant::required(GuiHostPermissionSource::DriverDaemon);
+    let mut capability = match gui() {
+        WorkerSurfaceCapability::Gui { desktop } => *desktop,
+        other => panic!("expected GUI capability, got {other:?}"),
+    };
+    capability.target = WorkerGuiTarget::Attach;
+    capability.macos_process_name = Some("A3S".to_string());
+    capability.host_permission_digest = host_permissions.digest();
+    capability.host_permissions = host_permissions;
+    let inventory = WorkerCapabilityInventory::local(
+        1,
+        vec![WorkerSurfaceCapability::Gui {
+            desktop: Box::new(capability),
+        }],
+    )
+    .expect("attach inventory");
+    inventory.validate().expect("valid attach inventory");
+    let encoded = serde_json::to_value(&inventory).expect("serialize");
+    assert_eq!(
+        encoded["surfaces"][0]["desktop"]["macos_process_name"],
+        "A3S"
+    );
+    let decoded: WorkerCapabilityInventory =
+        serde_json::from_value(encoded).expect("deserialize attach inventory");
+    assert_eq!(decoded, inventory);
 }
 
 #[test]

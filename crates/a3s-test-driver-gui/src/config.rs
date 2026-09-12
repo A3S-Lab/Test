@@ -47,6 +47,12 @@ pub struct LaunchSpec {
 pub struct AttachSpec {
     pub application: ApplicationIdentity,
     pub process_id: Option<NonZeroU32>,
+    /// Exact CUA `list_apps` process name.
+    ///
+    /// Required when attaching to a running macOS app whose `bundle_id` is
+    /// missing (unpackaged / `tauri dev` binaries). Optional cross-check when
+    /// the app reports a bundle identifier.
+    pub process_name: Option<String>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -214,7 +220,13 @@ fn validate_target(target: &GuiAppTarget) -> Result<(), DriverError> {
             }
             Ok(())
         }
-        GuiAppTarget::Attach(spec) => validate_application(&spec.application),
+        GuiAppTarget::Attach(spec) => {
+            validate_application(&spec.application)?;
+            if let Some(process_name) = &spec.process_name {
+                validate_text(process_name, "macOS process name")?;
+            }
+            Ok(())
+        }
     }
 }
 
@@ -336,6 +348,7 @@ mod tests {
                 desktop_id: " ".to_string(),
             },
             process_id: None,
+            process_name: None,
         });
         let error = config.validate().expect_err("empty application identity");
         assert_eq!(error.code(), "test.driver.gui.config_invalid");

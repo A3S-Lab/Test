@@ -456,6 +456,7 @@ mod tests {
                     perception: WorkerGuiPerception::Semantic,
                     target: WorkerGuiTarget::Launch,
                     application,
+                    macos_process_name: None,
                     cua_driver_version: "0.23.2".to_string(),
                     mcp_protocol: "2025-06-18".to_string(),
                     capability_vocabulary: "1".to_string(),

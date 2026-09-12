@@ -292,8 +292,10 @@ controls where the native state is unavailable. Missing, ambiguous, invalid,
 unsupported, or malformed observations remain `test.driver.web.*`. Only an
 observed mismatch becomes `test.assert.value`, `.enabled`, `.disabled`,
 `.checked`, `.unchecked`, `.selected`, `.unselected`, or `.selected_values`.
-GUI supports exact value only when CUA supplies it and rejects boolean or
-multi-selection assertions as unsupported. TUI supports visible text only.
+GUI supports exact value and single-target `rendered_text` when CUA supplies
+accessibility value or label text, and rejects boolean, multi-selection,
+`rendered_texts`, and `visible_count` as unsupported. TUI supports visible text
+only.
 
 All forms accept `stable_for_ms` and `sample_interval_ms`. A direct Web ref can
 read value, enabled, native checkbox/radio checked state, and admitted ARIA
@@ -363,8 +365,9 @@ proves viewport intersection or pixel occlusion.
 
 All three conditions accept assertion stability. A later scalar-text,
 ordered-sequence, or count mismatch is
-`test.assert.unstable`; a later driver error keeps its driver code. GUI and TUI
-currently reject all three conditions as unsupported.
+`test.assert.unstable`; a later driver error keeps its driver code. GUI supports
+single-target `rendered_text` from CUA `value` then `label`. GUI and TUI reject
+`rendered_texts` and `visible_count` as unsupported.
 
 ## Rendered-layout expectations
 

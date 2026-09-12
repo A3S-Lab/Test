@@ -1,0 +1,190 @@
+---
+title: Install A3S Test
+description: Choose the CLI, Agent Skill, or Web Test Kit for your task, then install and verify only what you need.
+---
+
+# Install A3S Test
+
+A3S Test has two separately versioned installable parts because they own different trust boundaries.
+
+- **Web Test Kit** is a frontend development dependency. It provides post-render Page Context, source mapping, and the optional in-page review surface.
+- **CLI and Agent Skill** run on the developer machine and in the coding agent's Skill directory. They own sessions, typed actions, ACL, evidence, repair coordination, and process cleanup.
+
+Install [Web Test Kit](#install-web-test-kit) for in-page marking, capture, or sketching. Use the [CLI and Agent Skill](#install-the-cli-and-agent-skill) for terminal exploration and ACL. Install both when a coding agent must receive a page finding and verify the repair.
+
+## Install Web Test Kit
+
+Run this command in the frontend project:
+
+```bash
+npm install --save-dev @a3s-lab/testkit@0.6.2
+```
+
+Use the matching command when the project already uses another package manager:
+
+| Package manager | Command                                         |
+| --------------- | ----------------------------------------------- |
+| npm             | `npm install --save-dev @a3s-lab/testkit@0.6.2` |
+| pnpm            | `pnpm add --save-dev @a3s-lab/testkit@0.6.2`    |
+| Yarn            | `yarn add --dev @a3s-lab/testkit@0.6.2`         |
+| Bun             | `bun add --dev @a3s-lab/testkit@0.6.2`          |
+
+`@a3s-lab/testkit` 0.6.2 is published on the official npm Registry with GitHub OIDC provenance. Pinning the version keeps installation reproducible, and the package manager stores its integrity in the project lockfile.
+
+Verify the installed dependency:
+
+```bash
+npm ls @a3s-lab/testkit
+```
+
+The Test Kit package version advances independently from the A3S Test Release tag, so the two version numbers do not need to match. Continue with the [three-step Web Test Kit setup](./testkit.mdx#three-step-react-setup). Test Kit 0.6.2 includes the simplified review panel, bounded SVG design board, in-page region capture, live CLI compatibility handshake, ranked rendered-node source mapping, and revision-scoped Page Context diffs without a browser extension, drawing SDK, screenshot plug-in, or screen-sharing permission.
+
+## Install the CLI and Agent Skill
+
+The installer detects the current platform, downloads the prebuilt CLI, verifies its SHA-256, and installs a matching Agent Skill. Run the same command again to upgrade.
+
+### macOS and Linux
+
+```bash
+curl -fsSL https://github.com/A3S-Lab/Test/releases/latest/download/install.sh | sh
+```
+
+Target Codex explicitly:
+
+```bash
+curl -fsSL https://github.com/A3S-Lab/Test/releases/latest/download/install.sh |
+  sh -s -- --agent codex
+```
+
+Pin a version:
+
+```bash
+curl -fsSL https://github.com/A3S-Lab/Test/releases/latest/download/install.sh |
+  sh -s -- --version v1.0.2
+```
+
+### Windows PowerShell
+
+```powershell
+& ([scriptblock]::Create((irm 'https://github.com/A3S-Lab/Test/releases/latest/download/install.ps1')))
+```
+
+Select an agent or version:
+
+```powershell
+& ([scriptblock]::Create((irm 'https://github.com/A3S-Lab/Test/releases/latest/download/install.ps1'))) -Agent codex
+& ([scriptblock]::Create((irm 'https://github.com/A3S-Lab/Test/releases/latest/download/install.ps1'))) -Version v1.0.2
+```
+
+### Supported agent targets
+
+| Tool                          | Target           | Default user directory       |
+| ----------------------------- | ---------------- | ---------------------------- |
+| A3S Code                      | `a3s-code`       | `~/.a3s/skills`              |
+| Codex                         | `codex`          | `~/.codex/skills`            |
+| Claude Code                   | `claude-code`    | `~/.claude/skills`           |
+| Cursor                        | `cursor`         | `~/.cursor/skills`           |
+| Gemini CLI                    | `gemini-cli`     | `~/.gemini/skills`           |
+| GitHub Copilot CLI            | `github-copilot` | `~/.copilot/skills`          |
+| OpenCode                      | `opencode`       | `~/.config/opencode/skills`  |
+| Cline                         | `cline`          | `~/.cline/skills`            |
+| Roo Code                      | `roo`            | `~/.roo/skills`              |
+| Windsurf                      | `windsurf`       | `~/.codeium/windsurf/skills` |
+| Agent Skills-compatible tools | `universal`      | `~/.agents/skills`           |
+
+`auto` installs only for detected tools and falls back to the universal directory. `all` targets every supported directory. The installers also accept `--skill-only`, `--cli-only`, `--install-dir`, and `--skill-dir`, with corresponding PascalCase PowerShell parameters.
+
+## Other CLI installation paths
+
+Build the CLI from a Git tag:
+
+```bash
+cargo install --git https://github.com/A3S-Lab/Test \
+  --tag v1.0.2 --locked a3s-test-cli
+```
+
+Each release also contains `a3s-test.skill`, platform archives, checksum files, the Test Kit package, and an immutable Linux runner image reference. Do not bypass checksums or replace the released image digest with a floating tag.
+
+## Start one local review loop
+
+The project-loop commands in this section are included in the v1.0.2 release
+and can be used directly after installation.
+
+After mounting Test Kit in the frontend, run these commands from the project
+root:
+
+```bash
+a3s-test init
+a3s-test doctor
+a3s-test dev
+```
+
+`init` detects the package manager, `dev` or `start` script, framework port,
+and Test Kit declaration, then writes `.a3s-test/project.acl`. It does not
+install packages or start processes. When Test Kit is missing, run the exact
+install command printed by `init`, mount the provider and overlay, then run
+`doctor` again.
+
+`doctor` separates a missing declaration from a declared but uninstalled
+package and rejects Test Kit versions outside the CLI compatibility range.
+`dev` reuses the configured URL when it already responds. Otherwise it owns
+the configured development process, waits for the URL, and opens one headed
+review browser. Ctrl+C closes the exact browser session and only the server
+that `dev` started.
+
+For a project that intentionally uses browser accessibility without the
+in-page overlay, initialize with:
+
+```bash
+a3s-test init --testkit optional
+```
+
+Use `--json` on all three commands in agent automation. `dev --json` emits one
+compact `a3s.test.dev/1` event per stdout line and keeps development-server
+logs on stderr. Once the live Test Kit handshake passes, its in-process
+`a3s.test.local-repair-bridge/1` emits evidence-backed `repair_batch` events on
+that same stream. Each event contains the generated session ID, so agent
+automation does not launch a second manually coordinated `repair-watch`
+process.
+
+### Add trusted verification checks
+
+`init` deliberately does not infer a test command. Package scripts may start a
+watcher, wait for input, or perform effects. To let `agent repair-verify` run
+project checks automatically, add an explicit catalog inside the generated
+`project` block:
+
+```acl
+verification {
+  check "component" {
+    tier = "focused"
+    executable = "npm"
+    args = ["run", "test:component"]
+    working_directory = "."
+    file_prefixes = ["src/components"]
+    timeout_ms = 120000
+    cleanup_timeout_ms = 10000
+  }
+
+  check "workspace" {
+    tier = "regression"
+    executable = "npm"
+    args = ["run", "test"]
+    working_directory = "."
+    file_prefixes = []
+    timeout_ms = 300000
+    cleanup_timeout_ms = 10000
+  }
+}
+```
+
+Focused checks map contained project-relative source prefixes to the smallest
+useful command. Regression checks have no prefixes and are selected only when
+source mapping, check coverage, browser-error deltas, or prior proof show that
+the repair may have broader impact. Commands run directly without a shell and
+inside an A3S Test-owned process tree with bounded execution and cleanup.
+
+Omit `--checks-json` from `agent repair-verify` to use this catalog. Supplying
+`--checks-json` keeps caller-reported mode for an orchestrator that already ran
+its own checks. An expanded verification with no trusted project check fails
+closed instead of claiming broad coverage.

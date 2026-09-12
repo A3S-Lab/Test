@@ -1,6 +1,46 @@
 # Changelog
 
-## Unreleased
+## 1.0.2 - 2026-09-12
+
+A3S Test 1.0.2 hardens multi-surface MCP and macOS GUI attach honesty: Web-gated
+inspect/repair tools, TUI MCP registration, unpackaged process-name attach, and
+GUI `rendered_text` from CUA accessibility copy.
+
+### Added
+
+- GUI semantic `role(...)` targets accept surface-neutral protocol roles
+  (`button`, `textbox`, …) against macOS AX / UIA role strings (`AXButton`,
+  `Button`, …). Observation JSON still reports the platform role; only matching
+  is normalized so ACL `role("button", "Save")` works against CUA `AXButton`.
+  The typed-target contract is documented in `docs/specification.md`.
+  Missing-target errors include the requested role/name (or other target form)
+  so ACL authors can distinguish protocol-role misses from empty trees.
+  Worker `gui_host` ACL admits attach-only `macos_process_name` and rejects it
+  on launch targets.
+- GUI attach can bind unpackaged macOS binaries (missing/empty CUA
+  `bundle_id`, e.g. naked `tauri dev` / `target/debug/A3S`) by exact process
+  id plus `--gui-macos-process-name` / `gui_host.macos_process_name`. Packaged
+  apps still match on bundle id; process name remains an optional cross-check.
+  Attach without a process name against a null-bundle app fails closed with
+  `test.driver.gui.app_identity_incomplete`.
+- MCP hosts can register a TUI surface with `--tui-executable` (alone or with
+  Web/GUI). Persistent `a3s-test agent` CLI sessions remain Web-only.
+- MCP `tools/list` advertises `test_inspect` and `test_repair_*` only when the
+  host registered a Web surface. GUI-only or TUI-only hosts omit those tools
+  and reject direct calls with `test.session.web_surface_required`. Hermetic
+  MCP tests cover GUI omission, TUI start/observe/act/finish, and the Web
+  gate.
+- Worker GUI inventory (`a3s.test.worker-capabilities/2`) advertises attach-only
+  `macos_process_name` on `WorkerGuiCapability`. Launch inventories must omit
+  it; validation fails closed if a launch profile claims a process name.
+  Ephemeral `attach_pid` stays out of inventory.
+- GUI single-target `rendered_text` reads CUA accessibility `value`, then
+  `label`, with the same whitespace normalization as Web. Collections
+  (`rendered_texts`, `visible_count`) remain fail-closed.
+- Worker CLI `inventory --gui-host-profile` hermetic coverage advertises attach
+  `macos_process_name` in JSON and rejects launch profiles that claim it.
+- Website and agentic docs align MCP multi-surface registration, Web-gated
+  inspect/repair tools, GUI `rendered_text`, and unpackaged attach identity.
 
 ### Changed
 

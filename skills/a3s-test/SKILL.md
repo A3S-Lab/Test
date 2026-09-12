@@ -13,9 +13,10 @@ surface sessions, typed actions, assertions, evidence, reports, and cleanup.
 
 - Use an **agent session** for exploration, bug reproduction, UX review, and
   any workflow where the next action depends on the latest observation.
-- Use the persistent **agent CLI** for Web or configured **MCP tools** for Web
-  and GUI. Read [references/gui-mcp.md](references/gui-mcp.md) before driving
-  a GUI session.
+- Use the persistent **agent CLI** for Web, or configured **MCP tools** for Web,
+  GUI, and/or TUI (`--web-url`, reviewed GUI host options, `--tui-executable`).
+  Read [references/gui-mcp.md](references/gui-mcp.md) before driving a GUI
+  session and [references/tui-acl.md](references/tui-acl.md) before hosting TUI.
 - Use an **ACL suite** for a known Web, GUI, or TUI regression flow that should
   run deterministically in local development and CI.
 - Use a **distributed ACL config** only after the suite is deterministic and

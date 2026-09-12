@@ -2,7 +2,9 @@
 
 Use TUI ACL only for a known deterministic terminal workflow. A3S Test owns
 the executable, pseudoterminal, process tree, semantic VT state, evidence, and
-cleanup. Interactive agent sessions do not currently register a TUI host.
+cleanup. Interactive MCP hosts may register a TUI surface with
+`--tui-executable` (optionally alongside `--web-url` and/or reviewed GUI host
+options). Persistent `a3s-test agent` CLI sessions remain Web-only.
 
 ## Suite
 
@@ -71,6 +73,19 @@ absolute path. `--tui-scrollback-rows` and `--tui-max-output-bytes` set bounded
 retention limits; they do not make observations or recordings unbounded.
 `--command-timeout-ms` bounds terminal input and waits, while
 `--cleanup-timeout-ms` bounds process-tree cleanup.
+
+## MCP host
+
+```bash
+a3s-test mcp \
+  --tui-executable ./target/debug/editor \
+  --tui-arg --fixture-mode \
+  --tui-columns 120 \
+  --tui-rows 40
+```
+
+The host fixes the owned executable and PTY bounds. Agents cannot override the
+TUI command, working directory, or cleanup policy mid-session.
 
 ## Observation and evidence
 

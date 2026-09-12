@@ -17,6 +17,7 @@ pub(crate) struct ApplicationBinding {
     pub pid: i32,
     pub identity: ApplicationIdentity,
     pub name: String,
+    pub process_name: Option<String>,
     pub owned: bool,
 }
 
@@ -34,7 +35,6 @@ pub(crate) async fn bind_application(
         GuiAppTarget::Launch(spec) => launch_application(api, spec).await,
         GuiAppTarget::Attach(spec) => {
             let apps = api.list_apps().await?;
-            let matches = matching_running_apps(&apps, &spec.application)?;
             let selected = if let Some(process_id) = spec.process_id {
                 let pid = i32::try_from(process_id.get()).map_err(|_| {
                     DriverError::new(
@@ -42,22 +42,33 @@ pub(crate) async fn bind_application(
                         "configured process id exceeds the CUA process-id range",
                     )
                 })?;
-                matches
-                    .into_iter()
-                    .find(|app| app.pid == pid)
+                let app = apps
+                    .iter()
+                    .find(|app| app.running && app.pid == pid)
                     .ok_or_else(|| {
                         DriverError::new(
                             "test.driver.gui.app_not_found",
-                            "no running application matched the configured identity and process id",
+                            "no running application matched the configured process id",
                         )
-                    })?
+                    })?;
+                ensure_app_matches_attach_identity(
+                    app,
+                    &spec.application,
+                    spec.process_name.as_deref(),
+                )?;
+                app
             } else {
-                select_exact_app(matches)?
+                select_exact_app(matching_running_apps(
+                    &apps,
+                    &spec.application,
+                    spec.process_name.as_deref(),
+                )?)?
             };
             Ok(ApplicationBinding {
                 pid: selected.pid,
                 identity: spec.application.clone(),
                 name: selected.name.clone(),
+                process_name: spec.process_name.clone(),
                 owned: false,
             })
         }
@@ -90,7 +101,7 @@ async fn launch_application(
         })
         .collect::<Result<Vec<_>, _>>()?;
     let before = api.list_apps().await?;
-    let previous_pids: BTreeSet<i32> = matching_running_apps(&before, &spec.application)?
+    let previous_pids: BTreeSet<i32> = matching_running_apps(&before, &spec.application, None)?
         .into_iter()
         .map(|app| app.pid)
         .collect();
@@ -111,23 +122,80 @@ async fn launch_application(
         pid: launched.pid,
         identity: spec.application.clone(),
         name: launched.name,
+        process_name: None,
         owned: true,
     })
+}
+
+fn reported_bundle_id(app: &CuaApp) -> Option<&str> {
+    app.bundle_id
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+}
+
+fn ensure_app_matches_attach_identity(
+    app: &CuaApp,
+    identity: &ApplicationIdentity,
+    process_name: Option<&str>,
+) -> Result<(), DriverError> {
+    match identity {
+        ApplicationIdentity::MacOsBundle { bundle_id } => match reported_bundle_id(app) {
+            Some(id) if id == bundle_id => {
+                if let Some(expected_name) = process_name {
+                    if app.name != expected_name {
+                        return Err(DriverError::new(
+                            "test.driver.gui.app_identity_invalid",
+                            "running application process name did not match the configured process name",
+                        ));
+                    }
+                }
+                Ok(())
+            }
+            Some(_) => Err(DriverError::new(
+                "test.driver.gui.app_identity_invalid",
+                "running application bundle identifier did not match the configured identity",
+            )),
+            None => {
+                let Some(expected_name) = process_name else {
+                    return Err(DriverError::new(
+                        "test.driver.gui.app_identity_incomplete",
+                        "running application has no bundle identifier; configure an exact process name to attach unpackaged macOS binaries",
+                    ));
+                };
+                if app.name == expected_name {
+                    Ok(())
+                } else {
+                    Err(DriverError::new(
+                        "test.driver.gui.app_identity_invalid",
+                        "unpackaged application process name did not match the configured process name",
+                    ))
+                }
+            }
+        },
+        _ => Err(platform_unsupported(identity)),
+    }
 }
 
 fn matching_running_apps<'a>(
     apps: &'a [CuaApp],
     identity: &ApplicationIdentity,
+    process_name: Option<&str>,
 ) -> Result<Vec<&'a CuaApp>, DriverError> {
     match identity {
         ApplicationIdentity::MacOsBundle { bundle_id } => Ok(apps
             .iter()
             .filter(|app| {
-                app.running
-                    && app
-                        .bundle_id
-                        .as_deref()
-                        .is_some_and(|value| value == bundle_id)
+                if !app.running {
+                    return false;
+                }
+                match reported_bundle_id(app) {
+                    Some(id) => {
+                        id == bundle_id
+                            && process_name.map_or(true, |expected| app.name == expected)
+                    }
+                    None => process_name.is_some_and(|expected| app.name == expected),
+                }
             })
             .collect()),
         _ => Err(platform_unsupported(identity)),
@@ -253,7 +321,14 @@ pub(crate) async fn validate_runtime_binding(
     else {
         return Err(application_binding_lost(application));
     };
-    if matching_running_apps(std::slice::from_ref(current), &application.identity)?.len() != 1 {
+    if matching_running_apps(
+        std::slice::from_ref(current),
+        &application.identity,
+        application.process_name.as_deref(),
+    )?
+    .len()
+        != 1
+    {
         return Err(application_binding_lost(application));
     }
 
@@ -298,6 +373,7 @@ pub(crate) async fn cleanup_resources(
                     match matching_running_apps(
                         std::slice::from_ref(current),
                         &application.identity,
+                        application.process_name.as_deref(),
                     ) {
                         Ok(matches) if matches.len() == 1 => {
                             if let Err(error) = api.kill_app(application.pid).await {
@@ -346,7 +422,14 @@ async fn wait_for_application_exit(
         else {
             return Ok(());
         };
-        if matching_running_apps(std::slice::from_ref(current), &application.identity)?.len() != 1 {
+        if matching_running_apps(
+            std::slice::from_ref(current),
+            &application.identity,
+            application.process_name.as_deref(),
+        )?
+        .len()
+            != 1
+        {
             return Err(DriverError::new(
                 "test.driver.gui.app_ownership_lost",
                 "owned process id was reused before application termination could be confirmed",
@@ -379,6 +462,7 @@ fn retryable_cleanup_error(error: DriverError) -> DriverError {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::api::CuaApp;
     use serde_json::json;
 
     fn window(
@@ -439,5 +523,71 @@ mod tests {
         assert_eq!(parsed.z_index, None);
         assert!(!parsed.is_on_screen);
         assert_eq!(parsed.on_current_space, None);
+    }
+
+    #[test]
+    fn attach_accepts_unpackaged_macos_app_when_process_name_matches() {
+        let app = CuaApp {
+            pid: 42,
+            name: "A3S".to_string(),
+            bundle_id: None,
+            running: true,
+        };
+        ensure_app_matches_attach_identity(
+            &app,
+            &ApplicationIdentity::MacOsBundle {
+                bundle_id: "dev.a3s.desktop".to_string(),
+            },
+            Some("A3S"),
+        )
+        .expect("unpackaged attach");
+
+        let matches = matching_running_apps(
+            std::slice::from_ref(&app),
+            &ApplicationIdentity::MacOsBundle {
+                bundle_id: "dev.a3s.desktop".to_string(),
+            },
+            Some("A3S"),
+        )
+        .expect("match unpackaged");
+        assert_eq!(matches.len(), 1);
+    }
+
+    #[test]
+    fn attach_refuses_unpackaged_macos_app_without_process_name() {
+        let app = CuaApp {
+            pid: 42,
+            name: "A3S".to_string(),
+            bundle_id: None,
+            running: true,
+        };
+        let error = ensure_app_matches_attach_identity(
+            &app,
+            &ApplicationIdentity::MacOsBundle {
+                bundle_id: "dev.a3s.desktop".to_string(),
+            },
+            None,
+        )
+        .expect_err("missing process name");
+        assert_eq!(error.code(), "test.driver.gui.app_identity_incomplete");
+    }
+
+    #[test]
+    fn attach_refuses_bundle_mismatch_even_when_process_name_matches() {
+        let app = CuaApp {
+            pid: 42,
+            name: "A3S".to_string(),
+            bundle_id: Some("com.other.app".to_string()),
+            running: true,
+        };
+        let error = ensure_app_matches_attach_identity(
+            &app,
+            &ApplicationIdentity::MacOsBundle {
+                bundle_id: "dev.a3s.desktop".to_string(),
+            },
+            Some("A3S"),
+        )
+        .expect_err("bundle mismatch");
+        assert_eq!(error.code(), "test.driver.gui.app_identity_invalid");
     }
 }

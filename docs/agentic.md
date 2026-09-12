@@ -117,8 +117,9 @@ surface-contract verification. Interactive action schemas omit
 `verify_contract`; a planner cannot use it to bypass suite admission,
 provenance digest verification, or the Runner's verdict semantics. Revision 7
 adds terminal paste, resize, VT recording, and regex waits for deterministic
-TUI suites. Persistent external-planner sessions do not yet register a TUI
-host, so those terminal actions remain unavailable there.
+TUI suites. Persistent `a3s-test agent` CLI sessions remain Web-only; multi-
+surface hosts use `a3s-test mcp` with `--web-url`, reviewed GUI options, and/or
+`--tui-executable`.
 Revision 8 adds exact control value, enabled, checked, selected, and selected
 value-set expectations. Web reads live DOM state; GUI admits exact values only
 when CUA reports them; GUI boolean and multi-selection state and every TUI
@@ -128,9 +129,10 @@ Revision 9 adds target-bound normalized rendered text and visible locator-set
 cardinality. Web distinguishes CSS visual visibility from semantic
 accessibility visibility and traverses open Shadow DOM for semantic targets.
 Rendered text retains zero/one/many target resolution, while an empty stable
-locator set is an observed count of zero. GUI and TUI fail closed because their
-current protocols do not expose equivalent collection or rendered-text
-evidence.
+locator set is an observed count of zero. GUI admits single-target
+`rendered_text` from CUA accessibility `value`, falling back to `label`. GUI
+and TUI fail closed for `visible_count` because their protocols do not expose
+locator cardinality.
 Revision 10 adds `rendered_texts`, an ordered, duplicate-preserving sequence
 of independently normalized rendered strings from a stable locator. Empty
 sets are observable, while ACL rejects refs and visual points and both ACL and
@@ -193,24 +195,29 @@ text without refocusing the page element.
 `a3s-test mcp` exposes the same typed session application layer over MCP stdio
 protocol `2025-06-18`. Clients must complete
 `initialize -> notifications/initialized` with that exact version before
-listing or calling tools. The host may register Web, GUI, or both and
-publishes these tools:
+listing or calling tools. The host may register Web, GUI, TUI, or any
+combination. Core session tools are always published for registered surfaces;
+page inspection and repair tools appear only when a Web surface is registered:
 
 | Tool | Application operation |
 | --- | --- |
-| `test_session_start` | Open the host-configured surface |
+| `test_session_start` | Open one host-registered surface |
 | `test_observe` | Return a new observation and observation ID |
-| `test_inspect` | Read bounded current Test Kit page, node, component, or region context, or wait for a revision-scoped diff |
+| `test_inspect` | Read bounded current Test Kit page, node, component, or region context, or wait for a revision-scoped diff (Web host only) |
 | `test_act` | Execute exactly one typed action |
 | `test_finish` | Record a result and close the exact owned surface |
 | `test_abort` | Abort and close the exact owned surface |
 | `test_schema` | Return action protocol revision 15 and its interactive JSON Schema |
-| `test_repair_watch` | Drain and perform one bounded pickup of submitted Test Kit findings |
-| `test_repair_inbox` | Prioritize resumable repair loops for one active owning session |
-| `test_repair_inspect` | Project one recoverable repair loop from the authoritative ledger |
-| `test_repair_claim`, `test_repair_progress`, `test_repair_reply` | Own one lease-bound repair attempt and report progress or required input |
-| `test_repair_complete`, `test_repair_verify` | Hand completed editing to A3S Test-owned browser verification |
-| `test_repair_fail`, `test_repair_cancel` | Preserve a terminal failed or cancelled repair transition |
+| `test_repair_watch` | Drain and perform one bounded pickup of submitted Test Kit findings (Web host only) |
+| `test_repair_inbox` | Prioritize resumable repair loops for one active owning session (Web host only) |
+| `test_repair_inspect` | Project one recoverable repair loop from the authoritative ledger (Web host only) |
+| `test_repair_claim`, `test_repair_progress`, `test_repair_reply` | Own one lease-bound repair attempt and report progress or required input (Web host only) |
+| `test_repair_complete`, `test_repair_verify` | Hand completed editing to A3S Test-owned browser verification (Web host only) |
+| `test_repair_fail`, `test_repair_cancel` | Preserve a terminal failed or cancelled repair transition (Web host only) |
+
+GUI-only or TUI-only MCP hosts omit `test_inspect` and `test_repair_*` from
+`tools/list` and reject direct calls with
+`test.session.web_surface_required`.
 
 `test_repair_complete` persists the caller's exact ordered changed-file list at
 the edit boundary. `test_repair_verify` must submit the same list and fails
@@ -230,9 +237,12 @@ The server serializes turns within each session, bounds active sessions and
 request size, advertises only registered surfaces, and closes independent
 sessions concurrently on EOF. Cancelling an opening request releases its
 session reservation. A failed observation invalidates all refs from the prior
-observation. Application identity, launch/attach mode, window selector,
+observation. Application identity, launch/attach mode, optional attach-only
+`macos_process_name` for unpackaged macOS identity, window selector,
 capture scope, CUA endpoint, and policy file are fixed when the host starts
-the server and are absent from tool arguments. Both semantic refs and visual
+the server and are absent from tool arguments. Worker inventory advertises
+that attach-only process name on `WorkerGuiCapability`; launch inventories
+must omit it. Both semantic refs and visual
 image refs require the latest `observation_id`.
 
 If `test_finish` or `test_abort` reaches its caller deadline, driver cleanup

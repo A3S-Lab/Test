@@ -70,7 +70,7 @@ enum Commands {
     GuiCertify(gui_certification::GuiCertifyArgs),
     /// Detect a Web project and create a typed A3S Test project profile.
     Init(workspace::InitArgs),
-    /// Serve surface-neutral agent sessions over MCP stdio.
+    /// Serve Web, GUI, and/or TUI agent sessions over MCP stdio.
     Mcp(McpArgs),
     /// Inspect versioned contracts for deployment-supplied model providers.
     Provider(provider_schema::ProviderArgs),
@@ -176,6 +176,8 @@ struct RunArgs {
 struct McpArgs {
     #[command(flatten)]
     gui: GuiRunArgs,
+    #[command(flatten)]
+    tui: TuiRunArgs,
     /// Initial Web URL fixed by the MCP host. Omit to disable Web sessions.
     #[arg(long)]
     web_url: Option<String>,
@@ -241,6 +243,10 @@ struct GuiRunArgs {
     /// macOS bundle identifier for the GUI application.
     #[arg(long)]
     gui_macos_bundle_id: Option<String>,
+    /// Exact CUA process name used when attaching to unpackaged macOS binaries
+    /// (missing bundle identifier), or as an optional cross-check for bundled apps.
+    #[arg(long)]
+    gui_macos_process_name: Option<String>,
     /// Launch a new app or attach to a running app.
     #[arg(long, value_enum, default_value_t = GuiTargetMode::Launch)]
     gui_target_mode: GuiTargetMode,
@@ -263,7 +269,7 @@ struct GuiRunArgs {
 
 #[derive(Debug, Args)]
 struct TuiRunArgs {
-    /// Executable owned by every TUI scenario in this run.
+    /// Executable owned by every TUI scenario or MCP TUI host in this process.
     #[arg(long)]
     tui_executable: Option<PathBuf>,
     /// Argument passed to the TUI executable. Repeat to pass multiple arguments.
@@ -487,8 +493,17 @@ async fn serve_mcp(args: McpArgs) -> Result<ExitCode> {
             gui_driver(&args.gui, Duration::from_millis(args.command_timeout_ms)).await?,
         ));
     }
+    if args.tui.requested() {
+        drivers.push(Arc::new(tui_driver(
+            &args.tui,
+            Duration::from_millis(args.command_timeout_ms),
+            Duration::from_millis(args.cleanup_timeout_ms),
+        )?));
+    }
     if drivers.is_empty() {
-        anyhow::bail!("MCP requires --web-url, reviewed GUI host options, or both");
+        anyhow::bail!(
+            "MCP requires --web-url, reviewed GUI host options, --tui-executable, or a combination"
+        );
     }
     let artifacts_root = if args.artifacts_root.is_absolute() {
         args.artifacts_root
@@ -516,6 +531,7 @@ impl GuiRunArgs {
             || self.cua_proxy_executable.is_some()
             || self.cua_embedded_socket.is_some()
             || self.gui_macos_bundle_id.is_some()
+            || self.gui_macos_process_name.is_some()
             || self.gui_target_mode != GuiTargetMode::Launch
             || self.gui_profile != GuiProfileArg::Semantic
             || self.gui_attach_pid.is_some()
@@ -596,6 +612,11 @@ async fn gui_driver(args: &GuiRunArgs, command_timeout: Duration) -> Result<GuiD
             if args.gui_attach_pid.is_some() {
                 anyhow::bail!("--gui-attach-pid is only valid with --gui-target-mode attach");
             }
+            if args.gui_macos_process_name.is_some() {
+                anyhow::bail!(
+                    "--gui-macos-process-name is only valid with --gui-target-mode attach"
+                );
+            }
             GuiAppTarget::Launch(LaunchSpec {
                 application,
                 arguments: args.gui_arguments.clone(),
@@ -609,6 +630,7 @@ async fn gui_driver(args: &GuiRunArgs, command_timeout: Duration) -> Result<GuiD
             GuiAppTarget::Attach(AttachSpec {
                 application,
                 process_id: args.gui_attach_pid,
+                process_name: args.gui_macos_process_name.clone(),
             })
         }
     };
@@ -959,6 +981,22 @@ mod tests {
         let matrix =
             a3s_test_driver_gui::GuiCertificationMatrix::locked().expect("certification matrix");
         assert_eq!(matrix.profiles().len(), 6);
+        let unsupported_platforms = matrix
+            .profiles()
+            .iter()
+            .filter(|profile| {
+                profile.status() == a3s_test_driver_gui::GuiCertificationStatus::Unsupported
+            })
+            .map(|profile| profile.platform().as_str())
+            .collect::<Vec<_>>();
+        assert!(
+            unsupported_platforms.contains(&"windows"),
+            "windows GUI profiles must remain lock-unsupported: {unsupported_platforms:?}"
+        );
+        assert!(
+            unsupported_platforms.contains(&"linux"),
+            "linux GUI profiles must remain lock-unsupported: {unsupported_platforms:?}"
+        );
     }
 
     #[tokio::test]
@@ -974,6 +1012,7 @@ mod tests {
                 cua_proxy_executable: Some(PathBuf::from("cua-driver")),
                 cua_embedded_socket: None,
                 gui_macos_bundle_id: Some("com.example.Editor".to_string()),
+                gui_macos_process_name: None,
                 gui_target_mode: GuiTargetMode::Launch,
                 gui_profile: GuiProfileArg::WindowVision,
                 gui_attach_pid: None,
@@ -987,5 +1026,26 @@ mod tests {
         .expect("GUI driver");
 
         assert_eq!(driver.surface(), Surface::Gui);
+    }
+
+    #[test]
+    fn builds_a_typed_tui_driver_for_run_and_mcp_hosts() {
+        let executable = std::env::current_exe().expect("current test executable");
+        let driver = tui_driver(
+            &TuiRunArgs {
+                tui_executable: Some(executable),
+                tui_arguments: vec![std::ffi::OsString::from("--fixture")],
+                tui_working_directory: None,
+                tui_columns: 80,
+                tui_rows: 24,
+                tui_scrollback_rows: 2_000,
+                tui_max_output_bytes: 4 * 1024 * 1024,
+            },
+            Duration::from_secs(2),
+            Duration::from_secs(1),
+        )
+        .expect("TUI driver");
+
+        assert_eq!(driver.surface(), Surface::Tui);
     }
 }

@@ -1,0 +1,50 @@
+[
+  { "text": "Get started", "link": "/guide/", "activeMatch": "^/guide/" },
+  {
+    "text": "Testing",
+    "items": [
+      { "text": "Exploration and regression", "link": "/guide/workflows" },
+      { "text": "Actions and evidence", "link": "/guide/actions-and-evidence" },
+      { "text": "Assertions and stability", "link": "/guide/assertions" },
+      { "text": "Web, GUI, TUI, and MCP", "link": "/guide/surfaces-and-mcp" },
+      { "text": "Model providers", "link": "/guide/providers" },
+      { "text": "Workers and distributed runs", "link": "/guide/distributed" }
+    ]
+  },
+  {
+    "text": "Test Kit",
+    "items": [
+      { "text": "Integration guide", "link": "/guide/testkit" },
+      { "text": "Page Context", "link": "/concepts/page-context" },
+      { "text": "Human review and repair", "link": "/guide/repairs" },
+      { "text": "Surface Contracts", "link": "/guide/contracts" }
+    ]
+  },
+  {
+    "text": "Architecture",
+    "link": "/concepts/architecture",
+    "activeMatch": "^/concepts/"
+  },
+  {
+    "text": "Reference",
+    "items": [
+      { "text": "Capabilities", "link": "/reference/capabilities" },
+      { "text": "CLI commands", "link": "/reference/cli" },
+      { "text": "Troubleshooting", "link": "/guide/troubleshooting" }
+    ]
+  },
+  {
+    "text": "Resources",
+    "items": [
+      { "text": "GitHub", "link": "https://github.com/A3S-Lab/Test" },
+      {
+        "text": "Releases",
+        "link": "https://github.com/A3S-Lab/Test/releases/latest"
+      },
+      {
+        "text": "Changelog",
+        "link": "https://github.com/A3S-Lab/Test/blob/main/CHANGELOG.md"
+      }
+    ]
+  }
+]

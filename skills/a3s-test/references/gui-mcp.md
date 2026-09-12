@@ -27,6 +27,15 @@ On locked CUA 0.23.2, prefer Launch Services `open` plus
 repository macOS certification script stages the AppKit harness, opens it,
 attaches by exact pid, then terminates it after each profile.
 
+Unpackaged macOS binaries (null/empty `bundle_id`, including naked
+`tauri dev` / `target/debug/A3S`) also require
+`--gui-macos-process-name <exact list_apps name>` together with
+`--gui-attach-pid`. Bundle-only attach keeps failing closed for those
+processes so packaged `dev.a3s.desktop` identity is not silently widened.
+
+MCP hosts may combine GUI with `--web-url` and/or `--tui-executable` in one
+stdio server; persistent `a3s-test agent` CLI remains Web-only.
+
 Version tags additionally require the repository's reusable real macOS
 certification workflow. Its `a3s.test.gui-host-certification/1` record binds
 the exact A3S Test and CUA source revisions, binary and policy digests, host
@@ -65,7 +74,11 @@ Start with an explicit goal and observable success criteria:
 ```
 
 Observe before the first action. Use `test_schema` as the authoritative action
-contract. Send one typed action at a time:
+contract. Send one typed action at a time. GUI ACL/MCP targets use
+surface-neutral roles such as `button` and `textbox`; the driver matches them
+to platform AX/UIA strings (`AXButton`, `Button`, …) while observation JSON
+keeps the platform role for evidence fidelity. `test_inspect` and
+`test_repair_*` appear only when this MCP host also registered `--web-url`.
 
 ```json
 {

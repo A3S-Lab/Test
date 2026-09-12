@@ -693,6 +693,28 @@ impl GuiSession {
                     "actual": actual,
                 })))
             }
+            Expectation::RenderedText { target, value } => {
+                let address = self.semantics.resolve(target)?;
+                let actual = gui_rendered_text(&address).ok_or_else(|| {
+                    DriverError::new(
+                        "test.driver.gui.assertion_unsupported",
+                        "the matched GUI element does not expose accessibility value or label text",
+                    )
+                })?;
+                let expected = normalize_rendered_text(value);
+                if actual != expected {
+                    return Err(DriverError::new(
+                        "test.assert.rendered_text",
+                        format!("expected GUI rendered text {expected:?}, received {actual:?}"),
+                    ));
+                }
+                Ok(StepOutput::new("GUI rendered text matched").with_data(json!({
+                    "target_ref": address.reference,
+                    "expected": expected,
+                    "actual": actual,
+                    "source": gui_rendered_text_source(&address),
+                })))
+            }
             Expectation::Layout {
                 target,
                 relative_to,
@@ -749,8 +771,7 @@ impl GuiSession {
                 "test.driver.gui.assertion_unsupported",
                 "URL assertions are not available on GUI surfaces",
             )),
-            Expectation::RenderedText { .. }
-            | Expectation::RenderedTexts { .. }
+            Expectation::RenderedTexts { .. }
             | Expectation::VisibleCount { .. }
             | Expectation::State { .. }
             | Expectation::SelectedValues { .. } => {
@@ -789,6 +810,35 @@ fn layout_frame(frame: Option<LayoutRect>, subject: &str) -> Result<LayoutRect, 
         ));
     }
     Ok(frame)
+}
+
+fn gui_rendered_text(address: &crate::semantic::ElementAddress) -> Option<String> {
+    accessibility_copy(address.value.as_deref())
+        .or_else(|| accessibility_copy(address.name.as_deref()))
+        .map(normalize_rendered_text)
+}
+
+fn gui_rendered_text_source(address: &crate::semantic::ElementAddress) -> &'static str {
+    if accessibility_copy(address.value.as_deref()).is_some() {
+        "value"
+    } else {
+        "label"
+    }
+}
+
+fn accessibility_copy(value: Option<&str>) -> Option<&str> {
+    value.and_then(|text| {
+        let trimmed = text.trim();
+        if trimmed.is_empty() {
+            None
+        } else {
+            Some(trimmed)
+        }
+    })
+}
+
+fn normalize_rendered_text(value: &str) -> String {
+    value.split_whitespace().collect::<Vec<_>>().join(" ")
 }
 
 fn layout_rect_data(rect: LayoutRect) -> Value {

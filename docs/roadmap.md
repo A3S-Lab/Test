@@ -116,6 +116,8 @@
 - [x] Cancellation-safe opening cleanup, including cancellation after an
       application launch is dispatched but before ownership is returned
 - [x] Semantic pointer and keyboard actions with stale-ref rejection
+- [x] Surface-neutral protocol role matching against platform AX/UIA strings
+      (`role("button", …)` ↔ `AXButton`) without rewriting observation roles
 - [x] Window-vision fallback with SHA-256-bound screenshot evidence and
       observation-scoped pixel targets
 - [x] Locked three-platform/two-endpoint certification matrix with
@@ -146,6 +148,8 @@
 - [x] Key chords, paste, resize, and alternate-screen support
 - [x] Text/regex waits and terminal recording
 - [x] Ctrl+C, EOF, crash, and terminal restoration tests
+- [x] MCP host registration via `--tui-executable` (alone or with Web/GUI);
+      persistent `a3s-test agent` CLI remains Web-only by design
 
 ## M5: Distributed execution
 

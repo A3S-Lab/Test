@@ -75,7 +75,7 @@ pub(in crate::worker_command) async fn load(
         GuiProfile::Semantic => WorkerGuiPerception::Semantic,
         GuiProfile::WindowVision => WorkerGuiPerception::WindowVision,
     };
-    let (target, application) = worker_target(&parsed.config.target)?;
+    let (target, application, macos_process_name) = worker_target(&parsed.config.target)?;
     let capability = WorkerGuiCapability {
         profile_id: parsed.id,
         compatibility_profile: compatibility_profile.id().to_string(),
@@ -83,6 +83,7 @@ pub(in crate::worker_command) async fn load(
         perception,
         target,
         application,
+        macos_process_name,
         cua_driver_version: probe.driver_version,
         mcp_protocol: probe.protocol_version,
         capability_vocabulary: probe.capability_vocabulary,
@@ -120,6 +121,7 @@ fn parse(
             "embedded_socket",
             "policy_file",
             "macos_bundle_id",
+            "macos_process_name",
             "target",
             "attach_pid",
             "arguments",
@@ -201,6 +203,7 @@ fn parse(
     let target = match target_name {
         "launch" => {
             reject_attribute(root, "attach_pid", "launch target")?;
+            reject_attribute(root, "macos_process_name", "launch target")?;
             GuiAppTarget::Launch(LaunchSpec {
                 application,
                 arguments: arguments.into_iter().map(OsString::from).collect(),
@@ -212,9 +215,11 @@ fn parse(
                 anyhow::bail!("gui_host.arguments is only valid for launch targets");
             }
             let process_id = optional_positive_u32(root, "attach_pid")?.and_then(NonZeroU32::new);
+            let process_name = optional_string_value(root, "macos_process_name")?;
             GuiAppTarget::Attach(AttachSpec {
                 application,
                 process_id,
+                process_name,
             })
         }
         _ => anyhow::bail!("gui_host.target must be launch or attach"),
@@ -254,10 +259,16 @@ fn parse(
     })
 }
 
-fn worker_target(target: &GuiAppTarget) -> Result<(WorkerGuiTarget, WorkerGuiApplication)> {
-    let (target, application) = match target {
-        GuiAppTarget::Launch(spec) => (WorkerGuiTarget::Launch, &spec.application),
-        GuiAppTarget::Attach(spec) => (WorkerGuiTarget::Attach, &spec.application),
+fn worker_target(
+    target: &GuiAppTarget,
+) -> Result<(WorkerGuiTarget, WorkerGuiApplication, Option<String>)> {
+    let (target, application, macos_process_name) = match target {
+        GuiAppTarget::Launch(spec) => (WorkerGuiTarget::Launch, &spec.application, None),
+        GuiAppTarget::Attach(spec) => (
+            WorkerGuiTarget::Attach,
+            &spec.application,
+            spec.process_name.clone(),
+        ),
     };
     let application = match application {
         ApplicationIdentity::MacOsBundle { bundle_id } => WorkerGuiApplication::MacosBundle {
@@ -274,7 +285,7 @@ fn worker_target(target: &GuiAppTarget) -> Result<(WorkerGuiTarget, WorkerGuiApp
             desktop_id: desktop_id.clone(),
         },
     };
-    Ok((target, application))
+    Ok((target, application, macos_process_name))
 }
 
 async fn canonicalize_proxy(config: &mut GuiDriverConfig) -> Result<()> {

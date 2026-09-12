@@ -1116,8 +1116,10 @@ probe envelopes, and single-target resolution failures. Product assertions
 own only observed scalar text, ordered text-vector, or count differences.
 Runner stability then repeats the exact immutable assertion; later product
 mismatches become `test.assert.unstable`, while later driver failures remain
-driver failures. GUI and TUI explicitly reject all three variants because
-their current protocols do not provide equivalent evidence.
+driver failures. GUI supports single-target `rendered_text` from CUA
+`value` then `label`. GUI and TUI explicitly reject `rendered_texts` and
+`visible_count` because their current protocols do not provide equivalent
+collection evidence.
 
 Revision-9 coverage contains 600 deterministic scalar-text/count Web
 classifications. Revision 10 adds 600 ordered-vector classifications split
@@ -1520,10 +1522,14 @@ Once a path is understood, the coding agent can author ACL and use
 `check --json` and `run --json` for deterministic regression coverage.
 
 The MCP stdio server is a thin projection of the same session application
-layer. It exposes `test_session_start`, `test_observe`, `test_inspect`,
-`test_act`, `test_finish`, `test_abort`, `test_schema`, and the bounded
-`test_repair_*` ledger transitions. The host may register Web, GUI, or both.
-It enforces the exact
+layer. It always exposes `test_session_start`, `test_observe`, `test_act`,
+`test_finish`, `test_abort`, and `test_schema`. `test_inspect` and the bounded
+`test_repair_*` ledger transitions are advertised and admitted only when the
+host registered a Web surface (`--web-url`); GUI-only or TUI-only hosts fail
+closed with `test.session.web_surface_required` if those tools are still
+invoked. The host may register Web, GUI, TUI, or any combination via
+`--web-url`, reviewed GUI host options, and/or `--tui-executable`. It enforces
+the exact
 `initialize -> notifications/initialized -> operation` lifecycle and protocol
 version from the
 [MCP 2025-06-18 lifecycle](https://modelcontextprotocol.io/specification/2025-06-18/basic/lifecycle),
@@ -1531,9 +1537,9 @@ and its start schema advertises only drivers actually registered by the host.
 Per-session turns are serialized, active session count is bounded, failed
 observations invalidate earlier refs, and cancelled opens release their name
 and capacity reservation. EOF closes independent surfaces concurrently, each
-within the configured cleanup deadline. Host-side GUI target configuration
-cannot be changed by a tool call. Deterministic `check` and `run` remain CLI
-operations rather than a second MCP runner.
+within the configured cleanup deadline. Host-side GUI and TUI target
+configuration cannot be changed by a tool call. Deterministic `check` and `run`
+remain CLI operations rather than a second MCP runner.
 
 Terminal cleanup is also a session state, not a fire-and-forget side effect.
 The manager reserves the session name while `close()` runs in an owned task. A

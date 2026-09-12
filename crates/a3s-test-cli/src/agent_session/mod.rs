@@ -875,7 +875,7 @@ async fn load_session_state(
         || state.artifacts_dir != store.artifacts_dir()
     {
         anyhow::bail!(
-            "agent session '{}' metadata does not match the current workspace",
+            "agent session '{}' metadata does not match the current workspace (persistent agent CLI is Web-only; use `a3s-test mcp` for GUI/TUI hosts)",
             session
         );
     }
