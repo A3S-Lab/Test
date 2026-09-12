@@ -11,12 +11,12 @@ A3S Test 把被测界面抽象成 `SurfaceDriver`。Core 只认识类型化观�
 
 ## 选择哪一种 Surface
 
-| 产品形态                        | 推荐入口                     | 权威感知来源                                    | 主要限制                                |
-| ------------------------------- | ---------------------------- | ----------------------------------------------- | --------------------------------------- |
-| 浏览器页面，流程已经明确        | 确定性 Web ACL               | 浏览器语义、实时 DOM、渲染几何、网络与 Test Kit | URL 和网络受 origin policy 约束         |
-| 浏览器页面，需要 Agent 探索     | `agent start` 或 `agent run` | 最新 observation、Page Context 和有界证据       | ref 每轮失效，模型 finish 只能提出建议  |
-| 原生桌面应用                    | GUI ACL 或 MCP               | CUA 辅助功能语义，可选窗口截图                  | 当前准入平台是 macOS，仍须认证真实 host |
-| 已知终端程序流程                | 确定性 TUI ACL               | VT viewport、scrollback、cursor 和模式          | 没有交互式 Agent host                   |
+| 产品形态                        | 推荐入口                     | 权威感知来源                                    | 主要限制                                                     |
+| ------------------------------- | ---------------------------- | ----------------------------------------------- | ------------------------------------------------------------ |
+| 浏览器页面，流程已经明确        | 确定性 Web ACL               | 浏览器语义、实时 DOM、渲染几何、网络与 Test Kit | URL 和网络受 origin policy 约束                              |
+| 浏览器页面，需要 Agent 探索     | `agent start` 或 `agent run` | 最新 observation、Page Context 和有界证据       | ref 每轮失效，模型 finish 只能提出建议                       |
+| 原生桌面应用                    | GUI ACL 或 MCP               | CUA 辅助功能语义，可选窗口截图                  | 当前准入平台是 macOS，仍须认证真实 host                      |
+| 已知终端程序流程                | 确定性 TUI ACL               | VT viewport、scrollback、cursor 和模式          | 没有交互式 Agent host                                        |
 | 外部编码 Agent 需要统一工具接口 | `a3s-test mcp`               | 已注册 Web、GUI 和/或 TUI driver 的会话层       | MCP 不替代确定性 `check` 与 `run`；持久 `agent` CLI 仍仅 Web |
 
 ## Web Surface
