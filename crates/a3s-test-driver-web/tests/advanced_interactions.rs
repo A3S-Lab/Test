@@ -182,13 +182,19 @@ async fn maps_advanced_interactions_to_the_verified_browser_protocol() {
         .skip(1)
         .map(|invocation| strip_session_prefix(&invocation.args))
         .collect::<Vec<_>>();
-    assert_eq!(action_args[6][0], "eval");
-    let context_menu_script = action_args[6][1].to_string_lossy();
+    assert_eq!(action_args[0][0], "eval");
+    let reveal_script = action_args[0][1].to_string_lossy();
+    assert!(reveal_script.contains(r#""type":"role""#));
+    assert!(reveal_script.contains("scrollIntoView"));
+    assert!(reveal_script.contains(r#"behavior: "instant""#));
+    action_args[0] = os(&["eval", "<reveal-target>"]);
+    assert_eq!(action_args[8][0], "eval");
+    let context_menu_script = action_args[8][1].to_string_lossy();
     assert!(context_menu_script.contains("new MouseEvent('contextmenu'"));
     assert!(context_menu_script.contains("document.elementFromPoint(60, 45)"));
     assert!(context_menu_script.contains("button: 2"));
     assert!(context_menu_script.contains("buttons: 2"));
-    action_args[6] = os(&["eval", "<context-menu-script>"]);
+    action_args[8] = os(&["eval", "<context-menu-script>"]);
     let shadow_check = action_args
         .iter()
         .position(|arguments| {
@@ -204,8 +210,10 @@ async fn maps_advanced_interactions_to_the_verified_browser_protocol() {
     assert_eq!(
         action_args,
         vec![
+            os(&["eval", "<reveal-target>"]),
             os(&["find", "role", "button", "hover", "--name", "Toolbar"]),
             os(&["focus", "@e1"]),
+            os(&["scrollintoview", "@e2"]),
             os(&["dblclick", "@e2"]),
             os(&["scrollintoview", ".selection"]),
             os(&["get", "box", ".selection"]),

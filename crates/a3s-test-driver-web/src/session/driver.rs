@@ -53,6 +53,7 @@ impl DriverSession for AgentBrowserSession {
                     .map(|data| StepOutput::new("target clicked").with_data(data))
             }
             Action::Hover { target } => {
+                self.reveal_target(target).await?;
                 let args = target_action(target, "hover", None)?;
                 self.execute_command(args)
                     .await
@@ -65,6 +66,7 @@ impl DriverSession for AgentBrowserSession {
                     .map(|data| StepOutput::new("target focused").with_data(data))
             }
             Action::DoubleClick { target } => {
+                self.reveal_target(target).await?;
                 let selector = direct_selector(target)?;
                 self.execute_command(vec!["dblclick".into(), selector.into()])
                     .await

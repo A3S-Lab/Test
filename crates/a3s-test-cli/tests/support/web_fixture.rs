@@ -13,6 +13,10 @@ const IO_TIMEOUT: Duration = Duration::from_secs(2);
 
 const HERMETIC_HTML: &str = include_str!("../../../../fixtures/web/hermetic.html");
 const ADVANCED_HTML: &str = include_str!("../../../../fixtures/web/advanced.html");
+const HARD_SURFACES_HTML: &str = include_str!("../../../../fixtures/web/hard-surfaces.html");
+const FRAME_COUPON_HTML: &str = include_str!("../../../../fixtures/web/frame-coupon.html");
+const FRAME_CHECKOUT_HTML: &str = include_str!("../../../../fixtures/web/frame-checkout.html");
+const PROFILE_JSON: &str = include_str!("../../../../fixtures/web/api/profile");
 const FOCUS_HTML: &str = include_str!("../../../../fixtures/web/focus.html");
 const LAYOUT_HTML: &str = include_str!("../../../../fixtures/web/layout.html");
 const INTERACTABILITY_HTML: &str = include_str!("../../../../fixtures/web/interactability.html");
@@ -464,6 +468,10 @@ fn route_primary(path: &str, blocked_origin: &str) -> Response {
             HERMETIC_HTML.replace("__BLOCKED_ORIGIN__", blocked_origin),
         ),
         "/advanced.html" => Response::html(ADVANCED_HTML.to_string()),
+        "/hard-surfaces.html" => Response::html(HARD_SURFACES_HTML.to_string()),
+        "/frame-coupon.html" => Response::html(FRAME_COUPON_HTML.to_string()),
+        "/frame-checkout.html" => Response::html(FRAME_CHECKOUT_HTML.to_string()),
+        "/api/profile" => Response::json(PROFILE_JSON.to_string()),
         "/focus.html" => Response::html(FOCUS_HTML.to_string()),
         "/layout.html" => Response::html(LAYOUT_HTML.to_string()),
         "/interactability.html" => Response::html(INTERACTABILITY_HTML.to_string()),

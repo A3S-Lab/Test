@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Checkout frame</title>
+  </head>
+  <body>
+    <p>Checkout frame</p>
+    <label>
+      Coupon code
+      <input id="code" placeholder="Coupon code" autocomplete="off" />
+    </label>
+    <button id="apply" type="button">Apply</button>
+    <script>
+      document.getElementById("apply").addEventListener("click", () => {
+        const code = document.getElementById("code").value;
+        parent.postMessage(
+          { type: "coupon", ok: code === "NORTH-17" },
+          location.origin,
+        );
+      });
+    </script>
+  </body>
+</html>

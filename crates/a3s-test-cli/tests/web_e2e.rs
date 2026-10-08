@@ -33,6 +33,7 @@ use support::web_fixture::{
 use support::website::build_website;
 
 const WEBSITE_TESTKIT_SUITE: &str = include_str!("../../../tests/e2e/website-testkit.acl");
+const HARD_SURFACES_SUITE: &str = include_str!("../../../examples/web-hard-surfaces.acl");
 
 fn binary() -> PathBuf {
     PathBuf::from(env!("CARGO_BIN_EXE_a3s-test"))
@@ -105,6 +106,27 @@ fn local_web_fixture_has_deterministic_routes_and_owned_lifecycle() {
         .expect("UTF-8 semantic state assertion fixture")
         .contains("data-testid=\"mixed-pressed\""));
 
+    let hard_surfaces = get(&origin, "/hard-surfaces.html").expect("hard surface fixture");
+    assert_eq!(hard_surfaces.status, 200);
+    assert!(String::from_utf8(hard_surfaces.body)
+        .expect("UTF-8 hard surface fixture")
+        .contains("A3S Test hard surfaces"));
+    let coupon_frame = get(&origin, "/frame-coupon.html").expect("coupon frame fixture");
+    assert_eq!(coupon_frame.status, 200);
+    assert!(String::from_utf8(coupon_frame.body)
+        .expect("UTF-8 coupon frame")
+        .contains("Coupon frame"));
+    let checkout_frame = get(&origin, "/frame-checkout.html").expect("checkout frame fixture");
+    assert_eq!(checkout_frame.status, 200);
+    assert!(String::from_utf8(checkout_frame.body)
+        .expect("UTF-8 checkout frame")
+        .contains("Checkout frame"));
+    let profile = get(&origin, "/api/profile").expect("profile fixture");
+    assert_eq!(profile.status, 200);
+    assert!(String::from_utf8(profile.body)
+        .expect("UTF-8 profile fixture")
+        .contains("\"name\":\"Ada\""));
+
     let containment = get(&origin, "/origin-policy.html").expect("containment fixture");
     assert_eq!(containment.status, 200);
     let containment = String::from_utf8(containment.body).expect("UTF-8 containment fixture");
@@ -128,7 +150,7 @@ fn local_web_fixture_has_deterministic_routes_and_owned_lifecycle() {
     let missing = get(&origin, "/missing").expect("missing route");
     assert_eq!(missing.status, 404);
     assert!(fixture.blocked_requests().is_empty());
-    assert_eq!(fixture.primary_requests().len(), 13);
+    assert_eq!(fixture.primary_requests().len(), 17);
 
     drop(fixture);
     assert!(
@@ -150,6 +172,117 @@ fn local_web_fixture_handles_repeated_short_lived_connections() {
     }
 
     assert_eq!(fixture.primary_requests().len(), 128);
+}
+
+#[test]
+fn hard_surface_acl_is_admitted() {
+    let temp = tempfile::tempdir().expect("temporary hard-surface ACL workspace");
+    let manifest = temp.path().join("web-hard-surfaces.acl");
+    std::fs::write(&manifest, HARD_SURFACES_SUITE).expect("write hard-surface ACL");
+
+    let output = Command::new(binary())
+        .args([
+            "check",
+            manifest.to_str().expect("UTF-8 hard-surface ACL path"),
+            "--json",
+        ])
+        .current_dir(temp.path())
+        .output()
+        .expect("check hard-surface ACL");
+
+    assert_process_success("admit hard-surface ACL", &output);
+}
+
+#[test]
+#[ignore = "requires the exact standalone agent-browser 0.26.x runtime"]
+fn real_agent_browser_runs_the_hard_surface_suite() {
+    let Some(browser) = std::env::var_os("A3S_TEST_AGENT_BROWSER").map(PathBuf::from) else {
+        eprintln!("A3S_TEST_AGENT_BROWSER is not set; skipping hard-surface browser E2E");
+        return;
+    };
+    assert!(
+        browser.is_file(),
+        "browser executable does not exist: {browser:?}"
+    );
+    let version = Command::new(&browser)
+        .arg("--version")
+        .output()
+        .expect("probe standalone browser version");
+    assert!(version.status.success(), "browser version probe failed");
+    assert!(
+        String::from_utf8_lossy(&version.stdout).contains("0.26."),
+        "real E2E requires the admitted 0.26.x protocol: {}",
+        String::from_utf8_lossy(&version.stdout)
+    );
+
+    let fixture = WebFixture::start().expect("start Web fixture");
+    let fixture_shutdown = fixture.shutdown_probe();
+    let temp = tempfile::tempdir().expect("temporary hard-surface E2E workspace");
+    let manifest = temp.path().join("web-hard-surfaces.acl");
+    let suite = HARD_SURFACES_SUITE.replace("http://127.0.0.1:4173", &fixture.origin());
+    std::fs::write(&manifest, suite).expect("write hard-surface ACL");
+    let runtime_directories_before = private_runtime_directories();
+
+    let output = Command::new(binary())
+        .args([
+            "run",
+            manifest.to_str().expect("UTF-8 manifest path"),
+            "--browser-driver",
+            "standalone",
+            "--browser-executable",
+            browser.to_str().expect("UTF-8 browser path"),
+            "--command-timeout-ms",
+            "20000",
+            "--idle-timeout-ms",
+            "15000",
+            "--cleanup-timeout-ms",
+            "15000",
+            "--infrastructure-retries",
+            "0",
+            "--json",
+        ])
+        .current_dir(temp.path())
+        .output()
+        .expect("run hard-surface browser E2E");
+
+    assert!(
+        output.status.success(),
+        "hard-surface browser E2E failed\nstdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let report: serde_json::Value =
+        serde_json::from_slice(&output.stdout).expect("JSON run report");
+    assert_eq!(report["status"], "passed");
+    let scenarios = report["scenarios"].as_array().expect("scenarios");
+    assert_eq!(scenarios.len(), 12);
+    for scenario in scenarios {
+        assert_eq!(scenario["status"], "passed", "{}", scenario["id"]);
+        assert!(scenario["cleanup_error"].is_null());
+    }
+
+    let primary_paths = fixture
+        .primary_requests()
+        .into_iter()
+        .map(|request| request.path)
+        .collect::<Vec<_>>();
+    for path in [
+        "/hard-surfaces.html",
+        "/frame-coupon.html",
+        "/frame-checkout.html",
+    ] {
+        assert!(
+            primary_paths.iter().any(|requested| requested == path),
+            "the browser never requested {path}: {primary_paths:?}"
+        );
+    }
+    assert_no_new_private_runtime_directories(&runtime_directories_before);
+
+    drop(fixture);
+    assert!(
+        fixture_shutdown.is_closed(),
+        "hard-surface fixture listener must be closed"
+    );
 }
 
 #[test]

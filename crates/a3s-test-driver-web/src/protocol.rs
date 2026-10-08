@@ -224,6 +224,11 @@ pub(crate) fn semantic_target_action_args(
   return { handled: true };
 "#
         .to_string(),
+        "reveal" => r#"
+  element.scrollIntoView({ behavior: "instant", block: "center", inline: "center" });
+  return { handled: true, matched: true };
+"#
+        .to_string(),
         _ => return Ok(None),
     };
 

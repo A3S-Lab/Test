@@ -1,0 +1,389 @@
+suite "web-hard-surfaces" {
+    version = 1
+
+    scenario "shadow-access" {
+        name = "Submit the access code that lives in an open shadow root"
+        surface = "web"
+        timeout_ms = 45000
+
+        navigate "open" {
+            url = "http://127.0.0.1:4173/hard-surfaces.html"
+        }
+
+        fill "wrong-code" {
+            target = placeholder("Access code")
+            value = "LUMEN-41"
+        }
+
+        click "reject-access" {
+            target = role("button", "Submit access")
+        }
+
+        expect "rejected" {
+            text = "shadow: rejected"
+        }
+
+        fill "right-code" {
+            target = placeholder("Access code")
+            value = "LUMEN-17"
+        }
+
+        click "grant-access" {
+            target = role("button", "Submit access")
+        }
+
+        expect "granted" {
+            text = "Access granted"
+            stable_for_ms = 100
+            sample_interval_ms = 25
+        }
+    }
+
+    scenario "iframe-coupon" {
+        name = "Apply the coupon from the checkout frame"
+        surface = "web"
+        timeout_ms = 45000
+
+        navigate "open" {
+            url = "http://127.0.0.1:4173/hard-surfaces.html"
+        }
+
+        frame "coupon" {
+            target = css("#coupon-frame")
+        }
+
+        snapshot "coupon-controls" {
+            interactive = false
+        }
+
+        frame "checkout" {
+            target = css("#checkout-frame")
+        }
+
+        snapshot "checkout-controls" {
+            interactive = true
+        }
+
+        fill "wrong-coupon" {
+            target = ref("@e2")
+            value = "NORTH-00"
+        }
+
+        click "refuse-coupon" {
+            target = ref("@e1")
+        }
+
+        frame "main-after-refusal" {
+            target = main()
+        }
+
+        expect "refused" {
+            text = "Invalid coupon code"
+        }
+
+        frame "checkout-again" {
+            target = css("#checkout-frame")
+        }
+
+        snapshot "checkout-controls-again" {
+            interactive = true
+        }
+
+        fill "right-coupon" {
+            target = ref("@e2")
+            value = "NORTH-17"
+        }
+
+        click "apply-coupon" {
+            target = ref("@e1")
+        }
+
+        frame "main-after-apply" {
+            target = main()
+        }
+
+        expect "applied" {
+            text = "Coupon applied"
+            stable_for_ms = 100
+            sample_interval_ms = 25
+        }
+    }
+
+    scenario "hover-menu" {
+        name = "Open the nested workspace menu and redeem credit"
+        surface = "web"
+        timeout_ms = 45000
+
+        navigate "open" {
+            url = "http://127.0.0.1:4173/hard-surfaces.html"
+        }
+
+        hover "workspace" {
+            target = role("button", "Workspace")
+        }
+
+        hover "billing" {
+            target = role("button", "Billing")
+        }
+
+        click "redeem" {
+            target = role("button", "Redeem credit")
+        }
+
+        expect "redeemed" {
+            text = "Credit redeemed"
+        }
+    }
+
+    scenario "export-dialog" {
+        name = "Confirm the export dialog"
+        surface = "web"
+        timeout_ms = 45000
+
+        navigate "open" {
+            url = "http://127.0.0.1:4173/hard-surfaces.html"
+        }
+
+        click "open-export" {
+            target = role("button", "Open export")
+        }
+
+        wait "dialog-open" {
+            visible = role("dialog", "Confirm export")
+        }
+
+        click "export" {
+            target = role("button", "Export now")
+        }
+
+        expect "confirmed" {
+            text = "Export confirmed"
+        }
+
+        expect "dialog-closed" {
+            hidden = role("dialog", "Confirm export")
+        }
+    }
+
+    scenario "hidden-plan" {
+        name = "Activate the plan that is painted under aria-hidden"
+        surface = "web"
+        timeout_ms = 45000
+
+        navigate "open" {
+            url = "http://127.0.0.1:4173/hard-surfaces.html"
+        }
+
+        expect "semantic-plan-hidden" {
+            hidden = role("button", "Studio")
+        }
+
+        expect "painted-plan" {
+            target = css("#studio-plan")
+            visible_count = 1
+        }
+
+        click "studio" {
+            target = css("#studio-plan")
+        }
+
+        expect "activated" {
+            text = "Plan activated"
+        }
+    }
+
+    scenario "overlay-trap" {
+        name = "Dismiss the late overlay before continuing"
+        surface = "web"
+        timeout_ms = 45000
+
+        navigate "open" {
+            url = "http://127.0.0.1:4173/hard-surfaces.html"
+        }
+
+        click "cookies" {
+            target = role("button", "Accept cookies")
+        }
+
+        wait "overlay" {
+            visible = role("button", "Close overlay")
+        }
+
+        click "close-overlay" {
+            target = role("button", "Close overlay")
+        }
+
+        click "continue" {
+            target = role("button", "Continue setup")
+        }
+
+        expect "continued" {
+            text = "Setup continued"
+        }
+
+        expect "continue-reachable" {
+            pointer_reachable = role("button", "Continue setup")
+        }
+    }
+
+    scenario "debounced-search" {
+        name = "Pick the exact catalog row after the debounce"
+        surface = "web"
+        timeout_ms = 45000
+
+        navigate "open" {
+            url = "http://127.0.0.1:4173/hard-surfaces.html"
+        }
+
+        fill "query" {
+            target = placeholder("Search catalog")
+            value = "cedar tea"
+        }
+
+        wait "results" {
+            visible = role("option", "Cedar tea")
+        }
+
+        expect "expanded" {
+            expanded = css("#catalog-search")
+        }
+
+        click "exact" {
+            target = role("option", "Cedar tea")
+        }
+
+        expect "added" {
+            text = "Added Cedar tea"
+        }
+    }
+
+    scenario "rebuilt-list" {
+        name = "Click the rebuilt target three times"
+        surface = "web"
+        timeout_ms = 45000
+
+        navigate "open" {
+            url = "http://127.0.0.1:4173/hard-surfaces.html"
+        }
+
+        click "first" {
+            target = role("button", "Tap me")
+        }
+
+        expect "one" {
+            text = "Progress: 1 / 3"
+        }
+
+        click "second" {
+            target = role("button", "Tap me")
+        }
+
+        expect "two" {
+            text = "Progress: 2 / 3"
+        }
+
+        click "third" {
+            target = role("button", "Tap me")
+        }
+
+        expect "done" {
+            text = "Target clicked 3 times"
+        }
+
+        expect "target-gone" {
+            hidden = role("button", "Tap me")
+        }
+    }
+
+    scenario "css-label" {
+        name = "Activate the control whose label is CSS content"
+        surface = "web"
+        timeout_ms = 45000
+
+        navigate "open" {
+            url = "http://127.0.0.1:4173/hard-surfaces.html"
+        }
+
+        click "publish" {
+            target = css("#ship")
+        }
+
+        expect "published" {
+            text = "Publish confirmed"
+        }
+    }
+
+    scenario "deferred-confirm" {
+        name = "Confirm the dialog that opens after submit"
+        surface = "web"
+        timeout_ms = 45000
+
+        navigate "open" {
+            url = "http://127.0.0.1:4173/hard-surfaces.html"
+        }
+
+        double_click "submit-report" {
+            target = css("#deferred-submit")
+        }
+
+        wait "confirm" {
+            visible = role("dialog", "Confirm report")
+        }
+
+        click "confirm-report" {
+            target = role("button", "Confirm report")
+        }
+
+        expect "submitted" {
+            text = "Report submitted"
+        }
+    }
+
+    scenario "mocked-profile" {
+        name = "Report the profile failure when the API route is aborted"
+        surface = "web"
+        timeout_ms = 45000
+
+        network_route "profile" {
+            pattern = "*api/profile"
+            abort = true
+        }
+
+        navigate "open" {
+            url = "http://127.0.0.1:4173/hard-surfaces.html"
+        }
+
+        click "load" {
+            target = role("button", "Load profile")
+        }
+
+        expect "loaded-profile" {
+            text = "profile: failed"
+        }
+    }
+
+    scenario "sticky-policy" {
+        name = "Accept the policy after the control clears the fixed bar"
+        surface = "web"
+        timeout_ms = 45000
+
+        navigate "open" {
+            url = "http://127.0.0.1:4173/hard-surfaces.html"
+        }
+
+        click "accept" {
+            target = role("button", "Accept policy")
+        }
+
+        expect "accepted" {
+            text = "Policy accepted"
+        }
+
+        expect "above-bar" {
+            target = role("button", "Accept policy")
+            relative_to = testid("sticky-footer")
+            layout = "above"
+            tolerance_px = 1
+        }
+    }
+}

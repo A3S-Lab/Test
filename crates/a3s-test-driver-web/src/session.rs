@@ -654,6 +654,19 @@ impl AgentBrowserSession {
         prepare_artifact_path(&self.artifacts_dir, requested).await
     }
 
+    async fn reveal_target(&self, target: &Target) -> Result<(), DriverError> {
+        if matches!(target, Target::Ref { .. } | Target::Css { .. }) {
+            let selector = direct_selector(target)?;
+            self.execute_command(vec!["scrollintoview".into(), selector.into()])
+                .await?;
+            return Ok(());
+        }
+        if let Some(args) = semantic_target_action_args(target, "reveal", None)? {
+            self.execute_command(args).await?;
+        }
+        Ok(())
+    }
+
     async fn execute_target_action(
         &self,
         target: &Target,

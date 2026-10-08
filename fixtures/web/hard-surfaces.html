@@ -1,0 +1,389 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>A3S Test hard surfaces</title>
+    <style>
+      body {
+        font: 16px/1.5 system-ui, sans-serif;
+        margin: 24px 24px 96px;
+      }
+
+      section {
+        border-top: 1px solid #d5dde8;
+        margin-top: 28px;
+        padding-top: 16px;
+      }
+
+      button,
+      input {
+        font: inherit;
+        padding: 8px 10px;
+      }
+
+      .hover-root {
+        display: inline-grid;
+        position: relative;
+      }
+
+      .menu,
+      .submenu {
+        background: white;
+        border: 1px solid #94a3b8;
+        display: none;
+        gap: 8px;
+        padding: 8px;
+        position: absolute;
+        z-index: 2;
+      }
+
+      .menu {
+        left: 0;
+        top: 100%;
+      }
+
+      .submenu {
+        left: 100%;
+        top: 0;
+      }
+
+      .hover-root:hover > .menu,
+      .hover-root:focus-within > .menu,
+      .hover-root.is-open > .menu,
+      .nest:hover > .submenu,
+      .nest:focus-within > .submenu,
+      .nest.is-open > .submenu {
+        display: grid;
+      }
+
+      .nest {
+        position: relative;
+      }
+
+      .overlay {
+        align-items: start;
+        background: rgb(15 23 42 / 35%);
+        display: grid;
+        inset: 0;
+        padding: 24px;
+        position: fixed;
+        z-index: 5;
+      }
+
+      .sticky-footer {
+        background: #e2e8f0;
+        border-top: 1px solid #94a3b8;
+        bottom: 0;
+        left: 0;
+        padding: 12px 24px;
+        position: fixed;
+        right: 0;
+      }
+
+      .policy-copy {
+        margin-bottom: 64px;
+        max-width: 520px;
+      }
+
+      .ship::before {
+        content: "Publish";
+      }
+
+      #catalog {
+        display: grid;
+        gap: 8px;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>A3S Test hard surfaces</h1>
+
+    <section id="shadow-case" aria-label="Open shadow form">
+      <h2>Open shadow form</h2>
+      <a3s-shadow-form></a3s-shadow-form>
+      <output id="shadow-result">shadow: pending</output>
+    </section>
+
+    <section id="frame-case" aria-label="Frame coupon">
+      <h2>Frame coupon</h2>
+      <iframe id="coupon-frame" title="Coupon frame" src="/frame-coupon.html"></iframe>
+      <iframe id="checkout-frame" title="Checkout frame" src="/frame-checkout.html"></iframe>
+      <output id="coupon-result">coupon: pending</output>
+    </section>
+
+    <section id="hover-case" aria-label="Hover menu">
+      <h2>Hover menu</h2>
+      <div class="hover-root">
+        <button id="workspace-menu" type="button">Workspace</button>
+        <div class="menu" role="menu" aria-label="Workspace menu">
+          <button id="sign-out" type="button">Sign out</button>
+          <div class="nest">
+            <button id="billing" type="button">Billing</button>
+            <div class="submenu" role="menu" aria-label="Billing menu">
+              <button id="redeem" type="button">Redeem credit</button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <output id="menu-result">menu: pending</output>
+    </section>
+
+    <section id="dialog-case" aria-label="Export dialog">
+      <h2>Export dialog</h2>
+      <button id="open-export" type="button">Open export</button>
+      <dialog id="export-dialog" role="dialog" aria-label="Confirm export">
+        <p>Confirm the export.</p>
+        <button id="confirm-export" type="button">Export now</button>
+      </dialog>
+      <output id="export-result">export: pending</output>
+    </section>
+
+    <section id="hidden-case" aria-label="Hidden plan">
+      <h2>Hidden plan</h2>
+      <div aria-hidden="true">
+        <button id="studio-plan" type="button">Studio</button>
+        <output id="decorative-status" data-testid="decorative-status">
+          Decorative status
+        </output>
+      </div>
+      <output id="plan-result">plan: pending</output>
+    </section>
+
+    <section id="overlay-case" aria-label="Overlay trap">
+      <h2>Overlay trap</h2>
+      <button id="accept-cookies" type="button">Accept cookies</button>
+      <button id="continue-setup" type="button" disabled>Continue setup</button>
+      <output id="overlay-result">overlay: pending</output>
+    </section>
+
+    <section id="search-case" aria-label="Debounced search">
+      <h2>Debounced search</h2>
+      <input
+        id="catalog-search"
+        role="combobox"
+        aria-expanded="false"
+        aria-controls="catalog-results"
+        placeholder="Search catalog"
+        autocomplete="off"
+      />
+      <ul id="catalog-results" role="listbox" hidden>
+        <li id="decoy-option" role="option">Cedar tea bags</li>
+        <li id="exact-option" role="option">Cedar tea</li>
+      </ul>
+      <output id="search-result">search: pending</output>
+    </section>
+
+    <section id="stale-case" aria-label="Rebuilt list">
+      <h2>Rebuilt list</h2>
+      <div id="catalog"></div>
+      <output id="stale-progress">Progress: 0 / 3</output>
+      <output id="stale-result">stale: pending</output>
+    </section>
+
+    <section id="css-case" aria-label="CSS label">
+      <h2>CSS label</h2>
+      <button id="ship" class="ship" type="button"></button>
+      <button id="wrong-ship" type="button"></button>
+      <output id="ship-result">ship: pending</output>
+    </section>
+
+    <section id="deferred-case" aria-label="Deferred confirm">
+      <h2>Deferred confirm</h2>
+      <button id="deferred-submit" type="button">Submit report</button>
+      <dialog id="deferred-dialog" role="dialog" aria-label="Confirm report">
+        <button id="confirm-report" type="button">Confirm report</button>
+      </dialog>
+      <output id="deferred-result">deferred: pending</output>
+    </section>
+
+    <section id="profile-case" aria-label="Mocked profile">
+      <h2>Mocked profile</h2>
+      <button id="load-profile" type="button">Load profile</button>
+      <output id="profile-result">profile: pending</output>
+    </section>
+
+    <section id="policy-case" aria-label="Sticky policy">
+      <h2>Sticky policy</h2>
+      <div class="policy-copy" data-testid="policy-copy">
+        Policy text stays above the fixed bar. The accept control starts under
+        that bar until the runner scrolls it clear.
+      </div>
+      <button id="accept-policy" type="button">Accept policy</button>
+      <output id="policy-result">policy: pending</output>
+      <div class="sticky-footer" data-testid="sticky-footer">Policy bar</div>
+    </section>
+
+    <script>
+      const byId = (id) => document.getElementById(id);
+      const write = (id, value) => {
+        byId(id).textContent = value;
+      };
+
+      customElements.define(
+        "a3s-shadow-form",
+        class extends HTMLElement {
+          constructor() {
+            super();
+            const root = this.attachShadow({ mode: "open" });
+            root.innerHTML = `
+              <style>
+                label, button { display: block; font: inherit; margin-top: 8px; }
+                input, button { font: inherit; padding: 8px 10px; }
+              </style>
+              <p>Access code hint: LUMEN-17</p>
+              <label>
+                Access code
+                <input placeholder="Access code" autocomplete="off" />
+              </label>
+              <button type="button">Submit access</button>
+              <output id="shadow-error">shadow-error: pending</output>
+            `;
+            const input = root.querySelector("input");
+            root.querySelector("button").addEventListener("click", () => {
+              const granted = input.value === "LUMEN-17";
+              root.querySelector("output").textContent = granted
+                ? "shadow-error: clear"
+                : "Wrong access code";
+              write("shadow-result", granted ? "Access granted" : "shadow: rejected");
+            });
+          }
+        },
+      );
+
+      window.addEventListener("message", (event) => {
+        if (event.origin !== location.origin || event.data?.type !== "coupon") return;
+        write(
+          "coupon-result",
+          event.data.ok ? "Coupon applied" : "Invalid coupon code",
+        );
+      });
+
+      byId("sign-out").addEventListener("click", () => {
+        write("menu-result", "menu: refused");
+      });
+      byId("redeem").addEventListener("click", () => {
+        write("menu-result", "Credit redeemed");
+      });
+      const hoverRoot = document.querySelector(".hover-root");
+      const hoverNest = document.querySelector(".nest");
+      hoverRoot.addEventListener("mouseenter", () => hoverRoot.classList.add("is-open"));
+      hoverNest.addEventListener("mouseenter", () => hoverNest.classList.add("is-open"));
+
+      byId("open-export").addEventListener("click", () => {
+        byId("export-dialog").showModal();
+      });
+      byId("confirm-export").addEventListener("click", () => {
+        byId("export-dialog").close();
+        write("export-result", "Export confirmed");
+      });
+
+      byId("studio-plan").addEventListener("click", () => {
+        write("plan-result", "Plan activated");
+      });
+
+      byId("accept-cookies").addEventListener("click", () => {
+        window.setTimeout(() => {
+          if (document.getElementById("blocking-overlay")) return;
+          const overlay = document.createElement("div");
+          overlay.className = "overlay";
+          overlay.id = "blocking-overlay";
+          const close = document.createElement("button");
+          close.type = "button";
+          close.id = "close-overlay";
+          close.textContent = "Close overlay";
+          close.addEventListener("click", () => {
+            overlay.remove();
+            byId("continue-setup").disabled = false;
+          });
+          overlay.append(close);
+          document.body.append(overlay);
+        }, 400);
+      });
+      byId("continue-setup").addEventListener("click", () => {
+        if (byId("continue-setup").disabled) return;
+        write("overlay-result", "Setup continued");
+      });
+
+      let searchTimer = 0;
+      byId("catalog-search").addEventListener("input", (event) => {
+        window.clearTimeout(searchTimer);
+        const query = event.target.value;
+        byId("catalog-results").hidden = true;
+        byId("catalog-search").setAttribute("aria-expanded", "false");
+        searchTimer = window.setTimeout(() => {
+          const open = query === "cedar tea";
+          byId("catalog-results").hidden = !open;
+          byId("catalog-search").setAttribute("aria-expanded", open ? "true" : "false");
+        }, 300);
+      });
+      byId("decoy-option").addEventListener("click", () => {
+        write("search-result", "search: refused");
+      });
+      byId("exact-option").addEventListener("click", () => {
+        write("search-result", "Added Cedar tea");
+      });
+
+      let hits = 0;
+      const renderCatalog = () => {
+        const host = byId("catalog");
+        host.replaceChildren();
+        for (let slot = 0; slot < 6; slot += 1) {
+          const index = (slot + hits) % 6;
+          const button = document.createElement("button");
+          button.type = "button";
+          button.textContent = index === 0 ? "Tap me" : "Decoy";
+          button.style.marginTop = `${index * 12}px`;
+          if (index === 0) {
+            button.addEventListener("click", () => {
+              hits += 1;
+              write("stale-progress", `Progress: ${hits} / 3`);
+              if (hits >= 3) {
+                host.replaceChildren();
+                write("stale-result", "Target clicked 3 times");
+                return;
+              }
+              renderCatalog();
+            });
+          }
+          host.append(button);
+        }
+      };
+      renderCatalog();
+
+      byId("ship").addEventListener("click", () => {
+        write("ship-result", "Publish confirmed");
+      });
+      byId("wrong-ship").addEventListener("click", () => {
+        write("ship-result", "ship: refused");
+      });
+
+      let deferredOpen = false;
+      byId("deferred-submit").addEventListener("click", () => {
+        if (deferredOpen || byId("deferred-result").textContent.startsWith("Report")) return;
+        deferredOpen = true;
+        window.setTimeout(() => {
+          byId("deferred-dialog").showModal();
+        }, 250);
+      });
+      byId("confirm-report").addEventListener("click", () => {
+        byId("deferred-dialog").close();
+        write("deferred-result", "Report submitted");
+      });
+
+      byId("load-profile").addEventListener("click", async () => {
+        try {
+          const response = await fetch("/api/profile");
+          const body = await response.json();
+          write("profile-result", `profile: ${body.name}`);
+        } catch (error) {
+          write("profile-result", "profile: failed");
+        }
+      });
+
+      byId("accept-policy").addEventListener("click", () => {
+        write("policy-result", "Policy accepted");
+      });
+    </script>
+  </body>
+</html>
