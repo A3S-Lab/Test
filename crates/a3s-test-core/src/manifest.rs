@@ -13,8 +13,9 @@ use self::targets::{optional_target, parse_target, required_target, target_argum
 
 use crate::{
     Action, AssertionMode, CaptureOperation, DialogOperation, FrameTarget, ModifierKey,
-    NetworkRoute, SpecError, Surface, TabOperation, TestScenario, TestStep, TestSuite,
-    VideoOperation, WaitMode,
+    NamedViewport, NetworkRoute, OwnedApp, ScrollDirection, SecretPurpose, SpecError, Surface,
+    TabOperation, TestScenario, TestStep, TestSuite, VideoOperation, WaitMode,
+    DEFAULT_SCROLL_UNTIL_TIMEOUT_MS, MAX_SCROLL_UNTIL_TIMEOUT_MS, MIN_SCROLL_UNTIL_TIMEOUT_MS,
 };
 
 const DEFAULT_SCENARIO_TIMEOUT_MS: u64 = 60_000;
@@ -144,23 +145,51 @@ fn parse_suite(block: &Block) -> Result<TestSuite, SpecError> {
 
     let mut scenarios = Vec::new();
     let mut ids = HashSet::new();
+    let mut app = None;
+    let mut targets = Vec::new();
+    let mut target_names = HashSet::new();
     for child in &block.blocks {
-        if child.name != "scenario" {
-            return Err(SpecError::new(
-                "test.spec.block_unknown",
-                format!("{path}.{}", child.name),
-                "only scenario blocks are allowed inside a suite",
-            ));
+        match child.name.as_str() {
+            "scenario" => {
+                let scenario = parse_scenario(child, &path)?;
+                if !ids.insert(scenario.id.clone()) {
+                    return Err(SpecError::new(
+                        "test.spec.scenario_duplicate",
+                        format!("{path}.scenario.{}", scenario.id),
+                        "scenario identifiers must be unique",
+                    ));
+                }
+                scenarios.push(scenario);
+            }
+            "app" => {
+                if app.is_some() {
+                    return Err(SpecError::new(
+                        "test.spec.app_duplicate",
+                        format!("{path}.app"),
+                        "a suite admits one owned app",
+                    ));
+                }
+                app = Some(parse_owned_app(child, &path)?);
+            }
+            "target" => {
+                let target = parse_named_viewport(child, &path)?;
+                if !target_names.insert(target.name.clone()) {
+                    return Err(SpecError::new(
+                        "test.spec.viewport_duplicate",
+                        format!("{path}.target.{}", target.name),
+                        "viewport target names must be unique",
+                    ));
+                }
+                targets.push(target);
+            }
+            _ => {
+                return Err(SpecError::new(
+                    "test.spec.block_unknown",
+                    format!("{path}.{}", child.name),
+                    "only scenario, app, and target blocks are allowed inside a suite",
+                ));
+            }
         }
-        let scenario = parse_scenario(child, &path)?;
-        if !ids.insert(scenario.id.clone()) {
-            return Err(SpecError::new(
-                "test.spec.scenario_duplicate",
-                format!("{path}.scenario.{}", scenario.id),
-                "scenario identifiers must be unique",
-            ));
-        }
-        scenarios.push(scenario);
     }
 
     if scenarios.is_empty() {
@@ -181,7 +210,131 @@ fn parse_suite(block: &Block) -> Result<TestSuite, SpecError> {
             )
         })?,
         scenarios,
+        app,
+        targets,
     })
+}
+
+fn parse_owned_app(block: &Block, suite_path: &str) -> Result<OwnedApp, SpecError> {
+    let label = one_label(block, &format!("{suite_path}.app"))?;
+    let path = format!("{suite_path}.app.{label}");
+    validate_identifier(label, &path)?;
+    ensure_attributes(block, &["command", "ready_url", "reuse"], &path)?;
+    if !block.blocks.is_empty() {
+        return Err(SpecError::new(
+            "test.spec.action_nested",
+            path,
+            "app blocks cannot contain nested blocks",
+        ));
+    }
+    let command = parse_app_command(block, &path)?;
+    let ready_url = required_string(block, "ready_url", &path)?.to_string();
+    admit_ready_url(&ready_url, &format!("{path}.ready_url"))?;
+    Ok(OwnedApp {
+        command,
+        ready_url,
+        reuse: optional_bool(block, "reuse", false, &path)?,
+    })
+}
+
+fn parse_app_command(block: &Block, path: &str) -> Result<Vec<String>, SpecError> {
+    let value = block.attributes.get("command").ok_or_else(|| {
+        SpecError::new(
+            "test.spec.attribute_required",
+            format!("{path}.command"),
+            "required attribute is missing",
+        )
+    })?;
+    if value.as_str().is_some() {
+        return Err(SpecError::new(
+            "test.spec.app_command",
+            format!("{path}.command"),
+            "app command must be an argument list",
+        ));
+    }
+    let command = required_string_list(block, "command", path).map_err(|error| {
+        if error.code() == "test.spec.attribute_required" {
+            error
+        } else {
+            SpecError::new(
+                "test.spec.app_command",
+                error.path(),
+                "app command must be an argument list",
+            )
+        }
+    })?;
+    if command.first().is_some_and(|program| program.is_empty()) {
+        return Err(SpecError::new(
+            "test.spec.app_command",
+            format!("{path}.command"),
+            "app command must be an argument list",
+        ));
+    }
+    Ok(command)
+}
+
+fn admit_ready_url(value: &str, path: &str) -> Result<(), SpecError> {
+    let url = Url::parse(value).map_err(|_| {
+        SpecError::new(
+            "test.spec.app_ready_url",
+            path,
+            "ready URL must be an HTTP or HTTPS URL",
+        )
+    })?;
+    if !matches!(url.scheme(), "http" | "https") || url.port() == Some(0) {
+        let code = if url.port() == Some(0) {
+            "test.spec.app_port"
+        } else {
+            "test.spec.app_ready_url"
+        };
+        return Err(SpecError::new(
+            code,
+            path,
+            "ready URL must be HTTP or HTTPS and must not store port 0",
+        ));
+    }
+    Ok(())
+}
+
+fn parse_named_viewport(block: &Block, suite_path: &str) -> Result<NamedViewport, SpecError> {
+    let name = one_label(block, &format!("{suite_path}.target"))?.to_string();
+    let path = format!("{suite_path}.target.{name}");
+    if !admit_viewport_name(&name) {
+        return Err(SpecError::new(
+            "test.spec.viewport_name",
+            &path,
+            "viewport name must contain letters, digits, '_', '.', or '-' and must not be only dots",
+        ));
+    }
+    ensure_attributes(block, &["width", "height", "scale"], &path)?;
+    let width = required_u32(block, "width", &path)?;
+    let height = required_u32(block, "height", &path)?;
+    let scale = optional_u32(block, "scale", &path)?;
+    if !(1..=4_096).contains(&width)
+        || !(1..=4_096).contains(&height)
+        || matches!(scale, Some(0) | Some(9..))
+    {
+        return Err(SpecError::new(
+            "test.spec.viewport_size",
+            &path,
+            "viewport width and height must be 1 through 4096 and scale must be 1 through 8",
+        ));
+    }
+    Ok(NamedViewport {
+        name,
+        width,
+        height,
+        scale,
+    })
+}
+
+fn admit_viewport_name(name: &str) -> bool {
+    !name.is_empty()
+        && !name.chars().all(|character| character == '.')
+        && name.len() <= 64
+        && name.chars().all(|character| {
+            character.is_ascii_alphanumeric() || matches!(character, '_' | '.' | '-')
+        })
 }
 
 fn parse_scenario(block: &Block, suite_path: &str) -> Result<TestScenario, SpecError> {
@@ -252,11 +405,43 @@ fn parse_step(block: &Block, scenario_path: &str) -> Result<TestStep, SpecError>
     let mut stability = None;
     let mut assertion_mode = AssertionMode::Positive;
     let mut wait_mode = WaitMode::Positive;
+    if let Some(name) = ["pierce", "shadow", "closed_shadow"]
+        .into_iter()
+        .find(|name| block.attributes.contains_key(*name))
+    {
+        return Err(browser_verb_unsupported(&path, name));
+    }
     let action = match block.name.as_str() {
         "navigate" => {
             ensure_attributes(block, &["url"], &path)?;
             Action::Navigate {
                 url: required_string(block, "url", &path)?.to_string(),
+            }
+        }
+        "back" => {
+            ensure_attributes(block, &[], &path)?;
+            Action::Back {}
+        }
+        "scroll_until" => {
+            ensure_attributes(block, &["target", "direction", "timeout_ms"], &path)?;
+            let timeout_ms =
+                optional_integer(block, "timeout_ms", DEFAULT_SCROLL_UNTIL_TIMEOUT_MS, &path)?;
+            if !(MIN_SCROLL_UNTIL_TIMEOUT_MS..=MAX_SCROLL_UNTIL_TIMEOUT_MS).contains(&timeout_ms) {
+                return Err(SpecError::new(
+                    "test.spec.scroll_until_timeout",
+                    format!("{path}.timeout_ms"),
+                    format!(
+                        "scroll_until timeout must be {MIN_SCROLL_UNTIL_TIMEOUT_MS} through {MAX_SCROLL_UNTIL_TIMEOUT_MS} milliseconds"
+                    ),
+                ));
+            }
+            Action::ScrollUntil {
+                target: required_target(block, "target", &path)?,
+                direction: parse_scroll_direction(
+                    required_string(block, "direction", &path)?,
+                    &format!("{path}.direction"),
+                )?,
+                timeout_ms,
             }
         }
         "snapshot" => {
@@ -266,6 +451,9 @@ fn parse_step(block: &Block, scenario_path: &str) -> Result<TestStep, SpecError>
             }
         }
         "click" => {
+            if let Some(name) = unsupported_click_attribute(block) {
+                return Err(browser_verb_unsupported(&path, name));
+            }
             ensure_attributes(block, &["target"], &path)?;
             Action::Click {
                 target: required_target(block, "target", &path)?,
@@ -309,6 +497,8 @@ fn parse_step(block: &Block, scenario_path: &str) -> Result<TestStep, SpecError>
                 value: required_string(block, "value", &path)?.to_string(),
             }
         }
+        "fill_secret" => parse_secret_fill(block, &path, true)?,
+        "type_secret" => parse_secret_fill(block, &path, false)?,
         "insert_text" => {
             ensure_attributes(block, &["value"], &path)?;
             Action::InsertText {
@@ -393,6 +583,10 @@ fn parse_step(block: &Block, scenario_path: &str) -> Result<TestStep, SpecError>
             }
         }
         "wait" => {
+            if block.attributes.contains_key("response") || block.attributes.contains_key("status")
+            {
+                return Err(browser_verb_unsupported(&path, "wait_for_response"));
+            }
             ensure_attributes(
                 block,
                 &["load", "text", "regex", "url", "visible", "hidden"],
@@ -407,6 +601,8 @@ fn parse_step(block: &Block, scenario_path: &str) -> Result<TestStep, SpecError>
                 block,
                 &[
                     "text",
+                    "text_contains",
+                    "text_matches",
                     "url",
                     "visible",
                     "hidden",
@@ -445,6 +641,12 @@ fn parse_step(block: &Block, scenario_path: &str) -> Result<TestStep, SpecError>
                     "tolerance_px",
                     "stable_for_ms",
                     "sample_interval_ms",
+                    "pixels",
+                    "threshold_millis",
+                    "max_diff_pixels",
+                    "max_diff_pixel_ratio_micros",
+                    "masks",
+                    "update",
                 ],
                 &path,
             )?;
@@ -492,6 +694,22 @@ fn parse_step(block: &Block, scenario_path: &str) -> Result<TestStep, SpecError>
             }
         }
         "network_route" => {
+            if let Some(name) = [
+                "status",
+                "content_type",
+                "headers",
+                "json",
+                "file",
+                "continue",
+                "method",
+                "post_data",
+                "fulfill",
+            ]
+            .into_iter()
+            .find(|name| block.attributes.contains_key(*name))
+            {
+                return Err(browser_verb_unsupported(&path, name));
+            }
             ensure_attributes(block, &["pattern", "abort", "body"], &path)?;
             Action::NetworkRoute {
                 pattern: required_string(block, "pattern", &path)?.to_string(),
@@ -551,7 +769,17 @@ fn parse_step(block: &Block, scenario_path: &str) -> Result<TestStep, SpecError>
                 state: required_string(block, "state", &path)?.to_string(),
             }
         }
+        "long_press" | "closed_shadow" | "pierce" | "network_fulfill" | "network_continue"
+        | "wait_response" | "wait_for_response" => {
+            return Err(browser_verb_unsupported(&path, block.name.as_str()));
+        }
         _ => {
+            if block.attributes.contains_key("pierce")
+                || block.attributes.contains_key("shadow")
+                || block.attributes.contains_key("closed_shadow")
+            {
+                return Err(browser_verb_unsupported(&path, "closed_shadow"));
+            }
             return Err(SpecError::new(
                 "test.spec.action_unknown",
                 action_path,
@@ -734,6 +962,89 @@ fn validate_identifier(value: &str, path: &str) -> Result<(), SpecError> {
         ));
     }
     Ok(())
+}
+
+fn parse_scroll_direction(value: &str, path: &str) -> Result<ScrollDirection, SpecError> {
+    match value {
+        "up" => Ok(ScrollDirection::Up),
+        "down" => Ok(ScrollDirection::Down),
+        "left" => Ok(ScrollDirection::Left),
+        "right" => Ok(ScrollDirection::Right),
+        _ => Err(SpecError::new(
+            "test.spec.scroll_direction",
+            path,
+            "scroll direction must be up, down, left, or right",
+        )),
+    }
+}
+
+fn browser_verb_unsupported(path: &str, verb: &str) -> SpecError {
+    SpecError::new(
+        "test.spec.browser_verb_unsupported",
+        path,
+        format!("{verb} is not expressed by the admitted browser command"),
+    )
+}
+
+fn unsupported_click_attribute(block: &Block) -> Option<&'static str> {
+    [
+        "modifiers",
+        "position",
+        "x",
+        "y",
+        "delay",
+        "button",
+        "long_press",
+    ]
+    .into_iter()
+    .find(|name| block.attributes.contains_key(*name))
+}
+
+fn parse_secret_fill(block: &Block, path: &str, fill: bool) -> Result<Action, SpecError> {
+    ensure_attributes(block, &["target", "name", "purpose"], path)?;
+    let name = required_string(block, "name", path)?;
+    if !admit_env_name(name) {
+        return Err(SpecError::new(
+            "test.spec.secret_name",
+            format!("{path}.name"),
+            "secret name must be an environment variable identifier",
+        ));
+    }
+    let purpose = match required_string(block, "purpose", path)? {
+        "text" => SecretPurpose::Text,
+        "password" => SecretPurpose::Password,
+        _ => {
+            return Err(SpecError::new(
+                "test.spec.secret_purpose",
+                format!("{path}.purpose"),
+                "secret purpose must be text or password",
+            ));
+        }
+    };
+    let target = required_target(block, "target", path)?;
+    if fill {
+        Ok(Action::FillSecret {
+            target,
+            name: name.to_string(),
+            purpose,
+        })
+    } else {
+        Ok(Action::TypeSecret {
+            target,
+            name: name.to_string(),
+            purpose,
+        })
+    }
+}
+
+fn admit_env_name(name: &str) -> bool {
+    let mut chars = name.chars();
+    let Some(first) = chars.next() else {
+        return false;
+    };
+    (first.is_ascii_alphabetic() || first == '_')
+        && name.len() <= 128
+        && chars.all(|character| character.is_ascii_alphanumeric() || character == '_')
 }
 
 fn ensure_attributes(block: &Block, allowed: &[&str], path: &str) -> Result<(), SpecError> {

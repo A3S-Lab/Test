@@ -1,7 +1,35 @@
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
+pub use super::pixels::PixelMask;
 use super::Target;
+
+pub const DEFAULT_PIXEL_THRESHOLD_MILLIS: u16 = 200;
+pub const MAX_PIXEL_THRESHOLD_MILLIS: u16 = 1_000;
+pub const MAX_PIXEL_RATIO_MICROS: u32 = 1_000_000;
+
+fn default_pixel_threshold() -> u16 {
+    DEFAULT_PIXEL_THRESHOLD_MILLIS
+}
+
+/// Closed pixel-compare request. Threshold is thousandths of the pixelmatch
+/// color distance (200 means 0.2). Ratio is millionths of the image.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct PixelExpectation {
+    pub baseline: String,
+    #[serde(default = "default_pixel_threshold")]
+    #[schemars(range(max = 1000))]
+    pub threshold_millis: u16,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max_diff_pixels: Option<u32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max_diff_pixel_ratio_micros: Option<u32>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub masks: Vec<PixelMask>,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub update: bool,
+}
 
 #[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -239,6 +267,30 @@ impl ViewportCoverageComparison {
     }
 }
 
+/// Admit a page-text regular expression before it is stored or executed.
+///
+/// The pattern is a Rust regex of at most 256 characters. Size limits reject
+/// expressions that would compile into an unbounded automaton.
+pub fn admit_text_pattern(pattern: &str) -> Result<(), &'static str> {
+    if pattern.is_empty() || pattern.chars().count() > super::MAX_TEXT_PATTERN_CHARS {
+        return Err("text pattern must contain 1 to 256 characters");
+    }
+    text_pattern(pattern).map(|_| ())
+}
+
+/// Report whether `page_text` contains a match for an already admitted pattern.
+pub fn text_pattern_matches(page_text: &str, pattern: &str) -> Result<bool, &'static str> {
+    Ok(text_pattern(pattern)?.is_match(page_text))
+}
+
+fn text_pattern(pattern: &str) -> Result<regex::Regex, &'static str> {
+    regex::RegexBuilder::new(pattern)
+        .size_limit(1 << 20)
+        .dfa_size_limit(1 << 20)
+        .build()
+        .map_err(|_| "text pattern is not a supported regular expression")
+}
+
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
 #[serde(
     tag = "type",
@@ -248,6 +300,8 @@ impl ViewportCoverageComparison {
 )]
 pub enum Expectation {
     TextVisible(String),
+    TextContains(String),
+    TextMatches(String),
     Url(String),
     Visible(Target),
     InViewport(Target),
@@ -291,4 +345,5 @@ pub enum Expectation {
         #[schemars(range(max = 1024))]
         tolerance_px: u32,
     },
+    Pixels(PixelExpectation),
 }

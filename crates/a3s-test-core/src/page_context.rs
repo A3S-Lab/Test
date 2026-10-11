@@ -309,11 +309,14 @@ fn action_targets(action: &Action) -> impl Iterator<Item = &Target> {
         | Action::ContextClick { target }
         | Action::Fill { target, .. }
         | Action::Type { target, .. }
+        | Action::FillSecret { target, .. }
+        | Action::TypeSecret { target, .. }
         | Action::Check { target }
         | Action::Uncheck { target }
         | Action::Select { target, .. }
         | Action::Upload { target, .. }
         | Action::Download { target, .. }
+        | Action::ScrollUntil { target, .. }
         | Action::Wait {
             condition: WaitCondition::Visible(target),
         } => targets.push(target),
@@ -357,11 +360,14 @@ fn visit_action_targets(
         | Action::ContextClick { target }
         | Action::Fill { target, .. }
         | Action::Type { target, .. }
+        | Action::FillSecret { target, .. }
+        | Action::TypeSecret { target, .. }
         | Action::Check { target }
         | Action::Uncheck { target }
         | Action::Select { target, .. }
         | Action::Upload { target, .. }
         | Action::Download { target, .. }
+        | Action::ScrollUntil { target, .. }
         | Action::Wait {
             condition: WaitCondition::Visible(target),
         } => visitor(target)?,
@@ -405,7 +411,12 @@ fn expectation_target(expectation: &Expectation) -> Option<&Target> {
         | Expectation::State { target, .. }
         | Expectation::Value { target, .. }
         | Expectation::SelectedValues { target, .. } => Some(target),
-        Expectation::TextVisible(_) | Expectation::Url(_) | Expectation::Layout { .. } => None,
+        Expectation::TextVisible(_)
+        | Expectation::TextContains(_)
+        | Expectation::TextMatches(_)
+        | Expectation::Url(_)
+        | Expectation::Pixels(_)
+        | Expectation::Layout { .. } => None,
     }
 }
 
@@ -421,7 +432,12 @@ fn expectation_target_mut(expectation: &mut Expectation) -> Option<&mut Target> 
         | Expectation::State { target, .. }
         | Expectation::Value { target, .. }
         | Expectation::SelectedValues { target, .. } => Some(target),
-        Expectation::TextVisible(_) | Expectation::Url(_) | Expectation::Layout { .. } => None,
+        Expectation::TextVisible(_)
+        | Expectation::TextContains(_)
+        | Expectation::TextMatches(_)
+        | Expectation::Url(_)
+        | Expectation::Pixels(_)
+        | Expectation::Layout { .. } => None,
     }
 }
 

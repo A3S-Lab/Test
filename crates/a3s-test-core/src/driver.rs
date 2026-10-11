@@ -189,6 +189,8 @@ pub trait DriverSession: Send {
         ))
     }
 
+    fn set_pixel_ci(&mut self, _ci: bool) {}
+
     async fn close(&mut self) -> Result<(), DriverError>;
 }
 

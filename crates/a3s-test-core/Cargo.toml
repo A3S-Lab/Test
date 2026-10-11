@@ -9,6 +9,8 @@ description = "Typed test specifications and driver contracts for A3S Test"
 
 [dependencies]
 a3s-acl.workspace = true
+png.workspace = true
+regex.workspace = true
 async-trait.workspace = true
 schemars.workspace = true
 serde.workspace = true

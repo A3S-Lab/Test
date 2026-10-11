@@ -160,6 +160,7 @@ impl RemoteJobExecutor for CliRemoteExecutor {
             )
         })?
         .with_contracts(admitted.contracts)
+        .with_ci(crate::environment_is_ci())
         .with_artifacts_root(job.artifacts_root().to_path_buf())
         .map_err(|error| {
             RemoteWorkerError::new(

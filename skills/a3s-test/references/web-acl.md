@@ -67,6 +67,14 @@ navigate "open" {
     url = "https://example.test"
 }
 
+back "return" {}
+
+scroll_until "footer" {
+    target = css("#end")
+    direction = "down"
+    timeout_ms = 5000
+}
+
 snapshot "controls" {
     interactive = true
 }
@@ -159,6 +167,14 @@ expect "saved" {
     text = "Saved"
 }
 
+expect "contains-saved" {
+    text_contains = "Saved"
+}
+
+expect "matches-saved" {
+    text_matches = "Sav+ed"
+}
+
 expect "current-url" {
     url = "https://example.test/dashboard"
 }
@@ -223,14 +239,15 @@ screenshot "final" {
 ```
 
 A wait accepts exactly one of `load`, `text`, `regex`, `url`, `visible`, or
-`hidden`. An expectation accepts exactly one of `text`, `url`, `visible`,
+`hidden`. An expectation accepts exactly one of `text`, `text_contains`,
+`text_matches`, `url`, `visible`,
 `hidden`, `value`, `enabled`, `disabled`, `checked`, `unchecked`, `selected`,
 `unselected`, `selected_values`, `rendered_text`, `rendered_texts`,
 `visible_count`, `layout`, `in_viewport`, `viewport_coverage_at_least`,
 `viewport_coverage_at_most`, `pointer_reachable`, `focused`,
 `unfocused`, `focus_within`, `focus_outside`, `expanded`, `collapsed`,
 `pressed`, `unpressed`, `readonly`, `writable`, `required`, `optional`,
-`invalid`, or `valid`.
+`invalid`, `valid`, or `pixels`.
 
 `expect hidden` immediately proves that a stable semantic or CSS locator has no
 visible match, including an absent element. A visible match fails as
@@ -243,9 +260,72 @@ then every 50 ms through the scenario deadline. It succeeds only on
 counter-evidence plus timing metrics. Both negative forms reject `ref()` and
 `visual_point()` because an unresolved observation-bound target is not proof
 of hidden product state. Driver, stale-target, and ambiguity errors remain
-errors. This is runner policy and adds no action variant; focus ownership
-semantic state and viewport coverage advance the current action protocol to
-revision 15.
+errors. This is runner policy and adds no action variant. Focus ownership,
+semantic state, and viewport coverage advanced the protocol through revision
+15. Revision 16 adds history `back`, directional `scroll_until`, and
+point-in-time `text_contains` and `text_matches` expectations.
+
+`back` accepts no attributes. After the history step, Web reads the resulting
+URL and admits it only when it stays on an allowed HTTP(S) origin. A configured
+origin list is exact. Domain patterns apply only when that origin list is
+empty. An empty policy admits any HTTP(S) URL. A non-Web result is
+`test.driver.web.session_origin_lost`. An unapproved HTTP(S) result is
+`test.driver.web.navigation_origin_denied`.
+
+`scroll_until` requires `target` and `direction` (`up`, `down`, `left`, or
+`right`). `timeout_ms` defaults to 5,000 and must be 50 through 30,000. Web
+checks visibility, scrolls the page 240 CSS pixels in that direction, and
+repeats every 50 milliseconds until the target is visible or the timeout
+elapses. The admitted browser command scrolls the page. It does not scroll a
+nested container named by the target. A timeout is
+`test.driver.web.scroll_until_timeout`.
+
+`text_contains` requires at least one character. `text_matches` is a Rust
+regular expression of 1 through 256 characters. Both read the current body text
+once and can be sampled by an assertion stability window. Body text over
+1,048,576 bytes is `test.driver.web.text_too_large`. Observed mismatches are
+`test.assert.text_contains` and `test.assert.text_matches`, and those messages
+do not include the page text. `text` remains the waiting visible-text
+expectation. GUI and TUI reject both page-text expectations and do not
+implement `back` or `scroll_until`.
+
+Revision 17 is the current action protocol. `fill_secret` and `type_secret`
+store an environment name and a purpose (`password` or `text`). The value is
+read only when Web is about to send the admitted fill or type command. It does
+not appear in ACL, action JSON, errors, events, reports, or step data. An
+unset, empty, disabled, read-only, non-editable, or password-purpose mismatch
+fails before that command. A present `readonly` attribute is read-only for
+every value, including an empty string and `false`. An absent attribute is
+not read-only. A later `pixels` expectation in that session is
+refused.
+
+```acl
+fill_secret "password" {
+    target = css("#password")
+    name = "APP_PASSWORD"
+    purpose = "password"
+}
+
+expect "shot" {
+    pixels = "baseline.png"
+    threshold_millis = 200
+    max_diff_pixels = 4
+    update = false
+}
+```
+
+`pixels` compares two bounded PNG captures in Rust. A size mismatch is
+`test.assert.pixel_size`. When both diff caps are set, the smaller limit wins.
+`update = false` does not create a missing baseline. A suite may own an app
+process, given as an argument list plus an HTTP(S) ready URL. CI refuses
+reuse, and the runner reaps the process group on finish, cancel, and timeout.
+Named `target` blocks open a fresh session and a separate evidence directory
+for each viewport. The default remains one viewport. A verified session emits
+an ACL candidate only after a later assertion passed. That candidate omits
+observation refs, visual points, and secret literals. Long-press, click
+modifiers, click box position, closed-shadow piercing, and typed network
+fulfill, continue, and response waits are
+`test.spec.browser_verb_unsupported` before any browser command.
 
 Focus, double-click, context-click, type, uncheck, select, drag, and
 target-scoped wheel require `ref()` or `css()` with the current browser

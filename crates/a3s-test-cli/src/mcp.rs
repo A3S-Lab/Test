@@ -259,10 +259,8 @@ async fn call_tool(
         "test_repair_inspect" => match require_web_mcp_host(manager) {
             Err(error) => Err(error),
             Ok(()) => {
-                let request = parse_value::<RepairInspectArgument>(
-                    arguments,
-                    "repair inspect arguments",
-                )?;
+                let request =
+                    parse_value::<RepairInspectArgument>(arguments, "repair inspect arguments")?;
                 manager
                     .inspect_repair_loop(&request.session, &request.finding_id)
                     .await
@@ -283,8 +281,7 @@ async fn call_tool(
         "test_repair_claim" => match require_web_mcp_host(manager) {
             Err(error) => Err(error),
             Ok(()) => {
-                repair_transition(manager, arguments, RepairStatus::Claimed, "repair claimed")
-                    .await
+                repair_transition(manager, arguments, RepairStatus::Claimed, "repair claimed").await
             }
         },
         "test_repair_progress" => match require_web_mcp_host(manager) {
@@ -561,16 +558,58 @@ fn tool_definitions(surfaces: &[a3s_test_core::Surface]) -> Vec<Value> {
             true,
             false,
         ));
-        tools.push(tool_definition("test_repair_watch", "Drain already queued Test Kit findings, then perform one bounded page pickup.", repair_watch_schema(), true, false));
+        tools.push(tool_definition(
+            "test_repair_watch",
+            "Drain already queued Test Kit findings, then perform one bounded page pickup.",
+            repair_watch_schema(),
+            true,
+            false,
+        ));
         tools.push(tool_definition("test_repair_inbox", "Read the prioritized repair inbox for one active session without observing or mutating the page.", repair_inbox_schema(), true, false));
-        tools.push(tool_definition("test_repair_inspect", "Read one versioned durable repair loop without observing or mutating the page.", repair_inspect_schema(), true, false));
-        tools.push(tool_definition("test_repair_claim", "Claim one queued repair with an explicit attempt and lease.", repair_transition_schema(), false, false));
-        tools.push(tool_definition("test_repair_progress", "Report that workspace editing has begun for the claimed attempt.", repair_transition_schema(), false, false));
-        tools.push(tool_definition("test_repair_reply", "Request bounded human clarification for a claimed or repairing finding.", repair_transition_schema(), false, false));
+        tools.push(tool_definition(
+            "test_repair_inspect",
+            "Read one versioned durable repair loop without observing or mutating the page.",
+            repair_inspect_schema(),
+            true,
+            false,
+        ));
+        tools.push(tool_definition(
+            "test_repair_claim",
+            "Claim one queued repair with an explicit attempt and lease.",
+            repair_transition_schema(),
+            false,
+            false,
+        ));
+        tools.push(tool_definition(
+            "test_repair_progress",
+            "Report that workspace editing has begun for the claimed attempt.",
+            repair_transition_schema(),
+            false,
+            false,
+        ));
+        tools.push(tool_definition(
+            "test_repair_reply",
+            "Request bounded human clarification for a claimed or repairing finding.",
+            repair_transition_schema(),
+            false,
+            false,
+        ));
         tools.push(tool_definition("test_repair_complete", "Append the exact changed-files report, then move editing to A3S Test-owned verification, not resolved.", repair_complete_schema(), false, false));
         tools.push(tool_definition("test_repair_verify", "Run A3S Test-owned browser verification against a newer ready page revision and produce a validated ACL candidate when possible.", repair_verify_schema(), false, false));
-        tools.push(tool_definition("test_repair_fail", "Record a failed repair attempt without discarding its history.", repair_transition_schema(), false, false));
-        tools.push(tool_definition("test_repair_cancel", "Cancel a queued or claimed repair finding.", repair_transition_schema(), false, true));
+        tools.push(tool_definition(
+            "test_repair_fail",
+            "Record a failed repair attempt without discarding its history.",
+            repair_transition_schema(),
+            false,
+            false,
+        ));
+        tools.push(tool_definition(
+            "test_repair_cancel",
+            "Cancel a queued or claimed repair finding.",
+            repair_transition_schema(),
+            false,
+            true,
+        ));
     }
     tools
 }

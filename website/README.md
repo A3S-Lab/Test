@@ -53,9 +53,9 @@ the release that installation commands may download. Main may stage the next
 documentation version, but its homepage must keep installing the published
 version and disclose that distinction until a release commit aligns both.
 
-The active documentation lives under `docs/v1.0.2`. The `docs/v1.0.1`,
-`docs/v1.0.0`, `docs/v0.16.2`, and `docs/v0.15.0` directories are historical
-snapshots for previous contract lines. New documentation work updates only
+The active documentation lives under `docs/v1.0.3`. The `docs/v1.0.2`,
+`docs/v1.0.1`, `docs/v1.0.0`, `docs/v0.16.2`, and `docs/v0.15.0` directories
+are historical snapshots for previous contract lines. New documentation work updates only
 the active version. When a release changes a public action schema, provider
 protocol, CLI contract, or safety boundary, archive the old directory before
 advancing the default version.
@@ -72,8 +72,8 @@ Run the metadata gate locally with:
 ```bash
 node ../scripts/check-release-metadata.mjs
 
-# Only after publishedVersion and every installer example move to v1.0.2.
-node ../scripts/check-release-metadata.mjs --tag v1.0.2
+# Only after publishedVersion and every installer example move to v1.0.3.
+node ../scripts/check-release-metadata.mjs --tag v1.0.3
 ```
 
 `npm run check:site` derives expected routes from the source trees, verifies

@@ -1,5 +1,31 @@
 # Changelog
 
+## Unreleased
+
+## 1.0.3 - 2026-10-12
+
+A3S Test 1.0.3 moves the Web action protocol to revision 17. History back,
+directional scroll, page-text expectations, secret references, pixel
+expectations, owned app process groups, and named viewport targets are closed
+sets. Verbs the admitted browser cannot express stay rejected before execution.
+
+### Added
+
+- Action protocol revision 16 adds Web `back`, directional `scroll_until`, and
+  point-in-time `text_contains` and `text_matches` expectations. History back
+  reads the resulting URL and rejects a non-Web or unapproved origin.
+  `scroll_until` steps the page 240 CSS pixels until a target is visible or a
+  50 through 30,000 millisecond timeout elapses. Page-text expectations read
+  body text once and do not include that text in failure messages. GUI and TUI
+  fail closed for the new expectations. Long-press, click modifiers, and typed
+  network fulfill remain outside this revision.
+- Action protocol revision 17 adds `fill_secret` and `type_secret` environment
+  references, an owned app process group, named viewport targets, bounded pixel
+  expectations, and a verified-session ACL candidate. Secret values stay out of
+  ACL, action JSON, errors, events, reports, and step data. Unsupported browser
+  verbs stay rejected before any browser command. Typed network fulfill,
+  continue, and response waits remain outside this revision.
+
 ## 1.0.2 - 2026-09-12
 
 A3S Test 1.0.2 hardens multi-surface MCP and macOS GUI attach honesty: Web-gated

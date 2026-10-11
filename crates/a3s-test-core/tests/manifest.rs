@@ -1,7 +1,8 @@
 use a3s_test_core::{
-    Action, AssertionMode, AssertionStability, CaptureOperation, DialogOperation, Expectation,
-    FrameTarget, LoadState, ModifierKey, NetworkRoute, Surface, TabOperation, Target, TestSuite,
-    VideoOperation, WaitCondition, WaitMode,
+    action_uses_observation_target, action_uses_page_context_ref, Action, AssertionMode,
+    AssertionStability, CaptureOperation, DialogOperation, Expectation, FrameTarget, LoadState,
+    ModifierKey, NetworkRoute, ScrollDirection, Surface, TabOperation, Target, TestSuite,
+    VideoOperation, WaitCondition, WaitMode, DEFAULT_SCROLL_UNTIL_TIMEOUT_MS,
 };
 
 const VALID_SUITE: &str = r#"
@@ -1121,4 +1122,209 @@ fn rejects_state_changing_repair_acl_steps() {
     let error = TestSuite::from_repair_acl(&source, "https://example.test:8443/checkout")
         .expect_err("repair proof must not mutate application state");
     assert_eq!(error.code(), "test.spec.repair_action_denied");
+}
+
+#[test]
+fn parses_history_scroll_and_page_text_expectations() {
+    let suite = TestSuite::from_acl(
+        r#"
+suite "gestures" {
+    scenario "history" {
+        surface = "web"
+
+        back "return" {}
+
+        scroll_until "footer" {
+            target = css("[data-end]")
+            direction = "down"
+        }
+
+        scroll_until "page-context-footer" {
+            target = ref("@c3")
+            direction = "up"
+            timeout_ms = 50
+        }
+
+        expect "contains-ready" {
+            text_contains = "Ready"
+        }
+
+        expect "matches-ready" {
+            text_matches = "Rea+dy"
+        }
+    }
+}
+"#,
+    )
+    .expect("gesture suite");
+
+    let steps = &suite.scenarios[0].steps;
+    assert_eq!(steps[0].action, Action::Back {});
+    assert!(!action_uses_observation_target(&steps[0].action));
+    assert_eq!(
+        steps[1].action,
+        Action::ScrollUntil {
+            target: Target::Css {
+                selector: "[data-end]".to_string(),
+            },
+            direction: ScrollDirection::Down,
+            timeout_ms: DEFAULT_SCROLL_UNTIL_TIMEOUT_MS,
+        }
+    );
+    assert!(!action_uses_page_context_ref(&steps[1].action));
+    assert!(action_uses_page_context_ref(&steps[2].action));
+    assert!(action_uses_observation_target(&steps[2].action));
+    assert_eq!(
+        steps[3].action,
+        Action::Assert {
+            expectation: Expectation::TextContains("Ready".to_string()),
+        }
+    );
+    assert!(!action_uses_observation_target(&steps[3].action));
+    assert_eq!(
+        steps[4].action,
+        Action::Assert {
+            expectation: Expectation::TextMatches("Rea+dy".to_string()),
+        }
+    );
+}
+
+#[test]
+fn rejects_invalid_history_scroll_and_page_text_values() {
+    let pattern = "a".repeat(257);
+    let cases = [
+        (
+            r#"
+suite "invalid" {
+    scenario "web" {
+        surface = "web"
+        back "return" {
+            url = "https://example.test"
+        }
+    }
+}
+"#,
+            "test.spec.attribute_unknown",
+        ),
+        (
+            r#"
+suite "invalid" {
+    scenario "web" {
+        surface = "web"
+        scroll_until "footer" {
+            target = css("[data-end]")
+            direction = "forward"
+        }
+    }
+}
+"#,
+            "test.spec.scroll_direction",
+        ),
+        (
+            r#"
+suite "invalid" {
+    scenario "web" {
+        surface = "web"
+        scroll_until "footer" {
+            target = css("[data-end]")
+            direction = "down"
+            timeout_ms = 49
+        }
+    }
+}
+"#,
+            "test.spec.scroll_until_timeout",
+        ),
+        (
+            r#"
+suite "invalid" {
+    scenario "web" {
+        surface = "web"
+        scroll_until "footer" {
+            target = css("[data-end]")
+            direction = "down"
+            timeout_ms = 30001
+        }
+    }
+}
+"#,
+            "test.spec.scroll_until_timeout",
+        ),
+        (
+            r#"
+suite "invalid" {
+    scenario "web" {
+        surface = "web"
+        expect "empty" {
+            text_contains = ""
+        }
+    }
+}
+"#,
+            "test.spec.text_contains",
+        ),
+        (
+            r#"
+suite "invalid" {
+    scenario "web" {
+        surface = "web"
+        expect "empty-pattern" {
+            text_matches = ""
+        }
+    }
+}
+"#,
+            "test.spec.text_pattern",
+        ),
+        (
+            r#"
+suite "invalid" {
+    scenario "web" {
+        surface = "web"
+        expect "broken-pattern" {
+            text_matches = "("
+        }
+    }
+}
+"#,
+            "test.spec.text_pattern",
+        ),
+    ];
+
+    for (source, code) in cases {
+        let error = TestSuite::from_acl(source).expect_err(code);
+        assert_eq!(error.code(), code, "{}", error.message());
+    }
+
+    let oversized = format!(
+        r#"
+suite "invalid" {{
+    scenario "web" {{
+        surface = "web"
+        expect "long-pattern" {{
+            text_matches = "{pattern}"
+        }}
+    }}
+}}
+"#
+    );
+    let error = TestSuite::from_acl(&oversized).expect_err("pattern length");
+    assert_eq!(error.code(), "test.spec.text_pattern");
+}
+
+#[test]
+fn repair_acl_rejects_history_and_scroll_gestures() {
+    for gesture in [
+        "        back \"return\" {}",
+        "        scroll_until \"footer\" {\n            target = css(\"#end\")\n            direction = \"down\"\n        }",
+        "        fill_secret \"password\" {\n            target = css(\"#password\")\n            name = \"APP_PASSWORD\"\n            purpose = \"password\"\n        }",
+    ] {
+        let source = repair_acl(&READ_ONLY_REPAIR_SCENARIO.replace(
+            "        wait \"ready\" {\n            load = \"domcontentloaded\"\n        }",
+            gesture,
+        ));
+        let error = TestSuite::from_repair_acl(&source, "https://example.test:8443/checkout")
+            .expect_err("repair proof rejects effectful gestures");
+        assert_eq!(error.code(), "test.spec.repair_action_denied");
+    }
 }

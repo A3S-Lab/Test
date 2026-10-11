@@ -542,7 +542,7 @@ async fn multi_surface_mcp_hosts_gate_repair_tools_on_web_registration() {
         .iter()
         .filter_map(|tool| tool["name"].as_str())
         .collect::<Vec<_>>();
-    assert!(!tools.iter().any(|name| *name == "test_inspect"));
+    assert!(!tools.contains(&"test_inspect"));
     assert!(!tools.iter().any(|name| name.starts_with("test_repair_")));
     drop(client_writer);
     server.await.expect("server task").expect("MCP server");
@@ -622,8 +622,8 @@ async fn multi_surface_mcp_hosts_gate_repair_tools_on_web_registration() {
         .iter()
         .filter_map(|tool| tool["name"].as_str())
         .collect::<Vec<_>>();
-    assert!(tools.iter().any(|name| *name == "test_inspect"));
-    assert!(tools.iter().any(|name| *name == "test_repair_inbox"));
+    assert!(tools.contains(&"test_inspect"));
+    assert!(tools.contains(&"test_repair_inbox"));
     drop(client_writer);
     server.await.expect("server task").expect("MCP server");
 }

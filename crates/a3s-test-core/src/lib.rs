@@ -1,5 +1,6 @@
 //! Typed test specifications and surface-driver contracts for A3S Test.
 
+mod candidate;
 mod contract;
 mod design_audit;
 mod driver;
@@ -10,6 +11,7 @@ mod page_context;
 mod page_context_diff;
 mod page_context_observation;
 mod reconcile;
+mod secret;
 mod source_mapping;
 mod ui_understanding;
 
@@ -24,34 +26,42 @@ pub use design_audit::{
     DesignAuditTarget, DesignAuditUsage, DESIGN_AUDIT_REPORT_PROTOCOL,
 };
 
+pub use candidate::{verified_session_candidate, RecordedStep};
 pub use driver::{
     DriverSession, PageContextInspectRequest, PageContextInspectScope, ScenarioContext,
     SurfaceDriver,
 };
 pub use error::{DriverError, SpecError};
 pub use model::{
-    Action, AssertionMode, AssertionStability, CaptureOperation, DialogOperation, ElementState,
-    Evidence, Expectation, FrameTarget, GroundingScreenshot, LayoutRect, LayoutRelation, LoadState,
-    ModifierKey, NetworkRoute, PageContextComponent, PageContextGeometry, PageContextLocator,
-    PageContextNode, PageContextNodeState, PageContextObservation, PageContextPage,
-    PageContextPoint, PageContextPosition, PageContextRect, PageContextSize, PageContextSnapshot,
-    PageContextSource, PageContextSourceCandidate, PageContextSourceMapping,
+    admit_text_pattern, compare_pixels, decode_png_bounded, paint_pixel_masks,
+    pixel_baseline_decision, text_pattern_matches, Action, AssertionMode, AssertionStability,
+    CaptureOperation, DecodedPng, DialogOperation, ElementState, Evidence, Expectation,
+    FrameTarget, GroundingScreenshot, LayoutRect, LayoutRelation, LoadState, ModifierKey,
+    NamedViewport, NetworkRoute, OwnedApp, PageContextComponent, PageContextGeometry,
+    PageContextLocator, PageContextNode, PageContextNodeState, PageContextObservation,
+    PageContextPage, PageContextPoint, PageContextPosition, PageContextRect, PageContextSize,
+    PageContextSnapshot, PageContextSource, PageContextSourceCandidate, PageContextSourceMapping,
     PageContextSourceOrigin, PageContextSourceRelation, PageContextTheme, PageContextViewport,
-    PageContextVisualViewport, RepairAclProof, RepairActor, RepairAttempt, RepairBatch,
-    RepairBatchItemResult, RepairBatchStatus, RepairChange, RepairCheckResult, RepairCheckStatus,
-    RepairDesignReference, RepairDesignReferenceImage, RepairDesignReferenceKind,
-    RepairEvidenceBundle, RepairEvidencePhase, RepairEvidenceRequest, RepairFinding,
-    RepairHumanAction, RepairHumanActionKind, RepairIntent, RepairLayoutCanvas, RepairLayoutIntent,
-    RepairRelation, RepairSeverity, RepairStatus, RepairStatusEvent, RepairTarget,
-    RepairTargetKind, RepairThreadMessage, RepairVerification, RepairVerificationExpansionReason,
-    RepairVerificationScope, RepairVerificationSlice, StepOutput, Surface, SurfaceObservation,
-    TabOperation, Target, TestScenario, TestStep, TestSuite, VideoOperation,
-    ViewportCoverageComparison, WaitCondition, WaitMode, ACTION_PROTOCOL_REVISION,
-    DEFAULT_ASSERTION_SAMPLE_INTERVAL_MS, MAX_ASSERTION_STABILITY_MS,
+    PageContextVisualViewport, PixelBaselineDecision, PixelCompareFailure, PixelDecodeError,
+    PixelExpectation, PixelLimits, PixelMask, RepairAclProof, RepairActor, RepairAttempt,
+    RepairBatch, RepairBatchItemResult, RepairBatchStatus, RepairChange, RepairCheckResult,
+    RepairCheckStatus, RepairDesignReference, RepairDesignReferenceImage,
+    RepairDesignReferenceKind, RepairEvidenceBundle, RepairEvidencePhase, RepairEvidenceRequest,
+    RepairFinding, RepairHumanAction, RepairHumanActionKind, RepairIntent, RepairLayoutCanvas,
+    RepairLayoutIntent, RepairRelation, RepairSeverity, RepairStatus, RepairStatusEvent,
+    RepairTarget, RepairTargetKind, RepairThreadMessage, RepairVerification,
+    RepairVerificationExpansionReason, RepairVerificationScope, RepairVerificationSlice,
+    ScrollDirection, SecretPurpose, StepOutput, Surface, SurfaceObservation, TabOperation, Target,
+    TestScenario, TestStep, TestSuite, VideoOperation, ViewportCoverageComparison, WaitCondition,
+    WaitMode, ACTION_PROTOCOL_REVISION, DEFAULT_ASSERTION_SAMPLE_INTERVAL_MS,
+    DEFAULT_PIXEL_THRESHOLD_MILLIS, DEFAULT_SCROLL_UNTIL_TIMEOUT_MS, MAX_ASSERTION_STABILITY_MS,
     MAX_ASSERTION_STABILITY_SAMPLES, MAX_LAYOUT_COORDINATE_ABS, MAX_LAYOUT_TOLERANCE_PX,
+    MAX_PAGE_TEXT_BYTES, MAX_PIXEL_RATIO_MICROS, MAX_PIXEL_THRESHOLD_MILLIS,
     MAX_RENDERED_TEXT_ITEMS, MAX_REPAIR_CHECK_COMMAND_BYTES, MAX_REPAIR_CHECK_SUMMARY_BYTES,
-    MAX_VIEWPORT_COVERAGE_PERCENT, MIN_ASSERTION_STABILITY_MS, PAGE_CONTEXT_PROTOCOL,
-    REPAIR_PROTOCOL, REPAIR_VERIFICATION_SLICE_PROTOCOL, SOURCE_MAPPING_PROTOCOL,
+    MAX_SCROLL_UNTIL_TIMEOUT_MS, MAX_TEXT_PATTERN_CHARS, MAX_VIEWPORT_COVERAGE_PERCENT,
+    MIN_ASSERTION_STABILITY_MS, MIN_SCROLL_UNTIL_TIMEOUT_MS, PAGE_CONTEXT_PROTOCOL,
+    REPAIR_PROTOCOL, REPAIR_VERIFICATION_SLICE_PROTOCOL, SCROLL_UNTIL_SAMPLE_INTERVAL_MS,
+    SCROLL_UNTIL_STEP_PX, SOURCE_MAPPING_PROTOCOL,
 };
 pub use page_context::{
     action_uses_observation_target, action_uses_page_context_ref,
@@ -66,6 +76,7 @@ pub use page_context_diff::{
 pub use reconcile::{
     ContractFinding, ContractMatch, ContractMatchStrategy, ContractOutcome, ContractReport,
 };
+pub use secret::{admit_secret_sink, redact_secret_text, SecretSink, SecretSinkError};
 pub use source_mapping::SourceMappingValidationError;
 pub use ui_understanding::{
     UiAccessibilityStateChange, UiAnimationProfile, UiAnimationSource, UiAnimationTimeline,

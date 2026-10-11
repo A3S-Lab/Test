@@ -1,0 +1,29 @@
+suite "web-gestures" {
+    version = 1
+
+    scenario "history-and-text" {
+        name = "Return to a scrolled page and read its text"
+        surface = "web"
+        timeout_ms = 30000
+
+        navigate "open" {
+            url = "https://example.test/start"
+        }
+
+        scroll_until "footer" {
+            target = css("#end")
+            direction = "down"
+            timeout_ms = 5000
+        }
+
+        back "return" {}
+
+        expect "contains-start" {
+            text_contains = "Start"
+        }
+
+        expect "matches-start" {
+            text_matches = "Sta+rt"
+        }
+    }
+}

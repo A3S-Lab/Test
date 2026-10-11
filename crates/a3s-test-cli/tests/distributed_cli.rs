@@ -294,6 +294,7 @@ mod unix {
             id: id.to_string(),
             name: id.to_string(),
             surface: Surface::Tui,
+            target: None,
             status: if failed {
                 RunStatus::Failed
             } else {

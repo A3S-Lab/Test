@@ -125,6 +125,9 @@ pub(crate) struct AgentSessionReport {
     pub(crate) started_at_ms: u64,
     pub(crate) finished_at_ms: u64,
     pub(crate) summary: String,
+    /// Present only when a later assertion confirmed earlier passed actions.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) acl_candidate: Option<String>,
 }
 
 pub(crate) struct AgentSessionStore {
@@ -323,6 +326,39 @@ impl AgentSessionStore {
                 self.events_path.display()
             )
         })
+    }
+
+    pub(crate) async fn read_events(&self) -> Result<Vec<AgentSessionEvent>> {
+        if !self.events_path.is_file() {
+            return Ok(Vec::new());
+        }
+        let bytes = tokio::fs::read(&self.events_path).await.with_context(|| {
+            format!(
+                "failed to read agent event log {}",
+                self.events_path.display()
+            )
+        })?;
+        let text = String::from_utf8(bytes).with_context(|| {
+            format!(
+                "agent event log {} is not UTF-8",
+                self.events_path.display()
+            )
+        })?;
+        let mut events = Vec::new();
+        for (index, line) in text.lines().enumerate() {
+            if line.trim().is_empty() {
+                continue;
+            }
+            let event = serde_json::from_str(line).with_context(|| {
+                format!(
+                    "agent event log {} line {} is not a session event",
+                    self.events_path.display(),
+                    index + 1
+                )
+            })?;
+            events.push(event);
+        }
+        Ok(events)
     }
 
     pub(crate) async fn write_report(&self, report: &AgentSessionReport) -> Result<()> {

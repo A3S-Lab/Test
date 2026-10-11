@@ -842,6 +842,8 @@ fn transient_suite(stability: Option<AssertionStability>) -> TestSuite {
                 }],
             })
             .collect(),
+        app: None,
+        targets: Vec::new(),
     }
 }
 
@@ -879,6 +881,8 @@ fn state_suite(stability: AssertionStability) -> TestSuite {
                 }],
             })
             .collect(),
+        app: None,
+        targets: Vec::new(),
     }
 }
 
@@ -930,6 +934,8 @@ fn focus_suite(stability: AssertionStability) -> TestSuite {
         name: "focus-stability-dataset".to_string(),
         version: 1,
         scenarios: focused.chain(focus_within).collect(),
+        app: None,
+        targets: Vec::new(),
     }
 }
 
@@ -963,6 +969,8 @@ fn layout_suite(stability: AssertionStability) -> TestSuite {
                 }],
             })
             .collect(),
+        app: None,
+        targets: Vec::new(),
     }
 }
 
@@ -1006,6 +1014,8 @@ fn interactability_suite(stability: AssertionStability) -> TestSuite {
         name: "interactability-stability-dataset".to_string(),
         version: 1,
         scenarios: viewport.chain(pointer).collect(),
+        app: None,
+        targets: Vec::new(),
     }
 }
 
@@ -1043,6 +1053,8 @@ fn viewport_coverage_suite(stability: AssertionStability) -> TestSuite {
                 }
             })
             .collect(),
+        app: None,
+        targets: Vec::new(),
     }
 }
 
@@ -1119,5 +1131,7 @@ fn rendered_suite(stability: AssertionStability) -> TestSuite {
             .chain(visible_count)
             .chain(rendered_texts)
             .collect(),
+        app: None,
+        targets: Vec::new(),
     }
 }

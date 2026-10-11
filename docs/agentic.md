@@ -104,7 +104,7 @@ profile and every later turn reconnects with it; legacy session metadata
 without the field defaults to `disabled`. The same option is available to
 deterministic `run`, direct `agent run`, and Web MCP hosts.
 
-Action protocol revision 15 is the current cross-surface schema. Revision 2
+Action protocol revision 17 is the current cross-surface schema. Revision 2
 introduced the browser interactions needed to inspect document-style
 applications: click, hover, focus, double-click, context-click,
 fill, incremental type, check/uncheck, multi-value select, drag, key press,
@@ -177,6 +177,38 @@ validates both and recomputes intersection area divided by target area.
 unconditionally true endpoint claims never enter execution. Stable semantic or
 CSS locators are required, current Page Context refs may resolve before
 dispatch, and GUI/TUI fail closed without equivalent viewport evidence.
+Revision 16 adds history `back`, directional `scroll_until`, and point-in-time
+`text_contains` and `text_matches` expectations. `back` has no URL of its own;
+the Web driver reads the resulting URL and rejects a non-Web or unapproved
+origin before the step succeeds. `scroll_until` checks visibility, then scrolls
+the page 240 CSS pixels in one of `up`, `down`, `left`, or `right`, repeating
+every 50 milliseconds inside a 50 through 30,000 millisecond timeout. The two
+page-text expectations read body text once and do not echo that text in a
+failure. They stay closed expectations, so the external planner still proposes
+one typed action per turn. GUI and TUI fail closed for the page-text
+expectations and do not implement the new gestures. Long-press, click
+modifiers, and click position remain outside revision 16.
+Revision 17 adds environment secret references, named viewport targets,
+pixel expectations, and a verified-session ACL candidate. `fill_secret` and
+`type_secret` store an environment name and a purpose. The value is read only
+when the Web driver is about to send the admitted fill or type command, and it
+never appears in ACL, action JSON, errors, events, reports, or step data.
+Unset, empty, disabled, read-only, non-editable, and password-purpose
+mismatches fail before that command. A present `readonly` attribute is
+read-only for every value, including an empty string and `false`. A later pixel expectation is refused
+after a secret fill. A suite may declare an owned app as an argument list and
+a ready HTTP(S) URL. The runner reaps the process group on finish, cancel, and
+timeout, and CI refuses process reuse. Named `target` blocks fan one scenario
+across fresh sessions and separate evidence directories. `pixels` compares two
+bounded PNG captures in Rust. A missing baseline is not created unless
+`update` is set. A session emits an ACL candidate only after a later assertion
+passed, and that candidate omits observation refs, visual points, and secret
+literals. A passing session whose success criteria are prose emits none.
+Long-press, click modifiers, click box position, closed-shadow piercing, and
+typed network fulfill, continue, and response waits stay unavailable: ACL
+rejects them with `test.spec.browser_verb_unsupported` before any browser
+command. `forward` and `reload` remain unknown actions. Repair suites and
+agent-run verification still deny `back`, `scroll_until`, and secret fills.
 
 Semantic role, text, test-ID, label, and placeholder targets are used whenever
 the underlying browser command supports the requested subaction. Focus,
@@ -207,7 +239,7 @@ page inspection and repair tools appear only when a Web surface is registered:
 | `test_act` | Execute exactly one typed action |
 | `test_finish` | Record a result and close the exact owned surface |
 | `test_abort` | Abort and close the exact owned surface |
-| `test_schema` | Return action protocol revision 15 and its interactive JSON Schema |
+| `test_schema` | Return action protocol revision 17 and its interactive JSON Schema |
 | `test_repair_watch` | Drain and perform one bounded pickup of submitted Test Kit findings (Web host only) |
 | `test_repair_inbox` | Prioritize resumable repair loops for one active owning session (Web host only) |
 | `test_repair_inspect` | Project one recoverable repair loop from the authoritative ledger (Web host only) |

@@ -1,0 +1,375 @@
+---
+title: LLM、视觉定位与设计 Provider
+description: 接入部署方模型服务，同时保留提议、观察、契约、断言和修复之间的权限边界。
+---
+
+# LLM、视觉定位与设计 Provider
+
+A3S Test 定义模型请求、响应、来源、预算和权限，不捆绑模型权重或推理 runtime。部署方可以把任意模型服务放在协议后面，只要 adapter 返回严格 Schema 所要求的结构，并接受 A3S Test 的本地复验。
+
+Provider 只补充机器擅长的提议能力。浏览器观察、确定性断言、人工审批和 workspace 授权仍由各自的权威层负责。
+
+## 四种 Provider 不能混用
+
+| 能力                | 入口                | 输入重点                                      | 输出权限         | 明确没有的权限                            |
+| ------------------- | ------------------- | --------------------------------------------- | ---------------- | ----------------------------------------- |
+| LLM planning        | `agent run`         | 目标、最新观察、历史、剩余预算、Action Schema | `proposal_only`  | 不能决定 verdict 或声称动作已经发生       |
+| Contract generation | `contract generate` | PRD、设计图、context 和精确来源摘要           | `candidate_only` | 不能发布 Expected Surface 或批准冲突      |
+| Visual grounding    | `agent ground`      | 最新截图、query、observation 和触发原因       | `advisory`       | 不能点击、生成持久 ref 或授权修复         |
+| Design audit        | `agent audit`       | 最新截图、完整 Page Context 和审计维度        | `advisory`       | 不能产生测试结果、Expected Surface 或修复 |
+
+先用机器命令发现每种协议。
+
+```bash
+a3s-test provider schema llm
+a3s-test provider schema contract-generation
+a3s-test provider schema visual-grounding
+a3s-test provider schema design-audit
+```
+
+输出包含 transport-neutral request 与 response Schema、标准 HTTP envelope 和安全不变量。未知字段被拒绝，不兼容修改必须使用新的 protocol ID。
+
+## 共同的 HTTP 和凭据边界
+
+四种 CLI adapter 使用相同的部署原则。
+
+- endpoint 必须是 HTTPS，只有显式 loopback 地址可以使用 HTTP。
+- endpoint 不允许内嵌 credentials、query 或 fragment。
+- authorization environment variable 必须以 `A3S_TEST_PROVIDER_AUTHORIZATION_` 开头。
+- 环境变量的值是完整 Authorization header，不写入 ACL、命令参数、session metadata 或报告。
+- adapter 不跟随 redirect，不使用环境 proxy，并限制 request 与 response body。
+- HTTP 必须返回 200 和 JSON media type，transport 成功仍要经过 typed response admission。
+- deadline 取配置 timeout 与 wire deadline 中更早的一个。
+- provider identity、model、request binding、usage 和 cost 都会在本地重新核对。
+
+标准响应只允许 success 或 failure 二选一。
+
+```json
+{
+  "protocol": "a3s.test.visual-grounding-provider/2",
+  "status": "failure",
+  "error": {
+    "code": "capacity_exhausted",
+    "message": "queue is full",
+    "retryable": true
+  }
+}
+```
+
+HTTP 200 不代表功能成功。`status = "failure"` 仍是 provider 失败，调用方根据 bounded `retryable` 决定是否在原 deadline 内处理。
+
+## LLM Provider 驱动一次有界 Web 工作流
+
+外部编码 Agent 使用 `agent start -> observe -> act` 时，本身就是 planner，不需要再配置一个嵌套 LLM。只有希望 A3S Test 自己拥有一次完整模型循环时，才使用 `agent run`。
+
+### 配置
+
+```acl
+agent_run "checkout" {
+    url = "http://127.0.0.1:3000/checkout"
+    goal = "Complete checkout with the fixture account"
+    success_criteria = ["The order confirmation is visible"]
+    allow_origins = ["https://auth.example.test"]
+    allow_domains = ["cdn.example.test"]
+    allow_actions = ["click", "fill", "wait"]
+    max_turns = 8
+    max_total_tokens = 20000
+    max_cost_microusd = 50000
+    max_context_bytes = 524288
+    timeout_ms = 120000
+
+    provider {
+        name = "deployment"
+        model = "planner"
+        endpoint = "https://models.example.test/v1/plan"
+        authorization_env = "A3S_TEST_PROVIDER_AUTHORIZATION_DEPLOYMENT"
+    }
+
+    verification {
+        expect "confirmation" {
+            text = "Order confirmed"
+        }
+
+        screenshot "final" {
+            path = "confirmation.png"
+        }
+    }
+}
+```
+
+```bash
+export A3S_TEST_PROVIDER_AUTHORIZATION_DEPLOYMENT='Bearer ...'
+a3s-test agent run tests/checkout.agent.acl --json
+```
+
+必填项包括 URL、goal、非空 success criteria、allow actions、cost 上限、一个 provider 和一个 verification block。下面是完整的运行预算准入。
+
+| 字段                | 默认值   | 准入范围或含义                                                   |
+| ------------------- | -------- | ---------------------------------------------------------------- |
+| `allow_origins`     | `[]`     | 增加精确 scheme、host 与有效 port；初始 URL origin 总会加入      |
+| `allow_domains`     | `[]`     | 只增加网络 hostname，不授予页面导航或观察权限                    |
+| `max_turns`         | `12`     | 1 到 256 次模型决策                                              |
+| `max_total_tokens`  | `64000`  | 1 到 100,000,000 个累计 provider token                           |
+| `max_cost_microusd` | 必填     | 0 到 1,000,000,000 micro-USD                                     |
+| `max_context_bytes` | `524288` | 1 到 67,108,864 bytes，限制每轮序列化 context                    |
+| `timeout_ms`        | `120000` | 1 ms 到 24 小时，覆盖打开 surface、模型轮次、动作和 verification |
+
+`allow_actions` 只接受下面的唯一值。
+
+```text
+navigate, snapshot, click, hover, focus, double_click, context_click,
+fill, type, check, uncheck, select, drag, press, wheel, viewport,
+wait, assert, screenshot, tab, frame, dialog, upload, download,
+network_route, network_unroute, har, trace, video, accessibility,
+console, page_errors
+```
+
+这个 CLI workflow 只打开 Web surface，所以不接受 `terminal_paste`、`terminal_resize` 或 `terminal_recording`。allowlist 中的 `type` 同时约束带目标的 `type` 和在当前焦点插入文本的 `insert_text`。Runner 自有的 `verify_contract` 永远不能由模型提出。整个 workflow deadline 与 cleanup deadline 相互独立。
+
+### 每轮模型收到什么
+
+协议 `a3s.test.llm-provider/1` 的 request 包含以下结构化内容。
+
+| 字段                  | 作用                                          |
+| --------------------- | --------------------------------------------- |
+| `prompt_version`      | 当前 system contract 版本 `a3s-test-agent/v2` |
+| `system_instruction`  | 与用户目标分离的 planner 规则                 |
+| `context.goal`        | goal 和可观察 success criteria                |
+| `context.surface`     | 类型化 surface                                |
+| `context.observation` | 最新语义观察与当前引用                        |
+| `image_attachments`   | observation 实际绑定的 GUI grounding images   |
+| `context.history`     | 已执行 Action 和 StepOutput                   |
+| `context.remaining`   | turn、token、cost 和 time 剩余预算            |
+| `response_schema`     | 生成的 `AgentDecision` JSON Schema            |
+
+Provider 返回一个 JSON decision、token 和 micro-USD usage，以及可选 request ID。即使模型声称自己使用 structured output，Core 仍会重新反序列化并校验。一条动作还要通过 allowlist、surface capability、origin、observation revision 和 target admission。
+
+内部循环如下。
+
+```text
+open Web surface
+    -> observe
+    -> build bounded model context
+    -> provider proposes one typed decision
+    -> local schema and policy admission
+    -> execute one action
+    -> observe again
+    -> provider proposes finish
+    -> run local deterministic verification
+    -> close exact owned surface
+```
+
+模型的 finish 只是提议。verification 只接受 `snapshot`、`wait`、`expect`、`screenshot`、`accessibility`、`console` 和 `page_errors`，并且至少有一个 `expect`。只有模型完成、本地 verification 全部通过且 surface cleanup 成功，最终报告才可以 passed。
+
+报告协议是 `a3s.test.agent-run/1`，默认写到 `.a3s-test/agent-runs/<run-id>/report.json`。它保留 provider identity 与 usage、decision digest、观察、动作输出、verification 和独立 cleanup error，并在发布前做有界 redaction。
+
+## Contract Generation Provider 把来源变成候选
+
+这条能力把 PRD 片段和设计图区域解释为 Expected Surface 候选。它不会生成浏览器可访问树，也不会直接写出可执行契约。
+
+```acl
+contract_generation "checkout" {
+    max_cost_microusd = 50000
+
+    context {
+        mode = "operate"
+        audience = ["customer"]
+        primary_outcome = "place_order"
+    }
+
+    provider {
+        name = "deployment-gateway"
+        model = "interface-contract-model"
+        endpoint = "https://inference.example.test/v1/contracts"
+        authorization_env = "A3S_TEST_PROVIDER_AUTHORIZATION_CONTRACTS"
+    }
+
+    source "requirements" {
+        kind = "prd"
+        path = "./checkout.md"
+        uri = "./checkout.md"
+    }
+
+    source "desktop-design" {
+        kind = "design"
+        path = "./checkout.png"
+        uri = "./checkout.png"
+        media_type = "image/png"
+        width = 1440
+        height = 900
+    }
+}
+```
+
+```bash
+a3s-test contract generate \
+  --config tests/contracts/checkout.generate.acl \
+  --output tests/contracts/checkout.draft.json
+```
+
+### 来源字段与生成上限
+
+`context` 必须包含 `mode = "persuade" | "operate" | "read" | "experience"`、非空 `audience` 和 `primary_outcome`。每个唯一命名的 `source` 都需要 `kind` 与配置目录内的相对 `path`；`uri` 省略时使用 `path`。设计图还需要匹配真实图片的 `media_type`、正数 `width` 与 `height`，PRD 则禁止这些图片字段。
+
+| 字段               | 默认值    | 硬上限                      |
+| ------------------ | --------- | --------------------------- |
+| `timeout_ms`       | `30000`   | 300,000 ms                  |
+| `max_sources`      | `8`       | 32 个来源                   |
+| `max_source_bytes` | `8388608` | 每个来源 33,554,432 bytes   |
+| `max_candidates`   | `64`      | 256 个候选                  |
+| `max_elements`     | `1024`    | 5,000 个候选元素            |
+| `max_string_bytes` | `16384`   | 每个有界字符串 65,536 bytes |
+
+所有可选上限至少为 1。`max_cost_microusd` 必填，并限制 provider 实际报告的成本。
+
+CLI 计算来源 SHA-256，不接受配置伪造 digest。PRD candidate 必须带精确 source byte span。design candidate 必须带界内 pixel 或 normalized region，并保持视觉父子关系和语义父子关系一致。调用前后都会重新检查来源文件，symbolic link、目录逃逸、内容漂移、循环 parent、未知来源、重复元素和预算超限都会关闭失败。
+
+不同来源的不同字段不会由模型自动选胜者。生成阶段把它们变成稳定 conflict。人必须批准或拒绝每个适用 candidate，解决所有 conflict，并为选择写 rationale，才能通过 `contract review` 发布 canonical Surface Contract。完整流程见[把 PRD 与设计稿变成可核对的界面契约](./contracts.mdx)。
+
+## Visual Grounding Provider 只返回定位建议
+
+视觉定位用于 canvas、image-only control、remote desktop、design reference 或语义定位确实没有匹配的情况。常规 Web 元素仍优先使用 role、label、test ID、placeholder、text 和 CSS。
+
+### 配置与调用
+
+```acl
+visual_grounding {
+    max_cost_microusd = 10000
+    timeout_ms = 15000
+    max_candidates = 32
+    max_query_bytes = 4096
+    max_label_bytes = 1024
+
+    provider {
+        name = "deployment-gateway"
+        model = "ui-grounding-model"
+        endpoint = "https://inference.example.test/v1/ground"
+        authorization_env = "A3S_TEST_PROVIDER_AUTHORIZATION_GROUNDING"
+    }
+}
+```
+
+| 字段                | 默认值  | 准入范围                   |
+| ------------------- | ------- | -------------------------- |
+| `max_cost_microusd` | 必填    | 非负 provider cost ceiling |
+| `timeout_ms`        | `15000` | 1 到 300,000 ms            |
+| `max_candidates`    | `32`    | 1 到 256                   |
+| `max_query_bytes`   | `4096`  | 1 到 65,536 bytes          |
+| `max_label_bytes`   | `1024`  | 1 到 16,384 bytes          |
+
+```bash
+a3s-test agent ground "Checkout button in the canvas" \
+  --session checkout \
+  --observation 7 \
+  --config tests/providers/grounding.acl \
+  --reason canvas \
+  --json
+```
+
+`--reason` 只能是 `explicit`、`canvas`、`image-only`、`remote-desktop`、`design-reference` 或 `no-semantic-match`。自然语言关键词不能自动触发 provider。
+
+### 截图和几何如何复验
+
+请求绑定最新 observation ID、Test Kit surface revision、PNG SHA-256、宽高、query、trigger、deadline 和 cost ceiling。HTTP envelope 内携带 Base64 `image/png`，不会要求远程服务读取本地文件路径。解码 PNG 最多 32 MiB，JSON envelope 最多 64 MiB。
+
+响应可以使用 screenshot pixel 或 normalized 坐标，并返回有界 point 或正尺寸 box。A3S Test 会完成下面的复验。
+
+1. 再次读取并哈希截图。
+2. 核对 provider、model、observation、revision、dimensions 和 usage。
+3. 拒绝非有限、越界或畸形几何。
+4. 把 box center 映射到当前 visual viewport CSS pixel。
+5. 只对可见、未遮挡且拥有可用语义 target 的 Page Context node 做 hit test。
+6. 唯一命中可以返回当前语义建议，零个或多个命中保持 image-bound ambiguity。
+
+结果始终是 `authority = advisory`，不能充当 durable ref、contract evidence、action permission 或 Repair Ledger finding。调用成功不会派发 click，页面 revision 漂移还会使原 observation 失效。
+
+## Design Audit Provider 给出可追溯的设计建议
+
+设计审计同时使用截图和完整 forensic Page Context，适合发现层级、构图、间距、排版、色彩、一致性、交互文案和响应式问题。它属于持久 Web session 的显式建议操作，不参与 deterministic expectation。
+
+### 配置与调用
+
+```acl
+design_audit {
+    max_cost_microusd = 20000
+    timeout_ms = 30000
+    max_findings = 100
+    max_summary_bytes = 2048
+    max_rationale_bytes = 8192
+    max_recommendation_bytes = 8192
+    max_page_context_bytes = 8388608
+
+    provider {
+        name = "deployment-gateway"
+        model = "design-review-model"
+        endpoint = "https://inference.example.test/v1/design-audit"
+        authorization_env = "A3S_TEST_PROVIDER_AUTHORIZATION_DESIGN_AUDIT"
+    }
+}
+```
+
+| 字段                       | 默认值    | 准入范围                   |
+| -------------------------- | --------- | -------------------------- |
+| `max_cost_microusd`        | 必填      | 非负 provider cost ceiling |
+| `timeout_ms`               | `30000`   | 1 到 300,000 ms            |
+| `max_findings`             | `100`     | 1 到 500                   |
+| `max_summary_bytes`        | `2048`    | 1 到 65,536 bytes          |
+| `max_rationale_bytes`      | `8192`    | 1 到 65,536 bytes          |
+| `max_recommendation_bytes` | `8192`    | 1 到 65,536 bytes          |
+| `max_page_context_bytes`   | `8388608` | 1 到 33,554,432 bytes      |
+
+```bash
+a3s-test agent audit \
+  --session checkout \
+  --observation 7 \
+  --config tests/providers/design-audit.acl \
+  --dimension visual-hierarchy,spacing-rhythm \
+  --json
+```
+
+可选维度共有九个。
+
+| CLI 值                   | 审查内容                     |
+| ------------------------ | ---------------------------- |
+| `visual-hierarchy`       | 主要任务、视觉重心和阅读顺序 |
+| `layout-composition`     | 区块组织、密度和平衡         |
+| `spacing-rhythm`         | 间距尺度与重复节奏           |
+| `typography`             | 字号、字重、行高和文本层级   |
+| `color-use`              | 色彩角色、对比和状态表达     |
+| `consistency`            | 组件、token 和行为一致性     |
+| `interaction-clarity`    | 控件 affordance、状态和反馈  |
+| `content-clarity`        | 文案准确性与可理解性         |
+| `responsive-composition` | 不同视口下的结构与优先级     |
+
+省略 `--dimension` 会请求全部维度。重复维度在访问 session 前被拒绝。
+
+每条 finding 必须有唯一 ID、请求内维度、high/medium/low priority、summary、rationale、recommendation、0 到 100 confidence，以及 page、当前 visible node 或截图内 region 之一。A3S Test 拒绝 stale node、越界 region、重复 ID、未请求维度、digest 漂移、cost 超限和 revision drift。
+
+admitted report 协议是 `a3s.test.design-audit-report/1`，权限仍为 advisory。兼容 Test Kit 可以把报告显示在单独的设计审计层。关闭建议没有副作用，打开 review 也不会自动授权。只有人明确保存或发送单项或批量 finding，才会进入已有 Repair Ledger。
+
+## 选择和部署模型时看什么
+
+模型名称本身不能证明集成质量。部署评审至少应覆盖以下事实。
+
+- adapter 是否完整实现当前 generated Schema，并拒绝近似 JSON。
+- 图片是否由 digest 绑定并作为 request attachment 发送。
+- 最大 context、image、response、candidate 和 finding 是否在双方边界内。
+- token 与 micro-USD usage 是否真实报告并能触发本地预算拒绝。
+- timeout、cancellation 和 retryable error 是否保留准确归属。
+- 模型 license、权重分发、推理数据保留和区域合规是否由部署方负责。
+- provider 不可用时是否关闭失败，同时禁止关键词或未声明启发式回退。
+
+视觉模型可以实现 visual-grounding 或 design-audit provider，也可以为 contract-generation 提供 design candidate。它不能因此获得浏览器动作、断言 verdict 或人工修复权限。协议边界比具体模型系列更稳定。
+
+## 常见失败的处理顺序
+
+| 错误范围                  | 优先检查                                                     |
+| ------------------------- | ------------------------------------------------------------ |
+| ACL provider config       | endpoint、变量名、唯一 block、limit 和 source path           |
+| HTTP transport            | HTTPS、200、JSON media type、body limit、redirect 和 timeout |
+| Provider response         | protocol、status、identity、unknown field、usage 和 geometry |
+| Observation binding       | session、latest observation、surface revision 和 screenshot  |
+| Local authority admission | candidate、proposal 或 advisory 输出是否越权                 |
+| Final workflow            | local verification、human review、surface cleanup 和报告写入 |
+
+Provider 返回成功只是中间证据。最终结论必须继续经过对应的本地准入、确定性 verification 或人工 review。

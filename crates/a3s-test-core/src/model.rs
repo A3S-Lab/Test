@@ -3,16 +3,30 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 mod assertions;
+mod pixels;
 
 pub use assertions::{
-    AssertionMode, AssertionStability, ElementState, Expectation, LayoutRect, LayoutRelation,
+    admit_text_pattern, text_pattern_matches, AssertionMode, AssertionStability, ElementState,
+    Expectation, LayoutRect, LayoutRelation, PixelExpectation, PixelMask,
     ViewportCoverageComparison, WaitMode, DEFAULT_ASSERTION_SAMPLE_INTERVAL_MS,
-    MAX_ASSERTION_STABILITY_MS, MAX_ASSERTION_STABILITY_SAMPLES, MAX_LAYOUT_COORDINATE_ABS,
-    MAX_LAYOUT_TOLERANCE_PX, MAX_RENDERED_TEXT_ITEMS, MAX_VIEWPORT_COVERAGE_PERCENT,
+    DEFAULT_PIXEL_THRESHOLD_MILLIS, MAX_ASSERTION_STABILITY_MS, MAX_ASSERTION_STABILITY_SAMPLES,
+    MAX_LAYOUT_COORDINATE_ABS, MAX_LAYOUT_TOLERANCE_PX, MAX_PIXEL_RATIO_MICROS,
+    MAX_PIXEL_THRESHOLD_MILLIS, MAX_RENDERED_TEXT_ITEMS, MAX_VIEWPORT_COVERAGE_PERCENT,
     MIN_ASSERTION_STABILITY_MS,
 };
+pub use pixels::{
+    compare_pixels, decode_png_bounded, paint_pixel_masks, pixel_baseline_decision, DecodedPng,
+    PixelBaselineDecision, PixelCompareFailure, PixelDecodeError, PixelLimits,
+};
 
-pub const ACTION_PROTOCOL_REVISION: u32 = 15;
+pub const ACTION_PROTOCOL_REVISION: u32 = 17;
+pub const MIN_SCROLL_UNTIL_TIMEOUT_MS: u64 = 50;
+pub const MAX_SCROLL_UNTIL_TIMEOUT_MS: u64 = 30_000;
+pub const DEFAULT_SCROLL_UNTIL_TIMEOUT_MS: u64 = 5_000;
+pub const SCROLL_UNTIL_STEP_PX: u32 = 240;
+pub const SCROLL_UNTIL_SAMPLE_INTERVAL_MS: u64 = 50;
+pub const MAX_TEXT_PATTERN_CHARS: usize = 256;
+pub const MAX_PAGE_TEXT_BYTES: usize = 1_048_576;
 pub const PAGE_CONTEXT_PROTOCOL: &str = "a3s.test.page-context/1";
 pub const SOURCE_MAPPING_PROTOCOL: &str = "a3s.test.source-mapping/1";
 pub const REPAIR_PROTOCOL: &str = "a3s.test.repair/1";
@@ -33,6 +47,41 @@ pub struct TestSuite {
     pub name: String,
     pub version: u32,
     pub scenarios: Vec<TestScenario>,
+    /// Process the runner owns for this suite. Absent suites start no process.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub app: Option<OwnedApp>,
+    /// Named viewport matrix. Empty means one run at the browser's own size.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub targets: Vec<NamedViewport>,
+}
+
+/// An application the runner starts and reaps. `command` is an argument list.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct OwnedApp {
+    pub command: Vec<String>,
+    pub ready_url: String,
+    #[serde(default)]
+    pub reuse: bool,
+}
+
+/// One isolated viewport in a suite matrix.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct NamedViewport {
+    pub name: String,
+    pub width: u32,
+    pub height: u32,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub scale: Option<u32>,
+}
+
+/// Why a fill reads an environment variable instead of a literal.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum SecretPurpose {
+    Text,
+    Password,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -62,6 +111,19 @@ pub enum Action {
     Navigate {
         url: String,
     },
+    /// One history step backward. The driver reads the resulting URL and
+    /// rejects a non-Web or unapproved origin before the step succeeds.
+    ///
+    /// An empty struct, not a unit variant: serde ignores unknown fields on
+    /// internally tagged unit variants, and a history step must not accept a
+    /// URL or any other attribute.
+    Back {},
+    ScrollUntil {
+        target: Target,
+        direction: ScrollDirection,
+        #[schemars(range(min = 50, max = 30000))]
+        timeout_ms: u64,
+    },
     Snapshot {
         interactive: bool,
     },
@@ -87,6 +149,18 @@ pub enum Action {
     Type {
         target: Target,
         value: String,
+    },
+    /// Fill from an environment variable. The action stores the name only.
+    FillSecret {
+        target: Target,
+        name: String,
+        purpose: SecretPurpose,
+    },
+    /// Type from an environment variable. The action stores the name only.
+    TypeSecret {
+        target: Target,
+        name: String,
+        purpose: SecretPurpose,
     },
     InsertText {
         value: String,
@@ -200,6 +274,27 @@ pub enum ModifierKey {
     Control,
     Meta,
     Shift,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum ScrollDirection {
+    Up,
+    Down,
+    Left,
+    Right,
+}
+
+impl ScrollDirection {
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Up => "up",
+            Self::Down => "down",
+            Self::Left => "left",
+            Self::Right => "right",
+        }
+    }
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]

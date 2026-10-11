@@ -1,7 +1,10 @@
 //! Cancellation-safe orchestration for A3S Test.
 
+mod app;
 mod assertion_stability;
 mod hidden_wait;
+
+pub use app::{start_owned_app, AppHandle, AppProcess, AppStop, StartedApp, UnixAppProcess};
 
 use std::collections::HashMap;
 use std::hash::{DefaultHasher, Hash, Hasher};
@@ -12,8 +15,9 @@ use std::time::{Duration, Instant};
 
 use a3s_test_core::{
     bind_page_context_observation_refs, validate_action_page_context_refs, Action, AssertionMode,
-    ContractOutcome, DriverError, DriverSession, Expectation, ScenarioContext, StepOutput, Surface,
-    SurfaceContract, SurfaceDriver, Target, TestScenario, TestStep, TestSuite, WaitMode,
+    ContractOutcome, DriverError, DriverSession, Expectation, NamedViewport, ScenarioContext,
+    StepOutput, Surface, SurfaceContract, SurfaceDriver, Target, TestScenario, TestStep, TestSuite,
+    WaitMode,
 };
 use futures::{stream, StreamExt};
 use serde::{Deserialize, Serialize};
@@ -64,6 +68,8 @@ pub struct Runner {
     contracts: ContractRegistry,
     options: RunnerOptions,
     artifacts_root: PathBuf,
+    app_process: Arc<dyn AppProcess>,
+    ci: bool,
 }
 
 pub struct SessionStepResult {
@@ -139,7 +145,21 @@ impl Runner {
             contracts: ContractRegistry::default(),
             options,
             artifacts_root: PathBuf::from(".a3s-test"),
+            app_process: Arc::new(UnixAppProcess::new()),
+            ci: false,
         })
+    }
+
+    #[must_use]
+    pub fn with_app_process(mut self, app_process: Arc<dyn AppProcess>) -> Self {
+        self.app_process = app_process;
+        self
+    }
+
+    #[must_use]
+    pub fn with_ci(mut self, ci: bool) -> Self {
+        self.ci = ci;
+        self
     }
 
     #[must_use]
@@ -203,16 +223,85 @@ impl Runner {
 
     pub async fn run(&self, suite: &TestSuite, cancellation: CancellationToken) -> RunResult {
         let run_id = new_run_id();
+        let started = if let Some(app) = &suite.app {
+            match start_owned_app(app, self.app_process.as_ref(), self.ci).await {
+                Ok(started) => Some(started),
+                Err(error) => {
+                    return RunResult {
+                        run_id,
+                        suite: suite.name.clone(),
+                        status: RunStatus::Failed,
+                        scenarios: suite
+                            .scenarios
+                            .iter()
+                            .map(|scenario| {
+                                ScenarioResult::not_started(
+                                    scenario,
+                                    RunStatus::Failed,
+                                    error.code(),
+                                    error.message(),
+                                )
+                            })
+                            .collect(),
+                    };
+                }
+            }
+        } else {
+            None
+        };
+        let mut guard = AppReapGuard {
+            process: Arc::clone(&self.app_process),
+            handle: started.and_then(|started| {
+                if started.spawned {
+                    started.handle
+                } else {
+                    None
+                }
+            }),
+        };
+        let result = self.run_matrix(&run_id, suite, cancellation.clone()).await;
+        let stop = app_stop(&result);
+        if let Some(handle) = guard.handle.take() {
+            if self.app_process.reap(handle, stop).await.is_err() {
+                self.app_process.reap_now(&handle);
+            }
+        }
+        result
+    }
+
+    async fn run_matrix(
+        &self,
+        run_id: &str,
+        suite: &TestSuite,
+        cancellation: CancellationToken,
+    ) -> RunResult {
+        let targets = viewport_matrix(&suite.targets);
+        let jobs = suite
+            .scenarios
+            .iter()
+            .cloned()
+            .enumerate()
+            .flat_map(|(scenario_index, scenario)| {
+                targets
+                    .iter()
+                    .cloned()
+                    .enumerate()
+                    .map(move |(target_index, target)| {
+                        (scenario_index, target_index, scenario.clone(), target)
+                    })
+            })
+            .collect::<Vec<_>>();
         // Buffered scenario futures own their inputs so this run future remains
         // Send when a Runner is embedded behind an async-trait executor.
-        let mut indexed = stream::iter(suite.scenarios.clone().into_iter().enumerate())
-            .map(|(index, scenario)| {
+        let mut indexed = stream::iter(jobs)
+            .map(|(scenario_index, target_index, scenario, target)| {
                 let cancellation = cancellation.clone();
-                let run_id = run_id.clone();
+                let run_id = run_id.to_string();
                 async move {
                     (
-                        index,
-                        self.run_scenario(&run_id, &scenario, cancellation).await,
+                        (scenario_index, target_index),
+                        self.run_scenario(&run_id, &scenario, target.as_ref(), cancellation)
+                            .await,
                     )
                 }
             })
@@ -224,10 +313,9 @@ impl Runner {
             .into_iter()
             .map(|(_, scenario)| scenario)
             .collect::<Vec<_>>();
-
         let status = aggregate_status(scenarios.iter().map(|scenario| scenario.status));
         RunResult {
-            run_id,
+            run_id: run_id.to_string(),
             suite: suite.name.clone(),
             status,
             scenarios,
@@ -238,6 +326,7 @@ impl Runner {
         &self,
         run_id: &str,
         scenario: &TestScenario,
+        target: Option<&NamedViewport>,
         cancellation: CancellationToken,
     ) -> ScenarioResult {
         let Some(driver) = self.drivers.get(&scenario.surface) else {
@@ -252,15 +341,19 @@ impl Runner {
         let started = Instant::now();
         let mut deadline = started + Duration::from_millis(scenario.timeout_ms);
         let mut quality_projection_budget = self.options.quality_projection_timeout;
+        let mut artifacts_dir = self
+            .artifacts_root
+            .clone()
+            .join("runs")
+            .join(run_id)
+            .join(artifact_component(&scenario.id));
+        if let Some(target) = target {
+            artifacts_dir = artifacts_dir.join(artifact_component(&target.name));
+        }
         let context = ScenarioContext {
             run_id: run_id.to_string(),
             scenario_id: scenario.id.clone(),
-            artifacts_dir: self
-                .artifacts_root
-                .clone()
-                .join("runs")
-                .join(run_id)
-                .join(artifact_component(&scenario.id)),
+            artifacts_dir,
         };
 
         let mut open_retries = 0;
@@ -325,10 +418,26 @@ impl Runner {
             }
         };
 
+        session.set_pixel_ci(self.ci);
         let mut status = RunStatus::Passed;
-        let mut steps = Vec::with_capacity(scenario.steps.len());
+        let mut planned = Vec::with_capacity(scenario.steps.len() + 1);
+        if let Some(target) = target {
+            planned.push(TestStep {
+                id: "viewport".to_string(),
+                action: Action::Viewport {
+                    width: target.width,
+                    height: target.height,
+                    scale: target.scale,
+                },
+                stability: None,
+                assertion_mode: Default::default(),
+                wait_mode: Default::default(),
+            });
+        }
+        planned.extend(scenario.steps.iter().cloned());
+        let mut steps = Vec::with_capacity(planned.len());
 
-        for step in &scenario.steps {
+        for step in &planned {
             let step_started = Instant::now();
             let (execution, attempts) = self
                 .execute_step(session.as_mut(), step, deadline, cancellation.clone())
@@ -426,6 +535,7 @@ impl Runner {
             id: scenario.id.clone(),
             name: scenario.name.clone(),
             surface: scenario.surface,
+            target: target.map(|target| target.name.clone()),
             status,
             duration_ms: millis(started.elapsed()),
             steps,
@@ -818,6 +928,8 @@ pub struct ScenarioResult {
     pub id: String,
     pub name: String,
     pub surface: Surface,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub target: Option<String>,
     pub status: RunStatus,
     pub duration_ms: u64,
     pub steps: Vec<StepResult>,
@@ -831,6 +943,7 @@ impl ScenarioResult {
             id: scenario.id.clone(),
             name: scenario.name.clone(),
             surface: scenario.surface,
+            target: None,
             status,
             duration_ms: 0,
             steps: Vec::new(),
@@ -946,6 +1059,45 @@ fn severity(status: RunStatus) -> u8 {
         RunStatus::Failed => 1,
         RunStatus::TimedOut => 2,
         RunStatus::Cancelled => 3,
+    }
+}
+
+struct AppReapGuard {
+    process: Arc<dyn AppProcess>,
+    handle: Option<AppHandle>,
+}
+
+impl Drop for AppReapGuard {
+    fn drop(&mut self) {
+        if let Some(handle) = self.handle.take() {
+            self.process.reap_now(&handle);
+        }
+    }
+}
+
+fn viewport_matrix(targets: &[NamedViewport]) -> Vec<Option<NamedViewport>> {
+    if targets.is_empty() {
+        vec![None]
+    } else {
+        targets.iter().cloned().map(Some).collect()
+    }
+}
+
+fn app_stop(result: &RunResult) -> AppStop {
+    if result
+        .scenarios
+        .iter()
+        .any(|scenario| scenario.status == RunStatus::Cancelled)
+    {
+        AppStop::Cancel
+    } else if result
+        .scenarios
+        .iter()
+        .any(|scenario| scenario.status == RunStatus::TimedOut)
+    {
+        AppStop::Timeout
+    } else {
+        AppStop::Finish
     }
 }
 

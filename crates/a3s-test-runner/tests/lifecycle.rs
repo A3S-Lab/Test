@@ -143,6 +143,8 @@ fn suite(timeout_ms: u64) -> TestSuite {
                 wait_mode: Default::default(),
             }],
         }],
+        app: None,
+        targets: Vec::new(),
     }
 }
 

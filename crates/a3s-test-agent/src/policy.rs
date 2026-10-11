@@ -8,6 +8,8 @@ use crate::{ActionHistory, AgentError, AgentGoal};
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub enum ActionKind {
     Navigate,
+    Back,
+    ScrollUntil,
     Snapshot,
     Click,
     Hover,
@@ -15,7 +17,9 @@ pub enum ActionKind {
     DoubleClick,
     ContextClick,
     Fill,
+    FillSecret,
     Type,
+    TypeSecret,
     Check,
     Uncheck,
     Select,
@@ -49,6 +53,8 @@ impl From<&Action> for ActionKind {
     fn from(action: &Action) -> Self {
         match action {
             Action::Navigate { .. } => Self::Navigate,
+            Action::Back {} => Self::Back,
+            Action::ScrollUntil { .. } => Self::ScrollUntil,
             Action::Snapshot { .. } => Self::Snapshot,
             Action::Click { .. } => Self::Click,
             Action::Hover { .. } => Self::Hover,
@@ -56,7 +62,9 @@ impl From<&Action> for ActionKind {
             Action::DoubleClick { .. } => Self::DoubleClick,
             Action::ContextClick { .. } => Self::ContextClick,
             Action::Fill { .. } => Self::Fill,
+            Action::FillSecret { .. } => Self::FillSecret,
             Action::Type { .. } | Action::InsertText { .. } => Self::Type,
+            Action::TypeSecret { .. } => Self::TypeSecret,
             Action::Check { .. } => Self::Check,
             Action::Uncheck { .. } => Self::Uncheck,
             Action::Select { .. } => Self::Select,

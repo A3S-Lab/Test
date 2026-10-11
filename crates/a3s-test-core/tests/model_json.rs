@@ -1,6 +1,7 @@
 use a3s_test_core::{
-    Action, ModifierKey, RepairActor, RepairDesignReference, RepairDesignReferenceImage,
-    RepairDesignReferenceKind, Target,
+    action_uses_page_context_ref, Action, Expectation, ModifierKey, RepairActor,
+    RepairDesignReference, RepairDesignReferenceImage, RepairDesignReferenceKind, ScrollDirection,
+    Target,
 };
 
 #[test]
@@ -313,4 +314,46 @@ fn visual_viewport_is_additive_and_preserves_css_pixel_geometry() {
     }))
     .expect("deserialize legacy viewport without visual metadata");
     assert!(legacy.visual.is_none());
+}
+
+#[test]
+fn history_scroll_and_page_text_actions_round_trip_through_agent_json() {
+    let actions = [
+        Action::Back {},
+        Action::ScrollUntil {
+            target: Target::Css {
+                selector: "#end".to_string(),
+            },
+            direction: ScrollDirection::Left,
+            timeout_ms: 50,
+        },
+        Action::Assert {
+            expectation: Expectation::TextContains("Ready".to_string()),
+        },
+        Action::Assert {
+            expectation: Expectation::TextMatches("Rea+dy".to_string()),
+        },
+    ];
+
+    for action in actions {
+        let encoded = serde_json::to_string(&action).expect("serialize action");
+        let decoded: Action = serde_json::from_str(&encoded).expect("deserialize action");
+        assert_eq!(decoded, action);
+    }
+
+    assert!(
+        serde_json::from_str::<Action>(r#"{"type":"back","url":"https://example.test"}"#).is_err()
+    );
+    let scroll = Action::ScrollUntil {
+        target: Target::Ref {
+            value: "@c3".to_string(),
+        },
+        direction: ScrollDirection::Down,
+        timeout_ms: 5_000,
+    };
+    assert!(action_uses_page_context_ref(&scroll));
+    assert_eq!(
+        serde_json::to_value(&scroll).expect("serialize scroll")["direction"],
+        "down"
+    );
 }

@@ -2,9 +2,9 @@ use std::collections::BTreeSet;
 use std::ffi::OsString;
 
 use a3s_test_core::{
-    DriverError, ElementState, Expectation, LayoutRect, LayoutRelation, StepOutput, Target,
-    ViewportCoverageComparison, MAX_LAYOUT_TOLERANCE_PX, MAX_RENDERED_TEXT_ITEMS,
-    MAX_VIEWPORT_COVERAGE_PERCENT,
+    admit_text_pattern, text_pattern_matches, DriverError, ElementState, Expectation, LayoutRect,
+    LayoutRelation, StepOutput, Target, ViewportCoverageComparison, MAX_LAYOUT_TOLERANCE_PX,
+    MAX_PAGE_TEXT_BYTES, MAX_RENDERED_TEXT_ITEMS, MAX_VIEWPORT_COVERAGE_PERCENT,
 };
 use serde_json::{json, Value};
 
@@ -17,7 +17,7 @@ use super::{browser_result, AgentBrowserSession};
 
 impl AgentBrowserSession {
     pub(super) async fn assert(
-        &self,
+        &mut self,
         expectation: &Expectation,
     ) -> Result<StepOutput, DriverError> {
         match expectation {
@@ -27,6 +27,8 @@ impl AgentBrowserSession {
                     .await?;
                 Ok(StepOutput::new("text is visible").with_data(data))
             }
+            Expectation::TextContains(text) => self.assert_page_text_contains(text).await,
+            Expectation::TextMatches(pattern) => self.assert_page_text_matches(pattern).await,
             Expectation::Url(expected) => {
                 let data = self
                     .execute_command(vec!["get".into(), "url".into()])
@@ -102,7 +104,71 @@ impl AgentBrowserSession {
                 self.assert_layout(target, relative_to, *relation, *tolerance_px)
                     .await
             }
+            Expectation::Pixels(pixels) => self.assert_pixels(pixels).await,
         }
+    }
+
+    async fn assert_page_text_contains(&self, expected: &str) -> Result<StepOutput, DriverError> {
+        if expected.is_empty() {
+            return Err(DriverError::new(
+                "test.driver.web.text_contains_invalid",
+                "text_contains must contain at least one character",
+            ));
+        }
+        let actual = self.page_text().await?;
+        if !actual.contains(expected) {
+            return Err(DriverError::new(
+                "test.assert.text_contains",
+                "page text does not contain the expected value",
+            ));
+        }
+        Ok(
+            StepOutput::new("page text contains the expected value").with_data(json!({
+                "matched": true
+            })),
+        )
+    }
+
+    async fn assert_page_text_matches(&self, pattern: &str) -> Result<StepOutput, DriverError> {
+        admit_text_pattern(pattern)
+            .map_err(|reason| DriverError::new("test.driver.web.text_pattern_invalid", reason))?;
+        let actual = self.page_text().await?;
+        let matched = text_pattern_matches(&actual, pattern)
+            .map_err(|reason| DriverError::new("test.driver.web.text_pattern_invalid", reason))?;
+        if !matched {
+            return Err(DriverError::new(
+                "test.assert.text_matches",
+                "page text does not match the expected pattern",
+            ));
+        }
+        Ok(
+            StepOutput::new("page text matches the expected pattern").with_data(json!({
+                "matched": true
+            })),
+        )
+    }
+
+    async fn page_text(&self) -> Result<String, DriverError> {
+        let data = self
+            .execute_command(vec!["get".into(), "text".into(), "body".into()])
+            .await?;
+        let unwrapped = browser_result(data.clone());
+        let text = scalar_string(&unwrapped)
+            .or_else(|| scalar_string(&data))
+            .or_else(|| data.pointer("/data/text").and_then(Value::as_str))
+            .ok_or_else(|| {
+                DriverError::new(
+                    "test.driver.web.output_invalid",
+                    "browser text response did not contain a string",
+                )
+            })?;
+        if text.len() > MAX_PAGE_TEXT_BYTES {
+            return Err(DriverError::new(
+                "test.driver.web.text_too_large",
+                "page text exceeds the assertion bound",
+            ));
+        }
+        Ok(text.to_string())
     }
 
     async fn assert_viewport_coverage(

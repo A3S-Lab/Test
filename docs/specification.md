@@ -37,6 +37,14 @@ navigate "open" {
     url = "https://example.com"
 }
 
+back "return" {}
+
+scroll_until "footer" {
+    target = css("#end")
+    direction = "down"
+    timeout_ms = 5000
+}
+
 snapshot "controls" {
     interactive = true
 }
@@ -145,6 +153,8 @@ treats an observation-bound ref failure as disappearance.
 `expect` accepts exactly one of:
 
 - `text = "..."`
+- `text_contains = "..."`
+- `text_matches = "<regular expression>"`
 - `url = "..."`
 - `visible = <target>`
 - `hidden = <stable target>`
@@ -165,6 +175,92 @@ treats an observation-bound ref failure as disappearance.
   `viewport_coverage_at_most = <integer percent>` with a separate stable
   `target`
 - `pointer_reachable = <stable target>`
+- `pixels = "<baseline path>"` with optional `threshold_millis`,
+  `max_diff_pixels`, `max_diff_pixel_ratio_micros`, `masks`, and `update`
+
+`back` takes one history step and accepts no attributes. The Web driver reads
+the resulting URL before the step succeeds. A non-HTTP(S) result fails as
+`test.driver.web.session_origin_lost`. When the session lists allowed origins,
+the URL origin must be one of those origins. When origins are empty and domains
+are set, the host must match an exact domain or a `*.suffix` pattern. An empty
+policy admits any HTTP(S) URL. An unapproved HTTP(S) result fails as
+`test.driver.web.navigation_origin_denied`. Domains do not widen an origin
+list. GUI and TUI do not implement `back`.
+
+`scroll_until` requires `target` and `direction` (`up`, `down`, `left`, or
+`right`). `timeout_ms` defaults to 5,000 and must be 50 through 30,000. The
+Web driver checks visibility, scrolls the page 240 CSS pixels in that
+direction, and repeats every 50 milliseconds until the target is visible or
+the timeout elapses. A timeout is `test.driver.web.scroll_until_timeout`. The
+admitted browser command scrolls the page; it does not scroll a nested
+container selected by the target. A timeout outside the bound fails as
+`test.spec.scroll_until_timeout` in ACL and
+`test.driver.web.scroll_until_invalid` on a direct action.
+
+`text_contains` and `text_matches` read the current body text once. They remain
+ordinary expectations, so an assertion stability window can sample them.
+`text_contains` must contain at least one character. `text_matches` is a Rust
+regular expression of 1 through 256 characters with a bounded automaton.
+Body text over 1,048,576 bytes fails as `test.driver.web.text_too_large`.
+Observed mismatches are `test.assert.text_contains` and
+`test.assert.text_matches`. Those failures do not include the page text.
+`text` remains the waiting visible-text expectation. GUI and TUI reject both
+page-text expectations.
+
+`fill_secret` and `type_secret` require `target`, `name`, and `purpose`.
+`name` is an environment variable of 1 through 128 characters matching
+`[A-Za-z_][A-Za-z0-9_]*`. `purpose` is `password` or `text`. The ACL and the
+action JSON store the name, never the variable's value. The Web driver reads
+the variable only when it is about to send the admitted `fill` or `type`
+command. An unset or empty value is `test.driver.web.secret_unavailable` and
+sends no browser command for that step. A disabled, read-only, or
+non-editable sink fails before input. A present `readonly` attribute is read-only for every value, including an
+empty string, an ASCII case-insensitive `readonly`, and `false`. An absent
+attribute is not read-only.
+A `password` purpose on a field whose type is not `password` also fails
+before input. After the driver sends the fill or type
+command, a later `pixels` expectation in that session is
+`test.driver.web.pixel_after_secret`. Step data names the variable and
+reports `filled`; it does not return the value or the browser payload. A
+command failure redacts the value to `[redacted]`. Repair ACL and agent-run
+verification do not admit these actions. GUI and TUI fail closed.
+
+A suite may contain one labeled `app` block. `command` is an argument list,
+not a shell string. `ready_url` is an HTTP or HTTPS URL and must not use port
+0. `reuse` defaults to false. CI refuses reuse with
+`test.run.app_reuse_denied`. When reuse is off and the ready URL already
+answers, startup fails with `test.run.app_already_running` and opens no
+browser. Otherwise the runner starts the process group and reaps it on
+finish, cancel, and timeout. Errors omit credentials and the full ready URL.
+
+A suite may contain labeled `target` blocks. Each name is 1 through 64
+characters of ASCII letters, digits, `_`, `.`, or `-`, and is not only dots.
+Duplicate names are `test.spec.viewport_duplicate`. Width and height are 1
+through 4096. Scale, when set, is 1 through 8. An empty target list keeps one
+session at the browser's own size and does not inject a viewport step. Two or
+more targets open a fresh session for each name, run `viewport` first, and
+store evidence in a separate directory for that name. Sessions do not share
+cookies or storage.
+
+`pixels` compares the page with a PNG baseline inside the artifact root. The
+Web driver captures two screenshots and refuses the expectation when those
+captures differ (`test.driver.web.pixel_unstable`). Comparison decodes at most
+32 MiB, rejects a zero or larger-than-4096 dimension, and does not use the
+browser `diff screenshot` command. A size mismatch is
+`test.assert.pixel_size` and is decided before masks. Masks are `x,y,width,height`
+rectangles painted on both images. `threshold_millis` defaults to 200 and is
+0 through 1000. When neither diff cap is set, zero differing pixels are
+allowed. When both `max_diff_pixels` and `max_diff_pixel_ratio_micros` are
+set, the smaller limit wins. `max_diff_pixel_ratio_micros` is 0 through
+1,000,000. `update = true` writes the stable capture over the baseline. With
+`update` false, a missing baseline is `test.driver.web.pixel_baseline_missing`
+and the file is not created. Pixel attributes on another expectation are
+`test.spec.attribute_unexpected`. GUI and TUI reject `pixels`.
+
+Long-press, closed-shadow piercing, click modifiers, click box position, and
+typed network fulfill, continue, and response waits are
+`test.spec.browser_verb_unsupported`. That rejection happens before a browser
+opens. `forward` and `reload` remain `test.spec.action_unknown`.
 
 ### Negative visibility
 
@@ -236,7 +332,7 @@ wait "dialog-closed" {
 This is `TestStep` wait policy, not a new `Action` or `WaitCondition` variant.
 Core stores `Action::Wait { condition: WaitCondition::Visible(target) }` plus
 `WaitMode::Hidden`; it reuses the visible condition introduced before the
-current action protocol revision 15 and does not change surface-driver command
+current action protocol revision 17 and does not change surface-driver command
 schemas. Runner admission requires `AssertionMode::Positive`,
 no assertion-stability policy, and a locator that is not `ref()` or
 `visual_point()`.
@@ -1514,7 +1610,7 @@ code and path to repair manifests.
 ## Browser admission and runner bounds
 
 `a3s-test capabilities --json` probes the configured executable before any
-browser session launches. Action protocol revision 15 admits A3S Browser
+browser session launches. Action protocol revision 17 admits A3S Browser
 `>= 0.4.0, < 0.5.0` and standalone agent-browser `>= 0.26.0, < 0.27.0`.
 Unverified versions fail with `test.driver.web.version_unsupported`.
 
@@ -1642,7 +1738,7 @@ sequence and is therefore deliverable again. The compact JSONL event is:
   "protocol": "a3s.test.local-repair-bridge/1",
   "event": "repair_batch",
   "project": "checkout",
-  "protocol_revision": 15,
+  "protocol_revision": 17,
   "session": "dev",
   "repairs": [],
   "batches": [],
@@ -2133,8 +2229,10 @@ host, and effective port. They remain exact in A3S Browser's network policy;
 `allow_domains` adds network-only hostnames without adding navigation origins.
 Standalone projects origin hostnames into its older containment protocol.
 
-`allow_actions` contains unique values from `navigate`, `snapshot`, `click`,
-`hover`, `focus`, `double_click`, `context_click`, `fill`, `type`, `check`,
+`allow_actions` contains unique values from `navigate`, `back`, `scroll_until`,
+`snapshot`, `click`,
+`hover`, `focus`, `double_click`, `context_click`, `fill`, `fill_secret`,
+`type`, `type_secret`, `check`,
 `uncheck`, `select`, `drag`, `press`, `wheel`, `viewport`, `wait`, `assert`,
 `screenshot`, `tab`, `frame`, `dialog`, `upload`, `download`,
 `network_route`, `network_unroute`, `har`, `trace`, `video`, `accessibility`,

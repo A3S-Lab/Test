@@ -195,6 +195,19 @@ fn redacts_assertion_targets_text_values_and_selected_values() {
                 values: vec!["public".to_string(), "state-secret".to_string()],
             },
         },
+        Action::ScrollUntil {
+            target: Target::Css {
+                selector: "#state-secret".to_string(),
+            },
+            direction: a3s_test_core::ScrollDirection::Down,
+            timeout_ms: 5_000,
+        },
+        Action::Assert {
+            expectation: Expectation::TextContains("state-secret".to_string()),
+        },
+        Action::Assert {
+            expectation: Expectation::TextMatches("state-secret".to_string()),
+        },
         Action::Assert {
             expectation: Expectation::Layout {
                 target: Target::TestId {

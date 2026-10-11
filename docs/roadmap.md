@@ -29,6 +29,12 @@
 - [x] Action protocol revision 15 bounded visual-viewport coverage thresholds
       with independently recomputed geometry and honest per-surface capability
       failures
+- [x] Action protocol revision 16 history back, directional page scroll-until,
+      and point-in-time page-text expectations with returned-origin checks and
+      honest per-surface capability failures
+- [x] Action protocol revision 17 environment secret references, owned-app
+      process groups, named viewport evidence, bounded pixel expectations,
+      verified-session ACL candidates, and fail-closed unsupported browser verbs
 - [x] Surface driver and session contracts
 - [x] Cancellation-safe sequential runner
 - [x] Bounded sampled assertion stability with static duration/sample limits,
@@ -985,3 +991,43 @@ finding ID before it can discover the next safe unit of work.
       filtering, expired-lease handling, command-text isolation, invalid
       limits, storage bounds, linked-path rejection, CLI integration, and MCP
       lifecycle behavior without starting a browser
+
+## M30: Web history, directional scroll, and page-text expectations
+
+- [x] Add `back`, `scroll_until`, `text_contains`, and `text_matches` under
+      action protocol revision 16 without a second planner grammar
+- [x] Read the URL after `back` and admit it only for an allowed HTTP(S)
+      origin; keep domain patterns from widening a configured origin list
+- [x] Bound `scroll_until` to 50 through 30,000 milliseconds, 240 CSS-pixel
+      page steps, and a 50 millisecond sample, and stop when the target is
+      already visible
+- [x] Read body text once for `text_contains` and `text_matches`, reject empty
+      contains values and unbounded regular expressions, and keep page text out
+      of mismatch messages
+- [x] Fail closed on GUI and TUI for the page-text expectations and leave the
+      new gestures unimplemented there
+- [x] Keep repair ACL and agent-run verification on their existing read-only
+      allow-lists, so `back` and `scroll_until` stay effectful
+- [ ] Typed network fulfill, continue, and response waits stay out of this
+      revision until the admitted browser command can express them
+
+## M31: Secret references, viewports, pixels, and verified sessions
+
+- [x] Move the current action protocol to revision 17 in one bump. Schema, ACL,
+      driver, policy, and living docs stay on that revision
+- [x] Admit `fill_secret` and `type_secret` by environment name and purpose.
+      Resolve the value only at execution, reject a bad sink before input, and
+      keep the value out of ACL, action JSON, errors, events, reports, and
+      step data
+- [x] Start an owned app from an argument list, refuse CI reuse, and reap the
+      process group on finish, cancel, and timeout
+- [x] Fan named viewport targets into fresh sessions with separate evidence
+      directories. The default remains one viewport
+- [x] Compare pixel expectations with a bounded PNG decode. Size mismatch is
+      its own failure, the smaller configured cap wins, and a missing baseline
+      is written only when update is set
+- [x] Emit a verified-session ACL candidate only after a later assertion
+      passed, with no observation refs, visual points, or secret literals
+- [x] Reject long-press, click modifiers, click box position, closed-shadow
+      piercing, and typed network fulfill, continue, and response waits with
+      `test.spec.browser_verb_unsupported` before any browser command

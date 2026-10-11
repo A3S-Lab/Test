@@ -426,7 +426,10 @@ impl TuiSession {
                 Ok(StepOutput::new("terminal text is visible")
                     .with_data(json!({ "text": text, "visible": true })))
             }
-            Expectation::Url(_)
+            Expectation::TextContains(_)
+            | Expectation::TextMatches(_)
+            | Expectation::Pixels(_)
+            | Expectation::Url(_)
             | Expectation::Visible(_)
             | Expectation::InViewport(_)
             | Expectation::ViewportCoverage { .. }

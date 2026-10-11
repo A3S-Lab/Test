@@ -1,0 +1,50 @@
+[
+  { "text": "开始使用", "link": "/guide/", "activeMatch": "^/guide/" },
+  {
+    "text": "测试能力",
+    "items": [
+      { "text": "探索与回归", "link": "/guide/workflows" },
+      { "text": "动作与证据", "link": "/guide/actions-and-evidence" },
+      { "text": "断言与稳定性", "link": "/guide/assertions" },
+      { "text": "Web、GUI、TUI 与 MCP", "link": "/guide/surfaces-and-mcp" },
+      { "text": "模型 Provider", "link": "/guide/providers" },
+      { "text": "Worker 与分布式执行", "link": "/guide/distributed" }
+    ]
+  },
+  {
+    "text": "Test Kit",
+    "items": [
+      { "text": "接入指南", "link": "/guide/testkit" },
+      { "text": "Page Context", "link": "/concepts/page-context" },
+      { "text": "人工评审与修复", "link": "/guide/repairs" },
+      { "text": "Surface Contract", "link": "/guide/contracts" }
+    ]
+  },
+  {
+    "text": "架构",
+    "link": "/concepts/architecture",
+    "activeMatch": "^/concepts/"
+  },
+  {
+    "text": "参考",
+    "items": [
+      { "text": "完整能力", "link": "/reference/capabilities" },
+      { "text": "CLI 命令", "link": "/reference/cli" },
+      { "text": "故障排查", "link": "/guide/troubleshooting" }
+    ]
+  },
+  {
+    "text": "资源",
+    "items": [
+      { "text": "GitHub", "link": "https://github.com/A3S-Lab/Test" },
+      {
+        "text": "发布版本",
+        "link": "https://github.com/A3S-Lab/Test/releases/latest"
+      },
+      {
+        "text": "更新日志",
+        "link": "https://github.com/A3S-Lab/Test/blob/main/CHANGELOG.md"
+      }
+    ]
+  }
+]

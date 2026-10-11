@@ -1,0 +1,390 @@
+---
+title: Assertions and stability
+description: Understand A3S Test assertions from visibility through control state, rendered output, layout, viewport, focus, semantic state, and bounded stability.
+---
+
+# Assertions and stability
+
+An assertion has a narrow job. It reads authoritative evidence from the current surface, compares the actual value with one explicit expectation, and returns either a pass or a structured failure. Model advice, screenshot impressions, and the success of the preceding action cannot replace it.
+
+Each `expect` block admits exactly one condition. Use multiple stable step names when an outcome contains multiple facts.
+
+```acl
+expect "confirmation-visible" {
+    visible = role("heading", "Order confirmed")
+}
+
+expect "total-copy" {
+    target = testid("order-total")
+    rendered_text = "Total $42.00"
+}
+```
+
+This separation makes a report identify the failed product constraint precisely. It also keeps quarantine and Surface Contract differences auditable.
+
+## Understand result ownership first
+
+A negative assertion cannot use location failure as its proof. A3S Test validates the target and evidence before comparing product state.
+
+| Observation                                                        | Result owner                            |
+| ------------------------------------------------------------------ | --------------------------------------- |
+| Conflicting ACL conditions, missing fields, or out-of-range values | `test.spec.*`                           |
+| A single-target assertion cannot resolve exactly one element       | `test.driver.<surface>.*`               |
+| A valid stable visibility probe finds no visible match             | `test.assert.visible`                   |
+| No equivalent evidence on this surface                             | `test.driver.<surface>.*_unsupported`   |
+| Malformed evidence shape or value                                  | `test.driver.<surface>.*output_invalid` |
+| Valid evidence differs from the expectation                        | The corresponding `test.assert.*`       |
+| Initial pass followed by a counterexample in a stability window    | `test.assert.unstable`                  |
+
+A missing checkbox therefore cannot prove `unchecked`. A missing dialog also cannot prove that a target identified by an observation ref is hidden.
+
+## Basic page assertions
+
+### Visible text, URL, and target
+
+```acl
+expect "saved-copy" {
+    text = "Saved"
+}
+
+expect "confirmation-url" {
+    url = "http://127.0.0.1:3000/orders/42"
+}
+
+expect "confirmation-heading" {
+    visible = role("heading", "Order confirmed")
+}
+```
+
+`text` proves that visible text exists on the current surface. TUI supports the same condition through its bounded viewport and scrollback semantics. `url` is exact Web page state. `visible` first resolves a target, then requires current-surface visibility evidence.
+
+### Prove that a stable target has no visible match
+
+```acl
+expect "dialog-closed" {
+    hidden = role("dialog", "Checkout")
+}
+```
+
+`hidden` is a runner policy around positive `Visible(target)`, not another Action variant. It uses this truth table.
+
+| Positive visibility probe                      | `hidden` result                                               |
+| ---------------------------------------------- | ------------------------------------------------------------- |
+| Returns visible target evidence                | Fails as `test.assert.hidden` and retains the counterevidence |
+| Returns `test.assert.visible`                  | Passes and records `visible = false`                          |
+| Returns stale, ambiguous, driver, or I/O error | Preserves the original error; unknown state cannot pass       |
+
+Semantic and CSS locators can be resolved repeatedly and are admitted for `hidden`. `ref()` and `visual_point()` belong to one observation and fail admission as `test.spec.hidden_target_unstable`.
+
+Use `wait hidden` when disappearance is the ready condition. Use `expect hidden` with a stability window when the target must remain absent after disappearing.
+
+## Control values and boolean states
+
+### Exact value
+
+```acl
+expect "display-name" {
+    target = label("Display name")
+    value = "Ada"
+}
+```
+
+Web reads the live DOM `value`. GUI can compare it only when the CUA semantic element actually exposes a value. TUI does not infer control values from terminal copy.
+
+### Enabled, checked, and selected
+
+```acl
+expect "submit-disabled" {
+    disabled = role("button", "Submit")
+}
+
+expect "terms-checked" {
+    checked = label("Accept terms")
+}
+
+expect "review-selected" {
+    selected = role("option", "Review")
+}
+```
+
+Each positive state has a negative spelling.
+
+| Dimension    | Positive   | Negative     |
+| ------------ | ---------- | ------------ |
+| Availability | `enabled`  | `disabled`   |
+| Check state  | `checked`  | `unchecked`  |
+| Selection    | `selected` | `unselected` |
+
+For native Web checkboxes and radio buttons, live properties take precedence over contradictory ARIA. A custom control may expose state through valid boolean ARIA. A missing or ambiguous target, or an inapplicable control type, remains a driver error.
+
+### Exact selected-value set
+
+```acl
+expect "publication-status" {
+    target = role("listbox", "Publication status")
+    selected_values = ["review", "published"]
+}
+
+expect "nothing-selected" {
+    target = css("#status")
+    selected_values = []
+}
+```
+
+`selected_values` compares the exact deduplicated, canonically sorted set. Duplicate expected values fail admission; an empty expected array is valid. Any missing or additional actual value returns `test.assert.selected_values`. The condition never degrades into a contains check.
+
+## Live semantic state
+
+Five dimensions are independent, and each has positive and negative forms.
+
+```acl
+expect "filters-expanded" {
+    expanded = testid("filters")
+}
+
+expect "pin-unpressed" {
+    unpressed = role("button", "Pin")
+}
+
+expect "name-readonly" {
+    readonly = label("Display name")
+}
+
+expect "email-required" {
+    required = placeholder("Email")
+}
+
+expect "email-invalid" {
+    invalid = testid("email")
+}
+```
+
+| Dimension | Spellings               | Authoritative Web source                                      |
+| --------- | ----------------------- | ------------------------------------------------------------- |
+| Expansion | `expanded`, `collapsed` | `<details>.open`, otherwise valid `aria-expanded`             |
+| Press     | `pressed`, `unpressed`  | Exact boolean `aria-pressed`                                  |
+| Readonly  | `readonly`, `writable`  | Applicable native `readOnly`, otherwise valid `aria-readonly` |
+| Required  | `required`, `optional`  | Applicable native `required`, otherwise valid `aria-required` |
+| Validity  | `invalid`, `valid`      | Constraint Validation, otherwise defined `aria-invalid`       |
+
+An applicable native state wins over ARIA. Boolean ARIA accepts exactly `true` and `false`. `aria-pressed="mixed"` is not guessed into either value. `aria-invalid` values `grammar` and `spelling` map to invalid.
+
+The dimensions do not imply one another. A disabled input whose native `readOnly` is false can still be observed as writable. Proving user-editability therefore requires separate `enabled` and `writable` assertions. A negative spelling only inverts an observed boolean; missing or unknown state cannot prove `collapsed`, `valid`, or another negative conclusion.
+
+These conditions require a repeatable stable target. ACL rejects browser refs and visual points. GUI and TUI currently have no equivalent semantic-state protocol and fail closed.
+
+## Rendered text, sequences, and counts
+
+### Actual rendered copy for one target
+
+```acl
+expect "total-copy" {
+    target = testid("total")
+    rendered_text = "Total $42.00"
+}
+```
+
+Web requires one uniquely visible target. It reads `innerText` from HTML elements and `textContent` from other rendered elements. Both expected and actual text are trimmed and each whitespace run becomes one ASCII space. Only an observed text difference is `test.assert.rendered_text`; zero matches, multiple matches, and invalid selectors retain driver ownership.
+
+### Complete ordered text sequence
+
+```acl
+expect "line-items" {
+    target = css("[data-line-item]")
+    rendered_texts = [
+        "Keyboard × 1",
+        "Mouse × 2",
+        "Shipping",
+        "Shipping"
+    ]
+}
+
+expect "empty-items" {
+    target = css("[data-line-item]")
+    rendered_texts = []
+}
+```
+
+`rendered_texts` preserves traversal order and duplicate items, then compares the complete vector. Expected and actual vectors are limited to 256 items. An empty match set produces `[]` and can prove that the collection is empty. This condition requires a stable semantic or CSS locator and does not accept a single-element ref.
+
+### Visible collection count
+
+```acl
+expect "three-rows" {
+    target = css("[data-row]")
+    visible_count = 3
+}
+
+expect "no-alerts" {
+    target = role("alert", "Checkout error")
+    visible_count = 0
+}
+```
+
+`visible_count` compares the complete visible match set. Zero is an observed first-class value. CSS uses the visual rendering plane, so `aria-hidden` alone does not make pixels disappear. A semantic locator additionally excludes accessibility-hidden ancestry and traverses open Shadow DOM. Both planes exclude `hidden`, `display: none`, `visibility: hidden`, complete opacity, and zero geometry.
+
+These three rendered-output assertions are currently provided by Web. GUI and TUI do not estimate equivalent collections from labels, pixels, or terminal output.
+
+## Layout relations between two targets
+
+```acl
+expect "checkout-below-summary" {
+    target = testid("checkout")
+    relative_to = role("region", "Order summary")
+    layout = "below"
+    tolerance_px = 1
+}
+```
+
+Web resolves both targets and reads both `getBoundingClientRect()` values in one page evaluation. Geometry from two page states is never joined. GUI requires both semantic elements to expose valid frames in the same fresh CUA snapshot. TUI has no rendered-page geometry.
+
+| Group        | Values                                                                                                   | Meaning of tolerance                                    |
+| ------------ | -------------------------------------------------------------------------------------------------------- | ------------------------------------------------------- |
+| Direction    | `above`, `below`, `left_of`, `right_of`                                                                  | Allows boundary intrusion up to the pixel tolerance     |
+| Containment  | `contains`, `inside`                                                                                     | Allows each containing edge to miss by the tolerance    |
+| Intersection | `overlaps`, `not_overlapping`                                                                            | Threshold for overlap on both axes or separation on one |
+| Alignment    | `aligned_left`, `aligned_right`, `aligned_top`, `aligned_bottom`, `aligned_center_x`, `aligned_center_y` | Absolute edge or center difference                      |
+| Size         | `same_width`, `same_height`, `same_size`                                                                 | Absolute width or height difference                     |
+
+`tolerance_px` defaults to 0 and admits 0 through 1,024. Both targets must be stable and unique. Refs and visual points fail as `test.spec.layout_target_unstable`. A valid pair of rectangles that does not satisfy the relation is `test.assert.layout`.
+
+## Viewport coverage and pointer reachability
+
+```acl
+expect "checkout-in-view" {
+    in_viewport = testid("checkout")
+}
+
+expect "checkout-mostly-visible" {
+    target = testid("checkout")
+    viewport_coverage_at_least = 80
+}
+
+expect "drawer-mostly-outside" {
+    target = css("#drawer")
+    viewport_coverage_at_most = 10
+}
+
+expect "checkout-pointer-hit" {
+    pointer_reachable = role("button", "Checkout")
+}
+```
+
+`in_viewport` requires a positive-area intersection between the target rectangle and the visual viewport. Boundary-only contact and a fully offscreen target fail.
+
+Coverage is intersection area divided by the complete target area. `viewport_coverage_at_least` admits 1 through 100, while `viewport_coverage_at_most` admits 0 through 99. `at_least = 100` proves complete geometric containment. `at_most = 0` proves no positive-area intersection. Coverage does not prove that pixels are unobscured.
+
+`pointer_reachable` performs deep `elementFromPoint` hit testing at the fixed 3-by-3 grid over the intersection rectangle. It passes when at least one point hits the target or a composed-tree descendant. It proves browser hit-test reachability, not that the control is enabled, has a listener, or satisfies business rules.
+
+Rust recomputes the intersection, ratio, and coordinates and order of all nine samples after the browser returns. Malformed geometry or samples cannot pass by supplying a forged `matched` field. GUI and TUI currently lack equivalent visual-viewport and point-hit evidence and fail closed.
+
+## Focus ownership
+
+```acl
+expect "checkout-focused" {
+    focused = role("button", "Checkout")
+}
+
+expect "cancel-unfocused" {
+    unfocused = testid("cancel")
+}
+
+expect "dialog-owns-focus" {
+    focus_within = role("dialog", "Checkout")
+}
+
+expect "page-does-not-own-focus" {
+    focus_outside = testid("page-shell")
+}
+```
+
+`focused` compares the target with the deepest active element observable from the current document through nested open Shadow DOM. `focus_within` also follows assigned slots, DOM parents, and Shadow hosts through the rendered flat tree.
+
+`unfocused` and `focus_outside` invert the same valid observation. A missing target cannot prove lack of focus. A closed shadow root remains opaque, making its host the deepest element observable from the document. GUI and TUI do not infer focus ownership from frames, the preceding action, or cursor cells.
+
+## Add a bounded stability window
+
+A single assertion proves one observation point. Hydration, animation, optimistic updates, and delayed rollback can make one frame happen to pass. Make time explicit when product state must remain correct.
+
+```acl
+expect "settled-total" {
+    target = testid("order-total")
+    rendered_text = "Total $42.00"
+    stable_for_ms = 300
+    sample_interval_ms = 25
+}
+
+expect "dialog-stays-closed" {
+    hidden = role("dialog", "Checkout")
+    stable_for_ms = 300
+    sample_interval_ms = 25
+}
+```
+
+| Field                | Rule                                              | Default                     |
+| -------------------- | ------------------------------------------------- | --------------------------- |
+| `stable_for_ms`      | Enables sampling, 10 through 60,000 ms            | Disabled                    |
+| `sample_interval_ms` | Positive and no greater than the stability window | 50 ms or the shorter window |
+
+Planned samples equal `ceil(stable_for_ms / sample_interval_ms) + 1`, including the initial assertion, with a maximum of 1,001. The runner follows a fixed sequence.
+
+1. Execute the original assertion once. An initial failure keeps its specific `test.assert.*` code.
+2. Start the stability window only after the first pass.
+3. Sample at the requested interval and once more at the window boundary.
+4. Return `test.assert.unstable` for a later valid counterexample.
+5. Preserve driver ownership for later location or driver failures.
+
+The full window counts against the scenario deadline. Output retains the complete first and last assertion payloads, required time, observed time, interval, and sample count. Sampling can find changes at its observation points; it cannot prove that no shorter transient occurred between two samples.
+
+## Current surface support matrix
+
+| Assertion group                      | Web                                 | GUI                                 | TUI          |
+| ------------------------------------ | ----------------------------------- | ----------------------------------- | ------------ |
+| Visible text                         | Yes                                 | Yes                                 | Yes          |
+| URL                                  | Yes                                 | No                                  | No           |
+| `visible` and stable-target `hidden` | Yes                                 | Semantic targets                    | No           |
+| Exact value                          | Yes                                 | When CUA exposes value              | No           |
+| Enabled, checked, selected           | Yes                                 | No                                  | No           |
+| Selected values                      | Yes                                 | No                                  | No           |
+| Rendered text, sequence, count       | Yes                                 | No                                  | No           |
+| Layout                               | Yes                                 | When both semantic frames exist     | No           |
+| Viewport coverage and pointer hit    | Yes                                 | No                                  | No           |
+| Focus ownership                      | Yes                                 | No                                  | No           |
+| Live semantic state                  | Yes                                 | No                                  | No           |
+| Bounded stability                    | Every supported read-only assertion | Every supported read-only assertion | Visible text |
+
+Use `a3s-test capabilities --json` to inspect the installed adapter. A protocol-unsupported assertion returns a stable unsupported error. It is never filled in with a visual model or heuristic guess.
+
+## A reviewable checkout outcome
+
+```acl
+wait "checkout-ready" {
+    visible = testid("checkout-ready")
+}
+
+expect "dialog-closed" {
+    hidden = role("dialog", "Checkout")
+    stable_for_ms = 300
+    sample_interval_ms = 25
+}
+
+expect "confirmation-visible" {
+    visible = role("heading", "Order confirmed")
+}
+
+expect "total-copy" {
+    target = testid("order-total")
+    rendered_text = "Total $42.00"
+}
+
+expect "submit-in-view" {
+    target = testid("checkout")
+    viewport_coverage_at_least = 100
+}
+
+expect "submit-pointer-hit" {
+    pointer_reachable = testid("checkout")
+}
+```
+
+These assertions separately prove readiness, stable negative visibility, success copy, exact target-bound output, full viewport containment, and real hit-test reachability. Any failure has its own step ID, error code, expected and actual values, and locator or geometry evidence.

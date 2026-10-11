@@ -408,6 +408,8 @@ fn suite() -> TestSuite {
                 wait_mode: Default::default(),
             }],
         }],
+        app: None,
+        targets: Vec::new(),
     }
 }
 

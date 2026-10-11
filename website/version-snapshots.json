@@ -1,11 +1,17 @@
 {
   "current": {
-    "version": "v1.0.2",
-    "sourceTag": "v1.0.2",
-    "sourceCommit": "34fce291e013523a065fffd07720e1cc7c0a8f21",
+    "version": "v1.0.3",
+    "sourceTag": "v1.0.3",
+    "sourceCommit": "ba1401cad9bd69805cb99ed6892e9b74105b1cba",
     "testkitVersion": "0.6.2"
   },
   "archives": [
+    {
+      "version": "v1.0.2",
+      "sourceTag": "v1.0.2",
+      "sourceCommit": "34fce291e013523a065fffd07720e1cc7c0a8f21",
+      "testkitVersion": "0.6.2"
+    },
     {
       "version": "v1.0.1",
       "sourceTag": "v1.0.1",

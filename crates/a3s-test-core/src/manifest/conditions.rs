@@ -3,11 +3,12 @@ use std::collections::BTreeSet;
 use a3s_acl::{Block, Value};
 
 use crate::{
-    AssertionMode, AssertionStability, ElementState, Expectation, LayoutRelation, LoadState,
-    SpecError, Target, ViewportCoverageComparison, WaitCondition, WaitMode,
-    DEFAULT_ASSERTION_SAMPLE_INTERVAL_MS, MAX_ASSERTION_STABILITY_MS,
-    MAX_ASSERTION_STABILITY_SAMPLES, MAX_LAYOUT_TOLERANCE_PX, MAX_RENDERED_TEXT_ITEMS,
-    MAX_VIEWPORT_COVERAGE_PERCENT, MIN_ASSERTION_STABILITY_MS,
+    admit_text_pattern, AssertionMode, AssertionStability, ElementState, Expectation,
+    LayoutRelation, LoadState, PixelExpectation, PixelMask, SpecError, Target,
+    ViewportCoverageComparison, WaitCondition, WaitMode, DEFAULT_ASSERTION_SAMPLE_INTERVAL_MS,
+    DEFAULT_PIXEL_THRESHOLD_MILLIS, MAX_ASSERTION_STABILITY_MS, MAX_ASSERTION_STABILITY_SAMPLES,
+    MAX_LAYOUT_TOLERANCE_PX, MAX_PIXEL_RATIO_MICROS, MAX_PIXEL_THRESHOLD_MILLIS,
+    MAX_RENDERED_TEXT_ITEMS, MAX_VIEWPORT_COVERAGE_PERCENT, MIN_ASSERTION_STABILITY_MS,
 };
 
 use super::{
@@ -92,6 +93,8 @@ pub(super) fn parse_expectation(
 ) -> Result<(Expectation, AssertionMode), SpecError> {
     let conditions = [
         "text",
+        "text_contains",
+        "text_matches",
         "url",
         "visible",
         "hidden",
@@ -125,6 +128,7 @@ pub(super) fn parse_expectation(
         "valid",
         "selected_values",
         "layout",
+        "pixels",
     ];
     let configured = conditions
         .iter()
@@ -153,6 +157,23 @@ pub(super) fn parse_expectation(
             "target is valid only with rendered_text, rendered_texts, visible_count, value, selected_values, viewport coverage, or layout expectations",
         ));
     }
+    if condition != "pixels" {
+        for name in [
+            "threshold_millis",
+            "max_diff_pixels",
+            "max_diff_pixel_ratio_micros",
+            "masks",
+            "update",
+        ] {
+            if block.attributes.contains_key(name) {
+                return Err(SpecError::new(
+                    "test.spec.attribute_unexpected",
+                    format!("{path}.{name}"),
+                    "attribute is valid only with pixel expectations",
+                ));
+            }
+        }
+    }
     if condition != "layout" {
         for name in ["relative_to", "tolerance_px"] {
             if block.attributes.contains_key(name) {
@@ -170,6 +191,32 @@ pub(super) fn parse_expectation(
             &block.attributes[condition],
             format!("{path}.text"),
         )?),
+        "text_contains" => {
+            let text = value_string(
+                &block.attributes[condition],
+                format!("{path}.text_contains"),
+            )?;
+            if text.is_empty() {
+                return Err(SpecError::new(
+                    "test.spec.text_contains",
+                    format!("{path}.text_contains"),
+                    "text_contains must contain at least one character",
+                ));
+            }
+            Expectation::TextContains(text)
+        }
+        "text_matches" => {
+            let pattern =
+                value_string(&block.attributes[condition], format!("{path}.text_matches"))?;
+            admit_text_pattern(&pattern).map_err(|reason| {
+                SpecError::new(
+                    "test.spec.text_pattern",
+                    format!("{path}.text_matches"),
+                    reason,
+                )
+            })?;
+            Expectation::TextMatches(pattern)
+        }
         "url" => Expectation::Url(value_string(
             &block.attributes[condition],
             format!("{path}.url"),
@@ -310,6 +357,7 @@ pub(super) fn parse_expectation(
                 tolerance_px,
             }
         }
+        "pixels" => Expectation::Pixels(parse_pixel_expectation(block, path)?),
         "enabled" | "disabled" | "checked" | "unchecked" | "selected" | "unselected"
         | "focused" | "unfocused" | "focus_within" | "focus_outside" | "expanded" | "collapsed"
         | "pressed" | "unpressed" | "readonly" | "writable" | "required" | "optional"
@@ -564,6 +612,129 @@ pub(super) fn parse_assertion_stability(
         ));
     }
     Ok(Some(stability))
+}
+
+fn parse_pixel_expectation(block: &Block, path: &str) -> Result<PixelExpectation, SpecError> {
+    let baseline = value_string(&block.attributes["pixels"], format!("{path}.pixels"))?;
+    if baseline.is_empty()
+        || baseline.contains('\0')
+        || baseline.split(['/', '\\']).any(|part| part == "..")
+    {
+        return Err(SpecError::new(
+            "test.spec.pixel_baseline",
+            format!("{path}.pixels"),
+            "pixel baseline must be a relative file path",
+        ));
+    }
+    let threshold_millis = if block.attributes.contains_key("threshold_millis") {
+        let value = required_nonnegative_u32(block, "threshold_millis", path)?;
+        u16::try_from(value)
+            .ok()
+            .filter(|value| *value <= MAX_PIXEL_THRESHOLD_MILLIS)
+            .ok_or_else(|| {
+                SpecError::new(
+                    "test.spec.pixel_threshold",
+                    format!("{path}.threshold_millis"),
+                    format!("pixel threshold must be 0 through {MAX_PIXEL_THRESHOLD_MILLIS}"),
+                )
+            })?
+    } else {
+        DEFAULT_PIXEL_THRESHOLD_MILLIS
+    };
+    let max_diff_pixels = if block.attributes.contains_key("max_diff_pixels") {
+        Some(required_nonnegative_u32(block, "max_diff_pixels", path)?)
+    } else {
+        None
+    };
+    let max_diff_pixel_ratio_micros =
+        if block.attributes.contains_key("max_diff_pixel_ratio_micros") {
+            let value = required_nonnegative_u32(block, "max_diff_pixel_ratio_micros", path)?;
+            if value > MAX_PIXEL_RATIO_MICROS {
+                return Err(SpecError::new(
+                    "test.spec.pixel_ratio",
+                    format!("{path}.max_diff_pixel_ratio_micros"),
+                    format!("pixel ratio must be 0 through {MAX_PIXEL_RATIO_MICROS} millionths"),
+                ));
+            }
+            Some(value)
+        } else {
+            None
+        };
+    let update = match block.attributes.get("update") {
+        None => false,
+        Some(Value::Bool(value)) => *value,
+        Some(_) => {
+            return Err(type_error(
+                format!("{path}.update"),
+                "update must be a boolean",
+            ));
+        }
+    };
+    Ok(PixelExpectation {
+        baseline,
+        threshold_millis,
+        max_diff_pixels,
+        max_diff_pixel_ratio_micros,
+        masks: parse_pixel_masks(block, path)?,
+        update,
+    })
+}
+
+fn parse_pixel_masks(block: &Block, path: &str) -> Result<Vec<PixelMask>, SpecError> {
+    let Some(value) = block.attributes.get("masks") else {
+        return Ok(Vec::new());
+    };
+    let Value::List(values) = value else {
+        return Err(SpecError::new(
+            "test.spec.pixel_mask",
+            format!("{path}.masks"),
+            "pixel masks must be a list of x,y,width,height strings",
+        ));
+    };
+    values
+        .iter()
+        .enumerate()
+        .map(|(index, value)| {
+            let text = value.as_str().ok_or_else(|| {
+                SpecError::new(
+                    "test.spec.pixel_mask",
+                    format!("{path}.masks[{index}]"),
+                    "pixel masks must be a list of x,y,width,height strings",
+                )
+            })?;
+            let parts = text.split(',').collect::<Vec<_>>();
+            if parts.len() != 4 {
+                return Err(SpecError::new(
+                    "test.spec.pixel_mask",
+                    format!("{path}.masks[{index}]"),
+                    "pixel masks must be a list of x,y,width,height strings",
+                ));
+            }
+            let mut numbers = [0_u32; 4];
+            for (part_index, part) in parts.iter().enumerate() {
+                numbers[part_index] = part.parse::<u32>().map_err(|_| {
+                    SpecError::new(
+                        "test.spec.pixel_mask",
+                        format!("{path}.masks[{index}]"),
+                        "pixel masks must be a list of x,y,width,height strings",
+                    )
+                })?;
+            }
+            if numbers[2] == 0 || numbers[3] == 0 {
+                return Err(SpecError::new(
+                    "test.spec.pixel_mask",
+                    format!("{path}.masks[{index}]"),
+                    "pixel mask width and height must be greater than zero",
+                ));
+            }
+            Ok(PixelMask {
+                x: numbers[0],
+                y: numbers[1],
+                width: numbers[2],
+                height: numbers[3],
+            })
+        })
+        .collect()
 }
 
 pub(super) fn condition_count_error(path: &str, count: usize) -> SpecError {

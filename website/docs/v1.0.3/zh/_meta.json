@@ -1,0 +1,5 @@
+[
+  { "type": "dir", "name": "guide", "label": "指南" },
+  { "type": "dir", "name": "concepts", "label": "概念" },
+  { "type": "dir", "name": "reference", "label": "参考" }
+]

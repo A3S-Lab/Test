@@ -465,11 +465,8 @@ fn worker_inventory_rejects_launch_macos_process_name_before_probe() {
 
     let temp = tempfile::tempdir().expect("tempdir");
     fs::write(temp.path().join("policy.yaml"), "version: 1\n").expect("GUI policy");
-    fs::write(
-        temp.path().join("fake-cua-driver"),
-        "#!/bin/sh\nexit 1\n",
-    )
-    .expect("unused proxy stub");
+    fs::write(temp.path().join("fake-cua-driver"), "#!/bin/sh\nexit 1\n")
+        .expect("unused proxy stub");
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;

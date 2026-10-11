@@ -285,5 +285,7 @@ fn suite(stability: Option<AssertionStability>) -> TestSuite {
                 }],
             })
             .collect(),
+        app: None,
+        targets: Vec::new(),
     }
 }

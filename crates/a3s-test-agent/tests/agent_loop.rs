@@ -10,8 +10,9 @@ use a3s_test_agent::{
 use a3s_test_core::{
     Action, DriverError, DriverSession, Evidence, ModifierKey, PageContextDelta,
     PageContextDeltaStatus, PageContextInvalidation, PageContextLocator, PageContextNode,
-    PageContextNodeState, PageContextObservation, PageContextSnapshot, StepOutput, Surface,
-    SurfaceObservation, Target, TestStep, PAGE_CONTEXT_DIFF_PROTOCOL,
+    PageContextNodeState, PageContextObservation, PageContextSnapshot, ScrollDirection,
+    SecretPurpose, StepOutput, Surface, SurfaceObservation, Target, TestStep,
+    PAGE_CONTEXT_DIFF_PROTOCOL,
 };
 use async_trait::async_trait;
 use tokio_util::sync::CancellationToken;
@@ -635,6 +636,15 @@ fn advanced_actions_have_distinct_policy_capabilities() {
         selector: "#target".to_string(),
     };
     let actions = [
+        (Action::Back {}, ActionKind::Back),
+        (
+            Action::ScrollUntil {
+                target: target.clone(),
+                direction: ScrollDirection::Down,
+                timeout_ms: 5_000,
+            },
+            ActionKind::ScrollUntil,
+        ),
         (
             Action::Hover {
                 target: target.clone(),
@@ -665,6 +675,22 @@ fn advanced_actions_have_distinct_policy_capabilities() {
                 value: "text".to_string(),
             },
             ActionKind::Type,
+        ),
+        (
+            Action::FillSecret {
+                target: target.clone(),
+                name: "APP_PASSWORD".to_string(),
+                purpose: SecretPurpose::Password,
+            },
+            ActionKind::FillSecret,
+        ),
+        (
+            Action::TypeSecret {
+                target: target.clone(),
+                name: "APP_PASSWORD".to_string(),
+                purpose: SecretPurpose::Text,
+            },
+            ActionKind::TypeSecret,
         ),
         (
             Action::Check {

@@ -40,7 +40,9 @@ use self::browser::{
     validate_turn_browser_network_policy, BrowserConnectionPurpose,
 };
 pub(crate) use self::dev::{abort_dev_session, start_dev_session, DevSession, DevSessionRequest};
-use self::events::{append_success_event, append_terminal_event, record_failure};
+use self::events::{
+    append_success_event, append_terminal_event, candidate_from_events, record_failure,
+};
 use self::policy::{
     browser_network_policy, validate_action, validate_observation_origin, web_origin,
 };
@@ -695,6 +697,7 @@ async fn finish(args: FinishArgs) -> Result<ExitCode> {
         append_terminal_event(&store, &mut state, "finish").await?;
     }
     store.save(&state).await?;
+    let acl_candidate = candidate_from_events(&store.read_events().await?);
     let report = AgentSessionReport {
         schema_version: SESSION_SCHEMA_VERSION,
         session: state.session.clone(),
@@ -713,6 +716,7 @@ async fn finish(args: FinishArgs) -> Result<ExitCode> {
         started_at_ms: state.started_at_ms,
         finished_at_ms: state.updated_at_ms,
         summary: args.summary,
+        acl_candidate,
     };
     store.write_report(&report).await?;
 

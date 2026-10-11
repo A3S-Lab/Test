@@ -567,11 +567,15 @@ fn agent_schema_exposes_values_for_semantic_targets() {
         serde_json::json!(["verify_contract"])
     );
     for kind in [
+        "back",
+        "scroll_until",
         "hover",
         "focus",
         "double_click",
         "context_click",
         "type",
+        "fill_secret",
+        "type_secret",
         "check",
         "uncheck",
         "select",

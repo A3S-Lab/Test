@@ -143,13 +143,18 @@ impl ProvenanceRedactor {
                 self.redact_text(variant);
                 self.redact_text(state);
             }
-            Action::Click { target }
+            Action::Back {} => {}
+            Action::ScrollUntil { target, .. }
+            | Action::Click { target }
             | Action::Hover { target }
             | Action::Focus { target }
             | Action::DoubleClick { target }
             | Action::ContextClick { target }
             | Action::Check { target }
             | Action::Uncheck { target } => self.redact_target(target),
+            Action::FillSecret { target, .. } | Action::TypeSecret { target, .. } => {
+                self.redact_target(target);
+            }
             Action::Fill { target, value } | Action::Type { target, value } => {
                 self.redact_target(target);
                 value.clone_from(&self.replacement);
@@ -239,7 +244,10 @@ impl ProvenanceRedactor {
 
     fn redact_expectation(&self, expectation: &mut Expectation) {
         match expectation {
-            Expectation::TextVisible(text) => self.redact_text(text),
+            Expectation::TextVisible(text)
+            | Expectation::TextContains(text)
+            | Expectation::TextMatches(text) => self.redact_text(text),
+            Expectation::Pixels(pixels) => self.redact_text(&mut pixels.baseline),
             Expectation::Url(url) => self.redact_url(url),
             Expectation::Visible(target)
             | Expectation::InViewport(target)

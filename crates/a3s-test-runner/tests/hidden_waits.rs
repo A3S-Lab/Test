@@ -399,5 +399,7 @@ fn suite(scenarios: usize, timeout_ms: u64) -> TestSuite {
                 }],
             })
             .collect(),
+        app: None,
+        targets: Vec::new(),
     }
 }

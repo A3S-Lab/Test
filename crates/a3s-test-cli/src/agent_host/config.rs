@@ -270,6 +270,8 @@ fn parse_allowed_actions(block: &Block) -> Result<Vec<a3s_test_agent::ActionKind
     for value in values {
         let action = match value.as_str() {
             "navigate" => a3s_test_agent::ActionKind::Navigate,
+            "back" => a3s_test_agent::ActionKind::Back,
+            "scroll_until" => a3s_test_agent::ActionKind::ScrollUntil,
             "snapshot" => a3s_test_agent::ActionKind::Snapshot,
             "click" => a3s_test_agent::ActionKind::Click,
             "hover" => a3s_test_agent::ActionKind::Hover,
@@ -277,7 +279,9 @@ fn parse_allowed_actions(block: &Block) -> Result<Vec<a3s_test_agent::ActionKind
             "double_click" => a3s_test_agent::ActionKind::DoubleClick,
             "context_click" => a3s_test_agent::ActionKind::ContextClick,
             "fill" => a3s_test_agent::ActionKind::Fill,
+            "fill_secret" => a3s_test_agent::ActionKind::FillSecret,
             "type" => a3s_test_agent::ActionKind::Type,
+            "type_secret" => a3s_test_agent::ActionKind::TypeSecret,
             "check" => a3s_test_agent::ActionKind::Check,
             "uncheck" => a3s_test_agent::ActionKind::Uncheck,
             "select" => a3s_test_agent::ActionKind::Select,

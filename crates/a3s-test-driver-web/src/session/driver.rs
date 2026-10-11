@@ -1,6 +1,16 @@
+use std::time::{Duration, Instant};
+
+use a3s_test_core::{
+    ScrollDirection, MAX_SCROLL_UNTIL_TIMEOUT_MS, MIN_SCROLL_UNTIL_TIMEOUT_MS,
+    SCROLL_UNTIL_SAMPLE_INTERVAL_MS, SCROLL_UNTIL_STEP_PX,
+};
 use async_trait::async_trait;
+use serde_json::json;
+use url::Url;
 
 use super::*;
+use crate::protocol::{scalar_bool, scalar_string, visibility_args};
+use crate::BrowserNetworkPolicy;
 
 const PAGE_CONTEXT_INSPECT_FUNCTION: &str = r#"(async ({ request, waitTimeoutMs }) => {
   const bridge = window[Symbol.for("a3s.test.page-context")];
@@ -37,6 +47,12 @@ impl DriverSession for AgentBrowserSession {
                 .execute_command(vec!["open".into(), url.into()])
                 .await
                 .map(|data| StepOutput::new("page opened").with_data(data)),
+            Action::Back {} => self.go_back().await,
+            Action::ScrollUntil {
+                target,
+                direction,
+                timeout_ms,
+            } => self.scroll_until(target, *direction, *timeout_ms).await,
             Action::Snapshot { interactive } => {
                 self.capture_observation(*interactive)
                     .await
@@ -83,6 +99,12 @@ impl DriverSession for AgentBrowserSession {
                 self.execute_command(vec!["type".into(), selector.into(), value.into()])
                     .await
                     .map(|data| StepOutput::new("text typed into target").with_data(data))
+            }
+            Action::FillSecret { target, name, purpose } => {
+                self.fill_secret(target, name, *purpose, false).await
+            }
+            Action::TypeSecret { target, name, purpose } => {
+                self.fill_secret(target, name, *purpose, true).await
             }
             Action::InsertText { value } => self
                 .execute_command(vec!["keyboard".into(), "inserttext".into(), value.into()])
@@ -654,6 +676,10 @@ impl DriverSession for AgentBrowserSession {
         })
     }
 
+    fn set_pixel_ci(&mut self, ci: bool) {
+        self.pixel_ci = ci;
+    }
+
     async fn close(&mut self) -> Result<(), DriverError> {
         if self.closed {
             return Ok(());
@@ -681,5 +707,169 @@ impl DriverSession for AgentBrowserSession {
             }
             Err(error) => Err(error),
         }
+    }
+}
+
+impl AgentBrowserSession {
+    async fn go_back(&self) -> Result<StepOutput, DriverError> {
+        self.execute_command(vec!["back".into()]).await?;
+        let data = self
+            .execute_command(vec!["get".into(), "url".into()])
+            .await?;
+        let url = page_url(&data).ok_or_else(|| {
+            DriverError::new(
+                "test.driver.web.output_invalid",
+                "history back did not report a page URL",
+            )
+        })?;
+        admit_returned_page(&self.config.network_policy, &url)?;
+        Ok(StepOutput::new("history back completed").with_data(json!({ "url": url })))
+    }
+
+    async fn scroll_until(
+        &self,
+        target: &Target,
+        direction: ScrollDirection,
+        timeout_ms: u64,
+    ) -> Result<StepOutput, DriverError> {
+        if !(MIN_SCROLL_UNTIL_TIMEOUT_MS..=MAX_SCROLL_UNTIL_TIMEOUT_MS).contains(&timeout_ms) {
+            return Err(DriverError::new(
+                "test.driver.web.scroll_until_invalid",
+                format!(
+                    "scroll_until timeout must be {MIN_SCROLL_UNTIL_TIMEOUT_MS} through {MAX_SCROLL_UNTIL_TIMEOUT_MS} milliseconds"
+                ),
+            ));
+        }
+        let visible_args = visibility_args(target)?;
+        let scroll_args = vec![
+            OsString::from("scroll"),
+            OsString::from(direction.as_str()),
+            OsString::from(SCROLL_UNTIL_STEP_PX.to_string()),
+        ];
+        let deadline = Instant::now() + Duration::from_millis(timeout_ms);
+        let max_probes = timeout_ms
+            .div_ceil(SCROLL_UNTIL_SAMPLE_INTERVAL_MS)
+            .saturating_add(1);
+        let mut probes = 0_u64;
+        loop {
+            probes += 1;
+            if target_is_visible(&self.execute_command(visible_args.clone()).await?)? {
+                let summary = if probes == 1 {
+                    "target is visible"
+                } else {
+                    "target scrolled into view"
+                };
+                return Ok(StepOutput::new(summary).with_data(json!({
+                    "direction": direction.as_str(),
+                    "probes": probes,
+                    "scrolled": probes > 1,
+                })));
+            }
+            if probes >= max_probes || Instant::now() >= deadline {
+                break;
+            }
+            self.execute_command(scroll_args.clone()).await?;
+            let remaining = deadline.saturating_duration_since(Instant::now());
+            if remaining.is_zero() {
+                break;
+            }
+            tokio::time::sleep(
+                remaining.min(Duration::from_millis(SCROLL_UNTIL_SAMPLE_INTERVAL_MS)),
+            )
+            .await;
+        }
+        Err(DriverError::new(
+            "test.driver.web.scroll_until_timeout",
+            format!(
+                "target did not become visible within {timeout_ms} milliseconds after scrolling {}",
+                direction.as_str()
+            ),
+        ))
+    }
+}
+
+fn target_is_visible(data: &serde_json::Value) -> Result<bool, DriverError> {
+    scalar_bool(&browser_result(data.clone()))
+        .or_else(|| scalar_bool(data))
+        .ok_or_else(|| {
+            DriverError::new(
+                "test.driver.web.output_invalid",
+                "browser visibility response did not contain a boolean",
+            )
+        })
+}
+
+fn page_url(value: &serde_json::Value) -> Option<String> {
+    scalar_string(&browser_result(value.clone()))
+        .or_else(|| scalar_string(value))
+        .or_else(|| {
+            value
+                .pointer("/data/url")
+                .and_then(serde_json::Value::as_str)
+        })
+        .or_else(|| value.pointer("/url").and_then(serde_json::Value::as_str))
+        .map(str::to_string)
+}
+
+fn admit_returned_page(policy: &BrowserNetworkPolicy, url: &str) -> Result<(), DriverError> {
+    let parsed = Url::parse(url).map_err(|_| {
+        DriverError::new(
+            "test.driver.web.session_origin_lost",
+            "history back returned an invalid page URL",
+        )
+    })?;
+    if !matches!(parsed.scheme(), "http" | "https") {
+        return Err(DriverError::new(
+            "test.driver.web.session_origin_lost",
+            format!(
+                "history back left the Web page and reported the '{}' scheme",
+                parsed.scheme()
+            ),
+        ));
+    }
+    let origin = parsed.origin().ascii_serialization();
+    if !policy.allowed_origins().is_empty() {
+        return if policy
+            .allowed_origins()
+            .iter()
+            .any(|allowed| allowed == &origin)
+        {
+            Ok(())
+        } else {
+            Err(DriverError::new(
+                "test.driver.web.navigation_origin_denied",
+                format!("history back reached unapproved origin '{origin}'"),
+            ))
+        };
+    }
+    if policy.allowed_domains().is_empty() {
+        return Ok(());
+    }
+    let host = parsed.host_str().unwrap_or("");
+    if policy
+        .allowed_domains()
+        .iter()
+        .any(|domain| host_matches_domain(host, domain))
+    {
+        Ok(())
+    } else {
+        Err(DriverError::new(
+            "test.driver.web.navigation_origin_denied",
+            format!("history back reached unapproved host '{host}'"),
+        ))
+    }
+}
+
+fn host_matches_domain(host: &str, domain: &str) -> bool {
+    if let Some(suffix) = domain.strip_prefix("*.") {
+        let host_bytes = host.as_bytes();
+        let suffix_bytes = suffix.as_bytes();
+        if host_bytes.len() <= suffix_bytes.len() + 1 {
+            return false;
+        }
+        let split = host_bytes.len() - suffix_bytes.len();
+        host_bytes[split - 1] == b'.' && host_bytes[split..].eq_ignore_ascii_case(suffix_bytes)
+    } else {
+        host.eq_ignore_ascii_case(domain)
     }
 }

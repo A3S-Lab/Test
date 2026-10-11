@@ -13,7 +13,7 @@ use std::time::Duration;
 use a3s_test_core::{Action, ScenarioContext, SurfaceDriver as _, TestStep, WaitCondition};
 #[cfg(unix)]
 use a3s_test_core::{
-    ElementState, Expectation, LayoutRelation, Target, ViewportCoverageComparison,
+    ElementState, Expectation, LayoutRelation, PixelExpectation, Target, ViewportCoverageComparison,
 };
 use serde_json::Value;
 
@@ -164,6 +164,14 @@ async fn target_bound_rendered_assertions_fail_closed_on_terminal_surfaces() {
             relation: LayoutRelation::Above,
             tolerance_px: 0,
         },
+        Expectation::Pixels(PixelExpectation {
+            baseline: "baseline.png".to_string(),
+            threshold_millis: 200,
+            max_diff_pixels: None,
+            max_diff_pixel_ratio_micros: None,
+            masks: Vec::new(),
+            update: false,
+        }),
     ] {
         let error = session
             .execute(&step(

@@ -9,8 +9,9 @@ use a3s_test_core::{
     Action, CaptureOperation, ContractFinding, ContractOutcome, ContractReport, ContractSeverity,
     DesignAuditAuthority, DesignAuditDimension, DesignAuditFinding, DesignAuditPriority,
     DesignAuditProvenance, DesignAuditProviderIdentity, DesignAuditReport, DesignAuditTarget,
-    DesignAuditUsage, DialogOperation, FrameTarget, NetworkRoute, ScenarioContext, SurfaceDriver,
-    TabOperation, Target, TestStep, VideoOperation, WaitCondition, ACTION_PROTOCOL_REVISION,
+    DesignAuditUsage, DialogOperation, Expectation, FrameTarget, NetworkRoute, ScenarioContext,
+    ScrollDirection, SurfaceDriver, TabOperation, Target, TestStep, VideoOperation, WaitCondition,
+    ACTION_PROTOCOL_REVISION, MAX_PAGE_TEXT_BYTES,
 };
 use a3s_test_driver_web::{
     AgentBrowserConfig, AgentBrowserConnectionConfig, AgentBrowserDriver, BrowserCommand,
@@ -1781,6 +1782,438 @@ async fn failed_close_kills_the_exact_daemon_from_its_private_pid_file() {
     let mut daemon = executor.child.lock().unwrap().take().expect("fake daemon");
     let status = daemon.wait().expect("reap daemon");
     assert!(!status.success());
+}
+
+struct GestureExecutor {
+    invocations: Mutex<Vec<CommandInvocation>>,
+    url: String,
+    page_text: String,
+    visible_after_scrolls: usize,
+}
+
+impl GestureExecutor {
+    fn new(url: &str, page_text: &str, visible_after_scrolls: usize) -> Self {
+        Self {
+            invocations: Mutex::new(Vec::new()),
+            url: url.to_string(),
+            page_text: page_text.to_string(),
+            visible_after_scrolls,
+        }
+    }
+}
+
+#[async_trait]
+impl CommandExecutor for GestureExecutor {
+    async fn run(&self, invocation: CommandInvocation) -> Result<CommandOutput, CommandError> {
+        if invocation
+            .args
+            .last()
+            .is_some_and(|argument| argument == "--version")
+        {
+            return Ok(CommandOutput {
+                exit_code: 0,
+                stdout: "agent-browser 0.26.0".to_string(),
+                stderr: String::new(),
+            });
+        }
+        let tail = command_tail(&invocation.args);
+        let scrolls = self
+            .invocations
+            .lock()
+            .unwrap()
+            .iter()
+            .filter(|previous| {
+                command_tail(&previous.args).first().map(String::as_str) == Some("scroll")
+            })
+            .count();
+        self.invocations.lock().unwrap().push(invocation);
+        let stdout = match tail.first().map(String::as_str) {
+            Some("get") if tail.get(1).map(String::as_str) == Some("url") => {
+                format!(r#"{{"success":true,"data":"{}"}}"#, self.url)
+            }
+            Some("get") if tail.get(1).map(String::as_str) == Some("text") => {
+                format!(
+                    r#"{{"success":true,"data":{}}}"#,
+                    serde_json::to_string(&self.page_text).expect("page text")
+                )
+            }
+            Some("is") => {
+                let visible = scrolls >= self.visible_after_scrolls;
+                format!(r#"{{"success":true,"data":{visible}}}"#)
+            }
+            _ => r#"{"success":true}"#.to_string(),
+        };
+        Ok(CommandOutput {
+            exit_code: 0,
+            stdout,
+            stderr: String::new(),
+        })
+    }
+}
+
+fn command_tail(args: &[OsString]) -> Vec<String> {
+    let args = args
+        .iter()
+        .filter_map(|argument| argument.to_str())
+        .collect::<Vec<_>>();
+    let mut index = args
+        .iter()
+        .position(|argument| *argument == "--headed")
+        .map(|position| position + 2)
+        .unwrap_or(0);
+    if args.get(index) == Some(&"--allowed-domains") {
+        index += 2;
+        if args.get(index) == Some(&"--engine") {
+            index += 2;
+        }
+    }
+    args[index..]
+        .iter()
+        .map(|argument| (*argument).to_string())
+        .collect()
+}
+
+fn gesture_config(policy: BrowserNetworkPolicy) -> AgentBrowserConfig {
+    AgentBrowserConfig {
+        command: BrowserCommand::Standalone {
+            executable: PathBuf::from("/opt/agent-browser"),
+        },
+        namespace: "gestures".to_string(),
+        headed: false,
+        command_timeout: Duration::from_secs(5),
+        idle_timeout: Duration::from_secs(30),
+        microphone: Default::default(),
+        network_policy: policy,
+    }
+}
+
+async fn open_gesture_session(
+    policy: BrowserNetworkPolicy,
+    executor: Arc<GestureExecutor>,
+) -> (tempfile::TempDir, Box<dyn a3s_test_core::DriverSession>) {
+    let temp = tempfile::tempdir().expect("tempdir");
+    let driver = AgentBrowserDriver::with_executor(gesture_config(policy), executor);
+    let session = driver
+        .open(&ScenarioContext {
+            run_id: "gestures".to_string(),
+            scenario_id: "history".to_string(),
+            artifacts_dir: temp.path().join("artifacts"),
+        })
+        .await
+        .expect("session");
+    (temp, session)
+}
+
+fn gesture_commands(executor: &GestureExecutor) -> Vec<Vec<String>> {
+    executor
+        .invocations
+        .lock()
+        .unwrap()
+        .iter()
+        .map(|invocation| command_tail(&invocation.args))
+        .filter(|tail| tail.first().map(String::as_str) != Some("close"))
+        .collect()
+}
+
+#[tokio::test]
+async fn history_back_checks_the_returned_page_origin() {
+    let approved =
+        BrowserNetworkPolicy::restricted(["https://example.test"], std::iter::empty::<String>())
+            .expect("origin policy");
+    let domains =
+        BrowserNetworkPolicy::restricted_to_domains(["*.example.test"]).expect("domain policy");
+    let cases = [
+        (approved.clone(), "https://example.test/next", None),
+        (
+            approved,
+            "https://user:secret-token@evil.test/path",
+            Some("test.driver.web.navigation_origin_denied"),
+        ),
+        (domains.clone(), "https://app.example.test/ok", None),
+        (
+            domains.clone(),
+            "https://example.test/",
+            Some("test.driver.web.navigation_origin_denied"),
+        ),
+        (
+            domains,
+            "https://notexample.test/",
+            Some("test.driver.web.navigation_origin_denied"),
+        ),
+        (
+            BrowserNetworkPolicy::default(),
+            "https://anywhere.test/path",
+            None,
+        ),
+        (
+            BrowserNetworkPolicy::default(),
+            "about:blank",
+            Some("test.driver.web.session_origin_lost"),
+        ),
+    ];
+
+    for (policy, url, expected_code) in cases {
+        let executor = Arc::new(GestureExecutor::new(url, "", usize::MAX));
+        let (_temp, mut session) = open_gesture_session(policy, executor.clone()).await;
+        let result = session.execute(&step("return", Action::Back {})).await;
+        session.close().await.expect("close");
+        match expected_code {
+            None => {
+                let output = result.expect("approved history back");
+                assert_eq!(output.data["url"], url);
+                assert_eq!(
+                    gesture_commands(&executor),
+                    vec![
+                        vec!["back".to_string()],
+                        vec!["get".to_string(), "url".to_string()]
+                    ]
+                );
+            }
+            Some(code) => {
+                let error = result.expect_err("unapproved history back");
+                assert_eq!(error.code(), code);
+                assert!(!error.message().contains("secret-token"));
+                assert!(!error.message().contains(url));
+            }
+        }
+    }
+}
+
+#[tokio::test]
+async fn scroll_until_checks_visibility_before_scrolling() {
+    let executor = Arc::new(GestureExecutor::new("", "", 0));
+    let (_temp, mut session) =
+        open_gesture_session(BrowserNetworkPolicy::default(), executor.clone()).await;
+    let output = session
+        .execute(&step(
+            "footer",
+            Action::ScrollUntil {
+                target: Target::Css {
+                    selector: "#end".to_string(),
+                },
+                direction: ScrollDirection::Down,
+                timeout_ms: 50,
+            },
+        ))
+        .await
+        .expect("already visible");
+    session.close().await.expect("close");
+
+    assert_eq!(output.summary, "target is visible");
+    assert_eq!(output.data["scrolled"], false);
+    assert_eq!(output.data["probes"], 1);
+    assert_eq!(
+        gesture_commands(&executor),
+        vec![vec![
+            "is".to_string(),
+            "visible".to_string(),
+            "#end".to_string()
+        ]]
+    );
+}
+
+#[tokio::test]
+async fn scroll_until_scrolls_in_the_requested_direction_until_visible() {
+    let executor = Arc::new(GestureExecutor::new("", "", 1));
+    let (_temp, mut session) =
+        open_gesture_session(BrowserNetworkPolicy::default(), executor.clone()).await;
+    let output = session
+        .execute(&step(
+            "footer",
+            Action::ScrollUntil {
+                target: Target::Css {
+                    selector: "#end".to_string(),
+                },
+                direction: ScrollDirection::Right,
+                timeout_ms: 5_000,
+            },
+        ))
+        .await
+        .expect("scrolled into view");
+    session.close().await.expect("close");
+
+    assert_eq!(output.data["scrolled"], true);
+    assert_eq!(output.data["probes"], 2);
+    assert_eq!(
+        gesture_commands(&executor),
+        vec![
+            vec!["is".to_string(), "visible".to_string(), "#end".to_string()],
+            vec!["scroll".to_string(), "right".to_string(), "240".to_string()],
+            vec!["is".to_string(), "visible".to_string(), "#end".to_string()],
+        ]
+    );
+}
+
+#[tokio::test]
+async fn scroll_until_stops_at_the_timeout_bound() {
+    let executor = Arc::new(GestureExecutor::new("", "", usize::MAX));
+    let (_temp, mut session) =
+        open_gesture_session(BrowserNetworkPolicy::default(), executor.clone()).await;
+    let error = session
+        .execute(&step(
+            "footer",
+            Action::ScrollUntil {
+                target: Target::Css {
+                    selector: "#secret-end".to_string(),
+                },
+                direction: ScrollDirection::Down,
+                timeout_ms: 50,
+            },
+        ))
+        .await
+        .expect_err("scroll timeout");
+    session.close().await.expect("close");
+
+    assert_eq!(error.code(), "test.driver.web.scroll_until_timeout");
+    assert!(!error.message().contains("#secret-end"));
+    assert_eq!(
+        gesture_commands(&executor),
+        vec![
+            vec![
+                "is".to_string(),
+                "visible".to_string(),
+                "#secret-end".to_string()
+            ],
+            vec!["scroll".to_string(), "down".to_string(), "240".to_string()],
+            vec![
+                "is".to_string(),
+                "visible".to_string(),
+                "#secret-end".to_string()
+            ],
+        ]
+    );
+}
+
+#[tokio::test]
+async fn scroll_until_rejects_a_timeout_outside_the_driver_bound() {
+    let executor = Arc::new(GestureExecutor::new("", "", 0));
+    let (_temp, mut session) =
+        open_gesture_session(BrowserNetworkPolicy::default(), executor.clone()).await;
+    let error = session
+        .execute(&step(
+            "footer",
+            Action::ScrollUntil {
+                target: Target::Css {
+                    selector: "#end".to_string(),
+                },
+                direction: ScrollDirection::Up,
+                timeout_ms: 49,
+            },
+        ))
+        .await
+        .expect_err("invalid timeout");
+    session.close().await.expect("close");
+
+    assert_eq!(error.code(), "test.driver.web.scroll_until_invalid");
+    assert!(gesture_commands(&executor).is_empty());
+}
+
+#[tokio::test]
+async fn page_text_expectations_read_body_text_without_echoing_it() {
+    let page_text = "Quarterly plan";
+    let executor = Arc::new(GestureExecutor::new("", page_text, 0));
+    let (_temp, mut session) =
+        open_gesture_session(BrowserNetworkPolicy::default(), executor.clone()).await;
+    let matched = session
+        .execute(&step(
+            "contains",
+            Action::Assert {
+                expectation: Expectation::TextContains("plan".to_string()),
+            },
+        ))
+        .await
+        .expect("text contains");
+    assert_eq!(matched.data["matched"], true);
+    assert!(!matched.data.to_string().contains(page_text));
+
+    let pattern = session
+        .execute(&step(
+            "matches",
+            Action::Assert {
+                expectation: Expectation::TextMatches("plan".to_string()),
+            },
+        ))
+        .await
+        .expect("text matches");
+    assert_eq!(pattern.data["matched"], true);
+
+    let missing = session
+        .execute(&step(
+            "missing",
+            Action::Assert {
+                expectation: Expectation::TextContains("missing".to_string()),
+            },
+        ))
+        .await
+        .expect_err("text mismatch");
+    assert_eq!(missing.code(), "test.assert.text_contains");
+    assert!(!missing.message().contains(page_text));
+
+    let unmatched = session
+        .execute(&step(
+            "unmatched",
+            Action::Assert {
+                expectation: Expectation::TextMatches("Missing".to_string()),
+            },
+        ))
+        .await
+        .expect_err("pattern mismatch");
+    assert_eq!(unmatched.code(), "test.assert.text_matches");
+    assert!(!unmatched.message().contains(page_text));
+
+    let invalid = session
+        .execute(&step(
+            "invalid",
+            Action::Assert {
+                expectation: Expectation::TextMatches("(".to_string()),
+            },
+        ))
+        .await
+        .expect_err("invalid pattern");
+    assert_eq!(invalid.code(), "test.driver.web.text_pattern_invalid");
+
+    let empty = session
+        .execute(&step(
+            "empty",
+            Action::Assert {
+                expectation: Expectation::TextContains(String::new()),
+            },
+        ))
+        .await
+        .expect_err("empty contains");
+    assert_eq!(empty.code(), "test.driver.web.text_contains_invalid");
+    session.close().await.expect("close");
+
+    let commands = gesture_commands(&executor);
+    let reads = commands
+        .iter()
+        .filter(|command| command.first().map(String::as_str) == Some("get"))
+        .collect::<Vec<_>>();
+    assert_eq!(reads.len(), 4);
+    assert!(reads.iter().all(|command| {
+        command.as_slice() == ["get".to_string(), "text".to_string(), "body".to_string()]
+    }));
+}
+
+#[tokio::test]
+async fn page_text_over_the_byte_bound_fails_without_echoing_the_body() {
+    let page_text = "a".repeat(MAX_PAGE_TEXT_BYTES + 1);
+    let executor = Arc::new(GestureExecutor::new("", &page_text, 0));
+    let (_temp, mut session) =
+        open_gesture_session(BrowserNetworkPolicy::default(), executor).await;
+    let error = session
+        .execute(&step(
+            "too-large",
+            Action::Assert {
+                expectation: Expectation::TextContains("a".to_string()),
+            },
+        ))
+        .await
+        .expect_err("oversized page text");
+    session.close().await.expect("close");
+
+    assert_eq!(error.code(), "test.driver.web.text_too_large");
+    assert!(!error.message().contains(&page_text));
 }
 
 fn os(values: &[&str]) -> Vec<OsString> {

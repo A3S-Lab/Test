@@ -191,7 +191,8 @@ async fn execute_with_executor(
         },
     )
     .map_err(anyhow::Error::msg)
-    .context("invalid deterministic verification runner")?;
+    .context("invalid deterministic verification runner")?
+    .with_ci(crate::environment_is_ci());
     let cancellation = CancellationToken::new();
     let signal_task = install_interrupt_handler(cancellation.clone());
     let workflow_deadline = tokio::time::Instant::now() + config.options.timeout;

@@ -149,7 +149,7 @@ fn viewport_coverage_comparison_rejects_unknown_or_trivial_claims() {
 
 #[test]
 fn viewport_coverage_has_a_revision_fifteen_wire_contract() {
-    assert_eq!(ACTION_PROTOCOL_REVISION, 15);
+    assert_eq!(ACTION_PROTOCOL_REVISION, 17);
     for (comparison, percent, encoded_comparison) in [
         (ViewportCoverageComparison::AtLeast, 80, "at_least"),
         (ViewportCoverageComparison::AtMost, 10, "at_most"),

@@ -767,9 +767,12 @@ impl GuiSession {
                     "the current CUA semantic protocol does not expose visual-viewport coverage or point-level pointer hit evidence",
                 ))
             }
-            Expectation::Url(_) => Err(DriverError::new(
+            Expectation::Url(_)
+            | Expectation::TextContains(_)
+            | Expectation::TextMatches(_)
+            | Expectation::Pixels(_) => Err(DriverError::new(
                 "test.driver.gui.assertion_unsupported",
-                "URL assertions are not available on GUI surfaces",
+                "URL and page-text pattern assertions are not available on GUI surfaces",
             )),
             Expectation::RenderedTexts { .. }
             | Expectation::VisibleCount { .. }

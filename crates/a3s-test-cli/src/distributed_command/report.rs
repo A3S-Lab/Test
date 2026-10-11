@@ -262,6 +262,7 @@ mod tests {
             id: "checkout".to_string(),
             name: "Checkout".to_string(),
             surface: Surface::Web,
+            target: None,
             status: RunStatus::Failed,
             duration_ms: 50,
             steps: vec![StepResult {

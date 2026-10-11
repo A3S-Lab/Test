@@ -39,6 +39,8 @@ use crate::{AgentBrowserConfig, BrowserCapabilities, CommandExecutor, TokioComma
 mod advanced;
 mod assertion;
 mod driver;
+mod pixels;
+mod secret;
 
 const SESSION_FRESH: u8 = 0;
 const SESSION_ACTIVE: u8 = 1;
@@ -181,6 +183,9 @@ impl AgentBrowserDriver {
             close_on_drop: false,
             closed: false,
             lifecycle: AtomicU8::new(SESSION_ACTIVE),
+            secret_exposed: false,
+            pixel_ci: false,
+            pixel_captures: 0,
         })
     }
 }
@@ -248,6 +253,9 @@ impl SurfaceDriver for AgentBrowserDriver {
             close_on_drop: true,
             closed: false,
             lifecycle: AtomicU8::new(SESSION_FRESH),
+            secret_exposed: false,
+            pixel_ci: false,
+            pixel_captures: 0,
         }))
     }
 }
@@ -283,6 +291,11 @@ pub struct AgentBrowserSession {
     close_on_drop: bool,
     closed: bool,
     lifecycle: AtomicU8,
+    /// Set once a secret value has been sent to the browser.
+    secret_exposed: bool,
+    /// When set, a missing pixel baseline is still not created unless update is set.
+    pixel_ci: bool,
+    pixel_captures: u64,
 }
 
 struct ActiveVideo {

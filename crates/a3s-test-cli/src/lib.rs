@@ -431,7 +431,8 @@ async fn run(args: RunArgs) -> Result<ExitCode> {
         },
     )
     .map_err(anyhow::Error::msg)?
-    .with_contracts(admitted.contracts);
+    .with_contracts(admitted.contracts)
+    .with_ci(environment_is_ci());
 
     let cancellation = CancellationToken::new();
     let signal_task = install_interrupt_handler(cancellation.clone());
@@ -909,6 +910,13 @@ fn status_exit_code(status: RunStatus) -> ExitCode {
         RunStatus::Failed => ExitCode::from(1),
         RunStatus::TimedOut => ExitCode::from(124),
         RunStatus::Cancelled => ExitCode::from(130),
+    }
+}
+
+fn environment_is_ci() -> bool {
+    match std::env::var("CI") {
+        Ok(value) => !value.is_empty() && value != "0" && !value.eq_ignore_ascii_case("false"),
+        Err(_) => false,
     }
 }
 
