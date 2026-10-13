@@ -230,9 +230,7 @@ impl AgentBrowserSession {
             .await?;
         let result = browser_result(data);
         let (target_rect, viewport_rect) = interactability_rects(&result)?;
-        let intersection_ratio = target_rect
-            .intersection_ratio(viewport_rect)
-            .ok_or_else(|| output_invalid("interactability geometry"))?;
+        let intersection_ratio = intersection_ratio(target_rect, viewport_rect)?;
         let common = json!({
             "target": target,
             "target_rect": rect_data(target_rect),
@@ -656,6 +654,31 @@ fn viewport_coverage_expectation(
         }
         ViewportCoverageComparison::AtMost => ("at most", "test.assert.viewport_coverage_at_most"),
     }
+}
+
+impl AgentBrowserSession {
+    pub(super) async fn target_intersects_viewport(
+        &self,
+        target: &Target,
+    ) -> Result<bool, DriverError> {
+        let data = self
+            .execute_command(interactability_probe_args(
+                target,
+                InteractabilityProbe::InViewport,
+            )?)
+            .await?;
+        let (target_rect, viewport_rect) = interactability_rects(&browser_result(data))?;
+        Ok(intersection_ratio(target_rect, viewport_rect)? > 0.0)
+    }
+}
+
+fn intersection_ratio(
+    target_rect: LayoutRect,
+    viewport_rect: LayoutRect,
+) -> Result<f64, DriverError> {
+    target_rect
+        .intersection_ratio(viewport_rect)
+        .ok_or_else(|| output_invalid("interactability geometry"))
 }
 
 fn interactability_rects(value: &Value) -> Result<(LayoutRect, LayoutRect), DriverError> {

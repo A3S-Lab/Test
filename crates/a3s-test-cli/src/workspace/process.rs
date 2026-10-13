@@ -226,11 +226,14 @@ fn configure_owned_process(command: &mut Command) {
     {
         use std::os::windows::process::CommandExt as _;
 
+        // CREATE_NO_WINDOW still allocates a console host. That host stays in
+        // the Job after the launcher exits and fails an otherwise successful
+        // check. DETACHED_PROCESS allocates no console, so no host is created.
         const CREATE_SUSPENDED: u32 = 0x0000_0004;
-        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+        const DETACHED_PROCESS: u32 = 0x0000_0008;
         command
             .as_std_mut()
-            .creation_flags(CREATE_SUSPENDED | CREATE_NO_WINDOW);
+            .creation_flags(CREATE_SUSPENDED | DETACHED_PROCESS);
     }
 }
 

@@ -65,8 +65,11 @@ impl WorkerGuiApplication {
                 expected_publisher,
             } => {
                 validate_text(path, 1_024, "Windows executable path")?;
-                if let Some(publisher) = expected_publisher {
-                    validate_text(publisher, 256, "Windows publisher")?;
+                if expected_publisher.is_some() {
+                    return Err(inventory_error(
+                        "test.worker.inventory.gui_capability_invalid",
+                        "Windows publisher is not admitted because the locked CUA revision cannot prove it",
+                    ));
                 }
                 Ok(())
             }
@@ -91,6 +94,11 @@ pub struct WorkerGuiCapability {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[schemars(length(min = 1, max = 256))]
     pub macos_process_name: Option<String>,
+    /// Exact CUA `list_apps` file name for attach-only Windows executable identity.
+    /// Absent for launch targets and for attach that matches the executable path alone.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[schemars(length(min = 1, max = 256))]
+    pub windows_process_name: Option<String>,
     #[schemars(length(min = 1, max = 128))]
     pub cua_driver_version: String,
     #[schemars(length(min = 1, max = 128))]
@@ -113,18 +121,7 @@ impl WorkerGuiCapability {
         validate_identifier(&self.profile_id, "GUI profile ID")?;
         validate_identifier(&self.compatibility_profile, "GUI compatibility profile ID")?;
         self.application.validate()?;
-        match (self.target, self.macos_process_name.as_deref()) {
-            (WorkerGuiTarget::Launch, Some(_)) => {
-                return Err(inventory_error(
-                    "test.worker.inventory.gui_capability_invalid",
-                    "macos_process_name is only valid for GUI attach targets",
-                ));
-            }
-            (WorkerGuiTarget::Attach, Some(process_name)) => {
-                validate_text(process_name, 256, "macOS process name")?;
-            }
-            (WorkerGuiTarget::Launch | WorkerGuiTarget::Attach, None) => {}
-        }
+        self.validate_process_names()?;
         Version::parse(&self.cua_driver_version).map_err(|_| {
             inventory_error(
                 "test.worker.inventory.gui_capability_invalid",
@@ -162,12 +159,76 @@ impl WorkerGuiCapability {
                 "GUI host permission source does not match the endpoint ownership model",
             ));
         }
+        let platform_grant = match &self.application {
+            WorkerGuiApplication::MacosBundle { .. } => {
+                Some(GuiHostPermissionGrant::required(expected_source))
+            }
+            WorkerGuiApplication::WindowsExecutable { .. } => {
+                Some(GuiHostPermissionGrant::windows_uia(expected_source))
+            }
+            WorkerGuiApplication::LinuxDesktop { .. } => None,
+        };
+        if platform_grant.is_some_and(|grant| grant != self.host_permissions) {
+            return Err(inventory_error(
+                "test.worker.inventory.host_permission_invalid",
+                "GUI host permission grant does not match the application platform",
+            ));
+        }
         validate_digest(&self.host_permission_digest, "GUI host permission digest")?;
         if self.host_permission_digest != self.host_permissions.digest() {
             return Err(inventory_error(
                 "test.worker.inventory.host_permission_digest_mismatch",
                 "GUI host permission grant does not match its digest",
             ));
+        }
+        Ok(())
+    }
+
+    fn validate_process_names(&self) -> Result<(), WorkerCapabilityError> {
+        if self.target == WorkerGuiTarget::Launch
+            && (self.macos_process_name.is_some() || self.windows_process_name.is_some())
+        {
+            let name = if self.macos_process_name.is_some() {
+                "macos_process_name"
+            } else {
+                "windows_process_name"
+            };
+            return Err(inventory_error(
+                "test.worker.inventory.gui_capability_invalid",
+                format!("{name} is only valid for GUI attach targets"),
+            ));
+        }
+        match &self.application {
+            WorkerGuiApplication::MacosBundle { .. } => {
+                if self.windows_process_name.is_some() {
+                    return Err(inventory_error(
+                        "test.worker.inventory.gui_capability_invalid",
+                        "windows_process_name is only valid for a Windows executable",
+                    ));
+                }
+                if let Some(process_name) = &self.macos_process_name {
+                    validate_text(process_name, 256, "macOS process name")?;
+                }
+            }
+            WorkerGuiApplication::WindowsExecutable { .. } => {
+                if self.macos_process_name.is_some() {
+                    return Err(inventory_error(
+                        "test.worker.inventory.gui_capability_invalid",
+                        "macos_process_name is only valid for a macOS bundle",
+                    ));
+                }
+                if let Some(process_name) = &self.windows_process_name {
+                    validate_text(process_name, 256, "Windows process name")?;
+                }
+            }
+            WorkerGuiApplication::LinuxDesktop { .. } => {
+                if self.macos_process_name.is_some() || self.windows_process_name.is_some() {
+                    return Err(inventory_error(
+                        "test.worker.inventory.gui_capability_invalid",
+                        "process name is only valid for macOS or Windows attach targets",
+                    ));
+                }
+            }
         }
         Ok(())
     }

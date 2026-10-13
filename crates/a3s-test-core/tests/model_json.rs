@@ -43,7 +43,13 @@ fn semantic_target_values_round_trip_through_agent_action_json() {
             }
         );
         let action: Action = serde_json::from_str(&encoded).expect("typed agent action");
-        assert_eq!(action, Action::Click { target: expected });
+        assert_eq!(
+            action,
+            Action::Click {
+                modifiers: Vec::new(),
+                target: expected
+            }
+        );
         let serialized = serde_json::to_value(action).expect("serialize action");
         assert!(serialized["target"]["value"].is_string());
     }
@@ -62,6 +68,7 @@ fn advanced_web_actions_round_trip_through_agent_action_json() {
             target: target.clone(),
         },
         Action::DoubleClick {
+            modifiers: Vec::new(),
             target: target.clone(),
         },
         Action::ContextClick {
@@ -113,6 +120,7 @@ fn advanced_web_actions_round_trip_through_agent_action_json() {
 #[test]
 fn visual_point_round_trips_with_its_grounding_snapshot() {
     let action = Action::Click {
+        modifiers: Vec::new(),
         target: Target::VisualPoint {
             snapshot: "@v7".to_string(),
             x: 240,
@@ -321,6 +329,7 @@ fn history_scroll_and_page_text_actions_round_trip_through_agent_json() {
     let actions = [
         Action::Back {},
         Action::ScrollUntil {
+            container: None,
             target: Target::Css {
                 selector: "#end".to_string(),
             },
@@ -345,6 +354,7 @@ fn history_scroll_and_page_text_actions_round_trip_through_agent_json() {
         serde_json::from_str::<Action>(r#"{"type":"back","url":"https://example.test"}"#).is_err()
     );
     let scroll = Action::ScrollUntil {
+        container: None,
         target: Target::Ref {
             value: "@c3".to_string(),
         },

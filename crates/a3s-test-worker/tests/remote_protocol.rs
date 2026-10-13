@@ -99,7 +99,10 @@ fn remote_protocol_schema_is_strict_and_states_execution_boundaries() {
 #[test]
 fn gui_submission_requires_the_exact_probed_host_permission_grant() {
     let now_ms = 1_800_000_000_000;
-    let host_permissions = GuiHostPermissionGrant::required(GuiHostPermissionSource::DriverDaemon);
+    let host_permissions = match std::env::consts::OS {
+        "windows" => GuiHostPermissionGrant::windows_uia(GuiHostPermissionSource::DriverDaemon),
+        _ => GuiHostPermissionGrant::required(GuiHostPermissionSource::DriverDaemon),
+    };
     let permission_digest = host_permissions.digest();
     let application = match std::env::consts::OS {
         "macos" => WorkerGuiApplication::MacosBundle {
@@ -124,6 +127,7 @@ fn gui_submission_requires_the_exact_probed_host_permission_grant() {
                 target: WorkerGuiTarget::Launch,
                 application,
                 macos_process_name: None,
+                windows_process_name: None,
                 cua_driver_version: "0.23.2".to_string(),
                 mcp_protocol: "2025-06-18".to_string(),
                 capability_vocabulary: "cua.capabilities/1".to_string(),

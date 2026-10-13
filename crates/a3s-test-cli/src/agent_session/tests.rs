@@ -58,6 +58,7 @@ fn ref_actions_require_the_latest_observation() {
     let state = test_state(Some(7));
     let actions = [
         Action::Click {
+            modifiers: Vec::new(),
             target: Target::Ref {
                 value: "@e3".to_string(),
             },

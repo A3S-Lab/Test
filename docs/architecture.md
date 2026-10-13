@@ -577,10 +577,13 @@ support.
 GUI capability evidence appears only after `--gui-host-profile` admits a
 deployment-owned ACL file and performs a real, read-only CUA startup probe.
 The probe validates the locked CUA protocol and tool vocabulary, then reads
-the exact `accessibility` and `screen_recording` grant without launching or
-attaching to the configured application. The capability records the fixed
-application target, endpoint and perception profiles, configuration and policy
-digests, permission attribution, and canonical permission digest. A GUI
+the host grant without launching or attaching to the configured application.
+macOS requires `accessibility` and `screen_recording`. A Windows installed
+daemon requires `accessibility` only, which is the UI Automation and
+PostMessage grant. The capability records the fixed application target,
+endpoint and perception profiles, configuration and policy digests, permission
+attribution, and canonical permission digest. Attach inventories may also
+record `macos_process_name` or `windows_process_name`. A GUI
 inventory must advertise exactly one parallel scenario because it represents
 one physical desktop slot. A pool is multiple independently supervised GUI
 workers, never concurrent jobs sharing one desktop.
@@ -1439,7 +1442,7 @@ The locked execution matrix is deliberately fail-closed:
 | Platform | Installed daemon | Embedded socket |
 | --- | --- | --- |
 | macOS | `contract_tested` | `contract_tested` |
-| Windows | `unsupported` | `unsupported` |
+| Windows | `contract_tested` | `unsupported` |
 | Linux | `unsupported` | `unsupported` |
 
 `contract_tested` means the checked-in fake CUA contract, permission
@@ -1459,9 +1462,10 @@ CUA revisions, executable and policy SHA-256 digests, macOS version and build,
 permission attribution, bounded observation summaries, session cleanup, and
 fixture inventory. A detached checksum and GitHub OIDC/Sigstore SLSA
 provenance make the record independently verifiable; successful version tags
-publish the record and checksum. Windows and Linux still fail during
-configuration, before a transport starts, because the locked CUA 0.23.2
-revision has no reviewed application backend for them.
+publish the record and checksum. The locked CUA 0.34.1 revision admits the
+Windows installed daemon as a contract-tested window-scoped profile. Linux
+and the Windows embedded socket still fail during configuration, before a
+transport starts.
 
 The CUA stdio proxy has lifecycle ownership independent of the target
 application. On Unix it starts in a new process group that remains registered

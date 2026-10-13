@@ -104,7 +104,7 @@ profile and every later turn reconnects with it; legacy session metadata
 without the field defaults to `disabled`. The same option is available to
 deterministic `run`, direct `agent run`, and Web MCP hosts.
 
-Action protocol revision 17 is the current cross-surface schema. Revision 2
+Action protocol revision 19 is the current cross-surface schema. Revision 2
 introduced the browser interactions needed to inspect document-style
 applications: click, hover, focus, double-click, context-click,
 fill, incremental type, check/uncheck, multi-value select, drag, key press,
@@ -204,11 +204,55 @@ bounded PNG captures in Rust. A missing baseline is not created unless
 `update` is set. A session emits an ACL candidate only after a later assertion
 passed, and that candidate omits observation refs, visual points, and secret
 literals. A passing session whose success criteria are prose emits none.
-Long-press, click modifiers, click box position, closed-shadow piercing, and
-typed network fulfill, continue, and response waits stay unavailable: ACL
-rejects them with `test.spec.browser_verb_unsupported` before any browser
-command. `forward` and `reload` remain unknown actions. Repair suites and
+`finish` leaves that candidate on the session report and does not write a
+suite file. `a3s-test adopt --report <report.json> --output <suite.acl>`
+re-validates the candidate and writes a caller-named suite. `--name` replaces
+the `verified-session` label, `--replace` is required to overwrite an existing
+file, and each `--secret-env` name supplies a literal that must not appear.
+Adoption refuses a missing candidate, an observation ref, a visual point, a
+secret literal, and a silent overwrite. `a3s-test run` of the adopted suite
+does not construct a model provider. A missing or ambiguous stable locator is
+`re_recordable` on that run report and stays distinct from a `test.assert.*`
+mismatch.
+Revision 18 adds origin-checked `reload`, bounded `long_press`, an optional
+scroll container, `network_abort`, `network_continue`, and one bounded
+`wait_response`. `reload` reads the resulting URL and fails closed with
+`test.driver.web.navigation_origin_denied` when that origin is outside the
+session policy. `long_press` holds a direct target for 50 through 5,000
+milliseconds. `scroll_until` still scrolls the page when `container` is
+absent; a `ref()` or `css()` container is passed as `--selector`. The loop
+treats the target as visible only when its rectangle intersects the visual
+viewport. `network_abort` installs `network route <pattern> --abort`, and
+`network_continue` removes that same pattern. `wait_response` polls
+`network requests --filter` for 50 through 30,000 milliseconds. That filter
+is a substring. GUI and TUI reject these verbs.
+`network_fulfill` stays rejected. agent-browser 0.26.0 answers
+`network route --body` with a routed route and still delivers the live
+response. Click and double-click modifiers stay rejected: `click` has no
+modifier flag, and holding Shift does not set `shiftKey` on the following
+click. Click box position, closed-shadow piercing, `forward`, page evaluate,
+and arbitrary init scripts stay `test.spec.browser_verb_unsupported` or
+`test.spec.action_unknown` before any browser command. Repair suites and
 agent-run verification still deny `back`, `scroll_until`, and secret fills.
+Revision 19 strips BMP private-use characters and supplementary private-use
+pairs from both sides of a role-name comparison, then collapses whitespace.
+That comparison does not change `text()` locators. Agent observation drops
+names that occur only inside an `[inert]` subtree; a `css()` locator can
+still click those nodes. Pixel comparison injects a hold that cancels CSS
+animations and hides the caret before its two captures. Differing captures
+remain `test.driver.web.pixel_unstable` and do not write mismatch images. A
+real pixel difference writes actual, expected, and diff PNG files and keeps
+the zero-diff default. `set_cookie` admits one `http` or `https` origin with
+no userinfo, path, query, or fragment, then sets every cookie or none. A
+later command failure expires the names already applied. Step data lists
+names and count, never values. `preview_headers` stores headers for one
+origin and passes them only on `open` of that origin. A basic-auth password
+is read from `password_env` after the origin is admitted. An unset or empty
+variable is `test.driver.web.secret_unavailable` and sends no browser command.
+The password, header values, and basic-auth token stay out of ACL, action
+JSON, events, reports, and step data. Each scenario opens a fresh session, so
+cookies and storage do not cross scenarios. GUI and TUI reject `set_cookie`
+and `preview_headers`.
 
 Semantic role, text, test-ID, label, and placeholder targets are used whenever
 the underlying browser command supports the requested subaction. Focus,
@@ -239,7 +283,7 @@ page inspection and repair tools appear only when a Web surface is registered:
 | `test_act` | Execute exactly one typed action |
 | `test_finish` | Record a result and close the exact owned surface |
 | `test_abort` | Abort and close the exact owned surface |
-| `test_schema` | Return action protocol revision 17 and its interactive JSON Schema |
+| `test_schema` | Return action protocol revision 19 and its interactive JSON Schema |
 | `test_repair_watch` | Drain and perform one bounded pickup of submitted Test Kit findings (Web host only) |
 | `test_repair_inbox` | Prioritize resumable repair loops for one active owning session (Web host only) |
 | `test_repair_inspect` | Project one recoverable repair loop from the authoritative ledger (Web host only) |
@@ -270,11 +314,12 @@ request size, advertises only registered surfaces, and closes independent
 sessions concurrently on EOF. Cancelling an opening request releases its
 session reservation. A failed observation invalidates all refs from the prior
 observation. Application identity, launch/attach mode, optional attach-only
-`macos_process_name` for unpackaged macOS identity, window selector,
+`macos_process_name` for unpackaged macOS identity, `windows_process_name`
+for a Windows executable file name, window selector,
 capture scope, CUA endpoint, and policy file are fixed when the host starts
 the server and are absent from tool arguments. Worker inventory advertises
-that attach-only process name on `WorkerGuiCapability`; launch inventories
-must omit it. Both semantic refs and visual
+those attach-only process names on `WorkerGuiCapability`; launch inventories
+must omit them. Both semantic refs and visual
 image refs require the latest `observation_id`.
 
 If `test_finish` or `test_abort` reaches its caller deadline, driver cleanup

@@ -5,7 +5,8 @@
 //! secret literals are left out.
 
 use crate::{
-    Action, Expectation, SecretPurpose, Target, TestSuite, DEFAULT_PIXEL_THRESHOLD_MILLIS,
+    Action, Expectation, ModifierKey, SecretPurpose, Target, TestSuite,
+    DEFAULT_PIXEL_THRESHOLD_MILLIS,
 };
 
 #[derive(Clone, Debug)]
@@ -36,7 +37,7 @@ pub fn verified_session_candidate(
             continue;
         }
         if let Some(block) = render_action(step.index, &step.action) {
-            if contains_observation_ref(&block) {
+            if text_contains_observation_ref(&block) {
                 continue;
             }
             saw_expect |=
@@ -74,7 +75,7 @@ fn contains_secret(action: &Action, secret_values: &[&str]) -> bool {
     value_contains_secret(&value, secret_values)
 }
 
-fn value_contains_secret(value: &serde_json::Value, secret_values: &[&str]) -> bool {
+pub(crate) fn value_contains_secret(value: &serde_json::Value, secret_values: &[&str]) -> bool {
     match value {
         serde_json::Value::String(text) => secret_values
             .iter()
@@ -89,7 +90,7 @@ fn value_contains_secret(value: &serde_json::Value, secret_values: &[&str]) -> b
     }
 }
 
-fn contains_observation_ref(text: &str) -> bool {
+pub(crate) fn text_contains_observation_ref(text: &str) -> bool {
     for prefix in ["@e", "@c", "@u"] {
         let mut rest = text;
         while let Some(index) = rest.find(prefix) {
@@ -105,10 +106,10 @@ fn contains_observation_ref(text: &str) -> bool {
 
 fn action_targets(action: &Action) -> Vec<&Target> {
     match action {
-        Action::Click { target }
+        Action::Click { target, .. }
         | Action::Hover { target }
         | Action::Focus { target }
-        | Action::DoubleClick { target }
+        | Action::DoubleClick { target, .. }
         | Action::ContextClick { target }
         | Action::Fill { target, .. }
         | Action::Type { target, .. }
@@ -116,7 +117,16 @@ fn action_targets(action: &Action) -> Vec<&Target> {
         | Action::TypeSecret { target, .. }
         | Action::Check { target }
         | Action::Uncheck { target }
-        | Action::ScrollUntil { target, .. } => vec![target],
+        | Action::LongPress { target, .. } => vec![target],
+        Action::ScrollUntil {
+            target, container, ..
+        } => {
+            let mut targets = vec![target];
+            if let Some(container) = container {
+                targets.push(container);
+            }
+            targets
+        }
         Action::Assert { expectation } => match expectation {
             Expectation::Visible(target)
             | Expectation::InViewport(target)
@@ -139,8 +149,13 @@ fn render_action(index: u32, action: &Action) -> Option<String> {
     let block = match action {
         Action::Navigate { url } => format!("        navigate \"{id}\" {{\n            url = {}\n        }}", quote(url)),
         Action::Back {} => format!("        back \"{id}\" {{}}"),
-        Action::Click { target } => {
-            format!("        click \"{id}\" {{\n            target = {}\n        }}", render_target(target)?)
+        Action::Reload {} => format!("        reload \"{id}\" {{}}"),
+        Action::Click { target, modifiers , ..} => {
+            format!(
+                "        click \"{id}\" {{\n            target = {}{}\n        }}",
+                render_target(target)?,
+                render_modifiers(modifiers)
+            )
         }
         Action::Fill { target, value } => format!(
             "        fill \"{id}\" {{\n            target = {}\n            value = {}\n        }}",
@@ -174,12 +189,52 @@ fn render_action(index: u32, action: &Action) -> Option<String> {
         ),
         Action::ScrollUntil {
             target,
+            container,
             direction,
             timeout_ms,
-        } => format!(
-            "        scroll_until \"{id}\" {{\n            target = {}\n            direction = \"{}\"\n            timeout_ms = {timeout_ms}\n        }}",
+            ..
+        } => {
+            let container = match container {
+                Some(container) => format!("\n            container = {}", render_target(container)?),
+                None => String::new(),
+            };
+            format!(
+                "        scroll_until \"{id}\" {{\n            target = {}{container}\n            direction = \"{}\"\n            timeout_ms = {timeout_ms}\n        }}",
+                render_target(target)?,
+                direction.as_str()
+            )
+        }
+        Action::DoubleClick { target, modifiers , ..} => format!(
+            "        double_click \"{id}\" {{\n            target = {}{}\n        }}",
             render_target(target)?,
-            direction.as_str()
+            render_modifiers(modifiers)
+        ),
+        Action::LongPress {
+            target,
+            duration_ms,
+        } => format!(
+            "        long_press \"{id}\" {{\n            target = {}\n            duration_ms = {duration_ms}\n        }}",
+            render_target(target)?
+        ),
+        Action::NetworkFulfill { pattern, body } => format!(
+            "        network_fulfill \"{id}\" {{\n            pattern = {}\n            body = {}\n        }}",
+            quote(pattern),
+            quote(body)
+        ),
+        Action::NetworkContinue { pattern } => format!(
+            "        network_continue \"{id}\" {{\n            pattern = {}\n        }}",
+            quote(pattern)
+        ),
+        Action::NetworkAbort { pattern } => format!(
+            "        network_abort \"{id}\" {{\n            pattern = {}\n        }}",
+            quote(pattern)
+        ),
+        Action::WaitForResponse {
+            pattern,
+            timeout_ms,
+        } => format!(
+            "        wait_response \"{id}\" {{\n            pattern = {}\n            timeout_ms = {timeout_ms}\n        }}",
+            quote(pattern)
         ),
         Action::Viewport {
             width,
@@ -205,6 +260,24 @@ fn render_expect(id: &str, expectation: &Expectation) -> Option<String> {
         Expectation::TextMatches(pattern) => format!("text_matches = {}", quote(pattern)),
         Expectation::Url(url) => format!("url = {}", quote(url)),
         Expectation::Visible(target) => format!("visible = {}", render_target(target)?),
+        Expectation::RenderedText { target, value } => format!(
+            "target = {}\n            rendered_text = {}",
+            render_target(target)?,
+            quote(value)
+        ),
+        Expectation::VisibleCount { target, count } => format!(
+            "target = {}\n            visible_count = {count}",
+            render_target(target)?
+        ),
+        Expectation::InViewport(target) => format!("in_viewport = {}", render_target(target)?),
+        Expectation::PointerReachable(target) => {
+            format!("pointer_reachable = {}", render_target(target)?)
+        }
+        Expectation::Value { target, value } => format!(
+            "target = {}\n            value = {}",
+            render_target(target)?,
+            quote(value)
+        ),
         Expectation::Pixels(pixels) => {
             let mut lines = vec![format!("pixels = {}", quote(&pixels.baseline))];
             if pixels.threshold_millis != DEFAULT_PIXEL_THRESHOLD_MILLIS {
@@ -266,6 +339,23 @@ fn purpose_name(purpose: SecretPurpose) -> &'static str {
         SecretPurpose::Text => "text",
         SecretPurpose::Password => "password",
     }
+}
+
+fn render_modifiers(modifiers: &[ModifierKey]) -> String {
+    if modifiers.is_empty() {
+        return String::new();
+    }
+    let items = modifiers
+        .iter()
+        .map(|modifier| match modifier {
+            ModifierKey::Alt => "\"alt\"",
+            ModifierKey::Control => "\"control\"",
+            ModifierKey::Meta => "\"meta\"",
+            ModifierKey::Shift => "\"shift\"",
+        })
+        .collect::<Vec<_>>()
+        .join(", ");
+    format!("\n            modifiers = [{items}]")
 }
 
 fn quote(value: &str) -> String {

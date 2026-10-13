@@ -15,16 +15,23 @@ pub use assertions::{
     MIN_ASSERTION_STABILITY_MS,
 };
 pub use pixels::{
-    compare_pixels, decode_png_bounded, paint_pixel_masks, pixel_baseline_decision, DecodedPng,
-    PixelBaselineDecision, PixelCompareFailure, PixelDecodeError, PixelLimits,
+    compare_pixels, decode_png_bounded, encode_png, paint_pixel_masks, pixel_baseline_decision,
+    render_pixel_diff, DecodedPng, PixelBaselineDecision, PixelCompareFailure, PixelDecodeError,
+    PixelLimits,
 };
 
-pub const ACTION_PROTOCOL_REVISION: u32 = 17;
+pub const ACTION_PROTOCOL_REVISION: u32 = 19;
 pub const MIN_SCROLL_UNTIL_TIMEOUT_MS: u64 = 50;
 pub const MAX_SCROLL_UNTIL_TIMEOUT_MS: u64 = 30_000;
 pub const DEFAULT_SCROLL_UNTIL_TIMEOUT_MS: u64 = 5_000;
 pub const SCROLL_UNTIL_STEP_PX: u32 = 240;
 pub const SCROLL_UNTIL_SAMPLE_INTERVAL_MS: u64 = 50;
+pub const MIN_LONG_PRESS_MS: u64 = 50;
+pub const MAX_LONG_PRESS_MS: u64 = 5_000;
+pub const DEFAULT_LONG_PRESS_MS: u64 = 500;
+pub const MIN_RESPONSE_WAIT_MS: u64 = 50;
+pub const MAX_RESPONSE_WAIT_MS: u64 = 30_000;
+pub const DEFAULT_RESPONSE_WAIT_MS: u64 = 5_000;
 pub const MAX_TEXT_PATTERN_CHARS: usize = 256;
 pub const MAX_PAGE_TEXT_BYTES: usize = 1_048_576;
 pub const PAGE_CONTEXT_PROTOCOL: &str = "a3s.test.page-context/1";
@@ -106,6 +113,20 @@ pub struct TestStep {
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct CookieAssignment {
+    pub name: String,
+    pub value: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct PreviewHeader {
+    pub name: String,
+    pub value: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
 #[serde(tag = "type", rename_all = "snake_case", deny_unknown_fields)]
 pub enum Action {
     Navigate {
@@ -118,8 +139,15 @@ pub enum Action {
     /// internally tagged unit variants, and a history step must not accept a
     /// URL or any other attribute.
     Back {},
+    /// Reload the current page, then admit the resulting URL. An empty
+    /// network policy still admits any HTTP(S) URL. A configured origin list
+    /// is exact.
+    Reload {},
     ScrollUntil {
         target: Target,
+        /// Recorded scroll container. Absent means the page itself scrolls.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        container: Option<Target>,
         direction: ScrollDirection,
         #[schemars(range(min = 50, max = 30000))]
         timeout_ms: u64,
@@ -129,6 +157,9 @@ pub enum Action {
     },
     Click {
         target: Target,
+        /// Closed set: alt, control, meta, and shift. Empty keeps a plain click.
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        modifiers: Vec<ModifierKey>,
     },
     Hover {
         target: Target,
@@ -138,6 +169,15 @@ pub enum Action {
     },
     DoubleClick {
         target: Target,
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        modifiers: Vec<ModifierKey>,
+    },
+    /// Hold the primary button on a recorded target. The duration is bounded
+    /// so a suite cannot park the pointer indefinitely.
+    LongPress {
+        target: Target,
+        #[schemars(range(min = 50, max = 5000))]
+        duration_ms: u64,
     },
     ContextClick {
         target: Target,
@@ -236,6 +276,24 @@ pub enum Action {
     NetworkUnroute {
         pattern: Option<String>,
     },
+    /// Body-only fulfill. Status, headers, and content type stay rejected.
+    NetworkFulfill {
+        pattern: String,
+        body: String,
+    },
+    /// Drop one installed route so later requests for that pattern proceed.
+    NetworkContinue {
+        pattern: String,
+    },
+    NetworkAbort {
+        pattern: String,
+    },
+    /// Poll the admitted request log until one matching request is recorded.
+    WaitForResponse {
+        pattern: String,
+        #[schemars(range(min = 50, max = 30000))]
+        timeout_ms: u64,
+    },
     Har {
         operation: CaptureOperation,
     },
@@ -256,6 +314,21 @@ pub enum Action {
     PageErrors {
         path: String,
         clear: bool,
+    },
+    /// Apply every cookie for one allowed HTTP(S) origin, or apply none.
+    SetCookie {
+        origin: String,
+        cookies: Vec<CookieAssignment>,
+    },
+    /// Headers sent only when navigation stays on this HTTP(S) origin.
+    /// A basic-auth password is the name of an environment variable.
+    PreviewHeaders {
+        origin: String,
+        headers: Vec<PreviewHeader>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        username: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        password_env: Option<String>,
     },
     #[schemars(skip)]
     VerifyContract {

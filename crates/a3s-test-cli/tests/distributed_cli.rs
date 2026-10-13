@@ -311,6 +311,7 @@ mod unix {
                     error: Some(RunError {
                         code: "test.assert.text_visible".to_string(),
                         message: "known fixture is not fixed".to_string(),
+                        re_recordable: false,
                     }),
                 })
                 .into_iter()

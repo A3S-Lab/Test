@@ -146,6 +146,7 @@ async fn linked_grounding_file_is_rejected_even_when_its_digest_matches() {
         .execute(&TestStep {
             id: "linked-grounding".to_string(),
             action: Action::Click {
+                modifiers: Vec::new(),
                 target: Target::VisualPoint {
                     snapshot: visual_ref,
                     x: 10,

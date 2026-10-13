@@ -91,7 +91,8 @@ async fn probe_gui_host(
             return Err(error);
         }
     };
-    let permissions = match validate_permissions(&config.endpoint, &permissions) {
+    let permissions = match validate_permissions(&config.endpoint, config.platform(), &permissions)
+    {
         Ok(permissions) => permissions,
         Err(error) => {
             let _ = api.close().await;
@@ -164,7 +165,7 @@ async fn open_gui_session(
             return Err(error);
         }
     };
-    if let Err(error) = validate_permissions(&config.endpoint, &permissions) {
+    if let Err(error) = validate_permissions(&config.endpoint, config.platform(), &permissions) {
         let _ = opening.cleanup().await;
         return Err(error);
     }
@@ -277,11 +278,23 @@ impl DriverSession for GuiSession {
                 "test.driver.gui.action_unsupported",
                 "GUI semantic snapshots currently expose actionable elements only",
             )),
-            Action::Click { target } => {
+            Action::Click { target, modifiers , ..} => {
+                if !modifiers.is_empty() {
+                    return Err(DriverError::new(
+                        "test.driver.gui.action_unsupported",
+                        "GUI clicks do not admit keyboard modifiers",
+                    ));
+                }
                 self.target_action("click", target, "GUI target clicked", Map::new())
                     .await
             }
-            Action::DoubleClick { target } => {
+            Action::DoubleClick { target, modifiers , ..} => {
+                if !modifiers.is_empty() {
+                    return Err(DriverError::new(
+                        "test.driver.gui.action_unsupported",
+                        "GUI double-clicks do not admit keyboard modifiers",
+                    ));
+                }
                 self.target_action(
                     "double_click",
                     target,

@@ -2,6 +2,49 @@
 
 ## Unreleased
 
+### Added
+
+- The GUI compatibility lock is CUA 0.34.1
+  (`0c69d9a2c8abbb5051a2df4a23f0fa166d5385dc`). The Windows installed daemon
+  is contract-tested for window-scoped semantic and window-vision sessions.
+  Launch uses an absolute executable path, and attach matches that path or
+  its file name. A configured publisher is refused because this CUA revision
+  does not return one. Windows UI Automation plus PostMessage delivery is
+  the permission grant. `gui_host` ACL and the GUI host flags admit that
+  profile with `windows_executable` / `--gui-windows-executable` and an
+  accessibility-only grant. Attach may record the exact `list_apps` file name
+  as `windows_process_name`. A publisher is not admitted. Embedded Windows,
+  Linux, desktop capture, browser tools, clipboard, recording, and perception
+  stay outside the adapter.
+- Action protocol revision 19 removes private-use icon-font characters from
+  role names used for location, omits `[inert]` subtrees from agent
+  observation while `css()` can still address those nodes, and cancels CSS
+  animations and the caret before a pixel comparison. A pixel mismatch writes
+  actual, expected, and diff images. The zero-diff default stays, and two
+  captures that still differ remain `test.driver.web.pixel_unstable`.
+  `set_cookie` applies every cookie for one allowed HTTP(S) origin or applies
+  none. A rejected batch sends no cookie command. `preview_headers` are sent
+  only with navigation to that origin. A basic-auth password is read from an
+  environment-variable name and is absent from ACL, reports, and step data.
+  Scenario sessions do not share cookies or storage. GUI and TUI reject both
+  actions.
+- Action protocol revision 18 adds Web `reload`, bounded `long_press`,
+  container `scroll_until`, `network_abort`, `network_continue`, and bounded
+  `wait_response`. `reload` fails closed when the resulting origin is not
+  allowed. `scroll_until` scrolls the page unless a direct container selector
+  is set, and it waits for a visual-viewport intersection. `wait_response`
+  polls the request log with a substring filter. GUI and TUI reject these
+  verbs. `network_fulfill` and click or double-click modifiers stay rejected:
+  agent-browser 0.26.0 does not stub `network route --body`, and `click` does
+  not apply a held modifier.
+- `a3s-test adopt` writes a caller-named ACL suite from a verified-session
+  candidate on a finished agent report. `finish` does not write that file.
+  Adoption refuses a prose-only success, an observation ref, a visual point, a
+  secret literal named with `--secret-env`, and an existing file without
+  `--replace`. `a3s-test run` of the adopted suite does not construct a model
+  provider. A missing or ambiguous stable locator is `re_recordable` on the
+  run report and stays distinct from `test.assert.*`.
+
 ## 1.0.3 - 2026-10-12
 
 A3S Test 1.0.3 moves the Web action protocol to revision 17. History back,

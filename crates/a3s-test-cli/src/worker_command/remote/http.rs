@@ -79,7 +79,7 @@ async fn handle_worker_request(State(state): State<HttpState>, request: Request<
     let (request, _request_slot) =
         match decode_request::<RemoteWorkerRequest>(&state, request).await {
             Ok(request) => request,
-            Err(response) => return response,
+            Err(response) => return *response,
         };
     no_store(Json(state.service.handle(request).await).into_response())
 }
@@ -91,7 +91,7 @@ async fn handle_artifact_request(
     let (request, _request_slot) =
         match decode_request::<RemoteArtifactRequest>(&state, request).await {
             Ok(request) => request,
-            Err(response) => return response,
+            Err(response) => return *response,
         };
     no_store(Json(state.service.handle_artifact(request).await).into_response())
 }
@@ -99,7 +99,7 @@ async fn handle_artifact_request(
 async fn decode_request<T: DeserializeOwned>(
     state: &HttpState,
     request: Request<Body>,
-) -> Result<(T, OwnedSemaphorePermit), Response> {
+) -> Result<(T, OwnedSemaphorePermit), Box<Response>> {
     if !authorization_matches(request.headers(), &state.authorization) {
         return Err(transport_error(
             StatusCode::UNAUTHORIZED,
@@ -190,8 +190,10 @@ fn content_type_is_json(headers: &HeaderMap) -> bool {
         .is_some_and(|value| value.trim().eq_ignore_ascii_case("application/json"))
 }
 
-fn transport_error(status: StatusCode, code: &'static str, message: &'static str) -> Response {
-    no_store((status, Json(TransportError { code, message })).into_response())
+fn transport_error(status: StatusCode, code: &'static str, message: &'static str) -> Box<Response> {
+    Box::new(no_store(
+        (status, Json(TransportError { code, message })).into_response(),
+    ))
 }
 
 fn no_store(mut response: Response) -> Response {

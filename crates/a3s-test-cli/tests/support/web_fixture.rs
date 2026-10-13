@@ -23,6 +23,17 @@ const INTERACTABILITY_HTML: &str = include_str!("../../../../fixtures/web/intera
 const RENDERED_HTML: &str = include_str!("../../../../fixtures/web/rendered.html");
 const SEMANTIC_STATE_HTML: &str = include_str!("../../../../fixtures/web/semantic-state.html");
 const TRANSIENT_HTML: &str = include_str!("../../../../fixtures/web/transient.html");
+const ADOPT_HTML: &str = include_str!("../../../../fixtures/web/adopt.html");
+const ADOPT_RENAMED_HTML: &str = include_str!("../../../../fixtures/web/adopt-renamed.html");
+const ADOPT_AMBIGUOUS_HTML: &str = include_str!("../../../../fixtures/web/adopt-ambiguous.html");
+const ADOPT_MISMATCH_HTML: &str = include_str!("../../../../fixtures/web/adopt-mismatch.html");
+const VERBS_HTML: &str = include_str!("../../../../fixtures/web/verbs.html");
+const EVIDENCE_HTML: &str = include_str!("../../../../fixtures/web/evidence.html");
+const PIXEL_HTML: &str = include_str!("../../../../fixtures/web/pixel.html");
+const FLICKER_HTML: &str = include_str!("../../../../fixtures/web/flicker.html");
+/// `Authorization: Basic` token for `ada:preview-secret`. The fixture reports
+/// yes or no and never echoes the password.
+const PREVIEW_BASIC: &str = "Basic YWRhOnByZXZpZXctc2VjcmV0";
 const TESTKIT_HTML: &str = include_str!("../../../../packages/testkit/src/browser-fixture.html");
 const SCREEN_READER_WORKFLOWS: &str =
     include_str!("../../../../packages/testkit/screen-reader-audit/workflows.json");
@@ -304,7 +315,10 @@ fn serve(
                     requests
                         .lock()
                         .expect("Web fixture request log must not be poisoned")
-                        .push(request.clone());
+                        .push(RecordedRequest {
+                            method: request.method.clone(),
+                            path: request.path.clone(),
+                        });
                     let response = route(&site, &request);
                     let _ = write_response(&mut stream, &request.method, response);
                 }
@@ -326,7 +340,13 @@ fn transient_accept_error(error: &io::Error) -> bool {
     )
 }
 
-fn read_request(stream: &mut TcpStream) -> io::Result<RecordedRequest> {
+struct IncomingRequest {
+    method: String,
+    path: String,
+    headers: BTreeMap<String, String>,
+}
+
+fn read_request(stream: &mut TcpStream) -> io::Result<IncomingRequest> {
     let mut bytes = Vec::with_capacity(1024);
     let mut buffer = [0_u8; 1024];
     while bytes.len() < MAX_REQUEST_BYTES {
@@ -369,13 +389,28 @@ fn read_request(stream: &mut TcpStream) -> io::Result<RecordedRequest> {
         ));
     }
 
-    Ok(RecordedRequest {
+    let mut headers = BTreeMap::new();
+    for line in request.lines().skip(1) {
+        if line.is_empty() {
+            break;
+        }
+        let Some((name, value)) = line.split_once(':') else {
+            continue;
+        };
+        headers.insert(name.trim().to_ascii_lowercase(), value.trim().to_string());
+    }
+
+    Ok(IncomingRequest {
         method: method.to_string(),
         path: target.split('?').next().unwrap_or(target).to_string(),
+        headers,
     })
 }
 
-fn route(site: &Site, request: &RecordedRequest) -> Response {
+fn route(site: &Site, request: &IncomingRequest) -> Response {
+    if request.path == "/api/echo" {
+        return route_echo(request);
+    }
     if request.method != "GET" && request.method != "HEAD" {
         return Response::text("405 Method Not Allowed", "method not allowed")
             .with_header("Allow", "GET, HEAD");
@@ -478,6 +513,17 @@ fn route_primary(path: &str, blocked_origin: &str) -> Response {
         "/rendered.html" => Response::html(RENDERED_HTML.to_string()),
         "/semantic-state.html" => Response::html(SEMANTIC_STATE_HTML.to_string()),
         "/transient.html" => Response::html(TRANSIENT_HTML.to_string()),
+        "/adopt.html" => Response::html(ADOPT_HTML.to_string()),
+        "/adopt-renamed.html" => Response::html(ADOPT_RENAMED_HTML.to_string()),
+        "/adopt-ambiguous.html" => Response::html(ADOPT_AMBIGUOUS_HTML.to_string()),
+        "/adopt-mismatch.html" => Response::html(ADOPT_MISMATCH_HTML.to_string()),
+        "/verbs.html" => Response::html(VERBS_HTML.to_string()),
+        "/evidence.html" => {
+            Response::html(EVIDENCE_HTML.replace("__BLOCKED_ORIGIN__", blocked_origin))
+        }
+        "/pixel.html" => Response::html(PIXEL_HTML.to_string()),
+        "/flicker.html" => Response::html(FLICKER_HTML.to_string()),
+        "/api/abort-probe" => Response::text("200 OK", "ok"),
         "/origin-policy.html" => Response::html(origin_policy_html(blocked_origin)),
         "/health" => Response::text("200 OK", "ready"),
         "/next" => Response::html(
@@ -512,6 +558,36 @@ fn origin_policy_html(blocked_origin: &str) -> String {
   </body>
 </html>"#
     )
+}
+
+fn route_echo(request: &IncomingRequest) -> Response {
+    if request.method == "OPTIONS" {
+        return Response::plain("204 No Content", String::new())
+            .with_header("Access-Control-Allow-Origin", "*")
+            .with_header("Access-Control-Allow-Methods", "GET, OPTIONS")
+            .with_header(
+                "Access-Control-Allow-Headers",
+                "authorization, x-preview, content-type",
+            );
+    }
+    if request.method != "GET" && request.method != "HEAD" {
+        return Response::text("405 Method Not Allowed", "method not allowed")
+            .with_header("Allow", "GET, HEAD, OPTIONS");
+    }
+    let preview = request
+        .headers
+        .get("x-preview")
+        .is_some_and(|value| value == "on");
+    let basic = request
+        .headers
+        .get("authorization")
+        .is_some_and(|value| value == PREVIEW_BASIC);
+    let body = format!(
+        "preview={} basic={}",
+        if preview { "yes" } else { "no" },
+        if basic { "yes" } else { "no" }
+    );
+    Response::plain("200 OK", body).with_header("Access-Control-Allow-Origin", "*")
 }
 
 fn route_blocked(path: &str) -> Response {
@@ -576,6 +652,15 @@ impl Response {
         Self {
             status: "200 OK",
             content_type: "application/json; charset=utf-8",
+            headers: Vec::new(),
+            body: body.into_bytes(),
+        }
+    }
+
+    fn plain(status: &'static str, body: String) -> Self {
+        Self {
+            status,
+            content_type: "text/plain; charset=utf-8",
             headers: Vec::new(),
             body: body.into_bytes(),
         }

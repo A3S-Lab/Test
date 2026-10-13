@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Protocol 18 verbs</title>
+    <style>
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        overflow: hidden;
+      }
+      #pane {
+        height: 140px;
+        overflow: auto;
+      }
+      #spacer {
+        height: 800px;
+      }
+    </style>
+  </head>
+  <body>
+    <button id="load" type="button">Load profile</button>
+    <p id="name"></p>
+    <button id="abort" type="button">Abort probe</button>
+    <p id="abort-out"></p>
+    <button id="go" type="button">Go</button>
+    <p id="out"></p>
+    <button id="dbl" type="button">Again</button>
+    <p id="dbl-out"></p>
+    <button id="hold" type="button">Hold</button>
+    <p id="held"></p>
+    <div id="pane">
+      <div id="spacer"></div>
+      <p id="end">pane end</p>
+    </div>
+    <script>
+      document.querySelector("#load").addEventListener("click", async () => {
+        const response = await fetch("/api/profile");
+        const body = await response.json();
+        document.querySelector("#name").textContent = body.name;
+      });
+      document.querySelector("#abort").addEventListener("click", async () => {
+        try {
+          const response = await fetch("/api/abort-probe");
+          document.querySelector("#abort-out").textContent = await response.text();
+        } catch {
+          document.querySelector("#abort-out").textContent = "failed";
+        }
+      });
+      document.querySelector("#go").addEventListener("click", (event) => {
+        document.querySelector("#out").textContent = event.shiftKey ? "shifted" : "plain";
+      });
+      document.querySelector("#dbl").addEventListener("dblclick", (event) => {
+        document.querySelector("#dbl-out").textContent = event.shiftKey ? "shifted" : "plain";
+      });
+      const hold = document.querySelector("#hold");
+      let timer = 0;
+      hold.addEventListener("pointerdown", () => {
+        timer = window.setTimeout(() => {
+          document.querySelector("#held").textContent = "held";
+        }, 400);
+      });
+      const clearHold = () => window.clearTimeout(timer);
+      hold.addEventListener("pointerup", clearHold);
+      hold.addEventListener("pointerleave", clearHold);
+      hold.addEventListener("pointercancel", clearHold);
+    </script>
+  </body>
+</html>

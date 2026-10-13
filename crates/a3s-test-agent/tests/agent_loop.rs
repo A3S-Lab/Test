@@ -132,6 +132,7 @@ async fn executes_schema_constrained_llm_decisions_until_success() {
         response(
             AgentDecision::Act {
                 action: Action::Click {
+                    modifiers: Vec::new(),
                     target: Target::Ref {
                         value: "@e1".to_string(),
                     },
@@ -173,6 +174,7 @@ async fn executes_schema_constrained_llm_decisions_until_success() {
     assert_eq!(
         session.actions,
         vec![Action::Click {
+            modifiers: Vec::new(),
             target: Target::Ref {
                 value: "@e1".to_string()
             }
@@ -397,6 +399,7 @@ async fn resolves_page_context_refs_before_surface_execution() {
     let provider = Arc::new(ScriptedProvider::new([response(
         AgentDecision::Act {
             action: Action::Click {
+                modifiers: Vec::new(),
                 target: Target::Ref {
                     value: "@c1".to_string(),
                 },
@@ -425,6 +428,7 @@ async fn resolves_page_context_refs_before_surface_execution() {
     assert_eq!(
         session.actions,
         [Action::Click {
+            modifiers: Vec::new(),
             target: Target::TestId {
                 value: "submit".to_string()
             }
@@ -437,6 +441,7 @@ async fn retains_an_unaffected_page_context_ref_across_a_revision_delta() {
     let provider = Arc::new(ScriptedProvider::new([response(
         AgentDecision::Act {
             action: Action::Click {
+                modifiers: Vec::new(),
                 target: Target::Ref {
                     value: "@c1".to_string(),
                 },
@@ -466,6 +471,7 @@ async fn retains_an_unaffected_page_context_ref_across_a_revision_delta() {
     assert_eq!(
         session.actions,
         [Action::Click {
+            modifiers: Vec::new(),
             target: Target::TestId {
                 value: "submit".to_string()
             }
@@ -478,6 +484,7 @@ async fn rejects_a_page_context_ref_invalidated_by_the_revision_delta() {
     let provider = Arc::new(ScriptedProvider::new([response(
         AgentDecision::Act {
             action: Action::Click {
+                modifiers: Vec::new(),
                 target: Target::Ref {
                     value: "@c1".to_string(),
                 },
@@ -515,6 +522,7 @@ async fn refuses_to_execute_a_decision_that_exceeds_the_token_budget() {
     let provider = Arc::new(ScriptedProvider::new([response(
         AgentDecision::Act {
             action: Action::Click {
+                modifiers: Vec::new(),
                 target: Target::Css {
                     selector: "#save".to_string(),
                 },
@@ -639,6 +647,7 @@ fn advanced_actions_have_distinct_policy_capabilities() {
         (Action::Back {}, ActionKind::Back),
         (
             Action::ScrollUntil {
+                container: None,
                 target: target.clone(),
                 direction: ScrollDirection::Down,
                 timeout_ms: 5_000,
@@ -659,6 +668,7 @@ fn advanced_actions_have_distinct_policy_capabilities() {
         ),
         (
             Action::DoubleClick {
+                modifiers: Vec::new(),
                 target: target.clone(),
             },
             ActionKind::DoubleClick,

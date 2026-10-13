@@ -41,6 +41,7 @@ async fn projects_surface_neutral_observe_act_finish_turns() {
         .expect("start");
     let observation = manager.observe("gui_editor").await.expect("observe");
     let action = Action::Click {
+        modifiers: Vec::new(),
         target: Target::Ref {
             value: "@g1.1".to_string(),
         },
@@ -90,6 +91,7 @@ async fn rejects_refs_not_bound_to_the_latest_observation() {
             session: "stale".to_string(),
             observation_id: Some(99),
             action: Action::Click {
+                modifiers: Vec::new(),
                 target: Target::Ref {
                     value: "@g1.1".to_string(),
                 },
@@ -155,6 +157,7 @@ async fn visual_points_require_the_latest_observation_id() {
             session: "visual".to_string(),
             observation_id: None,
             action: Action::Click {
+                modifiers: Vec::new(),
                 target: Target::VisualPoint {
                     snapshot: "@v1".to_string(),
                     x: 20,
@@ -171,6 +174,7 @@ async fn visual_points_require_the_latest_observation_id() {
             session: "visual".to_string(),
             observation_id: Some(observed.observation_id),
             action: Action::Click {
+                modifiers: Vec::new(),
                 target: Target::VisualPoint {
                     snapshot: "@v1".to_string(),
                     x: 20,
@@ -218,6 +222,7 @@ async fn binds_private_page_nodes_to_observation_scoped_context_refs() {
             session: "context-ref".to_string(),
             observation_id: Some(observed.observation_id),
             action: Action::Click {
+                modifiers: Vec::new(),
                 target: Target::Ref {
                     value: "@c1".to_string(),
                 },
@@ -228,6 +233,7 @@ async fn binds_private_page_nodes_to_observation_scoped_context_refs() {
     assert_eq!(
         state.lock().await.actions,
         [Action::Click {
+            modifiers: Vec::new(),
             target: Target::TestId {
                 value: "pay".to_string(),
             },
@@ -264,6 +270,7 @@ async fn retains_an_unaffected_context_ref_across_a_complete_page_revision_delta
             session: "context-diff-retain".to_string(),
             observation_id: Some(observed.observation_id),
             action: Action::Click {
+                modifiers: Vec::new(),
                 target: Target::Ref {
                     value: "@c1".to_string(),
                 },
@@ -303,6 +310,7 @@ async fn rejects_a_context_ref_named_by_the_latest_invalidation_set() {
             session: "context-diff-reject".to_string(),
             observation_id: Some(observed.observation_id),
             action: Action::Click {
+                modifiers: Vec::new(),
                 target: Target::Ref {
                     value: "@c1".to_string(),
                 },
@@ -833,6 +841,7 @@ async fn failed_observation_invalidates_the_previous_refs() {
             session: "observe-failure".to_string(),
             observation_id: Some(observation.observation_id),
             action: Action::Click {
+                modifiers: Vec::new(),
                 target: Target::Ref {
                     value: "@g1.1".to_string(),
                 },

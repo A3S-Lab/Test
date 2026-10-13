@@ -12,9 +12,11 @@ use a3s_test_core::{
     Action, DriverError, DriverSession, NamedViewport, OwnedApp, ScenarioContext, StepOutput,
     Surface, SurfaceDriver, TestScenario, TestStep, TestSuite,
 };
+#[cfg(unix)]
+use a3s_test_runner::UnixAppProcess;
 use a3s_test_runner::{
     start_owned_app, AppHandle, AppProcess, AppStop, RetryPolicy, RunStatus, Runner, RunnerOptions,
-    StartedApp, UnixAppProcess,
+    StartedApp,
 };
 use async_trait::async_trait;
 use tokio_util::sync::CancellationToken;

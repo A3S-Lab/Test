@@ -1,5 +1,6 @@
 use std::collections::BTreeSet;
 
+use a3s_test_core::ACTION_PROTOCOL_REVISION;
 use a3s_test_driver_gui::{GuiHostPermissionGrant, GuiHostPermissionSource};
 use a3s_test_driver_tui::{TuiBackend, TuiCapabilities};
 use a3s_test_driver_web::{BrowserCapabilities, BrowserIntegration, WebCapability};
@@ -15,7 +16,7 @@ fn standalone_web() -> WorkerSurfaceCapability {
         browser: BrowserCapabilities {
             integration: BrowserIntegration::Standalone,
             version: "0.26.0".to_string(),
-            protocol_revision: 17,
+            protocol_revision: ACTION_PROTOCOL_REVISION,
             features: [
                 WebCapability::Accessibility,
                 WebCapability::Console,
@@ -53,14 +54,17 @@ fn tui() -> WorkerSurfaceCapability {
 }
 
 fn gui() -> WorkerSurfaceCapability {
-    let host_permissions = GuiHostPermissionGrant::required(GuiHostPermissionSource::DriverDaemon);
+    let host_permissions = match std::env::consts::OS {
+        "windows" => GuiHostPermissionGrant::windows_uia(GuiHostPermissionSource::DriverDaemon),
+        _ => GuiHostPermissionGrant::required(GuiHostPermissionSource::DriverDaemon),
+    };
     let application = match std::env::consts::OS {
         "macos" => WorkerGuiApplication::MacosBundle {
             bundle_id: "com.example.Editor".to_string(),
         },
         "windows" => WorkerGuiApplication::WindowsExecutable {
             path: "C:/Program Files/Example/editor.exe".to_string(),
-            expected_publisher: Some("Example, Inc.".to_string()),
+            expected_publisher: None,
         },
         _ => WorkerGuiApplication::LinuxDesktop {
             desktop_id: "com.example.Editor".to_string(),
@@ -75,6 +79,7 @@ fn gui() -> WorkerSurfaceCapability {
             target: WorkerGuiTarget::Launch,
             application,
             macos_process_name: None,
+            windows_process_name: None,
             cua_driver_version: "0.23.2".to_string(),
             mcp_protocol: "2025-06-18".to_string(),
             capability_vocabulary: "cua.capabilities/1".to_string(),
@@ -161,6 +166,7 @@ fn inventory_rejects_macos_process_name_on_launch_targets() {
     assert_eq!(error.code(), "test.worker.inventory.gui_capability_invalid");
 }
 
+#[cfg(target_os = "macos")]
 #[test]
 fn inventory_round_trips_attach_macos_process_name() {
     let host_permissions = GuiHostPermissionGrant::required(GuiHostPermissionSource::DriverDaemon);
@@ -188,6 +194,66 @@ fn inventory_round_trips_attach_macos_process_name() {
     let decoded: WorkerCapabilityInventory =
         serde_json::from_value(encoded).expect("deserialize attach inventory");
     assert_eq!(decoded, inventory);
+}
+
+#[cfg(any(windows, target_os = "macos"))]
+#[test]
+fn inventory_rejects_a_permission_grant_from_another_platform() {
+    let wrong = match std::env::consts::OS {
+        "windows" => GuiHostPermissionGrant::required(GuiHostPermissionSource::DriverDaemon),
+        "macos" => GuiHostPermissionGrant::windows_uia(GuiHostPermissionSource::DriverDaemon),
+        _ => unreachable!("test is limited to macOS and Windows"),
+    };
+    let mut inventory =
+        WorkerCapabilityInventory::local(1, vec![gui()]).expect("exclusive GUI inventory");
+    let WorkerSurfaceCapability::Gui { desktop } = &mut inventory.surfaces[0] else {
+        panic!("GUI capability");
+    };
+    desktop.host_permission_digest = wrong.digest();
+    desktop.host_permissions = wrong;
+    let error = inventory
+        .validate()
+        .expect_err("permission grant must match the application platform");
+    assert_eq!(
+        error.code(),
+        "test.worker.inventory.host_permission_invalid"
+    );
+}
+
+#[cfg(windows)]
+#[test]
+fn inventory_round_trips_attach_windows_process_name_and_rejects_a_publisher() {
+    let mut inventory =
+        WorkerCapabilityInventory::local(1, vec![gui()]).expect("exclusive GUI inventory");
+    let WorkerSurfaceCapability::Gui { desktop } = &mut inventory.surfaces[0] else {
+        panic!("GUI capability");
+    };
+    desktop.target = WorkerGuiTarget::Attach;
+    desktop.windows_process_name = Some("editor.exe".to_string());
+    inventory.validate().expect("windows attach inventory");
+    let encoded = serde_json::to_value(&inventory).expect("serialize");
+    assert_eq!(
+        encoded["surfaces"][0]["desktop"]["windows_process_name"],
+        "editor.exe"
+    );
+    let decoded: WorkerCapabilityInventory =
+        serde_json::from_value(encoded).expect("deserialize windows attach inventory");
+    assert_eq!(decoded, inventory);
+
+    let WorkerSurfaceCapability::Gui { desktop } = &mut inventory.surfaces[0] else {
+        panic!("GUI capability");
+    };
+    let WorkerGuiApplication::WindowsExecutable {
+        expected_publisher, ..
+    } = &mut desktop.application
+    else {
+        panic!("Windows executable");
+    };
+    *expected_publisher = Some("Example, Inc.".to_string());
+    let error = inventory
+        .validate()
+        .expect_err("unproven publisher must fail");
+    assert_eq!(error.code(), "test.worker.inventory.gui_capability_invalid");
 }
 
 #[test]

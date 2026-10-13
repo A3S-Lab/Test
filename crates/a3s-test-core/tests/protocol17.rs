@@ -433,6 +433,7 @@ fn verified_session_candidate_keeps_only_steps_a_later_assertion_confirmed() {
         RecordedStep {
             index: 2,
             action: Action::Click {
+                modifiers: Vec::new(),
                 target: Target::Ref {
                     value: "@e9".to_string(),
                 },
@@ -442,6 +443,7 @@ fn verified_session_candidate_keeps_only_steps_a_later_assertion_confirmed() {
         RecordedStep {
             index: 3,
             action: Action::Click {
+                modifiers: Vec::new(),
                 target: Target::VisualPoint {
                     snapshot: "shot".to_string(),
                     x: 1,
@@ -453,6 +455,7 @@ fn verified_session_candidate_keeps_only_steps_a_later_assertion_confirmed() {
         RecordedStep {
             index: 4,
             action: Action::Click {
+                modifiers: Vec::new(),
                 target: Target::Css {
                     selector: "#failed".to_string(),
                 },
@@ -469,6 +472,7 @@ fn verified_session_candidate_keeps_only_steps_a_later_assertion_confirmed() {
         RecordedStep {
             index: 6,
             action: Action::Click {
+                modifiers: Vec::new(),
                 target: Target::Css {
                     selector: "#after".to_string(),
                 },

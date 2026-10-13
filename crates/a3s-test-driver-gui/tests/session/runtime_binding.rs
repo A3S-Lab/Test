@@ -106,6 +106,7 @@ async fn window_binding_drift_blocks_observation_and_input_before_dispatch() {
         .execute(&TestStep {
             id: "old-window-ref".to_string(),
             action: Action::Click {
+                modifiers: Vec::new(),
                 target: Target::Ref { value: initial_ref },
             },
             stability: None,

@@ -1,7 +1,5 @@
 #[cfg(any(unix, windows))]
 use std::ffi::OsString;
-#[cfg(windows)]
-use std::io::Write as _;
 #[cfg(any(unix, windows))]
 use std::path::{Path, PathBuf};
 #[cfg(windows)]
@@ -10,10 +8,13 @@ use std::process::Stdio;
 use std::time::Duration;
 
 #[cfg(any(unix, windows))]
-use a3s_test_core::{Action, ScenarioContext, SurfaceDriver as _, TestStep, WaitCondition};
+use a3s_test_core::{
+    Action, CookieAssignment, ModifierKey, PreviewHeader, ScenarioContext, ScrollDirection, Target,
+    TestStep, WaitCondition,
+};
 #[cfg(unix)]
 use a3s_test_core::{
-    ElementState, Expectation, LayoutRelation, PixelExpectation, Target, ViewportCoverageComparison,
+    ElementState, Expectation, LayoutRelation, PixelExpectation, ViewportCoverageComparison,
 };
 use serde_json::Value;
 
@@ -72,6 +73,91 @@ fn step(id: &str, action: Action) -> TestStep {
         assertion_mode: Default::default(),
         wait_mode: Default::default(),
     }
+}
+
+#[cfg(any(unix, windows))]
+async fn assert_web_verbs_fail_closed(session: &mut dyn DriverSession) {
+    let before = session
+        .observe()
+        .await
+        .expect("observe before rejected verbs")
+        .data["viewport"]["text"]
+        .clone();
+    let target = Target::Css {
+        selector: "#hold".to_string(),
+    };
+    let rejected = [
+        Action::Reload {},
+        Action::LongPress {
+            target: target.clone(),
+            duration_ms: 500,
+        },
+        Action::NetworkFulfill {
+            pattern: "*api/profile".to_string(),
+            body: "{\"name\":\"Grace\"}".to_string(),
+        },
+        Action::NetworkContinue {
+            pattern: "*api/profile".to_string(),
+        },
+        Action::NetworkAbort {
+            pattern: "*api/abort-probe".to_string(),
+        },
+        Action::WaitForResponse {
+            pattern: "*api/profile".to_string(),
+            timeout_ms: 50,
+        },
+        Action::ScrollUntil {
+            target: Target::Css {
+                selector: "#end".to_string(),
+            },
+            container: Some(Target::Css {
+                selector: "#pane".to_string(),
+            }),
+            direction: ScrollDirection::Down,
+            timeout_ms: 50,
+        },
+        Action::Click {
+            target: target.clone(),
+            modifiers: vec![ModifierKey::Shift],
+        },
+        Action::DoubleClick {
+            target,
+            modifiers: vec![ModifierKey::Control],
+        },
+        Action::SetCookie {
+            origin: "http://127.0.0.1".to_string(),
+            cookies: vec![CookieAssignment {
+                name: "a".to_string(),
+                value: "1".to_string(),
+            }],
+        },
+        Action::PreviewHeaders {
+            origin: "http://127.0.0.1".to_string(),
+            headers: vec![PreviewHeader {
+                name: "X-Preview".to_string(),
+                value: "on".to_string(),
+            }],
+            username: None,
+            password_env: None,
+        },
+    ];
+    for action in rejected {
+        let error = session
+            .execute(&step("rejected-web-verb", action))
+            .await
+            .expect_err("terminal session must reject the Web verb");
+        assert_eq!(error.code(), "test.driver.tui.action_unsupported");
+    }
+    let after = session
+        .observe()
+        .await
+        .expect("observe after rejected verbs")
+        .data["viewport"]["text"]
+        .clone();
+    assert_eq!(
+        before, after,
+        "rejected Web verbs must not write terminal input"
+    );
 }
 
 #[cfg(any(unix, windows))]
@@ -182,6 +268,7 @@ async fn target_bound_rendered_assertions_fail_closed_on_terminal_surfaces() {
             .expect_err("terminal surfaces must reject browser-rendered assertions");
         assert_eq!(error.code(), "test.driver.tui.action_unsupported");
     }
+    assert_web_verbs_fail_closed(session.as_mut()).await;
 
     session.close().await.expect("close terminal");
 }
@@ -309,6 +396,7 @@ async fn real_conpty_supports_input_and_reaps_its_job_tree() {
         .await
         .expect("press enter");
     wait_text(session.as_mut(), "input:hello").await;
+    assert_web_verbs_fail_closed(session.as_mut()).await;
     let descendant = wait_for_pid(&pid_file).await;
     assert!(
         windows_process_is_running(descendant),

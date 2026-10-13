@@ -217,7 +217,7 @@ fn worker_inventory_adds_gui_only_after_a_real_host_probe() {
         "result": {
             "protocolVersion": "2025-06-18",
             "capabilities": { "tools": {} },
-            "serverInfo": { "name": "cua-driver", "version": "0.23.2" },
+            "serverInfo": { "name": "cua-driver", "version": "0.34.1" },
         },
     })
     .to_string();
@@ -360,7 +360,7 @@ fn worker_inventory_advertises_attach_macos_process_name() {
         "result": {
             "protocolVersion": "2025-06-18",
             "capabilities": { "tools": {} },
-            "serverInfo": { "name": "cua-driver", "version": "0.23.2" },
+            "serverInfo": { "name": "cua-driver", "version": "0.34.1" },
         },
     })
     .to_string();

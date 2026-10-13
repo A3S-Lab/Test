@@ -39,6 +39,7 @@ use crate::{AgentBrowserConfig, BrowserCapabilities, CommandExecutor, TokioComma
 mod advanced;
 mod assertion;
 mod driver;
+mod evidence;
 mod pixels;
 mod secret;
 
@@ -186,6 +187,10 @@ impl AgentBrowserDriver {
             secret_exposed: false,
             pixel_ci: false,
             pixel_captures: 0,
+            preview_origin: None,
+            preview_headers: None,
+            preview_secret: None,
+            preview_authorization: None,
         })
     }
 }
@@ -256,6 +261,10 @@ impl SurfaceDriver for AgentBrowserDriver {
             secret_exposed: false,
             pixel_ci: false,
             pixel_captures: 0,
+            preview_origin: None,
+            preview_headers: None,
+            preview_secret: None,
+            preview_authorization: None,
         }))
     }
 }
@@ -296,6 +305,13 @@ pub struct AgentBrowserSession {
     /// When set, a missing pixel baseline is still not created unless update is set.
     pixel_ci: bool,
     pixel_captures: u64,
+    /// Origin that may receive preview headers. Other origins never get them.
+    preview_origin: Option<String>,
+    preview_headers: Option<String>,
+    /// Basic-auth password kept only to redact command errors. It is not step data.
+    preview_secret: Option<String>,
+    /// `Authorization` value kept only to redact command output. It is not step data.
+    preview_authorization: Option<String>,
 }
 
 struct ActiveVideo {
@@ -476,6 +492,7 @@ impl AgentBrowserSession {
             let data = self.execute_command(args).await?;
             let after = self.capture_page_context().await?;
             if stable_page_context(&before, &after) {
+                let data = self.omit_inert_observation(data).await;
                 return Ok(SurfaceObservation::new("browser accessibility snapshot")
                     .with_data(data)
                     .with_page_context(after));

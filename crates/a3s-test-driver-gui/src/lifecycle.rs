@@ -1,4 +1,5 @@
 use std::collections::BTreeSet;
+use std::path::Path;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -31,6 +32,7 @@ pub(crate) async fn bind_application(
     api: &CuaApi,
     target: &GuiAppTarget,
 ) -> Result<ApplicationBinding, DriverError> {
+    refuse_before_application_tools(target)?;
     match target {
         GuiAppTarget::Launch(spec) => launch_application(api, spec).await,
         GuiAppTarget::Attach(spec) => {
@@ -79,39 +81,45 @@ async fn launch_application(
     api: &CuaApi,
     spec: &LaunchSpec,
 ) -> Result<ApplicationBinding, DriverError> {
-    let ApplicationIdentity::MacOsBundle { bundle_id } = &spec.application else {
-        return Err(platform_unsupported(&spec.application));
-    };
     if spec.working_directory.is_some() {
         return Err(DriverError::new(
             "test.driver.gui.launch_option_unsupported",
             "the locked CUA launch_app contract does not support a working directory",
         ));
     }
-    let arguments = spec
-        .arguments
-        .iter()
-        .map(|argument| {
-            argument.to_str().map(ToOwned::to_owned).ok_or_else(|| {
-                DriverError::new(
-                    "test.driver.gui.launch_option_invalid",
-                    "GUI application arguments must be valid Unicode",
-                )
-            })
-        })
-        .collect::<Result<Vec<_>, _>>()?;
+    let arguments = unicode_arguments(&spec.arguments)?;
     let before = api.list_apps().await?;
     let previous_pids: BTreeSet<i32> = matching_running_apps(&before, &spec.application, None)?
         .into_iter()
         .map(|app| app.pid)
         .collect();
-    let launched = api.launch_macos_app(bundle_id, &arguments).await?;
-    if launched.pid <= 0 || launched.bundle_id != *bundle_id {
-        return Err(DriverError::new(
-            "test.driver.gui.app_identity_invalid",
-            "CUA launch_app returned an application identity that did not match the request",
-        ));
-    }
+    let launched = match &spec.application {
+        ApplicationIdentity::MacOsBundle { bundle_id } => {
+            let launched = api.launch_macos_app(bundle_id, &arguments).await?;
+            if launched.pid <= 0 || launched.bundle_id.as_deref() != Some(bundle_id.as_str()) {
+                return Err(launch_identity_invalid());
+            }
+            launched
+        }
+        ApplicationIdentity::WindowsExecutable {
+            path,
+            expected_publisher,
+        } => {
+            reject_unproven_publisher(expected_publisher)?;
+            let path = windows_launch_path(path)?;
+            let launched = api.launch_windows_app(&path, &arguments).await?;
+            if launched.pid <= 0
+                || launched.bundle_id.is_some()
+                || !windows_name_matches(&launched.name, Path::new(&path))
+            {
+                return Err(launch_identity_invalid());
+            }
+            launched
+        }
+        ApplicationIdentity::LinuxDesktop { .. } => {
+            return Err(platform_unsupported(&spec.application));
+        }
+    };
     if previous_pids.contains(&launched.pid) {
         return Err(DriverError::new(
             "test.driver.gui.app_ownership_unproven",
@@ -125,6 +133,85 @@ async fn launch_application(
         process_name: None,
         owned: true,
     })
+}
+
+fn unicode_arguments(arguments: &[std::ffi::OsString]) -> Result<Vec<String>, DriverError> {
+    arguments
+        .iter()
+        .map(|argument| {
+            argument.to_str().map(ToOwned::to_owned).ok_or_else(|| {
+                DriverError::new(
+                    "test.driver.gui.launch_option_invalid",
+                    "GUI application arguments must be valid Unicode",
+                )
+            })
+        })
+        .collect()
+}
+
+fn launch_identity_invalid() -> DriverError {
+    DriverError::new(
+        "test.driver.gui.app_identity_invalid",
+        "CUA launch_app returned an application identity that did not match the request",
+    )
+}
+
+fn reject_unproven_publisher(publisher: &Option<String>) -> Result<(), DriverError> {
+    crate::config::reject_unproven_publisher(publisher)
+}
+
+fn refuse_before_application_tools(target: &GuiAppTarget) -> Result<(), DriverError> {
+    let (identity, launching) = match target {
+        GuiAppTarget::Launch(spec) => (&spec.application, true),
+        GuiAppTarget::Attach(spec) => (&spec.application, false),
+    };
+    match identity {
+        ApplicationIdentity::WindowsExecutable {
+            path,
+            expected_publisher,
+        } => {
+            reject_unproven_publisher(expected_publisher)?;
+            if launching {
+                windows_launch_path(path)?;
+            }
+            Ok(())
+        }
+        ApplicationIdentity::LinuxDesktop { .. } => Err(platform_unsupported(identity)),
+        ApplicationIdentity::MacOsBundle { .. } => Ok(()),
+    }
+}
+
+fn windows_launch_path(path: &Path) -> Result<String, DriverError> {
+    let text = path.to_str().ok_or_else(|| {
+        DriverError::new(
+            "test.driver.gui.launch_option_invalid",
+            "Windows application path must be valid Unicode",
+        )
+    })?;
+    if text.trim().is_empty() || !path.is_absolute() {
+        return Err(DriverError::new(
+            "test.driver.gui.launch_option_invalid",
+            "Windows application path must be an absolute Unicode path",
+        ));
+    }
+    Ok(text.to_string())
+}
+
+/// `list_apps` reports the executable file name. `launch_app` for a path
+/// reports that path. Both identify the configured executable.
+pub(crate) fn windows_name_matches(reported: &str, path: &Path) -> bool {
+    let reported = reported.trim();
+    if reported.is_empty() {
+        return false;
+    }
+    if let Some(path_text) = path.to_str() {
+        if reported.eq_ignore_ascii_case(path_text) {
+            return true;
+        }
+    }
+    path.file_name()
+        .and_then(|name| name.to_str())
+        .is_some_and(|name| reported.eq_ignore_ascii_case(name))
 }
 
 fn reported_bundle_id(app: &CuaApp) -> Option<&str> {
@@ -173,7 +260,28 @@ fn ensure_app_matches_attach_identity(
                 }
             }
         },
-        _ => Err(platform_unsupported(identity)),
+        ApplicationIdentity::WindowsExecutable {
+            path,
+            expected_publisher,
+        } => {
+            reject_unproven_publisher(expected_publisher)?;
+            if !windows_name_matches(&app.name, path) {
+                return Err(DriverError::new(
+                    "test.driver.gui.app_identity_invalid",
+                    "running application did not match the configured Windows executable",
+                ));
+            }
+            if let Some(expected_name) = process_name {
+                if app.name != expected_name {
+                    return Err(DriverError::new(
+                        "test.driver.gui.app_identity_invalid",
+                        "running application process name did not match the configured process name",
+                    ));
+                }
+            }
+            Ok(())
+        }
+        ApplicationIdentity::LinuxDesktop { .. } => Err(platform_unsupported(identity)),
     }
 }
 
@@ -191,14 +299,27 @@ fn matching_running_apps<'a>(
                 }
                 match reported_bundle_id(app) {
                     Some(id) => {
-                        id == bundle_id
-                            && process_name.map_or(true, |expected| app.name == expected)
+                        id == bundle_id && process_name.is_none_or(|expected| app.name == expected)
                     }
                     None => process_name.is_some_and(|expected| app.name == expected),
                 }
             })
             .collect()),
-        _ => Err(platform_unsupported(identity)),
+        ApplicationIdentity::WindowsExecutable {
+            path,
+            expected_publisher,
+        } => {
+            reject_unproven_publisher(expected_publisher)?;
+            Ok(apps
+                .iter()
+                .filter(|app| {
+                    app.running
+                        && windows_name_matches(&app.name, path)
+                        && process_name.is_none_or(|expected| app.name == expected)
+                })
+                .collect())
+        }
+        ApplicationIdentity::LinuxDesktop { .. } => Err(platform_unsupported(identity)),
     }
 }
 
@@ -589,5 +710,86 @@ mod tests {
         )
         .expect_err("bundle mismatch");
         assert_eq!(error.code(), "test.driver.gui.app_identity_invalid");
+    }
+
+    #[test]
+    fn windows_identity_matches_launch_path_and_process_file_name() {
+        let path = Path::new(r"C:\Windows\System32\notepad.exe");
+        assert!(windows_name_matches(
+            r"C:\Windows\System32\notepad.exe",
+            path
+        ));
+        assert!(windows_name_matches("notepad.exe", path));
+        assert!(!windows_name_matches("notepad", path));
+        #[cfg(windows)]
+        {
+            assert_eq!(
+                windows_launch_path(path).expect("absolute Windows launch path"),
+                path.to_str().expect("unicode path")
+            );
+            let error = windows_launch_path(Path::new("notepad.exe"))
+                .expect_err("relative Windows launch path");
+            assert_eq!(error.code(), "test.driver.gui.launch_option_invalid");
+        }
+
+        let app = CuaApp {
+            pid: 7,
+            name: "notepad.exe".to_string(),
+            bundle_id: None,
+            running: true,
+        };
+        ensure_app_matches_attach_identity(
+            &app,
+            &ApplicationIdentity::WindowsExecutable {
+                path: path.to_path_buf(),
+                expected_publisher: None,
+            },
+            None,
+        )
+        .expect("windows attach");
+        ensure_app_matches_attach_identity(
+            &app,
+            &ApplicationIdentity::WindowsExecutable {
+                path: path.to_path_buf(),
+                expected_publisher: None,
+            },
+            Some("notepad.exe"),
+        )
+        .expect("exact list_apps file name");
+        let error = ensure_app_matches_attach_identity(
+            &app,
+            &ApplicationIdentity::WindowsExecutable {
+                path: path.to_path_buf(),
+                expected_publisher: None,
+            },
+            Some("notepad"),
+        )
+        .expect_err("file name must match list_apps exactly");
+        assert_eq!(error.code(), "test.driver.gui.app_identity_invalid");
+        let apps = [app.clone()];
+        let identity = ApplicationIdentity::WindowsExecutable {
+            path: path.to_path_buf(),
+            expected_publisher: None,
+        };
+        assert_eq!(
+            matching_running_apps(&apps, &identity, Some("notepad.exe"))
+                .expect("exact file name filter")
+                .len(),
+            1
+        );
+        assert!(matching_running_apps(&apps, &identity, Some("notepad"))
+            .expect("inexact file name filter")
+            .is_empty());
+
+        let error = ensure_app_matches_attach_identity(
+            &app,
+            &ApplicationIdentity::WindowsExecutable {
+                path: path.to_path_buf(),
+                expected_publisher: Some("Microsoft".to_string()),
+            },
+            None,
+        )
+        .expect_err("publisher cannot be proven");
+        assert_eq!(error.code(), "test.driver.gui.publisher_unproven");
     }
 }

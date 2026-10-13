@@ -595,6 +595,11 @@ async fn pixel_expectation_compares_bounded_png_and_refuses_a_missing_baseline()
     assert!(error.message().contains("1x1"));
     assert!(error.message().contains("2x1"));
     assert!(!error.message().contains("PNG"));
+    assert!(!temp
+        .path()
+        .join("artifacts")
+        .join("pixel-mismatch-0-actual.png")
+        .exists());
     session.close().await.expect("close");
     drop(temp);
 
@@ -606,6 +611,11 @@ async fn pixel_expectation_compares_bounded_png_and_refuses_a_missing_baseline()
         .await
         .expect_err("unstable");
     assert_eq!(error.code(), "test.driver.web.pixel_unstable");
+    assert!(!temp
+        .path()
+        .join("artifacts")
+        .join("pixel-mismatch-0-diff.png")
+        .exists());
     session.close().await.expect("close");
     drop(temp);
 
@@ -618,6 +628,10 @@ async fn pixel_expectation_compares_bounded_png_and_refuses_a_missing_baseline()
         .expect_err("smaller cap");
     assert_eq!(error.code(), "test.assert.pixel_diff");
     assert!(error.message().contains("exceeds allowed 1"));
+    let artifacts = temp.path().join("artifacts");
+    assert!(artifacts.join("pixel-mismatch-0-actual.png").is_file());
+    assert!(artifacts.join("pixel-mismatch-0-expected.png").is_file());
+    assert!(artifacts.join("pixel-mismatch-0-diff.png").is_file());
     session.close().await.expect("close");
     drop(temp);
 
@@ -646,15 +660,16 @@ async fn missing_browser_verbs_fail_before_any_browser_command() {
     let executor = SecretBrowser::new(SinkMode::Password);
     let mut opened = 0_u32;
     let unsupported = [
-        r#"long_press "hold" {}"#,
         r#"closed_shadow "root" {}"#,
         r#"pierce "node" {}"#,
         r#"network_fulfill "api" { status = 200 }"#,
-        r#"network_continue "api" {}"#,
-        r#"wait_response "api" {}"#,
+        r#"network_fulfill "stub" { pattern = "*/api/profile" body = "{\"name\":\"Grace\"}" }"#,
         r#"wait_for_response "api" {}"#,
-        r#"click "mods" { target = css(".go") modifiers = ["Shift"] }"#,
+        r#"evaluate "script" {}"#,
+        r#"init_script "boot" {}"#,
         r#"click "box" { target = css(".go") position = "center" }"#,
+        r#"click "shifted" { target = css(".go") modifiers = ["shift"] }"#,
+        r#"double_click "shifted" { target = css(".go") modifiers = ["shift"] }"#,
         r#"click "coord" { target = css(".go") x = 1 }"#,
         r#"click "down" { target = css(".go") y = 2 }"#,
         r#"click "slow" { target = css(".go") delay = 10 }"#,
@@ -695,10 +710,9 @@ async fn missing_browser_verbs_fail_before_any_browser_command() {
             }
         }
     }
-    for step in [r#"forward "next" {}"#, r#"reload "again" {}"#] {
-        let error = TestSuite::from_acl(&verb_suite(step)).expect_err(step);
-        assert_eq!(error.code(), "test.spec.action_unknown", "{step}");
-    }
+    let step = r#"forward "next" {}"#;
+    let error = TestSuite::from_acl(&verb_suite(step)).expect_err(step);
+    assert_eq!(error.code(), "test.spec.action_unknown", "{step}");
     assert_eq!(opened, 0);
     assert!(
         recorded(&executor).is_empty(),

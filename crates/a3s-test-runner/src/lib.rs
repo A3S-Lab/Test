@@ -522,10 +522,10 @@ impl Runner {
             match tokio::time::timeout(self.options.cleanup_timeout, session.close()).await {
                 Ok(Ok(())) => None,
                 Ok(Err(error)) => Some(RunError::from_driver(error)),
-                Err(_) => Some(RunError {
-                    code: "test.run.cleanup_timeout".to_string(),
-                    message: "surface cleanup exceeded its deadline".to_string(),
-                }),
+                Err(_) => Some(RunError::plain(
+                    "test.run.cleanup_timeout",
+                    "surface cleanup exceeded its deadline",
+                )),
             };
         if status == RunStatus::Passed && cleanup_error.is_some() {
             status = RunStatus::Failed;
@@ -947,10 +947,7 @@ impl ScenarioResult {
             status,
             duration_ms: 0,
             steps: Vec::new(),
-            error: Some(RunError {
-                code: code.to_string(),
-                message: message.to_string(),
-            }),
+            error: Some(RunError::plain(code, message)),
             cleanup_error: None,
         }
     }
@@ -1020,10 +1017,7 @@ impl StepResult {
             duration_ms: millis(duration),
             attempts,
             output,
-            error: Some(RunError {
-                code: code.to_string(),
-                message: message.to_string(),
-            }),
+            error: Some(RunError::plain(code, message)),
         }
     }
 }
@@ -1032,15 +1026,43 @@ impl StepResult {
 pub struct RunError {
     pub code: String,
     pub message: String,
+    /// A missing or ambiguous stable locator can be re-recorded.
+    /// Assertion mismatches and other failures leave this false and omit it.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub re_recordable: bool,
+}
+
+fn is_false(value: &bool) -> bool {
+    !*value
 }
 
 impl RunError {
-    fn from_driver(error: DriverError) -> Self {
+    fn plain(code: impl Into<String>, message: impl Into<String>) -> Self {
         Self {
-            code: error.code().to_string(),
+            code: code.into(),
+            message: message.into(),
+            re_recordable: false,
+        }
+    }
+
+    fn from_driver(error: DriverError) -> Self {
+        let code = error.code().to_string();
+        Self {
+            re_recordable: locator_failure_is_re_recordable(&code),
+            code,
             message: error.message().to_string(),
         }
     }
+}
+
+fn locator_failure_is_re_recordable(code: &str) -> bool {
+    matches!(
+        code,
+        "test.driver.web.target_not_found"
+            | "test.driver.web.target_ambiguous"
+            | "test.driver.gui.target_not_found"
+            | "test.driver.gui.target_ambiguous"
+    )
 }
 
 fn aggregate_status(statuses: impl Iterator<Item = RunStatus>) -> RunStatus {
@@ -1137,12 +1159,46 @@ fn artifact_component(value: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::artifact_component;
+    use a3s_test_core::DriverError;
+
+    use super::{artifact_component, locator_failure_is_re_recordable, RunError};
 
     #[test]
     fn artifact_component_cannot_traverse_directories() {
         let component = artifact_component("../../outside");
         assert!(!component.contains('/'));
         assert!(!component.contains(".."));
+    }
+
+    #[test]
+    fn missing_and_ambiguous_locators_are_re_recordable() {
+        for code in [
+            "test.driver.web.target_not_found",
+            "test.driver.web.target_ambiguous",
+            "test.driver.gui.target_not_found",
+            "test.driver.gui.target_ambiguous",
+        ] {
+            assert!(locator_failure_is_re_recordable(code), "{code}");
+            let error = RunError::from_driver(DriverError::new(code, "locator failed"));
+            assert!(error.re_recordable, "{code}");
+            let json = serde_json::to_value(&error).expect("error JSON");
+            assert_eq!(json["re_recordable"], true);
+            assert_eq!(json["code"], code);
+        }
+
+        let mismatch = RunError::from_driver(DriverError::new(
+            "test.assert.rendered_text",
+            "expected rendered text differs",
+        ));
+        assert!(!mismatch.re_recordable);
+        let json = serde_json::to_value(&mismatch).expect("mismatch JSON");
+        assert!(json.get("re_recordable").is_none());
+        assert_eq!(json["code"], "test.assert.rendered_text");
+
+        let parsed: RunError = serde_json::from_str(
+            r#"{"code":"test.assert.visible","message":"target is not visible"}"#,
+        )
+        .expect("older report");
+        assert!(!parsed.re_recordable);
     }
 }

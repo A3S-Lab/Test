@@ -274,10 +274,11 @@ empty. An empty policy admits any HTTP(S) URL. A non-Web result is
 
 `scroll_until` requires `target` and `direction` (`up`, `down`, `left`, or
 `right`). `timeout_ms` defaults to 5,000 and must be 50 through 30,000. Web
-checks visibility, scrolls the page 240 CSS pixels in that direction, and
-repeats every 50 milliseconds until the target is visible or the timeout
-elapses. The admitted browser command scrolls the page. It does not scroll a
-nested container named by the target. A timeout is
+treats the target as visible only when its rectangle intersects the visual
+viewport, scrolls 240 CSS pixels in that direction, and repeats every 50
+milliseconds until the target intersects the viewport or the timeout elapses.
+Without `container`, the command scrolls the page. `container` must be
+`ref()` or `css()` and is passed as `--selector`. A timeout is
 `test.driver.web.scroll_until_timeout`.
 
 `text_contains` requires at least one character. `text_matches` is a Rust
@@ -289,7 +290,7 @@ do not include the page text. `text` remains the waiting visible-text
 expectation. GUI and TUI reject both page-text expectations and do not
 implement `back` or `scroll_until`.
 
-Revision 17 is the current action protocol. `fill_secret` and `type_secret`
+Revision 17 added secret input. `fill_secret` and `type_secret`
 store an environment name and a purpose (`password` or `text`). The value is
 read only when Web is about to send the admitted fill or type command. It does
 not appear in ACL, action JSON, errors, events, reports, or step data. An
@@ -314,7 +315,10 @@ expect "shot" {
 }
 ```
 
-`pixels` compares two bounded PNG captures in Rust. A size mismatch is
+`pixels` compares two bounded PNG captures in Rust. Before those captures, Web
+cancels CSS animations and hides the caret. Two captures that still differ are
+`test.driver.web.pixel_unstable` and do not write mismatch images. A pixel
+difference writes actual, expected, and diff PNG files. A size mismatch is
 `test.assert.pixel_size`. When both diff caps are set, the smaller limit wins.
 `update = false` does not create a missing baseline. A suite may own an app
 process, given as an argument list plus an HTTP(S) ready URL. CI refuses
@@ -322,10 +326,59 @@ reuse, and the runner reaps the process group on finish, cancel, and timeout.
 Named `target` blocks open a fresh session and a separate evidence directory
 for each viewport. The default remains one viewport. A verified session emits
 an ACL candidate only after a later assertion passed. That candidate omits
-observation refs, visual points, and secret literals. Long-press, click
-modifiers, click box position, closed-shadow piercing, and typed network
-fulfill, continue, and response waits are
-`test.spec.browser_verb_unsupported` before any browser command.
+observation refs, visual points, and secret literals. `finish` keeps the
+candidate on the report. `a3s-test adopt` writes it to a caller-named suite
+after refusing a prose-only success, an observation ref, a visual point, a
+secret literal, or an overwrite without `--replace`. Revision 18 added the
+verbs agent-browser 0.26.0 can express. Revision 19 is the current action
+protocol. Revision 18 admits:
+
+```acl
+reload "again" {}
+long_press "hold" { target = css("#hold") duration_ms = 700 }
+scroll_until "pane-end" { target = css("#end") container = css("#pane") direction = "down" timeout_ms = 5000 }
+network_abort "drop" { pattern = "*/api/abort-probe" }
+network_continue "restore" { pattern = "*/api/abort-probe" }
+wait_response "profile" { pattern = "api/profile" timeout_ms = 5000 }
+```
+
+`reload` reads the resulting URL and admits it with the same origin policy as
+`back`. `long_press` duration is 50 through 5,000 milliseconds and defaults to
+500. `network_abort` and `network_continue` take one pattern.
+`wait_response` polls the request log for a substring, defaults to 5,000
+milliseconds, and must be 50 through 30,000. `network_fulfill` and non-empty
+click or double-click modifiers stay `test.spec.browser_verb_unsupported`.
+Click box position, closed-shadow piercing, page evaluate, and arbitrary init
+scripts stay rejected before any browser command. `forward` stays
+`test.spec.action_unknown`.
+
+Revision 19 strips private-use icon-font characters from role names used for
+location, omits `[inert]` names from agent observation, and still lets `css()`
+address those nodes. `set_cookie` applies every cookie for one allowed
+HTTP(S) origin or applies none. `preview_headers` are attached only when
+navigation stays on that origin. `password_env` names an environment variable;
+the password is not written in the suite.
+
+```acl
+set_cookie "jar" {
+    origin = "https://app.example"
+    names = ["a", "b"]
+    values = ["1", "2"]
+}
+preview_headers "site" {
+    origin = "https://app.example"
+    header_names = ["X-Preview"]
+    header_values = ["on"]
+    username = "ada"
+    password_env = "PREVIEW_PASSWORD"
+}
+```
+
+A rejected cookie batch fails before any cookie command. An unset or empty
+`password_env` is `test.driver.web.secret_unavailable` and sends no browser
+command. Step data lists cookie names and header names, never cookie values,
+header values, or the password. Each scenario has its own cookies and storage.
+GUI and TUI reject both actions.
 
 Focus, double-click, context-click, type, uncheck, select, drag, and
 target-scoped wheel require `ref()` or `css()` with the current browser
@@ -847,8 +900,16 @@ path. Video stop attaches the path declared by video start.
 ```bash
 a3s-test capabilities --json
 a3s-test check tests/e2e/smoke.acl --json
+a3s-test adopt --report .a3s-test/agent-sessions/checkout/report.json --output tests/e2e/checkout.acl --name checkout
 a3s-test run tests/e2e/smoke.acl --json
 ```
+
+`adopt` reads `acl_candidate` from a finished session report. It does not call
+a model. `--replace` is required when the output file already exists. Repeat
+`--secret-env NAME` for each environment variable whose value must be absent
+from the suite. `a3s-test run` of that suite is the same provider-free entry
+as any other ACL suite. A missing or ambiguous stable locator sets
+`re_recordable` on the run error. An assertion mismatch does not.
 
 Useful run options:
 
@@ -880,6 +941,7 @@ JSON results include:
 - `passed`, `failed`, `timed_out`, or `cancelled` status;
 - step duration and attempt count;
 - stable error code and message;
+- `re_recordable` when a stable locator is missing or ambiguous;
 - structured action output and evidence paths;
 - bounded cleanup errors.
 

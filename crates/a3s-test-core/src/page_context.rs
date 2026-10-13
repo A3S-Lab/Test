@@ -302,10 +302,10 @@ pub fn preferred_page_context_target(locators: &[PageContextLocator]) -> Option<
 fn action_targets(action: &Action) -> impl Iterator<Item = &Target> {
     let mut targets = Vec::with_capacity(2);
     match action {
-        Action::Click { target }
+        Action::Click { target, .. }
         | Action::Hover { target }
         | Action::Focus { target }
-        | Action::DoubleClick { target }
+        | Action::DoubleClick { target, .. }
         | Action::ContextClick { target }
         | Action::Fill { target, .. }
         | Action::Type { target, .. }
@@ -316,10 +316,18 @@ fn action_targets(action: &Action) -> impl Iterator<Item = &Target> {
         | Action::Select { target, .. }
         | Action::Upload { target, .. }
         | Action::Download { target, .. }
-        | Action::ScrollUntil { target, .. }
+        | Action::LongPress { target, .. }
         | Action::Wait {
             condition: WaitCondition::Visible(target),
         } => targets.push(target),
+        Action::ScrollUntil {
+            target, container, ..
+        } => {
+            targets.push(target);
+            if let Some(container) = container {
+                targets.push(container);
+            }
+        }
         Action::Assert { expectation } => match expectation {
             Expectation::Layout {
                 target,
@@ -353,10 +361,10 @@ fn visit_action_targets(
     mut visitor: impl FnMut(&mut Target) -> Result<(), PageContextRefError>,
 ) -> Result<(), PageContextRefError> {
     match action {
-        Action::Click { target }
+        Action::Click { target, .. }
         | Action::Hover { target }
         | Action::Focus { target }
-        | Action::DoubleClick { target }
+        | Action::DoubleClick { target, .. }
         | Action::ContextClick { target }
         | Action::Fill { target, .. }
         | Action::Type { target, .. }
@@ -367,10 +375,18 @@ fn visit_action_targets(
         | Action::Select { target, .. }
         | Action::Upload { target, .. }
         | Action::Download { target, .. }
-        | Action::ScrollUntil { target, .. }
+        | Action::LongPress { target, .. }
         | Action::Wait {
             condition: WaitCondition::Visible(target),
         } => visitor(target)?,
+        Action::ScrollUntil {
+            target, container, ..
+        } => {
+            visitor(target)?;
+            if let Some(container) = container {
+                visitor(container)?;
+            }
+        }
         Action::Assert { expectation } => match expectation {
             Expectation::Layout {
                 target,

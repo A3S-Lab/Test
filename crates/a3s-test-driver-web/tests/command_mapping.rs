@@ -9,9 +9,9 @@ use a3s_test_core::{
     Action, CaptureOperation, ContractFinding, ContractOutcome, ContractReport, ContractSeverity,
     DesignAuditAuthority, DesignAuditDimension, DesignAuditFinding, DesignAuditPriority,
     DesignAuditProvenance, DesignAuditProviderIdentity, DesignAuditReport, DesignAuditTarget,
-    DesignAuditUsage, DialogOperation, Expectation, FrameTarget, NetworkRoute, ScenarioContext,
-    ScrollDirection, SurfaceDriver, TabOperation, Target, TestStep, VideoOperation, WaitCondition,
-    ACTION_PROTOCOL_REVISION, MAX_PAGE_TEXT_BYTES,
+    DesignAuditUsage, DialogOperation, Expectation, FrameTarget, ModifierKey, NetworkRoute,
+    ScenarioContext, ScrollDirection, SurfaceDriver, TabOperation, Target, TestStep,
+    VideoOperation, WaitCondition, ACTION_PROTOCOL_REVISION, MAX_PAGE_TEXT_BYTES,
 };
 use a3s_test_driver_web::{
     AgentBrowserConfig, AgentBrowserConnectionConfig, AgentBrowserDriver, BrowserCommand,
@@ -231,9 +231,15 @@ impl CommandExecutor for PageContextExecutor {
             .last()
             .is_some_and(|argument| argument == "--version");
         let is_eval = invocation.args.iter().any(|argument| argument == "eval");
+        let inert_probe = invocation
+            .args
+            .iter()
+            .any(|argument| argument.to_string_lossy().contains("[inert]"));
         self.invocations.lock().unwrap().push(invocation);
         let stdout = if version_probe {
             "agent-browser 0.26.0".to_string()
+        } else if inert_probe {
+            r#"{"success":true,"data":{"result":{"texts":[]}}}"#.to_string()
         } else if is_eval {
             let revision = self.revisions.lock().unwrap().remove(0);
             self.diff_from.map_or_else(
@@ -261,6 +267,10 @@ impl CommandExecutor for GroundingScreenshotExecutor {
             .last()
             .is_some_and(|argument| argument == "--version");
         let is_eval = invocation.args.iter().any(|argument| argument == "eval");
+        let inert_probe = invocation
+            .args
+            .iter()
+            .any(|argument| argument.to_string_lossy().contains("[inert]"));
         let is_screenshot = invocation
             .args
             .iter()
@@ -279,6 +289,8 @@ impl CommandExecutor for GroundingScreenshotExecutor {
         self.invocations.lock().unwrap().push(invocation);
         let stdout = if version_probe {
             "agent-browser 0.26.0".to_string()
+        } else if inert_probe {
+            r#"{"success":true,"data":{"result":{"texts":[]}}}"#.to_string()
         } else if is_eval {
             let revision = self.revisions.lock().unwrap().remove(0);
             page_context_response(revision, false)
@@ -418,6 +430,7 @@ async fn maps_typed_actions_and_scopes_browser_lifecycle() {
         .execute(&step(
             "word",
             Action::Click {
+                modifiers: Vec::new(),
                 target: Target::Role {
                     role: "button".to_string(),
                     name: "Word".to_string(),
@@ -574,7 +587,13 @@ async fn scrolls_direct_click_targets_into_view_before_dispatch() {
         ),
     ] {
         session
-            .execute(&step(id, Action::Click { target }))
+            .execute(&step(
+                id,
+                Action::Click {
+                    target,
+                    modifiers: Vec::new(),
+                },
+            ))
             .await
             .expect("direct click");
     }
@@ -1738,14 +1757,15 @@ async fn persistent_connection_survives_handle_drop_until_explicit_close() {
     second.close_surface().await.expect("close");
 
     let invocations = executor.invocations.lock().unwrap();
-    assert_eq!(invocations.len(), 6);
+    assert_eq!(invocations.len(), 7);
     assert_eq!(
         strip_session_prefix(&invocations[3].args),
         os(&["snapshot"])
     );
     assert_eq!(strip_session_prefix(&invocations[2].args)[0], "eval");
     assert_eq!(strip_session_prefix(&invocations[4].args)[0], "eval");
-    assert_eq!(strip_session_prefix(&invocations[5].args), os(&["close"]));
+    assert_eq!(strip_session_prefix(&invocations[5].args)[0], "eval");
+    assert_eq!(strip_session_prefix(&invocations[6].args), os(&["close"]));
 }
 
 #[cfg(unix)]
@@ -1789,6 +1809,7 @@ struct GestureExecutor {
     url: String,
     page_text: String,
     visible_after_scrolls: usize,
+    requests_ready: bool,
 }
 
 impl GestureExecutor {
@@ -1798,7 +1819,13 @@ impl GestureExecutor {
             url: url.to_string(),
             page_text: page_text.to_string(),
             visible_after_scrolls,
+            requests_ready: false,
         }
+    }
+
+    fn with_recorded_requests(mut self) -> Self {
+        self.requests_ready = true;
+        self
     }
 }
 
@@ -1835,6 +1862,28 @@ impl CommandExecutor for GestureExecutor {
                 format!(
                     r#"{{"success":true,"data":{}}}"#,
                     serde_json::to_string(&self.page_text).expect("page text")
+                )
+            }
+            Some("get") if tail.get(1).map(String::as_str) == Some("box") => {
+                r#"{"success":true,"data":{"x":8,"y":12,"width":20,"height":10}}"#.to_string()
+            }
+            Some("network") if tail.get(1).map(String::as_str) == Some("requests") => {
+                if self.requests_ready {
+                    r#"{"success":true,"data":{"requests":[{"url":"https://example.test/api/profile"}]}}"#
+                        .to_string()
+                } else {
+                    r#"{"success":true,"data":{"requests":[]}}"#.to_string()
+                }
+            }
+            Some("eval")
+                if tail
+                    .get(1)
+                    .is_some_and(|script| script.contains("in_viewport")) =>
+            {
+                let visible = scrolls >= self.visible_after_scrolls;
+                let y = if visible { 0 } else { 200 };
+                format!(
+                    r#"{{"success":true,"data":{{"result":{{"status":"ok","target_rect":{{"x":0,"y":{y},"width":10,"height":10}},"viewport_rect":{{"x":0,"y":0,"width":100,"height":100}}}}}},"error":null}}"#
                 )
             }
             Some("is") => {
@@ -1988,6 +2037,7 @@ async fn scroll_until_checks_visibility_before_scrolling() {
         .execute(&step(
             "footer",
             Action::ScrollUntil {
+                container: None,
                 target: Target::Css {
                     selector: "#end".to_string(),
                 },
@@ -2002,14 +2052,9 @@ async fn scroll_until_checks_visibility_before_scrolling() {
     assert_eq!(output.summary, "target is visible");
     assert_eq!(output.data["scrolled"], false);
     assert_eq!(output.data["probes"], 1);
-    assert_eq!(
-        gesture_commands(&executor),
-        vec![vec![
-            "is".to_string(),
-            "visible".to_string(),
-            "#end".to_string()
-        ]]
-    );
+    let commands = gesture_commands(&executor);
+    assert_eq!(commands.len(), 1);
+    assert!(viewport_probe(&commands[0], "#end"));
 }
 
 #[tokio::test]
@@ -2021,6 +2066,7 @@ async fn scroll_until_scrolls_in_the_requested_direction_until_visible() {
         .execute(&step(
             "footer",
             Action::ScrollUntil {
+                container: None,
                 target: Target::Css {
                     selector: "#end".to_string(),
                 },
@@ -2034,14 +2080,14 @@ async fn scroll_until_scrolls_in_the_requested_direction_until_visible() {
 
     assert_eq!(output.data["scrolled"], true);
     assert_eq!(output.data["probes"], 2);
+    let commands = gesture_commands(&executor);
+    assert_eq!(commands.len(), 3);
+    assert!(viewport_probe(&commands[0], "#end"));
     assert_eq!(
-        gesture_commands(&executor),
-        vec![
-            vec!["is".to_string(), "visible".to_string(), "#end".to_string()],
-            vec!["scroll".to_string(), "right".to_string(), "240".to_string()],
-            vec!["is".to_string(), "visible".to_string(), "#end".to_string()],
-        ]
+        commands[1],
+        vec!["scroll".to_string(), "right".to_string(), "240".to_string()]
     );
+    assert!(viewport_probe(&commands[2], "#end"));
 }
 
 #[tokio::test]
@@ -2053,6 +2099,7 @@ async fn scroll_until_stops_at_the_timeout_bound() {
         .execute(&step(
             "footer",
             Action::ScrollUntil {
+                container: None,
                 target: Target::Css {
                     selector: "#secret-end".to_string(),
                 },
@@ -2066,22 +2113,14 @@ async fn scroll_until_stops_at_the_timeout_bound() {
 
     assert_eq!(error.code(), "test.driver.web.scroll_until_timeout");
     assert!(!error.message().contains("#secret-end"));
+    let commands = gesture_commands(&executor);
+    assert_eq!(commands.len(), 3);
+    assert!(viewport_probe(&commands[0], "#secret-end"));
     assert_eq!(
-        gesture_commands(&executor),
-        vec![
-            vec![
-                "is".to_string(),
-                "visible".to_string(),
-                "#secret-end".to_string()
-            ],
-            vec!["scroll".to_string(), "down".to_string(), "240".to_string()],
-            vec![
-                "is".to_string(),
-                "visible".to_string(),
-                "#secret-end".to_string()
-            ],
-        ]
+        commands[1],
+        vec!["scroll".to_string(), "down".to_string(), "240".to_string()]
     );
+    assert!(viewport_probe(&commands[2], "#secret-end"));
 }
 
 #[tokio::test]
@@ -2093,6 +2132,7 @@ async fn scroll_until_rejects_a_timeout_outside_the_driver_bound() {
         .execute(&step(
             "footer",
             Action::ScrollUntil {
+                container: None,
                 target: Target::Css {
                     selector: "#end".to_string(),
                 },
@@ -2214,6 +2254,305 @@ async fn page_text_over_the_byte_bound_fails_without_echoing_the_body() {
 
     assert_eq!(error.code(), "test.driver.web.text_too_large");
     assert!(!error.message().contains(&page_text));
+}
+
+fn viewport_probe(command: &[String], selector: &str) -> bool {
+    command.first().map(String::as_str) == Some("eval")
+        && command
+            .get(1)
+            .is_some_and(|script| script.contains(selector) && script.contains("in_viewport"))
+}
+
+fn css(selector: &str) -> Target {
+    Target::Css {
+        selector: selector.to_string(),
+    }
+}
+
+#[tokio::test]
+async fn scroll_until_passes_the_container_selector_and_page_scroll_does_not() {
+    let executor = Arc::new(GestureExecutor::new("", "", 1));
+    let (_temp, mut session) =
+        open_gesture_session(BrowserNetworkPolicy::default(), executor.clone()).await;
+    let output = session
+        .execute(&step(
+            "pane",
+            Action::ScrollUntil {
+                target: css("#end"),
+                container: Some(css("#pane")),
+                direction: ScrollDirection::Down,
+                timeout_ms: 5_000,
+            },
+        ))
+        .await
+        .expect("container scroll");
+    session.close().await.expect("close");
+
+    assert_eq!(output.data["container"], true);
+    let commands = gesture_commands(&executor);
+    assert_eq!(commands.len(), 3);
+    assert!(viewport_probe(&commands[0], "#end"));
+    assert!(!commands[0][1].contains("#pane"));
+    assert_eq!(
+        commands[1],
+        vec![
+            "scroll".to_string(),
+            "down".to_string(),
+            "240".to_string(),
+            "--selector".to_string(),
+            "#pane".to_string(),
+        ]
+    );
+    assert!(viewport_probe(&commands[2], "#end"));
+}
+
+#[tokio::test]
+async fn scroll_until_rejects_a_container_that_is_not_a_direct_selector() {
+    let executor = Arc::new(GestureExecutor::new("", "", 0));
+    let (_temp, mut session) =
+        open_gesture_session(BrowserNetworkPolicy::default(), executor.clone()).await;
+    let error = session
+        .execute(&step(
+            "pane",
+            Action::ScrollUntil {
+                target: css("#end"),
+                container: Some(Target::Role {
+                    role: "region".to_string(),
+                    name: "Pane".to_string(),
+                }),
+                direction: ScrollDirection::Down,
+                timeout_ms: 50,
+            },
+        ))
+        .await
+        .expect_err("role container");
+    session.close().await.expect("close");
+    assert_eq!(error.code(), "test.driver.web.target_unsupported");
+    assert!(gesture_commands(&executor).is_empty());
+}
+
+#[tokio::test]
+async fn reload_checks_the_returned_page_origin_without_leaking_the_url() {
+    let approved =
+        BrowserNetworkPolicy::restricted(["https://example.test"], std::iter::empty::<String>())
+            .expect("origin policy");
+    let denied_url = "https://user:secret-token@evil.test/private";
+    let cases = [
+        (approved.clone(), "https://example.test/next", None),
+        (
+            approved,
+            denied_url,
+            Some("test.driver.web.navigation_origin_denied"),
+        ),
+        (
+            BrowserNetworkPolicy::default(),
+            "https://anywhere.test/path",
+            None,
+        ),
+    ];
+    for (policy, url, expected_code) in cases {
+        let executor = Arc::new(GestureExecutor::new(url, "", usize::MAX));
+        let (_temp, mut session) = open_gesture_session(policy, executor.clone()).await;
+        let result = session.execute(&step("again", Action::Reload {})).await;
+        session.close().await.expect("close");
+        match expected_code {
+            None => {
+                let output = result.expect("approved reload");
+                assert_eq!(output.data["url"], url);
+                assert_eq!(
+                    gesture_commands(&executor),
+                    vec![
+                        vec!["reload".to_string()],
+                        vec!["get".to_string(), "url".to_string()]
+                    ]
+                );
+            }
+            Some(code) => {
+                let error = result.expect_err("unapproved reload");
+                assert_eq!(error.code(), code);
+                assert!(error.message().contains("reload"));
+                assert!(!error.message().contains(url));
+                assert!(!error.message().contains("secret-token"));
+            }
+        }
+    }
+}
+
+#[tokio::test]
+async fn network_fulfill_continue_and_abort_use_the_admitted_route_commands() {
+    let executor = Arc::new(GestureExecutor::new("", "", 0));
+    let (_temp, mut session) =
+        open_gesture_session(BrowserNetworkPolicy::default(), executor.clone()).await;
+    let fulfill = session
+        .execute(&step(
+            "stub",
+            Action::NetworkFulfill {
+                pattern: "*api/profile".to_string(),
+                body: "{\"name\":\"Grace\"}".to_string(),
+            },
+        ))
+        .await
+        .expect_err("fulfill is not expressed by the admitted command");
+    assert_eq!(fulfill.code(), "test.driver.web.action_unsupported");
+    assert!(!fulfill.message().contains("Grace"));
+    assert!(!fulfill.message().contains("api/profile"));
+    session
+        .execute(&step(
+            "live",
+            Action::NetworkContinue {
+                pattern: "*api/profile".to_string(),
+            },
+        ))
+        .await
+        .expect("continue");
+    session
+        .execute(&step(
+            "drop",
+            Action::NetworkAbort {
+                pattern: "*api/abort-probe".to_string(),
+            },
+        ))
+        .await
+        .expect("abort");
+    session.close().await.expect("close");
+    assert_eq!(
+        gesture_commands(&executor),
+        vec![
+            vec![
+                "network".to_string(),
+                "unroute".to_string(),
+                "*api/profile".to_string(),
+            ],
+            vec![
+                "network".to_string(),
+                "route".to_string(),
+                "*api/abort-probe".to_string(),
+                "--abort".to_string(),
+            ],
+        ]
+    );
+}
+
+#[tokio::test]
+async fn wait_response_polls_until_a_matching_request_is_recorded() {
+    let executor = Arc::new(GestureExecutor::new("", "", 0).with_recorded_requests());
+    let (_temp, mut session) =
+        open_gesture_session(BrowserNetworkPolicy::default(), executor.clone()).await;
+    let output = session
+        .execute(&step(
+            "profile",
+            Action::WaitForResponse {
+                pattern: "*api/profile".to_string(),
+                timeout_ms: 50,
+            },
+        ))
+        .await
+        .expect("recorded response");
+    session.close().await.expect("close");
+    assert_eq!(output.summary, "matching response recorded");
+    assert_eq!(
+        gesture_commands(&executor),
+        vec![vec![
+            "network".to_string(),
+            "requests".to_string(),
+            "--filter".to_string(),
+            "*api/profile".to_string(),
+        ]]
+    );
+}
+
+#[tokio::test]
+async fn wait_response_times_out_without_treating_an_empty_log_as_success() {
+    let executor = Arc::new(GestureExecutor::new("", "", 0));
+    let (_temp, mut session) =
+        open_gesture_session(BrowserNetworkPolicy::default(), executor.clone()).await;
+    let error = session
+        .execute(&step(
+            "profile",
+            Action::WaitForResponse {
+                pattern: "*secret-api".to_string(),
+                timeout_ms: 50,
+            },
+        ))
+        .await
+        .expect_err("response wait timeout");
+    session.close().await.expect("close");
+    assert_eq!(error.code(), "test.driver.web.response_wait_timeout");
+    assert!(!error.message().contains("*secret-api"));
+    assert!(gesture_commands(&executor).iter().all(|command| {
+        command.first().map(String::as_str) == Some("network")
+            && command.get(1).map(String::as_str) == Some("requests")
+    }));
+}
+
+#[tokio::test]
+async fn modified_click_is_rejected_before_any_browser_command() {
+    let executor = Arc::new(GestureExecutor::new("", "", 0));
+    let (_temp, mut session) =
+        open_gesture_session(BrowserNetworkPolicy::default(), executor.clone()).await;
+    let shifted = session
+        .execute(&step(
+            "shifted",
+            Action::Click {
+                target: css("#go"),
+                modifiers: vec![ModifierKey::Shift],
+            },
+        ))
+        .await
+        .expect_err("modified click is not expressed");
+    let duplicate = session
+        .execute(&step(
+            "duplicate",
+            Action::Click {
+                target: css("#go"),
+                modifiers: vec![ModifierKey::Shift, ModifierKey::Shift],
+            },
+        ))
+        .await
+        .expect_err("duplicate modifier");
+    session.close().await.expect("close");
+    assert_eq!(shifted.code(), "test.driver.web.action_unsupported");
+    assert!(!shifted.message().contains("Shift"));
+    assert_eq!(duplicate.code(), "test.driver.web.action_unsupported");
+    assert!(gesture_commands(&executor).is_empty());
+}
+
+#[tokio::test]
+async fn long_press_uses_mouse_buttons_instead_of_page_script() {
+    let executor = Arc::new(GestureExecutor::new("", "", 0));
+    let (_temp, mut session) =
+        open_gesture_session(BrowserNetworkPolicy::default(), executor.clone()).await;
+    let output = session
+        .execute(&step(
+            "hold",
+            Action::LongPress {
+                target: css("#hold"),
+                duration_ms: 50,
+            },
+        ))
+        .await
+        .expect("long press");
+    session.close().await.expect("close");
+    assert_eq!(output.summary, "target held");
+    let commands = gesture_commands(&executor);
+    assert!(commands
+        .iter()
+        .all(|command| command.first().map(String::as_str) != Some("eval")));
+    assert_eq!(
+        commands,
+        vec![
+            vec!["scrollintoview".to_string(), "#hold".to_string()],
+            vec!["get".to_string(), "box".to_string(), "#hold".to_string()],
+            vec![
+                "mouse".to_string(),
+                "move".to_string(),
+                "18".to_string(),
+                "17".to_string()
+            ],
+            vec!["mouse".to_string(), "down".to_string(), "left".to_string()],
+            vec!["mouse".to_string(), "up".to_string(), "left".to_string()],
+        ]
+    );
 }
 
 fn os(values: &[&str]) -> Vec<OsString> {

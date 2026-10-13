@@ -293,7 +293,8 @@ const SEMANTIC_SHADOW_TARGET_QUERY: &str = r#"
     if (target.type === "test_id") return element.getAttribute("data-testid") === target.value || element.getAttribute("data-test-id") === target.value;
     if (target.type === "placeholder") return element.getAttribute("placeholder") === target.value;
     if (target.type === "label") return Array.from(element.labels ?? []).map(text).some((value) => value === target.value);
-    if (target.type === "role") return role(element) === target.role && labelledText(element) === target.name;
+    const roleName = (value) => String(value ?? "").replace(/[\uE000-\uF8FF]/g, "").replace(/[\uDB80-\uDBFF][\uDC00-\uDFFF]/g, "").replace(/\s+/g, " ").trim();
+    if (target.type === "role") return role(element) === target.role && roleName(labelledText(element)) === roleName(target.name);
     if (target.type === "text") return target.exact ? text(element) === target.value : text(element).includes(target.value);
     return false;
   };
@@ -677,7 +678,8 @@ fn semantic_visibility_expression(target: &Target) -> Result<String, DriverError
     if (target.type === "test_id") return element.getAttribute("data-testid") === target.value || element.getAttribute("data-test-id") === target.value;
     if (target.type === "placeholder") return element.getAttribute("placeholder") === target.value;
     if (target.type === "label") return Array.from(element.labels ?? []).map(text).some((value) => value === target.value);
-    if (target.type === "role") return role(element) === target.role && labelledText(element) === target.name;
+    const roleName = (value) => String(value ?? "").replace(/[\uE000-\uF8FF]/g, "").replace(/[\uDB80-\uDBFF][\uDC00-\uDFFF]/g, "").replace(/\s+/g, " ").trim();
+    if (target.type === "role") return role(element) === target.role && roleName(labelledText(element)) === roleName(target.name);
     if (target.type === "text") return target.exact ? text(element) === target.value : text(element).includes(target.value);
     return false;
   }};

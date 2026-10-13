@@ -144,8 +144,9 @@
 - [x] Record real macOS semantic and window-vision host certification in
       release automation with exact source and policy identity, owned-cleanup
       proof, detached SHA-256, and GitHub OIDC/Sigstore provenance
-- [ ] Windows and Linux execution, pending reviewed backends in the locked CUA
-      stack
+- [ ] Windows embedded-socket and Linux execution, pending reviewed backends.
+      The Windows installed daemon is contract-tested on locked CUA 0.34.1
+      and is not a host certification.
 
 ## M4: TUI
 
@@ -1031,3 +1032,13 @@ finding ID before it can discover the next safe unit of work.
 - [x] Reject long-press, click modifiers, click box position, closed-shadow
       piercing, and typed network fulfill, continue, and response waits with
       `test.spec.browser_verb_unsupported` before any browser command
+
+## M32: Explicit adoption of a verified session
+
+- [x] Adopt a verified-session candidate into a caller-named ACL suite.
+      `finish` writes the report only
+- [x] Refuse prose-only success, observation refs, visual points, secret
+      literals, and overwrite without `--replace`
+- [x] Run the adopted suite with `a3s-test run` and no model provider
+- [x] Mark a missing or ambiguous stable locator as re-recordable, distinct
+      from an assertion mismatch

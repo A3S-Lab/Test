@@ -432,7 +432,10 @@ mod tests {
 
     #[test]
     fn coordinator_requires_the_exact_gui_host_permission_pin() {
-        let permissions = GuiHostPermissionGrant::required(GuiHostPermissionSource::DriverDaemon);
+        let permissions = match std::env::consts::OS {
+            "windows" => GuiHostPermissionGrant::windows_uia(GuiHostPermissionSource::DriverDaemon),
+            _ => GuiHostPermissionGrant::required(GuiHostPermissionSource::DriverDaemon),
+        };
         let permission_digest = permissions.digest();
         let application = match std::env::consts::OS {
             "macos" => WorkerGuiApplication::MacosBundle {
@@ -440,7 +443,7 @@ mod tests {
             },
             "windows" => WorkerGuiApplication::WindowsExecutable {
                 path: "C:/Program Files/Example/editor.exe".to_string(),
-                expected_publisher: Some("Example, Inc.".to_string()),
+                expected_publisher: None,
             },
             _ => WorkerGuiApplication::LinuxDesktop {
                 desktop_id: "com.example.Editor".to_string(),
@@ -457,6 +460,7 @@ mod tests {
                     target: WorkerGuiTarget::Launch,
                     application,
                     macos_process_name: None,
+                    windows_process_name: None,
                     cua_driver_version: "0.23.2".to_string(),
                     mcp_protocol: "2025-06-18".to_string(),
                     capability_vocabulary: "1".to_string(),

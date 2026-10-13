@@ -5,8 +5,9 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use a3s_test_core::{
-    Action, ElementState, Expectation, LayoutRelation, ScenarioContext, Surface, SurfaceDriver,
-    Target, TestStep, ViewportCoverageComparison,
+    Action, CookieAssignment, ElementState, Expectation, LayoutRelation, ModifierKey,
+    PreviewHeader, ScenarioContext, ScrollDirection, Surface, SurfaceDriver, Target, TestStep,
+    ViewportCoverageComparison,
 };
 use a3s_test_driver_gui::{
     ApplicationIdentity, AttachSpec, CuaCompatibility, CuaEndpoint, CuaTransport,
@@ -143,7 +144,7 @@ impl CuaTransport for FakeTransport {
                 json!({
                     "protocolVersion": "2025-06-18",
                     "capabilities": { "tools": {} },
-                    "serverInfo": { "name": "cua-driver", "version": "0.23.2" },
+                    "serverInfo": { "name": "cua-driver", "version": "0.34.1" },
                 }),
             )),
             "tools/list" => Ok(JsonRpcResponse::success(request.id, tools_list())),
@@ -519,7 +520,7 @@ async fn host_probe_is_read_only_and_returns_exact_permissions() {
             GuiHostPermission::ScreenRecording,
         ]
     );
-    assert_eq!(probe.driver_version, "0.23.2");
+    assert_eq!(probe.driver_version, "0.34.1");
     assert!(probe.permissions.digest().starts_with("sha256:"));
     let names = transport.tool_names().await;
     assert_eq!(names, ["check_permissions"]);
@@ -548,6 +549,7 @@ async fn semantic_actions_use_opaque_refs_and_owned_cleanup() {
         .execute(&TestStep {
             id: "save".to_string(),
             action: Action::Click {
+                modifiers: Vec::new(),
                 target: Target::AutomationId {
                     value: "save-button".to_string(),
                 },
@@ -566,6 +568,7 @@ async fn semantic_actions_use_opaque_refs_and_owned_cleanup() {
         .execute(&TestStep {
             id: "stale".to_string(),
             action: Action::Click {
+                modifiers: Vec::new(),
                 target: Target::Ref { value: first_ref },
             },
             stability: None,
@@ -615,6 +618,7 @@ async fn protocol_role_button_matches_macos_ax_button_labels() {
         .execute(&TestStep {
             id: "save-by-protocol-role".to_string(),
             action: Action::Click {
+                modifiers: Vec::new(),
                 target: Target::Role {
                     role: "button".to_string(),
                     name: "Save".to_string(),
@@ -717,6 +721,7 @@ async fn ambiguous_semantic_target_fails_without_input() {
         .execute(&TestStep {
             id: "ambiguous".to_string(),
             action: Action::Click {
+                modifiers: Vec::new(),
                 target: Target::Label {
                     value: "Save".to_string(),
                 },
@@ -1269,6 +1274,7 @@ async fn window_vision_points_are_grounded_in_verified_image_evidence() {
         .execute(&TestStep {
             id: "visual-click".to_string(),
             action: Action::Click {
+                modifiers: Vec::new(),
                 target: Target::VisualPoint {
                     snapshot: visual_ref,
                     x: 320,
@@ -1310,6 +1316,7 @@ async fn visual_actions_reject_old_or_modified_grounding_images() {
         .execute(&TestStep {
             id: "stale-image".to_string(),
             action: Action::Click {
+                modifiers: Vec::new(),
                 target: Target::VisualPoint {
                     snapshot: first_ref,
                     x: 10,
@@ -1336,6 +1343,7 @@ async fn visual_actions_reject_old_or_modified_grounding_images() {
         .execute(&TestStep {
             id: "modified-image".to_string(),
             action: Action::Click {
+                modifiers: Vec::new(),
                 target: Target::VisualPoint {
                     snapshot: current_ref,
                     x: 10,
@@ -1415,6 +1423,91 @@ async fn embedded_endpoint_requires_host_permission_attribution() {
         names.iter().filter(|name| *name == "end_session").count(),
         1
     );
+}
+
+#[tokio::test]
+async fn web_verbs_and_click_modifiers_fail_closed_without_a_tool_call() {
+    let temp = TempDir::new().expect("temp dir");
+    let transport = FakeTransport::new(FakeOptions::default());
+    let mut session = driver(launch_config(&temp), Arc::clone(&transport))
+        .open(&context(&temp))
+        .await
+        .expect("GUI session");
+    let before = transport.tool_names().await;
+
+    let target = Target::Css {
+        selector: "#hold".to_string(),
+    };
+    let rejected = [
+        Action::Reload {},
+        Action::LongPress {
+            target: target.clone(),
+            duration_ms: 500,
+        },
+        Action::NetworkFulfill {
+            pattern: "*api/profile".to_string(),
+            body: "{\"name\":\"Grace\"}".to_string(),
+        },
+        Action::NetworkContinue {
+            pattern: "*api/profile".to_string(),
+        },
+        Action::NetworkAbort {
+            pattern: "*api/abort-probe".to_string(),
+        },
+        Action::WaitForResponse {
+            pattern: "*api/profile".to_string(),
+            timeout_ms: 50,
+        },
+        Action::ScrollUntil {
+            target: Target::Css {
+                selector: "#end".to_string(),
+            },
+            container: Some(Target::Css {
+                selector: "#pane".to_string(),
+            }),
+            direction: ScrollDirection::Down,
+            timeout_ms: 50,
+        },
+        Action::Click {
+            target: target.clone(),
+            modifiers: vec![ModifierKey::Shift],
+        },
+        Action::DoubleClick {
+            target,
+            modifiers: vec![ModifierKey::Control],
+        },
+        Action::SetCookie {
+            origin: "http://127.0.0.1".to_string(),
+            cookies: vec![CookieAssignment {
+                name: "a".to_string(),
+                value: "1".to_string(),
+            }],
+        },
+        Action::PreviewHeaders {
+            origin: "http://127.0.0.1".to_string(),
+            headers: vec![PreviewHeader {
+                name: "X-Preview".to_string(),
+                value: "on".to_string(),
+            }],
+            username: None,
+            password_env: None,
+        },
+    ];
+    for action in rejected {
+        let error = session
+            .execute(&TestStep {
+                id: "rejected".to_string(),
+                action,
+                stability: None,
+                assertion_mode: Default::default(),
+                wait_mode: Default::default(),
+            })
+            .await
+            .expect_err("GUI session must reject the Web verb");
+        assert_eq!(error.code(), "test.driver.gui.action_unsupported");
+    }
+    assert_eq!(transport.tool_names().await, before);
+    session.close().await.expect("close GUI session");
 }
 
 #[path = "session/artifact_containment.rs"]

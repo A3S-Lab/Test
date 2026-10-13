@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Flicker</title>
+    <style>
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        background: transparent;
+      }
+      #fill {
+        position: fixed;
+        inset: 0;
+        background: rgb(0, 0, 0);
+      }
+    </style>
+  </head>
+  <body>
+    <div id="fill"></div>
+    <script>
+      // A documentElement background sits behind the body, so both captures
+      // stay black. A two-color flip can also land both captures on the same
+      // half-period. Paint the covering layer from a timer with a counter.
+      const fill = document.getElementById("fill");
+      let tick = 0;
+      const paint = () => {
+        tick = (tick + 1) & 0xffffff;
+        fill.style.backgroundColor = `rgb(${tick & 255},${(tick >> 8) & 255},${
+          (tick >> 4) & 255
+        })`;
+        fill.textContent = String(tick);
+      };
+      setInterval(paint, 16);
+      paint();
+    </script>
+  </body>
+</html>

@@ -189,11 +189,12 @@ list. GUI and TUI do not implement `back`.
 
 `scroll_until` requires `target` and `direction` (`up`, `down`, `left`, or
 `right`). `timeout_ms` defaults to 5,000 and must be 50 through 30,000. The
-Web driver checks visibility, scrolls the page 240 CSS pixels in that
-direction, and repeats every 50 milliseconds until the target is visible or
-the timeout elapses. A timeout is `test.driver.web.scroll_until_timeout`. The
-admitted browser command scrolls the page; it does not scroll a nested
-container selected by the target. A timeout outside the bound fails as
+Web driver treats the target as visible only when its rectangle intersects the
+visual viewport, scrolls 240 CSS pixels in that direction, and repeats every
+50 milliseconds until the target intersects the viewport or the timeout
+elapses. Without `container`, the command scrolls the page. `container` must
+be `ref()` or `css()` and is passed as `--selector`. A timeout is
+`test.driver.web.scroll_until_timeout`. A timeout outside the bound fails as
 `test.spec.scroll_until_timeout` in ACL and
 `test.driver.web.scroll_until_invalid` on a direct action.
 
@@ -242,9 +243,14 @@ more targets open a fresh session for each name, run `viewport` first, and
 store evidence in a separate directory for that name. Sessions do not share
 cookies or storage.
 
-`pixels` compares the page with a PNG baseline inside the artifact root. The
-Web driver captures two screenshots and refuses the expectation when those
-captures differ (`test.driver.web.pixel_unstable`). Comparison decodes at most
+`pixels` compares the page with a PNG baseline inside the artifact root. Before
+the two captures, Web cancels CSS animations and hides the caret. The Web
+driver then captures two screenshots and refuses the expectation when those
+captures differ (`test.driver.web.pixel_unstable`). That unstable result does
+not write mismatch images. A pixel difference writes
+`pixel-mismatch-<index>-actual.png`, `pixel-mismatch-<index>-expected.png`,
+and `pixel-mismatch-<index>-diff.png` in the scenario artifact directory.
+Differing pixels are red and matches are gray. Comparison decodes at most
 32 MiB, rejects a zero or larger-than-4096 dimension, and does not use the
 browser `diff screenshot` command. A size mismatch is
 `test.assert.pixel_size` and is decided before masks. Masks are `x,y,width,height`
@@ -257,10 +263,36 @@ set, the smaller limit wins. `max_diff_pixel_ratio_micros` is 0 through
 and the file is not created. Pixel attributes on another expectation are
 `test.spec.attribute_unexpected`. GUI and TUI reject `pixels`.
 
-Long-press, closed-shadow piercing, click modifiers, click box position, and
-typed network fulfill, continue, and response waits are
-`test.spec.browser_verb_unsupported`. That rejection happens before a browser
-opens. `forward` and `reload` remain `test.spec.action_unknown`.
+Revision 18 admits origin-checked `reload`, bounded `long_press`, container
+`scroll_until`, `network_abort`, `network_continue`, and bounded
+`wait_response` on Web. GUI and TUI reject them. `network_fulfill` and click
+or double-click modifiers stay `test.spec.browser_verb_unsupported` because
+agent-browser 0.26.0 cannot stub a response body or attach a modifier to a
+click. Closed-shadow piercing, click box position, page evaluate, and
+arbitrary init scripts stay rejected before a browser opens. `forward` remains
+`test.spec.action_unknown`.
+
+Revision 19 strips private-use icon-font characters (U+E000 through U+F8FF,
+and supplementary private-use surrogate pairs) from both sides of a role-name
+comparison, then collapses whitespace. `text()` locators are unchanged. Agent
+observation omits names that occur only inside an `[inert]` subtree. A stable
+`css()` locator can still address those nodes. `set_cookie` takes one HTTP(S)
+origin, written as `scheme://host[:port]` with no userinfo, path, query, or
+fragment, plus parallel `names` and `values` lists of length 1 through 16.
+The driver admits the whole batch before any `cookies` command. A denied
+origin or an invalid batch returns before any cookie command with the message
+`cookie batch was rejected before any cookie command`. A later command failure
+expires the names already applied and does not clear unrelated cookies. Step
+data lists the origin, names, and count, never the values. `preview_headers`
+stores header names and values for one origin and attaches them only when
+`open` stays on that origin. `username` and `password_env` are both present or
+both absent. The password is read from the named environment variable after
+origin admission. An unset or empty variable is
+`test.driver.web.secret_unavailable` and sends no browser command. The
+password, header values, and basic-auth token are absent from ACL, action
+JSON, events, reports, and step data. Each scenario opens a fresh browser
+session, so cookies and storage do not cross scenarios. GUI and TUI reject
+`set_cookie` and `preview_headers`.
 
 ### Negative visibility
 
@@ -332,7 +364,7 @@ wait "dialog-closed" {
 This is `TestStep` wait policy, not a new `Action` or `WaitCondition` variant.
 Core stores `Action::Wait { condition: WaitCondition::Visible(target) }` plus
 `WaitMode::Hidden`; it reuses the visible condition introduced before the
-current action protocol revision 17 and does not change surface-driver command
+current action protocol revision 19 and does not change surface-driver command
 schemas. Runner admission requires `AssertionMode::Positive`,
 no assertion-stability policy, and a locator that is not `ref()` or
 `visual_point()`.
@@ -1610,7 +1642,7 @@ code and path to repair manifests.
 ## Browser admission and runner bounds
 
 `a3s-test capabilities --json` probes the configured executable before any
-browser session launches. Action protocol revision 17 admits A3S Browser
+browser session launches. Action protocol revision 19 admits A3S Browser
 `>= 0.4.0, < 0.5.0` and standalone agent-browser `>= 0.26.0, < 0.27.0`.
 Unverified versions fail with `test.driver.web.version_unsupported`.
 
@@ -1819,16 +1851,20 @@ A GUI entry represents exactly one deployment-owned desktop and therefore
 requires `max_parallel_scenarios = 1`. It contains the fixed profile ID,
 locked compatibility profile, endpoint and perception kinds, launch or attach
 target, typed application identity, optional attach-only `macos_process_name`
-for unpackaged macOS identity, CUA version and schema identifiers,
-configuration and policy digests, and the exact host-permission grant and
-digest. `macos_process_name` is inventory-visible scheduling identity for
-attach profiles; launch inventories must omit it. Ephemeral `attach_pid` is
-never advertised. The CLI emits the GUI entry only after a real CUA probe
-validates the locked contract and returns both `accessibility` and
-`screen_recording`. The probe is read-only and does not launch or attach to
-the application. Installed-daemon grants must use `driver_daemon`
-attribution; embedded-socket grants must use `host` attribution. The digest
-must exactly match the canonical typed grant.
+or `windows_process_name`, CUA version and schema identifiers, configuration
+and policy digests, and the exact host-permission grant and digest.
+`macos_process_name` is the exact CUA `list_apps` name for unpackaged macOS
+attach. `windows_process_name` is the exact `list_apps` file name for Windows
+attach. Launch inventories must omit both. Ephemeral `attach_pid` is never
+advertised. The CLI emits the GUI entry only after a real CUA probe validates
+the locked contract. A macOS probe must return `accessibility` and
+`screen_recording`. A Windows installed-daemon probe must return
+`accessibility`, which means UI Automation and PostMessage delivery are both
+granted. The probe is read-only and does not launch or attach to the
+application. Installed-daemon grants must use `driver_daemon` attribution;
+embedded-socket grants must use `host` attribution. The digest must exactly
+match the canonical typed grant. A Windows profile cannot name an embedded
+socket or a publisher.
 
 A TUI entry embeds protocol `a3s.test.driver-tui/1`, the backend compiled for
 the host (`unix_pty` or `windows_con_pty`), the reviewed feature set, and hard
@@ -1943,11 +1979,30 @@ gui_host "desktop-primary" {
 }
 ```
 
+A Windows installed daemon uses an absolute executable path and the
+accessibility-only grant:
+
+```acl
+gui_host "desktop-primary" {
+  endpoint = "installed_daemon"
+  proxy_executable = "C:/Users/operator/AppData/Local/Programs/Cua/cua-driver/bin/cua-driver.exe"
+  policy_file = "C:/ProgramData/a3s-test/cua-policy.yaml"
+  windows_executable = "C:/Program Files/Example/editor.exe"
+  target = "launch"
+  profile = "semantic"
+  permission_source = "driver_daemon"
+  permissions = ["accessibility"]
+}
+```
+
 `endpoint` is `installed_daemon` or `embedded_socket`; the latter also
-requires `embedded_socket` and `permission_source = "host"`. `target` is
+requires `embedded_socket` and `permission_source = "host"`. A profile names
+exactly one of `macos_bundle_id` or `windows_executable`. `windows_executable`
+requires `installed_daemon` and `permissions = ["accessibility"]`. `target` is
 `launch` or `attach`; attach may specify `attach_pid` and, for unpackaged
-macOS binaries with a missing CUA `bundle_id`, `macos_process_name`. Launch may
-specify up to 32 bounded `arguments`. A window may be selected by exactly one of
+macOS binaries with a missing CUA `bundle_id`, `macos_process_name`. Windows
+attach may specify `windows_process_name` as the exact `list_apps` file name.
+Launch may specify up to 32 bounded `arguments`. A window may be selected by exactly one of
 `window_title` or `window_automation_id`, otherwise the primary window is
 used. `profile` is `semantic` or `window_vision`. The profile and policy are
 bounded regular non-link files, and the CUA proxy is a regular non-link file.

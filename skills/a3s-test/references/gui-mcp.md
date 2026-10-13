@@ -15,12 +15,19 @@ Inspect the platform matrix before configuring a worker:
 a3s-test gui-certification --json
 ```
 
-The locked CUA 0.23.2 adapter admits macOS installed-daemon and embedded-socket
-profiles. Windows and Linux GUI profiles fail closed until their CUA backends
-are reviewed. A macOS worker should pass `a3s-test gui-certify` with its real
-application and permissions before use.
+The locked CUA 0.34.1 adapter admits macOS installed-daemon and embedded-socket
+profiles, and the Windows installed daemon, for window-scoped semantic and
+window-vision sessions. Windows embedded and Linux profiles fail closed.
+A macOS worker should pass `a3s-test gui-certify` with its real application
+and permissions before use. A Windows installed-daemon profile is
+contract-tested and is not a host certification.
 
-On locked CUA 0.23.2, prefer Launch Services `open` plus
+On Windows, pass `--gui-windows-executable` with an absolute path and omit
+`--cua-embedded-socket`. Attach may add `--gui-windows-process-name` with the
+exact `list_apps` file name. Do not declare a publisher: locked CUA 0.34.1
+does not return one, and the host fails closed instead of ignoring it.
+
+On locked CUA 0.34.1, prefer Launch Services `open` plus
 `--gui-target-mode attach --gui-attach-pid <pid>` for AppKit fixtures.
 `launch_app` can return a live pid while `list_apps` still reports
 `running=false` / `pid=0`, which fails closed in binding validation. The
@@ -142,7 +149,10 @@ digest as evidence.
   `test.driver.gui.window_binding_lost` mean the host-selected PID or window
   changed. The adapter invalidates current refs and dispatches no input; finish
   or abort instead of following the replacement.
-- Permission errors are non-prompting. The host must grant Accessibility and
-  Screen Recording to the reported daemon or embedded-host identity.
+- Permission errors are non-prompting. A macOS host must grant Accessibility
+  and Screen Recording to the reported daemon or embedded-host identity. A
+  Windows installed daemon must already have UI Automation and PostMessage
+  delivery; the declared grant is `accessibility` only and is not a screen
+  recording claim.
 - Ambiguous semantic or window matches require a more exact host selector or
   target; do not pick one by order.

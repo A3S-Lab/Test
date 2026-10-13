@@ -1,5 +1,6 @@
 //! Typed test specifications and surface-driver contracts for A3S Test.
 
+mod adopt;
 mod candidate;
 mod contract;
 mod design_audit;
@@ -26,6 +27,7 @@ pub use design_audit::{
     DesignAuditTarget, DesignAuditUsage, DESIGN_AUDIT_REPORT_PROTOCOL,
 };
 
+pub use adopt::{adopted_suite_acl, AdoptError};
 pub use candidate::{verified_session_candidate, RecordedStep};
 pub use driver::{
     DriverSession, PageContextInspectRequest, PageContextInspectScope, ScenarioContext,
@@ -33,35 +35,37 @@ pub use driver::{
 };
 pub use error::{DriverError, SpecError};
 pub use model::{
-    admit_text_pattern, compare_pixels, decode_png_bounded, paint_pixel_masks,
-    pixel_baseline_decision, text_pattern_matches, Action, AssertionMode, AssertionStability,
-    CaptureOperation, DecodedPng, DialogOperation, ElementState, Evidence, Expectation,
-    FrameTarget, GroundingScreenshot, LayoutRect, LayoutRelation, LoadState, ModifierKey,
-    NamedViewport, NetworkRoute, OwnedApp, PageContextComponent, PageContextGeometry,
-    PageContextLocator, PageContextNode, PageContextNodeState, PageContextObservation,
-    PageContextPage, PageContextPoint, PageContextPosition, PageContextRect, PageContextSize,
-    PageContextSnapshot, PageContextSource, PageContextSourceCandidate, PageContextSourceMapping,
-    PageContextSourceOrigin, PageContextSourceRelation, PageContextTheme, PageContextViewport,
-    PageContextVisualViewport, PixelBaselineDecision, PixelCompareFailure, PixelDecodeError,
-    PixelExpectation, PixelLimits, PixelMask, RepairAclProof, RepairActor, RepairAttempt,
-    RepairBatch, RepairBatchItemResult, RepairBatchStatus, RepairChange, RepairCheckResult,
-    RepairCheckStatus, RepairDesignReference, RepairDesignReferenceImage,
-    RepairDesignReferenceKind, RepairEvidenceBundle, RepairEvidencePhase, RepairEvidenceRequest,
-    RepairFinding, RepairHumanAction, RepairHumanActionKind, RepairIntent, RepairLayoutCanvas,
-    RepairLayoutIntent, RepairRelation, RepairSeverity, RepairStatus, RepairStatusEvent,
-    RepairTarget, RepairTargetKind, RepairThreadMessage, RepairVerification,
-    RepairVerificationExpansionReason, RepairVerificationScope, RepairVerificationSlice,
-    ScrollDirection, SecretPurpose, StepOutput, Surface, SurfaceObservation, TabOperation, Target,
-    TestScenario, TestStep, TestSuite, VideoOperation, ViewportCoverageComparison, WaitCondition,
-    WaitMode, ACTION_PROTOCOL_REVISION, DEFAULT_ASSERTION_SAMPLE_INTERVAL_MS,
-    DEFAULT_PIXEL_THRESHOLD_MILLIS, DEFAULT_SCROLL_UNTIL_TIMEOUT_MS, MAX_ASSERTION_STABILITY_MS,
+    admit_text_pattern, compare_pixels, decode_png_bounded, encode_png, paint_pixel_masks,
+    pixel_baseline_decision, render_pixel_diff, text_pattern_matches, Action, AssertionMode,
+    AssertionStability, CaptureOperation, CookieAssignment, DecodedPng, DialogOperation,
+    ElementState, Evidence, Expectation, FrameTarget, GroundingScreenshot, LayoutRect,
+    LayoutRelation, LoadState, ModifierKey, NamedViewport, NetworkRoute, OwnedApp,
+    PageContextComponent, PageContextGeometry, PageContextLocator, PageContextNode,
+    PageContextNodeState, PageContextObservation, PageContextPage, PageContextPoint,
+    PageContextPosition, PageContextRect, PageContextSize, PageContextSnapshot, PageContextSource,
+    PageContextSourceCandidate, PageContextSourceMapping, PageContextSourceOrigin,
+    PageContextSourceRelation, PageContextTheme, PageContextViewport, PageContextVisualViewport,
+    PixelBaselineDecision, PixelCompareFailure, PixelDecodeError, PixelExpectation, PixelLimits,
+    PixelMask, PreviewHeader, RepairAclProof, RepairActor, RepairAttempt, RepairBatch,
+    RepairBatchItemResult, RepairBatchStatus, RepairChange, RepairCheckResult, RepairCheckStatus,
+    RepairDesignReference, RepairDesignReferenceImage, RepairDesignReferenceKind,
+    RepairEvidenceBundle, RepairEvidencePhase, RepairEvidenceRequest, RepairFinding,
+    RepairHumanAction, RepairHumanActionKind, RepairIntent, RepairLayoutCanvas, RepairLayoutIntent,
+    RepairRelation, RepairSeverity, RepairStatus, RepairStatusEvent, RepairTarget,
+    RepairTargetKind, RepairThreadMessage, RepairVerification, RepairVerificationExpansionReason,
+    RepairVerificationScope, RepairVerificationSlice, ScrollDirection, SecretPurpose, StepOutput,
+    Surface, SurfaceObservation, TabOperation, Target, TestScenario, TestStep, TestSuite,
+    VideoOperation, ViewportCoverageComparison, WaitCondition, WaitMode, ACTION_PROTOCOL_REVISION,
+    DEFAULT_ASSERTION_SAMPLE_INTERVAL_MS, DEFAULT_LONG_PRESS_MS, DEFAULT_PIXEL_THRESHOLD_MILLIS,
+    DEFAULT_RESPONSE_WAIT_MS, DEFAULT_SCROLL_UNTIL_TIMEOUT_MS, MAX_ASSERTION_STABILITY_MS,
     MAX_ASSERTION_STABILITY_SAMPLES, MAX_LAYOUT_COORDINATE_ABS, MAX_LAYOUT_TOLERANCE_PX,
-    MAX_PAGE_TEXT_BYTES, MAX_PIXEL_RATIO_MICROS, MAX_PIXEL_THRESHOLD_MILLIS,
+    MAX_LONG_PRESS_MS, MAX_PAGE_TEXT_BYTES, MAX_PIXEL_RATIO_MICROS, MAX_PIXEL_THRESHOLD_MILLIS,
     MAX_RENDERED_TEXT_ITEMS, MAX_REPAIR_CHECK_COMMAND_BYTES, MAX_REPAIR_CHECK_SUMMARY_BYTES,
-    MAX_SCROLL_UNTIL_TIMEOUT_MS, MAX_TEXT_PATTERN_CHARS, MAX_VIEWPORT_COVERAGE_PERCENT,
-    MIN_ASSERTION_STABILITY_MS, MIN_SCROLL_UNTIL_TIMEOUT_MS, PAGE_CONTEXT_PROTOCOL,
-    REPAIR_PROTOCOL, REPAIR_VERIFICATION_SLICE_PROTOCOL, SCROLL_UNTIL_SAMPLE_INTERVAL_MS,
-    SCROLL_UNTIL_STEP_PX, SOURCE_MAPPING_PROTOCOL,
+    MAX_RESPONSE_WAIT_MS, MAX_SCROLL_UNTIL_TIMEOUT_MS, MAX_TEXT_PATTERN_CHARS,
+    MAX_VIEWPORT_COVERAGE_PERCENT, MIN_ASSERTION_STABILITY_MS, MIN_LONG_PRESS_MS,
+    MIN_RESPONSE_WAIT_MS, MIN_SCROLL_UNTIL_TIMEOUT_MS, PAGE_CONTEXT_PROTOCOL, REPAIR_PROTOCOL,
+    REPAIR_VERIFICATION_SLICE_PROTOCOL, SCROLL_UNTIL_SAMPLE_INTERVAL_MS, SCROLL_UNTIL_STEP_PX,
+    SOURCE_MAPPING_PROTOCOL,
 };
 pub use page_context::{
     action_uses_observation_target, action_uses_page_context_ref,

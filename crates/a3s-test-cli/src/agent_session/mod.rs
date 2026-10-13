@@ -78,6 +78,7 @@ pub(crate) async fn execute(args: AgentArgs) -> Result<ExitCode> {
             perform_action(
                 args.session,
                 Action::Click {
+                    modifiers: Vec::new(),
                     target: compact_target(&args.target)?,
                 },
                 args.observation,
@@ -111,6 +112,7 @@ pub(crate) async fn execute(args: AgentArgs) -> Result<ExitCode> {
             perform_action(
                 args.session,
                 Action::DoubleClick {
+                    modifiers: Vec::new(),
                     target: compact_target(&args.target)?,
                 },
                 args.observation,

@@ -348,6 +348,7 @@ fn rejects_ui_evidence_refs_as_action_targets() {
     let mut observation = observation_with_ui();
     let bindings = bind_page_context_refs(&mut observation);
     let action = Action::Click {
+        modifiers: Vec::new(),
         target: Target::Ref {
             value: "@u1".to_string(),
         },

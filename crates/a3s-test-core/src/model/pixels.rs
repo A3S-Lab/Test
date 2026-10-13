@@ -184,6 +184,63 @@ pub fn compare_pixels(
     Ok(different)
 }
 
+/// Encode one decoded image as an 8-bit RGBA PNG.
+pub fn encode_png(image: &DecodedPng) -> Result<Vec<u8>, PixelDecodeError> {
+    let mut buffer = Vec::new();
+    let mut encoder = png::Encoder::new(&mut buffer, image.width, image.height);
+    encoder.set_color(png::ColorType::Rgba);
+    encoder.set_depth(png::BitDepth::Eight);
+    let mut writer = encoder
+        .write_header()
+        .map_err(|_| PixelDecodeError::Invalid)?;
+    writer
+        .write_image_data(&image.rgba)
+        .map_err(|_| PixelDecodeError::Invalid)?;
+    writer.finish().map_err(|_| PixelDecodeError::Invalid)?;
+    Ok(buffer)
+}
+
+/// Paint differing pixels red and matching pixels gray. Size mismatch paints nothing.
+pub fn render_pixel_diff(
+    actual: &DecodedPng,
+    baseline: &DecodedPng,
+    limits: &PixelLimits,
+) -> Result<DecodedPng, PixelCompareFailure> {
+    if actual.width != baseline.width || actual.height != baseline.height {
+        return Err(PixelCompareFailure::Size {
+            actual_width: actual.width,
+            actual_height: actual.height,
+            baseline_width: baseline.width,
+            baseline_height: baseline.height,
+        });
+    }
+    let mut left = actual.clone();
+    let mut right = baseline.clone();
+    paint_pixel_masks(&mut left, &limits.masks);
+    paint_pixel_masks(&mut right, &limits.masks);
+    let threshold = f64::from(limits.threshold_millis.min(1_000)) / 1_000.0;
+    let max_delta = 35_215.0 * threshold * threshold;
+    let mut rgba = Vec::with_capacity(left.rgba.len());
+    let samples = left.rgba.len() / 4;
+    for index in 0..samples {
+        let start = index * 4;
+        let mut a = [0_u8; 4];
+        let mut b = [0_u8; 4];
+        a.copy_from_slice(&left.rgba[start..start + 4]);
+        b.copy_from_slice(&right.rgba[start..start + 4]);
+        if color_delta(a, b).abs() > max_delta {
+            rgba.extend_from_slice(&[255, 0, 0, 255]);
+        } else {
+            rgba.extend_from_slice(&[240, 240, 240, 255]);
+        }
+    }
+    Ok(DecodedPng {
+        width: actual.width,
+        height: actual.height,
+        rgba,
+    })
+}
+
 fn allowed_pixels(
     pixel_count: u64,
     max_diff_pixels: Option<u32>,

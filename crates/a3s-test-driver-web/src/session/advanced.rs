@@ -1,6 +1,9 @@
 use std::collections::BTreeSet;
+use std::time::Duration;
 
-use a3s_test_core::{DriverError, ModifierKey, StepOutput, Target};
+use a3s_test_core::{
+    DriverError, ModifierKey, StepOutput, Target, MAX_LONG_PRESS_MS, MIN_LONG_PRESS_MS,
+};
 use serde_json::{json, Value};
 
 use super::AgentBrowserSession;
@@ -157,6 +160,44 @@ impl AgentBrowserSession {
             (Ok(data), None) => Ok(StepOutput::new("mouse wheel dispatched").with_data(data)),
             (Ok(_), Some(error)) | (Err(error), _) => Err(error),
         }
+    }
+
+    pub(super) async fn long_press(
+        &self,
+        target: &Target,
+        duration_ms: u64,
+    ) -> Result<StepOutput, DriverError> {
+        if !(MIN_LONG_PRESS_MS..=MAX_LONG_PRESS_MS).contains(&duration_ms) {
+            return Err(DriverError::new(
+                "test.driver.web.long_press_invalid",
+                format!(
+                    "long_press duration must be {MIN_LONG_PRESS_MS} through {MAX_LONG_PRESS_MS} milliseconds"
+                ),
+            ));
+        }
+        let (x, y, _) = self.target_center(target).await?;
+        self.execute_command(vec![
+            "mouse".into(),
+            "move".into(),
+            x.to_string().into(),
+            y.to_string().into(),
+        ])
+        .await?;
+        if let Err(error) = self
+            .execute_command(vec!["mouse".into(), "down".into(), "left".into()])
+            .await
+        {
+            let _ = self
+                .execute_command(vec!["mouse".into(), "up".into(), "left".into()])
+                .await;
+            return Err(error);
+        }
+        tokio::time::sleep(Duration::from_millis(duration_ms)).await;
+        self.execute_command(vec!["mouse".into(), "up".into(), "left".into()])
+            .await?;
+        Ok(StepOutput::new("target held").with_data(json!({
+            "duration_ms": duration_ms
+        })))
     }
 
     async fn release_modifiers(&self, pressed: &[ModifierKey]) -> Option<DriverError> {

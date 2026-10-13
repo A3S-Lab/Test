@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Evidence</title>
+  </head>
+  <body>
+    <button id="save" type="button">&#xE000; Save</button>
+    <button id="live" type="button">Live</button>
+    <div inert>
+      <button id="quiet" type="button">Quiet</button>
+    </div>
+    <p id="out">idle</p>
+    <button id="read" type="button">Read cookies</button>
+    <p id="cookies">unread</p>
+    <button id="probe" type="button">Probe</button>
+    <p id="same">pending</p>
+    <p id="other">pending</p>
+    <script>
+      document.getElementById("save").addEventListener("click", () => {
+        document.getElementById("out").textContent = "saved";
+      });
+      document.getElementById("quiet").addEventListener("click", () => {
+        document.getElementById("out").textContent = "quiet";
+      });
+      document.getElementById("read").addEventListener("click", () => {
+        const pairs = document.cookie
+          .split(";")
+          .map((item) => item.trim())
+          .filter(Boolean)
+          .sort();
+        document.getElementById("cookies").textContent = pairs.length
+          ? pairs.join("; ")
+          : "none";
+      });
+      document.getElementById("probe").addEventListener("click", async () => {
+        const read = async (url) => {
+          try {
+            const response = await fetch(url);
+            return (await response.text()).trim();
+          } catch (error) {
+            return "error";
+          }
+        };
+        document.getElementById("same").textContent = await read("/api/echo");
+        document.getElementById("other").textContent = await read(
+          "__BLOCKED_ORIGIN__/api/echo",
+        );
+      });
+    </script>
+  </body>
+</html>

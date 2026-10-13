@@ -1,15 +1,16 @@
 use std::time::{Duration, Instant};
 
 use a3s_test_core::{
-    ScrollDirection, MAX_SCROLL_UNTIL_TIMEOUT_MS, MIN_SCROLL_UNTIL_TIMEOUT_MS,
-    SCROLL_UNTIL_SAMPLE_INTERVAL_MS, SCROLL_UNTIL_STEP_PX,
+    NetworkRoute, ScrollDirection, MAX_RESPONSE_WAIT_MS, MAX_SCROLL_UNTIL_TIMEOUT_MS,
+    MIN_RESPONSE_WAIT_MS, MIN_SCROLL_UNTIL_TIMEOUT_MS, SCROLL_UNTIL_SAMPLE_INTERVAL_MS,
+    SCROLL_UNTIL_STEP_PX,
 };
 use async_trait::async_trait;
 use serde_json::json;
 use url::Url;
 
 use super::*;
-use crate::protocol::{scalar_bool, scalar_string, visibility_args};
+use crate::protocol::scalar_string;
 use crate::BrowserNetworkPolicy;
 
 const PAGE_CONTEXT_INSPECT_FUNCTION: &str = r#"(async ({ request, waitTimeoutMs }) => {
@@ -43,16 +44,19 @@ impl DriverSession for AgentBrowserSession {
         self.ensure_open()?;
 
         match &step.action {
-            Action::Navigate { url } => self
-                .execute_command(vec!["open".into(), url.into()])
-                .await
-                .map(|data| StepOutput::new("page opened").with_data(data)),
+            Action::Navigate { url } => self.open_url(url).await,
             Action::Back {} => self.go_back().await,
+            Action::Reload {} => self.reload().await,
             Action::ScrollUntil {
                 target,
+                container,
                 direction,
                 timeout_ms,
-            } => self.scroll_until(target, *direction, *timeout_ms).await,
+                ..
+            } => {
+                self.scroll_until(target, container.as_ref(), *direction, *timeout_ms)
+                    .await
+            }
             Action::Snapshot { interactive } => {
                 self.capture_observation(*interactive)
                     .await
@@ -63,7 +67,13 @@ impl DriverSession for AgentBrowserSession {
                         page_context: observation.page_context,
                     })
             }
-            Action::Click { target } => {
+            Action::Click { target, modifiers, .. } => {
+                if !modifiers.is_empty() {
+                    return Err(DriverError::new(
+                        "test.driver.web.action_unsupported",
+                        "click modifiers are not expressed by the admitted browser command",
+                    ));
+                }
                 self.execute_target_action(target, "click", None)
                     .await
                     .map(|data| StepOutput::new("target clicked").with_data(data))
@@ -81,13 +91,23 @@ impl DriverSession for AgentBrowserSession {
                     .await
                     .map(|data| StepOutput::new("target focused").with_data(data))
             }
-            Action::DoubleClick { target } => {
+            Action::DoubleClick { target, modifiers, .. } => {
+                if !modifiers.is_empty() {
+                    return Err(DriverError::new(
+                        "test.driver.web.action_unsupported",
+                        "click modifiers are not expressed by the admitted browser command",
+                    ));
+                }
                 self.reveal_target(target).await?;
                 let selector = direct_selector(target)?;
                 self.execute_command(vec!["dblclick".into(), selector.into()])
                     .await
                     .map(|data| StepOutput::new("target double-clicked").with_data(data))
             }
+            Action::LongPress {
+                target,
+                duration_ms,
+            } => self.long_press(target, *duration_ms).await,
             Action::ContextClick { target } => self.context_click(target).await,
             Action::Fill { target, value } => {
                 self.execute_target_action(target, "fill", Some(value))
@@ -195,6 +215,22 @@ impl DriverSession for AgentBrowserSession {
                 .execute_command(network_unroute_args(pattern.as_deref()))
                 .await
                 .map(|data| StepOutput::new("network route removed").with_data(data)),
+            Action::NetworkFulfill { .. } => Err(DriverError::new(
+                "test.driver.web.action_unsupported",
+                "network fulfill is not expressed by the admitted browser command",
+            )),
+            Action::NetworkContinue { pattern } => self
+                .execute_command(network_unroute_args(Some(pattern)))
+                .await
+                .map(|data| StepOutput::new("network route continued").with_data(data)),
+            Action::NetworkAbort { pattern } => self
+                .execute_command(network_route_args(pattern, &NetworkRoute::Abort))
+                .await
+                .map(|data| StepOutput::new("network request aborted").with_data(data)),
+            Action::WaitForResponse {
+                pattern,
+                timeout_ms,
+            } => self.wait_for_response(pattern, *timeout_ms).await,
             Action::Har { operation } => self.har(operation).await,
             Action::Trace { operation } => self.trace(operation).await,
             Action::Video { operation } => self.video(operation).await,
@@ -220,6 +256,16 @@ impl DriverSession for AgentBrowserSession {
                     args.push(OsString::from("--clear"));
                 }
                 self.capture_json(args, path, "page errors captured").await
+            }
+            Action::SetCookie { origin, cookies } => self.set_cookies(origin, cookies).await,
+            Action::PreviewHeaders {
+                origin,
+                headers,
+                username,
+                password_env,
+            } => {
+                self.install_preview_headers(origin, headers, username.as_deref(), password_env.as_deref())
+                    .await
             }
             Action::VerifyContract { .. } => Err(DriverError::new(
                 "test.driver.web.runner_action_unsupported",
@@ -722,13 +768,29 @@ impl AgentBrowserSession {
                 "history back did not report a page URL",
             )
         })?;
-        admit_returned_page(&self.config.network_policy, &url)?;
+        admit_returned_page(&self.config.network_policy, &url, "history back")?;
         Ok(StepOutput::new("history back completed").with_data(json!({ "url": url })))
+    }
+
+    async fn reload(&self) -> Result<StepOutput, DriverError> {
+        self.execute_command(vec!["reload".into()]).await?;
+        let data = self
+            .execute_command(vec!["get".into(), "url".into()])
+            .await?;
+        let url = page_url(&data).ok_or_else(|| {
+            DriverError::new(
+                "test.driver.web.output_invalid",
+                "reload did not report a page URL",
+            )
+        })?;
+        admit_returned_page(&self.config.network_policy, &url, "reload")?;
+        Ok(StepOutput::new("page reloaded").with_data(json!({ "url": url })))
     }
 
     async fn scroll_until(
         &self,
         target: &Target,
+        container: Option<&Target>,
         direction: ScrollDirection,
         timeout_ms: u64,
     ) -> Result<StepOutput, DriverError> {
@@ -740,12 +802,15 @@ impl AgentBrowserSession {
                 ),
             ));
         }
-        let visible_args = visibility_args(target)?;
-        let scroll_args = vec![
+        let mut scroll_args = vec![
             OsString::from("scroll"),
             OsString::from(direction.as_str()),
             OsString::from(SCROLL_UNTIL_STEP_PX.to_string()),
         ];
+        if let Some(container) = container {
+            scroll_args.push(OsString::from("--selector"));
+            scroll_args.push(OsString::from(direct_selector(container)?));
+        }
         let deadline = Instant::now() + Duration::from_millis(timeout_ms);
         let max_probes = timeout_ms
             .div_ceil(SCROLL_UNTIL_SAMPLE_INTERVAL_MS)
@@ -753,7 +818,7 @@ impl AgentBrowserSession {
         let mut probes = 0_u64;
         loop {
             probes += 1;
-            if target_is_visible(&self.execute_command(visible_args.clone()).await?)? {
+            if self.target_intersects_viewport(target).await? {
                 let summary = if probes == 1 {
                     "target is visible"
                 } else {
@@ -763,6 +828,7 @@ impl AgentBrowserSession {
                     "direction": direction.as_str(),
                     "probes": probes,
                     "scrolled": probes > 1,
+                    "container": container.is_some(),
                 })));
             }
             if probes >= max_probes || Instant::now() >= deadline {
@@ -788,17 +854,6 @@ impl AgentBrowserSession {
     }
 }
 
-fn target_is_visible(data: &serde_json::Value) -> Result<bool, DriverError> {
-    scalar_bool(&browser_result(data.clone()))
-        .or_else(|| scalar_bool(data))
-        .ok_or_else(|| {
-            DriverError::new(
-                "test.driver.web.output_invalid",
-                "browser visibility response did not contain a boolean",
-            )
-        })
-}
-
 fn page_url(value: &serde_json::Value) -> Option<String> {
     scalar_string(&browser_result(value.clone()))
         .or_else(|| scalar_string(value))
@@ -811,18 +866,22 @@ fn page_url(value: &serde_json::Value) -> Option<String> {
         .map(str::to_string)
 }
 
-fn admit_returned_page(policy: &BrowserNetworkPolicy, url: &str) -> Result<(), DriverError> {
+pub(super) fn admit_returned_page(
+    policy: &BrowserNetworkPolicy,
+    url: &str,
+    step: &str,
+) -> Result<(), DriverError> {
     let parsed = Url::parse(url).map_err(|_| {
         DriverError::new(
             "test.driver.web.session_origin_lost",
-            "history back returned an invalid page URL",
+            format!("{step} returned an invalid page URL"),
         )
     })?;
     if !matches!(parsed.scheme(), "http" | "https") {
         return Err(DriverError::new(
             "test.driver.web.session_origin_lost",
             format!(
-                "history back left the Web page and reported the '{}' scheme",
+                "{step} left the Web page and reported the '{}' scheme",
                 parsed.scheme()
             ),
         ));
@@ -838,7 +897,7 @@ fn admit_returned_page(policy: &BrowserNetworkPolicy, url: &str) -> Result<(), D
         } else {
             Err(DriverError::new(
                 "test.driver.web.navigation_origin_denied",
-                format!("history back reached unapproved origin '{origin}'"),
+                format!("{step} reached unapproved origin '{origin}'"),
             ))
         };
     }
@@ -855,9 +914,74 @@ fn admit_returned_page(policy: &BrowserNetworkPolicy, url: &str) -> Result<(), D
     } else {
         Err(DriverError::new(
             "test.driver.web.navigation_origin_denied",
-            format!("history back reached unapproved host '{host}'"),
+            format!("{step} reached unapproved host '{host}'"),
         ))
     }
+}
+
+impl AgentBrowserSession {
+    async fn wait_for_response(
+        &self,
+        pattern: &str,
+        timeout_ms: u64,
+    ) -> Result<StepOutput, DriverError> {
+        if !(MIN_RESPONSE_WAIT_MS..=MAX_RESPONSE_WAIT_MS).contains(&timeout_ms) {
+            return Err(DriverError::new(
+                "test.driver.web.response_wait_invalid",
+                format!(
+                    "wait_response timeout must be {MIN_RESPONSE_WAIT_MS} through {MAX_RESPONSE_WAIT_MS} milliseconds"
+                ),
+            ));
+        }
+        let deadline = Instant::now() + Duration::from_millis(timeout_ms);
+        let args = vec![
+            OsString::from("network"),
+            OsString::from("requests"),
+            OsString::from("--filter"),
+            OsString::from(pattern),
+        ];
+        loop {
+            let data = self.execute_command(args.clone()).await?;
+            if response_recorded(&data)? {
+                return Ok(StepOutput::new("matching response recorded").with_data(data));
+            }
+            if Instant::now() >= deadline {
+                break;
+            }
+            let remaining = deadline.saturating_duration_since(Instant::now());
+            tokio::time::sleep(
+                remaining.min(Duration::from_millis(SCROLL_UNTIL_SAMPLE_INTERVAL_MS)),
+            )
+            .await;
+        }
+        Err(DriverError::new(
+            "test.driver.web.response_wait_timeout",
+            format!(
+                "no request matching the pattern was recorded within {timeout_ms} milliseconds"
+            ),
+        ))
+    }
+}
+
+fn response_recorded(value: &serde_json::Value) -> Result<bool, DriverError> {
+    let candidates = [
+        value.pointer("/data/requests"),
+        value.pointer("/requests"),
+        value.get("data"),
+        Some(value),
+    ];
+    for candidate in candidates.into_iter().flatten() {
+        if let Some(items) = candidate.as_array() {
+            return Ok(!items.is_empty());
+        }
+    }
+    if value.get("success") == Some(&serde_json::Value::Bool(true)) && value.get("data").is_none() {
+        return Ok(false);
+    }
+    Err(DriverError::new(
+        "test.driver.web.output_invalid",
+        "network request log was not a list",
+    ))
 }
 
 fn host_matches_domain(host: &str, domain: &str) -> bool {

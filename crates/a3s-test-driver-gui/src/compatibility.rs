@@ -609,7 +609,7 @@ mod tests {
     fn checked_in_lock_is_canonical_and_complete() {
         let compatibility = CuaCompatibility::locked().expect("locked compatibility");
         assert_eq!(compatibility.schema_version(), 2);
-        assert_eq!(compatibility.driver_version(), &Version::new(0, 23, 2));
+        assert_eq!(compatibility.driver_version(), &Version::new(0, 34, 1));
         assert_eq!(compatibility.mcp_protocol(), "2025-06-18");
         assert_eq!(compatibility.tools_schema(), "1");
         assert_eq!(compatibility.capability_vocabulary(), "1");
@@ -625,11 +625,24 @@ mod tests {
             .execution_profile(GuiPlatform::MacOs, GuiEndpointMode::InstalledDaemon)
             .expect("macOS installed profile");
         assert_eq!(macos.status(), GuiCertificationStatus::ContractTested);
-        let windows = compatibility
+        let windows_embedded = compatibility
             .execution_profile(GuiPlatform::Windows, GuiEndpointMode::EmbeddedSocket)
             .expect("Windows embedded profile");
-        assert_eq!(windows.status(), GuiCertificationStatus::Unsupported);
-        assert!(windows.reason().is_some());
+        assert_eq!(
+            windows_embedded.status(),
+            GuiCertificationStatus::Unsupported
+        );
+        assert!(windows_embedded.reason().is_some());
+        let windows_installed = compatibility
+            .execution_profile(GuiPlatform::Windows, GuiEndpointMode::InstalledDaemon)
+            .expect("Windows installed profile");
+        assert_eq!(
+            windows_installed.status(),
+            GuiCertificationStatus::ContractTested
+        );
+        assert!(windows_installed.semantic());
+        assert!(windows_installed.window_vision());
+        assert!(windows_installed.lifecycle());
     }
 
     #[test]

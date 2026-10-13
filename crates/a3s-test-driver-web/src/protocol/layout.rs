@@ -109,7 +109,8 @@ const LAYOUT_PROBE: &str = r#"
     if (candidate.type === "test_id") return element.getAttribute("data-testid") === candidate.value || element.getAttribute("data-test-id") === candidate.value;
     if (candidate.type === "placeholder") return element.getAttribute("placeholder") === candidate.value;
     if (candidate.type === "label") return Array.from(element.labels ?? []).map(text).some((value) => value === candidate.value);
-    if (candidate.type === "role") return role(element) === candidate.role && labelledText(element) === candidate.name;
+    const roleName = (value) => String(value ?? "").replace(/[\uE000-\uF8FF]/g, "").replace(/[\uDB80-\uDBFF][\uDC00-\uDFFF]/g, "").replace(/\s+/g, " ").trim();
+    if (candidate.type === "role") return role(element) === candidate.role && roleName(labelledText(element)) === roleName(candidate.name);
     if (candidate.type === "text") return candidate.exact ? text(element) === candidate.value : text(element).includes(candidate.value);
     return false;
   };

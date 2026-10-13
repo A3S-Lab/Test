@@ -49,10 +49,12 @@ contract is rejected until the compatibility lock and contract tests are
 reviewed together.
 
 macOS deployments use the installed CuaDriver application or an embedded
-socket owned by the application that holds the grants. The locked CUA 0.23.2
-revision has no reviewed Windows or Linux application backend, so those four
-platform/endpoint combinations are explicit unsupported profiles and fail
-before transport startup.
+socket owned by the application that holds the grants. The locked CUA 0.34.1
+revision admits the Windows installed daemon for the same window-scoped
+semantic and window-vision contract. That profile is contract-tested, not
+host-certified. The Windows embedded socket and both Linux profiles stay
+unsupported and fail before transport startup. Desktop capture, browser
+tools, clipboard, recording, and perception are not part of this adapter.
 
 A profile cannot claim host certification merely because a platform binary
 starts or its fake contract passes. The `gui-certify` harness must pass

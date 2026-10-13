@@ -156,6 +156,10 @@ impl GuiDriverConfig {
         }
         Ok(profile)
     }
+
+    pub(crate) fn platform(&self) -> GuiPlatform {
+        application_identity(&self.target).platform()
+    }
 }
 
 impl CuaEndpoint {
@@ -223,7 +227,7 @@ fn validate_target(target: &GuiAppTarget) -> Result<(), DriverError> {
         GuiAppTarget::Attach(spec) => {
             validate_application(&spec.application)?;
             if let Some(process_name) = &spec.process_name {
-                validate_text(process_name, "macOS process name")?;
+                validate_text(process_name, "process name")?;
             }
             Ok(())
         }
@@ -240,10 +244,7 @@ fn validate_application(application: &ApplicationIdentity) -> Result<(), DriverE
             expected_publisher,
         } => {
             validate_path(path, "Windows application executable")?;
-            if let Some(publisher) = expected_publisher {
-                validate_text(publisher, "Windows publisher identity")?;
-            }
-            Ok(())
+            reject_unproven_publisher(expected_publisher)
         }
         ApplicationIdentity::LinuxDesktop { desktop_id } => {
             validate_text(desktop_id, "Linux desktop identifier")
@@ -265,6 +266,16 @@ fn validate_path(path: &std::path::Path, name: &str) -> Result<(), DriverError> 
     } else {
         Ok(())
     }
+}
+
+pub(crate) fn reject_unproven_publisher(publisher: &Option<String>) -> Result<(), DriverError> {
+    if publisher.is_some() {
+        return Err(DriverError::new(
+            "test.driver.gui.publisher_unproven",
+            "CUA 0.34.1 launch and process list do not return a publisher, so a configured publisher cannot be checked",
+        ));
+    }
+    Ok(())
 }
 
 fn validate_text(value: &str, name: &str) -> Result<(), DriverError> {
@@ -355,7 +366,23 @@ mod tests {
     }
 
     #[test]
-    fn rejects_uncertified_platform_before_transport_startup() {
+    fn accepts_windows_installed_daemon_configuration() {
+        let mut config = valid_config();
+        config.target = GuiAppTarget::Launch(LaunchSpec {
+            application: ApplicationIdentity::WindowsExecutable {
+                path: PathBuf::from("C:/Program Files/Example/editor.exe"),
+                expected_publisher: None,
+            },
+            arguments: Vec::new(),
+            working_directory: None,
+        });
+        config
+            .validate()
+            .expect("Windows installed daemon is contract tested");
+    }
+
+    #[test]
+    fn rejects_unproven_windows_publisher_before_transport_startup() {
         let mut config = valid_config();
         config.target = GuiAppTarget::Launch(LaunchSpec {
             application: ApplicationIdentity::WindowsExecutable {
@@ -365,7 +392,40 @@ mod tests {
             arguments: Vec::new(),
             working_directory: None,
         });
-        let error = config.validate().expect_err("unsupported Windows profile");
+        let error = config
+            .validate()
+            .expect_err("configured publisher is unproven");
+        assert_eq!(error.code(), "test.driver.gui.publisher_unproven");
+    }
+
+    #[test]
+    fn rejects_uncertified_platform_before_transport_startup() {
+        let mut config = valid_config();
+        config.target = GuiAppTarget::Launch(LaunchSpec {
+            application: ApplicationIdentity::LinuxDesktop {
+                desktop_id: "example-editor".to_string(),
+            },
+            arguments: Vec::new(),
+            working_directory: None,
+        });
+        let error = config.validate().expect_err("unsupported Linux profile");
+        assert_eq!(error.code(), "test.driver.gui.platform_unsupported");
+
+        config.endpoint = CuaEndpoint::EmbeddedSocket {
+            proxy_executable: PathBuf::from("cua-driver"),
+            socket: std::env::temp_dir().join("cua.sock"),
+        };
+        config.target = GuiAppTarget::Launch(LaunchSpec {
+            application: ApplicationIdentity::WindowsExecutable {
+                path: PathBuf::from("C:/Program Files/Example/editor.exe"),
+                expected_publisher: None,
+            },
+            arguments: Vec::new(),
+            working_directory: None,
+        });
+        let error = config
+            .validate()
+            .expect_err("unsupported Windows embedded profile");
         assert_eq!(error.code(), "test.driver.gui.platform_unsupported");
     }
 

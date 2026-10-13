@@ -143,12 +143,20 @@ impl ProvenanceRedactor {
                 self.redact_text(variant);
                 self.redact_text(state);
             }
-            Action::Back {} => {}
-            Action::ScrollUntil { target, .. }
-            | Action::Click { target }
+            Action::Back {} | Action::Reload {} => {}
+            Action::ScrollUntil {
+                target, container, ..
+            } => {
+                self.redact_target(target);
+                if let Some(container) = container {
+                    self.redact_target(container);
+                }
+            }
+            Action::Click { target, .. }
             | Action::Hover { target }
             | Action::Focus { target }
-            | Action::DoubleClick { target }
+            | Action::DoubleClick { target, .. }
+            | Action::LongPress { target, .. }
             | Action::ContextClick { target }
             | Action::Check { target }
             | Action::Uncheck { target } => self.redact_target(target),
@@ -208,10 +216,27 @@ impl ProvenanceRedactor {
                     self.redact_text(pattern);
                 }
             }
+            Action::NetworkFulfill { pattern, body } => {
+                self.redact_text(pattern);
+                body.clone_from(&self.replacement);
+            }
+            Action::NetworkContinue { pattern }
+            | Action::NetworkAbort { pattern }
+            | Action::WaitForResponse { pattern, .. } => self.redact_text(pattern),
             Action::Har { operation } | Action::Trace { operation } => {
                 self.redact_capture(operation);
             }
             Action::Video { operation } => self.redact_video(operation),
+            Action::SetCookie { cookies, .. } => {
+                for cookie in cookies {
+                    cookie.value.clone_from(&self.replacement);
+                }
+            }
+            Action::PreviewHeaders { headers, .. } => {
+                for header in headers {
+                    header.value.clone_from(&self.replacement);
+                }
+            }
         }
     }
 

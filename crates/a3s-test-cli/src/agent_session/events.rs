@@ -161,6 +161,7 @@ mod tests {
             act(
                 3,
                 Some(Action::Click {
+                    modifiers: Vec::new(),
                     target: Target::Ref {
                         value: "@e4".to_string(),
                     },
@@ -170,6 +171,7 @@ mod tests {
             act(
                 4,
                 Some(Action::Click {
+                    modifiers: Vec::new(),
                     target: Target::VisualPoint {
                         snapshot: "shot".to_string(),
                         x: 3,
@@ -181,6 +183,7 @@ mod tests {
             act(
                 5,
                 Some(Action::Click {
+                    modifiers: Vec::new(),
                     target: Target::Css {
                         selector: "#failed".to_string(),
                     },
@@ -207,6 +210,7 @@ mod tests {
             act(
                 9,
                 Some(Action::Click {
+                    modifiers: Vec::new(),
                     target: Target::Css {
                         selector: "#after".to_string(),
                     },

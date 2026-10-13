@@ -26,6 +26,7 @@ use sha2::{Digest, Sha256};
 use tokio_util::sync::CancellationToken;
 
 mod action_schema;
+mod adopt;
 mod agent_host;
 mod agent_session;
 mod contract_workflow;
@@ -52,6 +53,8 @@ pub struct Cli {
 enum Commands {
     /// Drive a persistent test session from A3S Code, Codex, or another agent.
     Agent(agent_session::AgentArgs),
+    /// Write a caller-named ACL suite from a verified-session candidate.
+    Adopt(adopt::AdoptArgs),
     /// Validate and inspect an ACL test suite without launching a surface.
     Check(CheckArgs),
     /// Discover and verify the installed Web driver protocol.
@@ -247,6 +250,12 @@ struct GuiRunArgs {
     /// (missing bundle identifier), or as an optional cross-check for bundled apps.
     #[arg(long)]
     gui_macos_process_name: Option<String>,
+    /// Absolute Windows executable path. Mutually exclusive with a macOS bundle ID.
+    #[arg(long, conflicts_with = "gui_macos_bundle_id")]
+    gui_windows_executable: Option<PathBuf>,
+    /// Exact CUA `list_apps` file name used when attaching to a Windows executable.
+    #[arg(long, conflicts_with = "gui_macos_process_name")]
+    gui_windows_process_name: Option<String>,
     /// Launch a new app or attach to a running app.
     #[arg(long, value_enum, default_value_t = GuiTargetMode::Launch)]
     gui_target_mode: GuiTargetMode,
@@ -304,6 +313,7 @@ struct TuiRunArgs {
 pub fn execute(cli: Cli) -> Pin<Box<dyn Future<Output = Result<ExitCode>>>> {
     match cli.command {
         Commands::Agent(args) => Box::pin(agent_session::execute(args)),
+        Commands::Adopt(args) => Box::pin(adopt::execute(args)),
         Commands::Check(args) => Box::pin(check(args)),
         Commands::Capabilities(args) => Box::pin(capabilities(args)),
         Commands::Contract(args) => Box::pin(contract_workflow::execute(args)),
@@ -533,6 +543,8 @@ impl GuiRunArgs {
             || self.cua_embedded_socket.is_some()
             || self.gui_macos_bundle_id.is_some()
             || self.gui_macos_process_name.is_some()
+            || self.gui_windows_executable.is_some()
+            || self.gui_windows_process_name.is_some()
             || self.gui_target_mode != GuiTargetMode::Launch
             || self.gui_profile != GuiProfileArg::Semantic
             || self.gui_attach_pid.is_some()
@@ -602,21 +614,51 @@ async fn gui_driver(args: &GuiRunArgs, command_timeout: Duration) -> Result<GuiD
         },
         None => CuaEndpoint::InstalledDaemon { proxy_executable },
     };
-    let bundle_id = args
-        .gui_macos_bundle_id
-        .as_ref()
-        .context("GUI scenarios require --gui-macos-bundle-id")?
-        .clone();
-    let application = ApplicationIdentity::MacOsBundle { bundle_id };
+    let application = match (
+        args.gui_macos_bundle_id.clone(),
+        args.gui_windows_executable.clone(),
+    ) {
+        (Some(bundle_id), None) => {
+            if args.gui_windows_process_name.is_some() {
+                anyhow::bail!(
+                    "--gui-windows-process-name is only valid with --gui-windows-executable"
+                );
+            }
+            ApplicationIdentity::MacOsBundle { bundle_id }
+        }
+        (None, Some(path)) => {
+            if !path.is_absolute() {
+                anyhow::bail!("--gui-windows-executable must be an absolute path");
+            }
+            if args.cua_embedded_socket.is_some() {
+                anyhow::bail!(
+                    "Windows GUI sessions use the installed CUA daemon, not an embedded socket"
+                );
+            }
+            if args.gui_macos_process_name.is_some() {
+                anyhow::bail!("--gui-macos-process-name is only valid with --gui-macos-bundle-id");
+            }
+            ApplicationIdentity::WindowsExecutable {
+                path,
+                expected_publisher: None,
+            }
+        }
+        _ => anyhow::bail!(
+            "GUI scenarios require exactly one of --gui-macos-bundle-id or --gui-windows-executable"
+        ),
+    };
+    let process_name = match &application {
+        ApplicationIdentity::MacOsBundle { .. } => args.gui_macos_process_name.clone(),
+        ApplicationIdentity::WindowsExecutable { .. } => args.gui_windows_process_name.clone(),
+        ApplicationIdentity::LinuxDesktop { .. } => None,
+    };
     let target = match args.gui_target_mode {
         GuiTargetMode::Launch => {
             if args.gui_attach_pid.is_some() {
                 anyhow::bail!("--gui-attach-pid is only valid with --gui-target-mode attach");
             }
-            if args.gui_macos_process_name.is_some() {
-                anyhow::bail!(
-                    "--gui-macos-process-name is only valid with --gui-target-mode attach"
-                );
+            if process_name.is_some() {
+                anyhow::bail!("a process name is only valid with --gui-target-mode attach");
             }
             GuiAppTarget::Launch(LaunchSpec {
                 application,
@@ -631,7 +673,7 @@ async fn gui_driver(args: &GuiRunArgs, command_timeout: Duration) -> Result<GuiD
             GuiAppTarget::Attach(AttachSpec {
                 application,
                 process_id: args.gui_attach_pid,
-                process_name: args.gui_macos_process_name.clone(),
+                process_name,
             })
         }
     };
@@ -989,21 +1031,31 @@ mod tests {
         let matrix =
             a3s_test_driver_gui::GuiCertificationMatrix::locked().expect("certification matrix");
         assert_eq!(matrix.profiles().len(), 6);
-        let unsupported_platforms = matrix
+        let unsupported_ids = matrix
             .profiles()
             .iter()
             .filter(|profile| {
                 profile.status() == a3s_test_driver_gui::GuiCertificationStatus::Unsupported
             })
-            .map(|profile| profile.platform().as_str())
+            .map(|profile| profile.id())
             .collect::<Vec<_>>();
         assert!(
-            unsupported_platforms.contains(&"windows"),
-            "windows GUI profiles must remain lock-unsupported: {unsupported_platforms:?}"
+            unsupported_ids.contains(&"windows-embedded"),
+            "windows embedded GUI profile must remain lock-unsupported: {unsupported_ids:?}"
         );
         assert!(
-            unsupported_platforms.contains(&"linux"),
-            "linux GUI profiles must remain lock-unsupported: {unsupported_platforms:?}"
+            unsupported_ids.contains(&"linux-installed")
+                && unsupported_ids.contains(&"linux-embedded"),
+            "linux GUI profiles must remain lock-unsupported: {unsupported_ids:?}"
+        );
+        let windows_installed = matrix
+            .profiles()
+            .iter()
+            .find(|profile| profile.id() == "windows-installed")
+            .expect("windows-installed profile");
+        assert_eq!(
+            windows_installed.status(),
+            a3s_test_driver_gui::GuiCertificationStatus::ContractTested
         );
     }
 
@@ -1021,6 +1073,8 @@ mod tests {
                 cua_embedded_socket: None,
                 gui_macos_bundle_id: Some("com.example.Editor".to_string()),
                 gui_macos_process_name: None,
+                gui_windows_executable: None,
+                gui_windows_process_name: None,
                 gui_target_mode: GuiTargetMode::Launch,
                 gui_profile: GuiProfileArg::WindowVision,
                 gui_attach_pid: None,
@@ -1034,6 +1088,105 @@ mod tests {
         .expect("GUI driver");
 
         assert_eq!(driver.surface(), Surface::Gui);
+    }
+
+    #[tokio::test]
+    async fn gui_driver_requires_exactly_one_application_identity() {
+        let temp = tempfile::TempDir::new().expect("temp dir");
+        let policy = temp.path().join("policy.yaml");
+        tokio::fs::write(&policy, "rules: []")
+            .await
+            .expect("policy fixture");
+        let error = gui_driver(
+            &GuiRunArgs {
+                gui_policy_file: Some(policy),
+                cua_proxy_executable: Some(PathBuf::from("cua-driver")),
+                cua_embedded_socket: None,
+                gui_macos_bundle_id: Some("com.example.Editor".to_string()),
+                gui_macos_process_name: None,
+                gui_windows_executable: Some(PathBuf::from("editor.exe")),
+                gui_windows_process_name: None,
+                gui_target_mode: GuiTargetMode::Launch,
+                gui_profile: GuiProfileArg::Semantic,
+                gui_attach_pid: None,
+                gui_arguments: Vec::new(),
+                gui_window_title: None,
+                gui_window_automation_id: None,
+            },
+            Duration::from_secs(2),
+        )
+        .await
+        .map(|_| ())
+        .expect_err("two GUI identities");
+        assert!(
+            error.to_string().contains("exactly one"),
+            "unexpected error: {error}"
+        );
+    }
+
+    #[cfg(windows)]
+    #[tokio::test]
+    async fn builds_a_windows_installed_daemon_driver() {
+        let temp = tempfile::TempDir::new().expect("temp dir");
+        let policy = temp.path().join("policy.yaml");
+        tokio::fs::write(&policy, "rules: []")
+            .await
+            .expect("policy fixture");
+        let driver = gui_driver(
+            &GuiRunArgs {
+                gui_policy_file: Some(policy),
+                cua_proxy_executable: Some(PathBuf::from("cua-driver")),
+                cua_embedded_socket: None,
+                gui_macos_bundle_id: None,
+                gui_macos_process_name: None,
+                gui_windows_executable: Some(PathBuf::from(r"C:\Windows\System32\notepad.exe")),
+                gui_windows_process_name: None,
+                gui_target_mode: GuiTargetMode::Launch,
+                gui_profile: GuiProfileArg::Semantic,
+                gui_attach_pid: None,
+                gui_arguments: Vec::new(),
+                gui_window_title: None,
+                gui_window_automation_id: None,
+            },
+            Duration::from_secs(2),
+        )
+        .await
+        .expect("Windows GUI driver");
+        assert_eq!(
+            driver.execution_profile().expect("profile").id(),
+            "windows-installed"
+        );
+
+        let temp = tempfile::TempDir::new().expect("temp dir");
+        let policy = temp.path().join("policy.yaml");
+        tokio::fs::write(&policy, "rules: []")
+            .await
+            .expect("policy fixture");
+        let error = gui_driver(
+            &GuiRunArgs {
+                gui_policy_file: Some(policy),
+                cua_proxy_executable: Some(PathBuf::from("cua-driver")),
+                cua_embedded_socket: Some(PathBuf::from(r"C:\cua.sock")),
+                gui_macos_bundle_id: None,
+                gui_macos_process_name: None,
+                gui_windows_executable: Some(PathBuf::from(r"C:\Windows\System32\notepad.exe")),
+                gui_windows_process_name: None,
+                gui_target_mode: GuiTargetMode::Launch,
+                gui_profile: GuiProfileArg::Semantic,
+                gui_attach_pid: None,
+                gui_arguments: Vec::new(),
+                gui_window_title: None,
+                gui_window_automation_id: None,
+            },
+            Duration::from_secs(2),
+        )
+        .await
+        .map(|_| ())
+        .expect_err("Windows embedded socket");
+        assert!(
+            error.to_string().contains("installed CUA daemon"),
+            "unexpected error: {error}"
+        );
     }
 
     #[test]

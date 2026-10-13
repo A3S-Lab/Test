@@ -196,6 +196,7 @@ fn redacts_assertion_targets_text_values_and_selected_values() {
             },
         },
         Action::ScrollUntil {
+            container: None,
             target: Target::Css {
                 selector: "#state-secret".to_string(),
             },

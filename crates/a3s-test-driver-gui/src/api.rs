@@ -58,9 +58,9 @@ impl CuaApi {
         Ok(())
     }
 
-    pub(crate) async fn permissions(&self) -> Result<CuaPermissions, DriverError> {
-        self.structured_call("check_permissions", json!({ "prompt": false }))
-            .await
+    pub(crate) async fn permissions(&self) -> Result<CuaPermissionReport, DriverError> {
+        // CUA 0.34.1 rejects unknown arguments. `prompt` is not in that schema.
+        self.structured_call("check_permissions", json!({})).await
     }
 
     pub(crate) async fn list_apps(&self) -> Result<Vec<CuaApp>, DriverError> {
@@ -79,6 +79,21 @@ impl CuaApi {
                 "bundle_id": bundle_id,
                 "additional_arguments": arguments,
                 "creates_new_application_instance": true,
+            }),
+        )
+        .await
+    }
+
+    pub(crate) async fn launch_windows_app(
+        &self,
+        path: &str,
+        arguments: &[String],
+    ) -> Result<CuaLaunchResult, DriverError> {
+        self.structured_call(
+            "launch_app",
+            json!({
+                "path": path,
+                "additional_arguments": arguments,
             }),
         )
         .await
@@ -202,11 +217,23 @@ fn validate_session_state(
     Ok(())
 }
 
+/// Permission evidence from `check_permissions`.
+///
+/// macOS reports TCC accessibility and screen recording with an attribution.
+/// Windows 0.34.1 reports UI Automation and whether PostMessage delivery is
+/// available. The shapes do not substitute for each other.
 #[derive(Clone, Debug, Deserialize)]
-pub(crate) struct CuaPermissions {
-    pub accessibility: bool,
-    pub screen_recording: bool,
-    pub source: PermissionSource,
+#[serde(untagged)]
+pub(crate) enum CuaPermissionReport {
+    Windows {
+        uia: bool,
+        post_message: bool,
+    },
+    MacOs {
+        accessibility: bool,
+        screen_recording: bool,
+        source: PermissionSource,
+    },
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -248,7 +275,10 @@ fn validate_apps(apps: Vec<CuaApp>) -> Result<Vec<CuaApp>, DriverError> {
 #[derive(Clone, Debug, Deserialize)]
 pub(crate) struct CuaLaunchResult {
     pub pid: i32,
-    pub bundle_id: String,
+    /// Present for a macOS bundle or a Windows packaged AUMID.
+    /// A Windows path launch returns null.
+    #[serde(default)]
+    pub bundle_id: Option<String>,
     pub name: String,
 }
 

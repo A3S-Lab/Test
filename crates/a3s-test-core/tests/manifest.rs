@@ -65,6 +65,7 @@ fn parses_ordered_typed_web_scenario() {
     assert_eq!(
         scenario.steps[1].action,
         Action::Click {
+            modifiers: Vec::new(),
             target: Target::Role {
                 role: "button".to_string(),
                 name: "Word".to_string(),
@@ -420,6 +421,7 @@ suite "gui-smoke" {
     assert_eq!(
         suite.scenarios[0].steps[0].action,
         Action::Click {
+            modifiers: Vec::new(),
             target: Target::AutomationId {
                 value: "save-button".to_string(),
             },
@@ -446,6 +448,7 @@ suite "gui-vision" {
     assert_eq!(
         suite.scenarios[0].steps[0].action,
         Action::Click {
+            modifiers: Vec::new(),
             target: Target::VisualPoint {
                 snapshot: "@v3".to_string(),
                 x: 120,
@@ -895,6 +898,7 @@ suite "advanced-web" {
     assert_eq!(
         actions[2].action,
         Action::DoubleClick {
+            modifiers: Vec::new(),
             target: Target::Ref {
                 value: "@e2".to_string()
             }
@@ -1164,6 +1168,7 @@ suite "gestures" {
     assert_eq!(
         steps[1].action,
         Action::ScrollUntil {
+            container: None,
             target: Target::Css {
                 selector: "[data-end]".to_string(),
             },

@@ -7,8 +7,8 @@ use std::time::Duration;
 use a3s_acl::{Block, Value};
 use a3s_test_driver_gui::{
     ApplicationIdentity, AttachSpec, CuaEndpoint, GuiAppTarget, GuiCaptureScope, GuiDriver,
-    GuiDriverConfig, GuiHostPermission, GuiHostPermissionGrant, GuiHostPermissionSource,
-    GuiProfile, LaunchSpec, WindowSelector,
+    GuiDriverConfig, GuiHostPermissionGrant, GuiHostPermissionSource, GuiProfile, LaunchSpec,
+    WindowSelector,
 };
 use a3s_test_worker::{
     WorkerGuiApplication, WorkerGuiCapability, WorkerGuiEndpoint, WorkerGuiPerception,
@@ -75,7 +75,8 @@ pub(in crate::worker_command) async fn load(
         GuiProfile::Semantic => WorkerGuiPerception::Semantic,
         GuiProfile::WindowVision => WorkerGuiPerception::WindowVision,
     };
-    let (target, application, macos_process_name) = worker_target(&parsed.config.target)?;
+    let (target, application, macos_process_name, windows_process_name) =
+        worker_target(&parsed.config.target)?;
     let capability = WorkerGuiCapability {
         profile_id: parsed.id,
         compatibility_profile: compatibility_profile.id().to_string(),
@@ -84,6 +85,7 @@ pub(in crate::worker_command) async fn load(
         target,
         application,
         macos_process_name,
+        windows_process_name,
         cua_driver_version: probe.driver_version,
         mcp_protocol: probe.protocol_version,
         capability_vocabulary: probe.capability_vocabulary,
@@ -122,6 +124,8 @@ fn parse(
             "policy_file",
             "macos_bundle_id",
             "macos_process_name",
+            "windows_executable",
+            "windows_process_name",
             "target",
             "attach_pid",
             "arguments",
@@ -170,27 +174,8 @@ fn parse(
     if declared_source != expected_source {
         anyhow::bail!("gui_host.permission_source does not match endpoint ownership");
     }
-    let permissions = required_string_list(root, "permissions")?;
-    if permissions.as_slice() != ["accessibility", "screen_recording"] {
-        anyhow::bail!(
-            "gui_host.permissions must explicitly list accessibility then screen_recording"
-        );
-    }
-    let declared_permissions = GuiHostPermissionGrant {
-        protocol: a3s_test_driver_gui::GUI_HOST_PERMISSION_PROTOCOL.to_string(),
-        source: declared_source,
-        permissions: vec![
-            GuiHostPermission::Accessibility,
-            GuiHostPermission::ScreenRecording,
-        ],
-    };
-    declared_permissions
-        .validate()
-        .map_err(anyhow::Error::new)?;
-
-    let application = ApplicationIdentity::MacOsBundle {
-        bundle_id: bounded_string(root, "macos_bundle_id", 256)?,
-    };
+    let application = application_identity(root, &endpoint)?;
+    let declared_permissions = declared_permissions(root, &application, declared_source)?;
     let arguments = optional_string_list(root, "arguments")?;
     if arguments.len() > MAX_GUI_ARGUMENTS
         || arguments
@@ -199,11 +184,35 @@ fn parse(
     {
         anyhow::bail!("gui_host.arguments exceeds its count or value bound");
     }
+    let macos_process_name = optional_string_value(root, "macos_process_name")?;
+    let windows_process_name = optional_string_value(root, "windows_process_name")?;
+    match &application {
+        ApplicationIdentity::MacOsBundle { .. } => {
+            if windows_process_name.is_some() {
+                anyhow::bail!(
+                    "gui_host.windows_process_name is only valid with windows_executable"
+                );
+            }
+        }
+        ApplicationIdentity::WindowsExecutable { .. } => {
+            if macos_process_name.is_some() {
+                anyhow::bail!("gui_host.macos_process_name is only valid with macos_bundle_id");
+            }
+        }
+        ApplicationIdentity::LinuxDesktop { .. } => {
+            anyhow::bail!("gui_host does not admit a Linux desktop identity");
+        }
+    }
     let target_name = optional_string(root, "target", "launch")?;
     let target = match target_name {
         "launch" => {
             reject_attribute(root, "attach_pid", "launch target")?;
-            reject_attribute(root, "macos_process_name", "launch target")?;
+            if macos_process_name.is_some() {
+                anyhow::bail!("gui_host.macos_process_name is not valid for the launch target");
+            }
+            if windows_process_name.is_some() {
+                anyhow::bail!("gui_host.windows_process_name is not valid for the launch target");
+            }
             GuiAppTarget::Launch(LaunchSpec {
                 application,
                 arguments: arguments.into_iter().map(OsString::from).collect(),
@@ -215,7 +224,7 @@ fn parse(
                 anyhow::bail!("gui_host.arguments is only valid for launch targets");
             }
             let process_id = optional_positive_u32(root, "attach_pid")?.and_then(NonZeroU32::new);
-            let process_name = optional_string_value(root, "macos_process_name")?;
+            let process_name = macos_process_name.or(windows_process_name);
             GuiAppTarget::Attach(AttachSpec {
                 application,
                 process_id,
@@ -261,8 +270,13 @@ fn parse(
 
 fn worker_target(
     target: &GuiAppTarget,
-) -> Result<(WorkerGuiTarget, WorkerGuiApplication, Option<String>)> {
-    let (target, application, macos_process_name) = match target {
+) -> Result<(
+    WorkerGuiTarget,
+    WorkerGuiApplication,
+    Option<String>,
+    Option<String>,
+)> {
+    let (target, application, process_name) = match target {
         GuiAppTarget::Launch(spec) => (WorkerGuiTarget::Launch, &spec.application, None),
         GuiAppTarget::Attach(spec) => (
             WorkerGuiTarget::Attach,
@@ -285,7 +299,93 @@ fn worker_target(
             desktop_id: desktop_id.clone(),
         },
     };
-    Ok((target, application, macos_process_name))
+    let (macos_process_name, windows_process_name) = match &application {
+        WorkerGuiApplication::MacosBundle { .. } => (process_name, None),
+        WorkerGuiApplication::WindowsExecutable { .. } => (None, process_name),
+        WorkerGuiApplication::LinuxDesktop { .. } => (None, None),
+    };
+    Ok((
+        target,
+        application,
+        macos_process_name,
+        windows_process_name,
+    ))
+}
+
+fn application_identity(root: &Block, endpoint: &CuaEndpoint) -> Result<ApplicationIdentity> {
+    let bundle_id = optional_string_value(root, "macos_bundle_id")?;
+    let executable = optional_string_value(root, "windows_executable")?;
+    match (bundle_id, executable) {
+        (Some(bundle_id), None) => {
+            if bundle_id.trim().is_empty() || bundle_id.len() > 256 {
+                anyhow::bail!("gui_host.macos_bundle_id must be bounded and non-empty");
+            }
+            Ok(ApplicationIdentity::MacOsBundle { bundle_id })
+        }
+        (None, Some(executable)) => {
+            if matches!(endpoint, CuaEndpoint::EmbeddedSocket { .. }) {
+                anyhow::bail!("gui_host.windows_executable requires the installed_daemon endpoint");
+            }
+            Ok(ApplicationIdentity::WindowsExecutable {
+                path: windows_executable_path(&executable)?,
+                expected_publisher: None,
+            })
+        }
+        _ => {
+            anyhow::bail!("gui_host requires exactly one of macos_bundle_id or windows_executable")
+        }
+    }
+}
+
+fn declared_permissions(
+    root: &Block,
+    application: &ApplicationIdentity,
+    source: GuiHostPermissionSource,
+) -> Result<GuiHostPermissionGrant> {
+    let permissions = required_string_list(root, "permissions")?;
+    let grant = match application {
+        ApplicationIdentity::MacOsBundle { .. } => {
+            if permissions.as_slice() != ["accessibility", "screen_recording"] {
+                anyhow::bail!(
+                    "gui_host.permissions must explicitly list accessibility then screen_recording"
+                );
+            }
+            GuiHostPermissionGrant::required(source)
+        }
+        ApplicationIdentity::WindowsExecutable { .. } => {
+            if permissions.as_slice() != ["accessibility"] {
+                anyhow::bail!(
+                    "gui_host.permissions for a Windows executable must explicitly list accessibility"
+                );
+            }
+            GuiHostPermissionGrant::windows_uia(source)
+        }
+        ApplicationIdentity::LinuxDesktop { .. } => {
+            anyhow::bail!("gui_host does not admit a Linux desktop identity");
+        }
+    };
+    grant.validate().map_err(anyhow::Error::new)?;
+    Ok(grant)
+}
+
+fn windows_executable_path(value: &str) -> Result<PathBuf> {
+    if value.len() > 1_024 || !is_windows_absolute(value) {
+        anyhow::bail!("gui_host.windows_executable must be an absolute path");
+    }
+    Ok(PathBuf::from(value))
+}
+
+fn is_windows_absolute(value: &str) -> bool {
+    let bytes = value.as_bytes();
+    let drive = bytes.len() >= 3
+        && bytes[0].is_ascii_alphabetic()
+        && bytes[1] == b':'
+        && matches!(bytes[2], b'\\' | b'/');
+    let unc = bytes.len() >= 3
+        && matches!(bytes[0], b'\\' | b'/')
+        && matches!(bytes[1], b'\\' | b'/')
+        && !matches!(bytes[2], b'\\' | b'/');
+    drive || unc
 }
 
 async fn canonicalize_proxy(config: &mut GuiDriverConfig) -> Result<()> {
@@ -392,14 +492,6 @@ fn required_string<'a>(block: &'a Block, name: &str) -> Result<&'a str> {
         .and_then(Value::as_str)
         .filter(|value| !value.is_empty())
         .with_context(|| format!("gui_host.{name} must be a non-empty string"))
-}
-
-fn bounded_string(block: &Block, name: &str, max_bytes: usize) -> Result<String> {
-    let value = required_string(block, name)?;
-    if value.trim().is_empty() || value.len() > max_bytes {
-        anyhow::bail!("gui_host.{name} must be bounded and non-empty");
-    }
-    Ok(value.to_string())
 }
 
 fn optional_string<'a>(block: &'a Block, name: &str, default: &'a str) -> Result<&'a str> {

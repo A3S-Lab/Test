@@ -274,12 +274,14 @@ mod tests {
                 error: Some(RunError {
                     code: code.to_string(),
                     message: "failure".to_string(),
+                    re_recordable: false,
                 }),
             }],
             error: None,
             cleanup_error: cleanup.then(|| RunError {
                 code: "test.run.cleanup_timeout".to_string(),
                 message: "cleanup".to_string(),
+                re_recordable: false,
             }),
         }
     }

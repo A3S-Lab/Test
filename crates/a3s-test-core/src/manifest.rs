@@ -12,10 +12,13 @@ use self::conditions::{
 use self::targets::{optional_target, parse_target, required_target, target_argument};
 
 use crate::{
-    Action, AssertionMode, CaptureOperation, DialogOperation, FrameTarget, ModifierKey,
-    NamedViewport, NetworkRoute, OwnedApp, ScrollDirection, SecretPurpose, SpecError, Surface,
-    TabOperation, TestScenario, TestStep, TestSuite, VideoOperation, WaitMode,
-    DEFAULT_SCROLL_UNTIL_TIMEOUT_MS, MAX_SCROLL_UNTIL_TIMEOUT_MS, MIN_SCROLL_UNTIL_TIMEOUT_MS,
+    Action, AssertionMode, CaptureOperation, CookieAssignment, DialogOperation, FrameTarget,
+    ModifierKey, NamedViewport, NetworkRoute, OwnedApp, PreviewHeader, ScrollDirection,
+    SecretPurpose, SpecError, Surface, TabOperation, TestScenario, TestStep, TestSuite,
+    VideoOperation, WaitMode, DEFAULT_LONG_PRESS_MS, DEFAULT_RESPONSE_WAIT_MS,
+    DEFAULT_SCROLL_UNTIL_TIMEOUT_MS, MAX_LONG_PRESS_MS, MAX_RESPONSE_WAIT_MS,
+    MAX_SCROLL_UNTIL_TIMEOUT_MS, MIN_LONG_PRESS_MS, MIN_RESPONSE_WAIT_MS,
+    MIN_SCROLL_UNTIL_TIMEOUT_MS,
 };
 
 const DEFAULT_SCENARIO_TIMEOUT_MS: u64 = 60_000;
@@ -422,8 +425,16 @@ fn parse_step(block: &Block, scenario_path: &str) -> Result<TestStep, SpecError>
             ensure_attributes(block, &[], &path)?;
             Action::Back {}
         }
+        "reload" => {
+            ensure_attributes(block, &[], &path)?;
+            Action::Reload {}
+        }
         "scroll_until" => {
-            ensure_attributes(block, &["target", "direction", "timeout_ms"], &path)?;
+            ensure_attributes(
+                block,
+                &["target", "container", "direction", "timeout_ms"],
+                &path,
+            )?;
             let timeout_ms =
                 optional_integer(block, "timeout_ms", DEFAULT_SCROLL_UNTIL_TIMEOUT_MS, &path)?;
             if !(MIN_SCROLL_UNTIL_TIMEOUT_MS..=MAX_SCROLL_UNTIL_TIMEOUT_MS).contains(&timeout_ms) {
@@ -437,6 +448,7 @@ fn parse_step(block: &Block, scenario_path: &str) -> Result<TestStep, SpecError>
             }
             Action::ScrollUntil {
                 target: required_target(block, "target", &path)?,
+                container: optional_target(block, "container", &path)?,
                 direction: parse_scroll_direction(
                     required_string(block, "direction", &path)?,
                     &format!("{path}.direction"),
@@ -454,9 +466,14 @@ fn parse_step(block: &Block, scenario_path: &str) -> Result<TestStep, SpecError>
             if let Some(name) = unsupported_click_attribute(block) {
                 return Err(browser_verb_unsupported(&path, name));
             }
-            ensure_attributes(block, &["target"], &path)?;
+            ensure_attributes(block, &["target", "modifiers"], &path)?;
+            let modifiers = optional_modifiers(block, "modifiers", &path)?;
+            if !modifiers.is_empty() {
+                return Err(browser_verb_unsupported(&path, "modifiers"));
+            }
             Action::Click {
                 target: required_target(block, "target", &path)?,
+                modifiers,
             }
         }
         "hover" => {
@@ -472,9 +489,34 @@ fn parse_step(block: &Block, scenario_path: &str) -> Result<TestStep, SpecError>
             }
         }
         "double_click" => {
-            ensure_attributes(block, &["target"], &path)?;
+            if let Some(name) = unsupported_click_attribute(block) {
+                return Err(browser_verb_unsupported(&path, name));
+            }
+            ensure_attributes(block, &["target", "modifiers"], &path)?;
+            let modifiers = optional_modifiers(block, "modifiers", &path)?;
+            if !modifiers.is_empty() {
+                return Err(browser_verb_unsupported(&path, "modifiers"));
+            }
             Action::DoubleClick {
                 target: required_target(block, "target", &path)?,
+                modifiers,
+            }
+        }
+        "long_press" => {
+            ensure_attributes(block, &["target", "duration_ms"], &path)?;
+            let duration_ms = optional_integer(block, "duration_ms", DEFAULT_LONG_PRESS_MS, &path)?;
+            if !(MIN_LONG_PRESS_MS..=MAX_LONG_PRESS_MS).contains(&duration_ms) {
+                return Err(SpecError::new(
+                    "test.spec.long_press_duration",
+                    format!("{path}.duration_ms"),
+                    format!(
+                        "long_press duration must be {MIN_LONG_PRESS_MS} through {MAX_LONG_PRESS_MS} milliseconds"
+                    ),
+                ));
+            }
+            Action::LongPress {
+                target: required_target(block, "target", &path)?,
+                duration_ms,
             }
         }
         "context_click" => {
@@ -722,6 +764,37 @@ fn parse_step(block: &Block, scenario_path: &str) -> Result<TestStep, SpecError>
                 pattern: optional_string_attribute(block, "pattern", &path)?,
             }
         }
+        "network_fulfill" => parse_network_fulfill(block, &path)?,
+        "network_continue" => {
+            ensure_attributes(block, &["pattern"], &path)?;
+            Action::NetworkContinue {
+                pattern: required_string(block, "pattern", &path)?.to_string(),
+            }
+        }
+        "network_abort" => {
+            ensure_attributes(block, &["pattern"], &path)?;
+            Action::NetworkAbort {
+                pattern: required_string(block, "pattern", &path)?.to_string(),
+            }
+        }
+        "wait_response" => {
+            ensure_attributes(block, &["pattern", "timeout_ms"], &path)?;
+            let timeout_ms =
+                optional_integer(block, "timeout_ms", DEFAULT_RESPONSE_WAIT_MS, &path)?;
+            if !(MIN_RESPONSE_WAIT_MS..=MAX_RESPONSE_WAIT_MS).contains(&timeout_ms) {
+                return Err(SpecError::new(
+                    "test.spec.response_wait_timeout",
+                    format!("{path}.timeout_ms"),
+                    format!(
+                        "wait_response timeout must be {MIN_RESPONSE_WAIT_MS} through {MAX_RESPONSE_WAIT_MS} milliseconds"
+                    ),
+                ));
+            }
+            Action::WaitForResponse {
+                pattern: required_string(block, "pattern", &path)?.to_string(),
+                timeout_ms,
+            }
+        }
         "har" => {
             ensure_attributes(block, &["operation", "path"], &path)?;
             Action::Har {
@@ -761,6 +834,8 @@ fn parse_step(block: &Block, scenario_path: &str) -> Result<TestStep, SpecError>
                 clear: optional_bool(block, "clear", false, &path)?,
             }
         }
+        "set_cookie" => parse_set_cookie(block, &path)?,
+        "preview_headers" => parse_preview_headers(block, &path)?,
         "verify_contract" => {
             ensure_attributes(block, &["contract", "variant", "state"], &path)?;
             Action::VerifyContract {
@@ -769,8 +844,7 @@ fn parse_step(block: &Block, scenario_path: &str) -> Result<TestStep, SpecError>
                 state: required_string(block, "state", &path)?.to_string(),
             }
         }
-        "long_press" | "closed_shadow" | "pierce" | "network_fulfill" | "network_continue"
-        | "wait_response" | "wait_for_response" => {
+        "closed_shadow" | "pierce" | "wait_for_response" | "evaluate" | "init_script" => {
             return Err(browser_verb_unsupported(&path, block.name.as_str()));
         }
         _ => {
@@ -987,17 +1061,104 @@ fn browser_verb_unsupported(path: &str, verb: &str) -> SpecError {
 }
 
 fn unsupported_click_attribute(block: &Block) -> Option<&'static str> {
-    [
-        "modifiers",
-        "position",
-        "x",
-        "y",
-        "delay",
-        "button",
-        "long_press",
-    ]
-    .into_iter()
-    .find(|name| block.attributes.contains_key(*name))
+    ["position", "x", "y", "delay", "button", "long_press"]
+        .into_iter()
+        .find(|name| block.attributes.contains_key(*name))
+}
+
+fn parse_set_cookie(block: &Block, path: &str) -> Result<Action, SpecError> {
+    ensure_attributes(block, &["origin", "names", "values"], path)?;
+    let origin = required_string(block, "origin", path)?.to_string();
+    let names = required_string_list(block, "names", path)?;
+    let values = required_string_list(block, "values", path)?;
+    if names.len() != values.len() || names.len() > 16 {
+        return Err(SpecError::new(
+            "test.spec.cookie_invalid",
+            path.to_string(),
+            "set_cookie names and values must be the same length, from 1 through 16",
+        ));
+    }
+    let cookies = names
+        .into_iter()
+        .zip(values)
+        .map(|(name, value)| CookieAssignment { name, value })
+        .collect();
+    Ok(Action::SetCookie { origin, cookies })
+}
+
+fn parse_preview_headers(block: &Block, path: &str) -> Result<Action, SpecError> {
+    ensure_attributes(
+        block,
+        &[
+            "origin",
+            "header_names",
+            "header_values",
+            "username",
+            "password_env",
+        ],
+        path,
+    )?;
+    let origin = required_string(block, "origin", path)?.to_string();
+    let names = optional_string_list(block, "header_names", path)?;
+    let values = optional_string_list(block, "header_values", path)?;
+    if names.len() != values.len() || names.len() > 16 {
+        return Err(SpecError::new(
+            "test.spec.preview_headers_invalid",
+            path.to_string(),
+            "preview header names and values must be the same length, at most 16",
+        ));
+    }
+    let username = optional_string_attribute(block, "username", path)?;
+    let password_env = optional_string_attribute(block, "password_env", path)?;
+    match (&username, &password_env) {
+        (Some(_), Some(name)) if admit_env_name(name) => {}
+        (None, None) => {}
+        (Some(_), Some(_)) => {
+            return Err(SpecError::new(
+                "test.spec.secret_name",
+                format!("{path}.password_env"),
+                "basic-auth password_env must be an environment variable identifier",
+            ));
+        }
+        _ => {
+            return Err(SpecError::new(
+                "test.spec.preview_headers_invalid",
+                path.to_string(),
+                "basic auth requires both username and password_env",
+            ));
+        }
+    }
+    if names.is_empty() && username.is_none() {
+        return Err(SpecError::new(
+            "test.spec.preview_headers_invalid",
+            path.to_string(),
+            "preview headers require a header or basic auth",
+        ));
+    }
+    let headers = names
+        .into_iter()
+        .zip(values)
+        .map(|(name, value)| PreviewHeader { name, value })
+        .collect();
+    Ok(Action::PreviewHeaders {
+        origin,
+        headers,
+        username,
+        password_env,
+    })
+}
+
+fn optional_string_list(block: &Block, name: &str, path: &str) -> Result<Vec<String>, SpecError> {
+    if !block.attributes.contains_key(name) {
+        return Ok(Vec::new());
+    }
+    required_string_list(block, name, path)
+}
+
+fn parse_network_fulfill(_block: &Block, path: &str) -> Result<Action, SpecError> {
+    // agent-browser 0.26.0 answers `network route --body` with `routed` and
+    // then lets the real response through. The daemon never reads that body.
+    Err(browser_verb_unsupported(path, "network_fulfill"))
 }
 
 fn parse_secret_fill(block: &Block, path: &str, fill: bool) -> Result<Action, SpecError> {

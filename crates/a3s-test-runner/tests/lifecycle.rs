@@ -212,6 +212,7 @@ async fn rejects_ui_evidence_refs_before_surface_dispatch() {
     let closes = Arc::new(AtomicUsize::new(0));
     let mut ref_suite = suite(1_000);
     ref_suite.scenarios[0].steps[0].action = Action::Click {
+        modifiers: Vec::new(),
         target: a3s_test_core::Target::Ref {
             value: "@u1".to_string(),
         },

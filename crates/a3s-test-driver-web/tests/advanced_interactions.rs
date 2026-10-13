@@ -113,6 +113,7 @@ async fn maps_advanced_interactions_to_the_verified_browser_protocol() {
             },
         },
         Action::DoubleClick {
+            modifiers: Vec::new(),
             target: Target::Ref {
                 value: "@e2".to_string(),
             },

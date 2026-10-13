@@ -4,9 +4,9 @@
 use std::path::Path;
 
 use a3s_test_core::{
-    compare_pixels, decode_png_bounded, pixel_baseline_decision, DriverError,
-    PixelBaselineDecision, PixelCompareFailure, PixelDecodeError, PixelExpectation, PixelLimits,
-    StepOutput,
+    compare_pixels, decode_png_bounded, encode_png, pixel_baseline_decision, render_pixel_diff,
+    DriverError, PixelBaselineDecision, PixelCompareFailure, PixelDecodeError, PixelExpectation,
+    PixelLimits, StepOutput,
 };
 use serde_json::json;
 
@@ -38,6 +38,8 @@ impl AgentBrowserSession {
         }
 
         let index = self.pixel_captures;
+        self.execute_command(vec!["eval".into(), PIXEL_HOLD_SCRIPT.into()])
+            .await?;
         let actual = self
             .capture_png(&format!("pixel-hold-{index}-a.png"))
             .await?;
@@ -105,13 +107,43 @@ impl AgentBrowserSession {
             Err(PixelCompareFailure::Diff {
                 different_pixels,
                 allowed_pixels,
-            }) => Err(DriverError::new(
-                "test.assert.pixel_diff",
-                format!(
-                    "pixel difference {different_pixels} exceeds allowed {allowed_pixels}"
-                ),
-            )),
+            }) => {
+                let actual_name = format!("pixel-mismatch-{index}-actual.png");
+                let expected_name = format!("pixel-mismatch-{index}-expected.png");
+                let diff_name = format!("pixel-mismatch-{index}-diff.png");
+                self.write_png(&actual_name, &actual).await?;
+                self.write_png(&expected_name, &baseline_bytes).await?;
+                let diff = render_pixel_diff(&actual_image, &baseline_image, &limits).map_err(|_| {
+                    DriverError::new(
+                        "test.driver.web.pixel_decode",
+                        "pixel diff image could not be rendered",
+                    )
+                })?;
+                let bytes = encode_png(&diff).map_err(|_| {
+                    DriverError::new(
+                        "test.driver.web.pixel_decode",
+                        "pixel diff image could not be encoded",
+                    )
+                })?;
+                self.write_png(&diff_name, &bytes).await?;
+                Err(DriverError::new(
+                    "test.assert.pixel_diff",
+                    format!(
+                        "pixel difference {different_pixels} exceeds allowed {allowed_pixels}; wrote {actual_name}, {expected_name}, and {diff_name}"
+                    ),
+                ))
+            }
         }
+    }
+
+    async fn write_png(&self, name: &str, bytes: &[u8]) -> Result<(), DriverError> {
+        let path = prepare_artifact_path(&self.artifacts_dir, name).await?;
+        tokio::fs::write(&path, bytes).await.map_err(|_| {
+            DriverError::new(
+                "test.driver.web.pixel_decode",
+                "pixel mismatch image could not be written",
+            )
+        })
     }
 
     async fn capture_png(&mut self, name: &str) -> Result<Vec<u8>, DriverError> {
@@ -137,6 +169,25 @@ async fn artifact_file_exists(path: &Path) -> Result<bool, DriverError> {
         )),
     }
 }
+
+/// Freeze CSS motion and the caret, then cancel running CSS animations.
+const PIXEL_HOLD_SCRIPT: &str = r#"(() => {
+  const id = "a3s-pixel-hold";
+  let style = document.getElementById(id);
+  if (!style) {
+    style = document.createElement("style");
+    style.id = id;
+    (document.head || document.documentElement).appendChild(style);
+  }
+  style.textContent = "*,*::before,*::after{animation:none!important;transition:none!important;caret-color:transparent!important}";
+  const animations = typeof document.getAnimations === "function"
+    ? document.getAnimations({ subtree: true })
+    : [];
+  for (const animation of animations) {
+    if (animation && "animationName" in animation) animation.cancel();
+  }
+  return { held: true };
+})()"#;
 
 fn decode_capture(bytes: &[u8]) -> Result<a3s_test_core::DecodedPng, DriverError> {
     decode_png_bounded(bytes).map_err(|error| {

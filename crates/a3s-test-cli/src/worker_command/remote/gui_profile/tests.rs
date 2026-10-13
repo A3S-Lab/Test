@@ -1,6 +1,8 @@
 use super::*;
 use std::num::NonZeroU32;
 
+use a3s_test_driver_gui::GuiHostPermission;
+
 fn profile_source(permission_source: &str, permissions: &str) -> String {
     format!(
         r#"gui_host "desktop-primary" {{
@@ -95,9 +97,11 @@ fn attach_admits_macos_process_name_for_unpackaged_identity() {
         }
         other => panic!("expected attach target, got {other:?}"),
     }
-    let (target, _, process_name) = worker_target(&parsed.config.target).expect("worker target");
+    let (target, _, process_name, windows_process_name) =
+        worker_target(&parsed.config.target).expect("worker target");
     assert_eq!(target, WorkerGuiTarget::Attach);
     assert_eq!(process_name.as_deref(), Some("A3S"));
+    assert_eq!(windows_process_name, None);
 }
 
 #[test]
@@ -125,4 +129,92 @@ fn launch_rejects_macos_process_name() {
         error.to_string().contains("macos_process_name"),
         "unexpected error: {error}"
     );
+}
+
+#[test]
+fn parses_a_windows_installed_daemon_profile() {
+    let source = r#"gui_host "desktop-primary" {
+  endpoint = "installed_daemon"
+  proxy_executable = "bin/cua-driver"
+  policy_file = "policy.yaml"
+  windows_executable = "C:/Program Files/Example/editor.exe"
+  target = "attach"
+  windows_process_name = "editor.exe"
+  profile = "semantic"
+  permission_source = "driver_daemon"
+  permissions = ["accessibility"]
+}
+"#;
+    let parsed = parse(
+        source,
+        Path::new("/workspace/gui-host.acl"),
+        Duration::from_secs(30),
+        BTreeSet::new(),
+    )
+    .expect("Windows GUI profile");
+    match &parsed.config.target {
+        GuiAppTarget::Attach(spec) => {
+            assert!(matches!(
+                spec.application,
+                ApplicationIdentity::WindowsExecutable { .. }
+            ));
+            assert_eq!(spec.process_name.as_deref(), Some("editor.exe"));
+        }
+        other => panic!("expected attach target, got {other:?}"),
+    }
+    assert_eq!(
+        parsed.declared_permissions.permissions,
+        [GuiHostPermission::Accessibility]
+    );
+    let (_, application, macos_process_name, windows_process_name) =
+        worker_target(&parsed.config.target).expect("worker target");
+    assert!(matches!(
+        application,
+        WorkerGuiApplication::WindowsExecutable {
+            expected_publisher: None,
+            ..
+        }
+    ));
+    assert_eq!(macos_process_name, None);
+    assert_eq!(windows_process_name.as_deref(), Some("editor.exe"));
+}
+
+#[test]
+fn rejects_a_windows_profile_that_claims_screen_recording_or_an_embedded_socket() {
+    let screen_recording = r#"gui_host "desktop-primary" {
+  endpoint = "installed_daemon"
+  proxy_executable = "bin/cua-driver"
+  policy_file = "policy.yaml"
+  windows_executable = "C:/Program Files/Example/editor.exe"
+  permission_source = "driver_daemon"
+  permissions = ["accessibility", "screen_recording"]
+}
+"#;
+    let error = parse(
+        screen_recording,
+        Path::new("/workspace/gui-host.acl"),
+        Duration::from_secs(30),
+        BTreeSet::new(),
+    )
+    .expect_err("Windows grant is accessibility only");
+    assert!(error.to_string().contains("accessibility"), "{error}");
+
+    let embedded = r#"gui_host "desktop-primary" {
+  endpoint = "embedded_socket"
+  proxy_executable = "bin/cua-driver"
+  embedded_socket = "cua.sock"
+  policy_file = "policy.yaml"
+  windows_executable = "C:/Program Files/Example/editor.exe"
+  permission_source = "host"
+  permissions = ["accessibility"]
+}
+"#;
+    let error = parse(
+        embedded,
+        Path::new("/workspace/gui-host.acl"),
+        Duration::from_secs(30),
+        BTreeSet::new(),
+    )
+    .expect_err("Windows embedded socket is unsupported");
+    assert!(error.to_string().contains("installed_daemon"), "{error}");
 }

@@ -40,6 +40,7 @@ fn refresh_keeps_only_refs_outside_the_complete_invalidation_set() {
     assert_eq!(
         resolve_page_context_refs(
             Action::Click {
+                modifiers: Vec::new(),
                 target: Target::Ref {
                     value: "@c2".to_string(),
                 },
@@ -48,6 +49,7 @@ fn refresh_keeps_only_refs_outside_the_complete_invalidation_set() {
         )
         .expect("unaffected ref"),
         Action::Click {
+            modifiers: Vec::new(),
             target: Target::Css {
                 selector: "#n2".to_string(),
             },
@@ -55,6 +57,7 @@ fn refresh_keeps_only_refs_outside_the_complete_invalidation_set() {
     );
     assert!(resolve_page_context_refs(
         Action::Click {
+            modifiers: Vec::new(),
             target: Target::Ref {
                 value: "@c1".to_string(),
             },
